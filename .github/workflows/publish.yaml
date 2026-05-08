@@ -34,6 +34,9 @@ permissions: {}
 
 jobs:
   build-sveltekit:
+    # Publishing signed nightly/release artifacts requires upstream-only secrets.
+    # Fork schedules should be quiet; manual dispatch remains available when secrets are configured.
+    if: github.repository == 'gitbutlerapp/gitbutler' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     env:
       SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
