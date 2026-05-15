@@ -15,6 +15,9 @@ permissions: {}
 
 jobs:
   build:
+    # This workflow publishes signed nightly artifacts and requires upstream-only secrets.
+    # Keep manual dispatch available for forks, but do not let scheduled runs fail every day.
+    if: github.repository == 'gitbutlerapp/gitbutler' || github.event_name == 'workflow_dispatch'
     runs-on: ${{ matrix.platform }}
     strategy:
       fail-fast: false
