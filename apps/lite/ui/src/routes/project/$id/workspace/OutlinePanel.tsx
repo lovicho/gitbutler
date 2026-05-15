@@ -5,7 +5,7 @@ import {
 	headInfoQueryOptions,
 } from "#ui/api/queries.ts";
 import { findCommit, getCommonBaseCommitId, resolveRelativeTo } from "#ui/api/ref-info.ts";
-import { encodeRefName } from "#ui/api/ref-name.ts";
+import { decodeRefName, encodeRefName } from "#ui/api/ref-name.ts";
 import { commitTitle, shortCommitId } from "#ui/commit.ts";
 import {
 	showNativeContextMenu,
@@ -69,9 +69,9 @@ import {
 import {
 	formatForDisplay,
 	useHotkey,
+	UseHotkeyDefinition,
 	useHotkeys,
 	useKeyHold,
-	type RegisterableHotkey,
 } from "@tanstack/react-hotkeys";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
@@ -105,7 +105,7 @@ import { defaultOutlineSelection } from "#ui/projects/workspace/state.ts";
 import { ShortcutButton } from "#ui/components/ShortcutButton.tsx";
 import { createDiffSpec } from "#ui/operations/diff-specs.ts";
 import { rejectedChangesToastOptions } from "#ui/operations/rejectedChangesToastOptions.tsx";
-import { toElectronAccelerator } from "#ui/hotkeys.ts";
+import { changesHotkeys, outlineHotkeys, toElectronAccelerator } from "#ui/hotkeys.ts";
 import { assert } from "#ui/assert.ts";
 import { Spinner } from "#ui/components/Spinner.tsx";
 import { errorMessageForToast } from "#ui/errors.ts";
@@ -231,28 +231,11 @@ const useNavigationIndex = ({
 
 	const outlineMode = useAppSelector((state) => selectProjectOutlineModeState(state, projectId));
 
-	const navigationIndex = filterNavigationIndexForOutlineMode({
+	return filterNavigationIndexForOutlineMode({
 		navigationIndex: navigationIndexUnfiltered,
 		outlineMode,
 		absorptionTargetKeys,
 	});
-
-	const focusedPanel = useFocusedProjectPanel(projectId);
-
-	const select = (newItem: Operand) =>
-		dispatch(projectActions.selectOutline({ projectId, selection: newItem }));
-
-	useNavigationIndexHotkeys({
-		focusedPanel,
-		navigationIndex,
-		projectId,
-		group: "Outline",
-		panel: "outline",
-		select,
-		selection,
-	});
-
-	return navigationIndex;
 };
 
 export const OutlinePanel: FC<PanelProps> = ({ ...panelProps }) => (
@@ -267,9 +250,230 @@ export const OutlinePanel: FC<PanelProps> = ({ ...panelProps }) => (
 	</Suspense>
 );
 
+const useOutlineTreeHotkeys = ({
+	navigationIndex,
+	projectId,
+}: {
+	navigationIndex: NavigationIndex;
+	projectId: string;
+}) => {
+	const selection = useAppSelector((state) => selectProjectSelectionOutline(state, projectId));
+	const outlineMode = useAppSelector((state) => selectProjectOutlineModeState(state, projectId));
+	const focusedPanel = useFocusedProjectPanel(projectId);
+	const { data: worktreeChanges } = useQuery(changesInWorktreeQueryOptions(projectId));
+
+	const dispatch = useAppDispatch();
+
+	const select = (newItem: Operand) =>
+		dispatch(projectActions.selectOutline({ projectId, selection: newItem }));
+
+	const runOperationMutation = useMutation(useRunOperationMutationOptions());
+
+	const openBranchPicker = () => {
+		dispatch(projectActions.openBranchPicker({ projectId }));
+	};
+
+	const enterAbsorbMode = (source: Operand, sourceTarget: AbsorptionTarget) => {
+		dispatch(projectActions.enterAbsorbMode({ projectId, source, sourceTarget }));
+	};
+
+	const amendCommit = () => {
+		dispatch(
+			projectActions.enterTransferMode({
+				projectId,
+				mode: keyboardTransferOperationMode({
+					source: changesSectionOperand,
+					operationType: "rub",
+				}),
+			}),
+		);
+		focusPanel("outline");
+	};
+
+	const composeCommitHere = (relativeTo: RelativeTo) => {
+		dispatch(projectActions.setCommitTarget({ projectId, commitTarget: relativeTo }));
+		focusCommitMessageInput();
+	};
+
+	const moveSelectedCommit = (offset: -1 | 1) => {
+		if (selection._tag !== "Commit") return;
+
+		const source = commitOperand(selection);
+		const selectionIdx = navigationIndex.indexByKey.get(operandIdentityKey(source));
+		if (selectionIdx === undefined) return;
+
+		const nextItem = navigationIndex.items[selectionIdx + offset];
+		if (!nextItem) return;
+
+		const operation = moveOperation({
+			source,
+			target: nextItem,
+			side: offset === -1 ? "above" : "below",
+		});
+		if (!operation) return;
+
+		runOperationMutation.mutate(operation);
+	};
+
+	const defaultOutlineHotkeysEnabled = focusedPanel === "outline" && outlineMode._tag === "Default";
+	const isSelectedCommit = selection._tag === "Commit";
+	const isSelectedChanges = selection._tag === "ChangesSection";
+
+	useNavigationIndexHotkeys({
+		focusedPanel,
+		navigationIndex,
+		projectId,
+		group: "Outline",
+		panel: "outline",
+		select,
+		selection,
+	});
+
+	useHotkeys([
+		{
+			hotkey: outlineHotkeys.selectBranch.hotkey,
+			callback: openBranchPicker,
+			options: {
+				conflictBehavior: "allow",
+				meta: outlineHotkeys.selectBranch.meta,
+			},
+		},
+		{
+			hotkey: outlineHotkeys.selectChanges.hotkey,
+			callback: () => {
+				dispatch(projectActions.selectOutline({ projectId, selection: changesSectionOperand }));
+				focusPanel("outline");
+			},
+			options: { conflictBehavior: "allow", meta: outlineHotkeys.selectChanges.meta },
+		},
+		{
+			hotkey: outlineHotkeys.composeCommitMessage.hotkey,
+			callback: () => {
+				dispatch(projectActions.selectOutline({ projectId, selection: changesSectionOperand }));
+				focusCommitMessageInput();
+			},
+			options: {
+				conflictBehavior: "allow",
+				meta: outlineHotkeys.composeCommitMessage.meta,
+			},
+		},
+		...Match.value(selection).pipe(
+			Match.tag(
+				"Commit",
+				(selection): UseHotkeyDefinition => ({
+					hotkey: outlineHotkeys.rewordCommit.hotkey,
+					callback: () => {
+						dispatch(projectActions.startRewordCommit({ projectId, commit: selection }));
+					},
+					options: {
+						conflictBehavior: "allow",
+						enabled: defaultOutlineHotkeysEnabled,
+						meta: outlineHotkeys.rewordCommit.meta,
+					},
+				}),
+			),
+			Match.tag(
+				"Branch",
+				(selection): UseHotkeyDefinition => ({
+					hotkey: outlineHotkeys.renameBranch.hotkey,
+					callback: () => {
+						dispatch(projectActions.startRenameBranch({ projectId, branch: selection }));
+					},
+					options: {
+						conflictBehavior: "allow",
+						enabled: defaultOutlineHotkeysEnabled,
+						meta: outlineHotkeys.renameBranch.meta,
+					},
+				}),
+			),
+			Match.tag(
+				"ChangesSection",
+				(): UseHotkeyDefinition => ({
+					hotkey: outlineHotkeys.editChangesCommitMessage.hotkey,
+					callback: focusCommitMessageInput,
+					options: {
+						conflictBehavior: "allow",
+						enabled: defaultOutlineHotkeysEnabled,
+						meta: outlineHotkeys.editChangesCommitMessage.meta,
+					},
+				}),
+			),
+			Match.orElse(() => null),
+			(x) => (x ? [x] : []),
+		),
+		{
+			hotkey: outlineHotkeys.amendCommit.hotkey,
+			callback: amendCommit,
+			options: {
+				conflictBehavior: "allow",
+				enabled: defaultOutlineHotkeysEnabled && isSelectedCommit,
+				meta: outlineHotkeys.amendCommit.meta,
+			},
+		},
+		{
+			hotkey: outlineHotkeys.moveCommitUp.hotkey,
+			callback: () => moveSelectedCommit(-1),
+			options: {
+				conflictBehavior: "allow",
+				enabled:
+					defaultOutlineHotkeysEnabled && isSelectedCommit && !runOperationMutation.isPending,
+				meta: outlineHotkeys.moveCommitUp.meta,
+			},
+		},
+		{
+			hotkey: outlineHotkeys.moveCommitDown.hotkey,
+			callback: () => moveSelectedCommit(1),
+			options: {
+				conflictBehavior: "allow",
+				enabled:
+					defaultOutlineHotkeysEnabled && isSelectedCommit && !runOperationMutation.isPending,
+				meta: outlineHotkeys.moveCommitDown.meta,
+			},
+		},
+		...Match.value(selection).pipe(
+			Match.tags({
+				Commit: (selection): RelativeTo => ({ type: "commit", subject: selection.commitId }),
+				Branch: (selection): RelativeTo => ({
+					type: "referenceBytes",
+					subject: selection.branchRef,
+				}),
+			}),
+			Match.orElse(() => null),
+			(relativeTo) =>
+				relativeTo
+					? [
+							{
+								hotkey: outlineHotkeys.composeCommitHere.hotkey,
+								callback: () => composeCommitHere(relativeTo),
+								options: {
+									conflictBehavior: "allow",
+									enabled: defaultOutlineHotkeysEnabled,
+									meta: outlineHotkeys.composeCommitHere.meta,
+								},
+							} satisfies UseHotkeyDefinition,
+						]
+					: [],
+		),
+		{
+			hotkey: outlineHotkeys.absorb.hotkey,
+			callback: () => {
+				enterAbsorbMode(changesSectionOperand, { type: "all" });
+			},
+			options: {
+				conflictBehavior: "allow",
+				enabled:
+					defaultOutlineHotkeysEnabled &&
+					isSelectedChanges &&
+					worktreeChanges &&
+					worktreeChanges.changes.length > 0,
+				meta: outlineHotkeys.absorb.meta,
+			},
+		},
+	]);
+};
+
 const OutlineTreePanel: FC<PanelProps> = ({ ...panelProps }) => {
 	const { id: projectId } = useParams({ from: "/project/$id/workspace" });
-	const dispatch = useAppDispatch();
 
 	const selection = useAppSelector((state) => selectProjectSelectionOutline(state, projectId));
 
@@ -309,16 +513,19 @@ const OutlineTreePanel: FC<PanelProps> = ({ ...panelProps }) => {
 
 	const { data: headInfo } = useQuery(headInfoQueryOptions(projectId));
 
-	const openBranchPicker = () => {
-		dispatch(projectActions.openBranchPicker({ projectId }));
-	};
-
-	useHotkey("T", openBranchPicker, {
-		conflictBehavior: "allow",
-		meta: { group: "Outline", name: "Select branch" },
+	useOutlineTreeHotkeys({
+		navigationIndex,
+		projectId,
 	});
 
 	const operationSource = getOperationSource(outlineMode);
+
+	const commitTargetState = useAppSelector((state) => selectProjectCommitTarget(state, projectId));
+	const targetComboboxItems = buildCommitTargetComboboxItems({ headInfo, commitTargetState });
+	const commitTarget = selectCommitTargetComboboxItem({
+		items: targetComboboxItems,
+		commitTargetState,
+	});
 
 	return (
 		<NavigationIndexContext value={navigationIndex}>
@@ -332,12 +539,21 @@ const OutlineTreePanel: FC<PanelProps> = ({ ...panelProps }) => {
 						className={classes(panelProps.className, styles.panel)}
 					>
 						<div className={styles.panelPadding}>
-							<Changes projectId={projectId} />
+							<Changes
+								projectId={projectId}
+								commitTarget={commitTarget}
+								targetComboboxItems={targetComboboxItems}
+							/>
 						</div>
 
 						<div className={styles.headInfo}>
 							{headInfo?.stacks.map((stack) => (
-								<StackC key={stack.id} projectId={projectId} stack={stack} />
+								<StackC
+									key={stack.id}
+									projectId={projectId}
+									stack={stack}
+									commitTarget={commitTarget?.relativeTo ?? null}
+								/>
 							))}
 
 							<BaseCommit
@@ -518,23 +734,14 @@ const CommitRow: FC<
 		commit: Commit;
 		projectId: string;
 		stackId: string;
+		isCommitTarget: boolean;
 	} & ComponentProps<"div">
-> = ({ commit, projectId, stackId, ...restProps }) => {
-	const hotkeys = {
-		amend: "Shift+A",
-		reword: "Enter",
-		moveUp: "Alt+ArrowUp",
-		moveDown: "Alt+ArrowDown",
-		composeCommitHere: "C",
-	} satisfies Record<string, RegisterableHotkey>;
-
-	const navigationIndex = assert(use(NavigationIndexContext));
+> = ({ commit, projectId, stackId, isCommitTarget, ...restProps }) => {
 	const isHighlighted = useAppSelector((state) =>
 		selectProjectHighlightedCommitIds(state, projectId).includes(commit.id),
 	);
 	const dryRunCommit = useDryRunCommit(commit.id);
 	const outlineMode = useAppSelector((state) => selectProjectOutlineModeState(state, projectId));
-	const { selectedItem: commitTarget } = useCommitTargetCombobox(projectId);
 
 	const dispatch = useAppDispatch();
 	const commitOperandV: CommitOperand = {
@@ -658,25 +865,6 @@ const CommitRow: FC<
 		});
 	};
 
-	const runOperationMutation = useMutation(useRunOperationMutationOptions());
-
-	const moveCommit = (offset: -1 | 1) => {
-		const selectionIdx = navigationIndex.indexByKey.get(operandIdentityKey(operand));
-		if (selectionIdx === undefined) return;
-
-		const nextItem = navigationIndex.items[selectionIdx + offset];
-		if (!nextItem) return;
-
-		const operation = moveOperation({
-			source: operand,
-			target: nextItem,
-			side: offset === -1 ? "above" : "below",
-		});
-		if (!operation) return;
-
-		runOperationMutation.mutate(operation);
-	};
-
 	const cutCommit = () => {
 		dispatch(
 			projectActions.enterTransferMode({
@@ -693,7 +881,6 @@ const CommitRow: FC<
 		dispatch(projectActions.selectOutline({ projectId, selection: operand }));
 		dispatch(projectActions.startRewordCommit({ projectId, commit: commitOperandV }));
 	};
-	const focusedPanel = useFocusedProjectPanel(projectId);
 
 	const endEditing = () => {
 		dispatch(projectActions.exitMode({ projectId }));
@@ -744,68 +931,17 @@ const CommitRow: FC<
 	};
 
 	const relativeTo: RelativeTo = { type: "commit", subject: commit.id };
-	const isCommitTarget = commitTarget && relativeToEquals(commitTarget.relativeTo, relativeTo);
 
 	const composeCommitHere = () => {
 		dispatch(projectActions.setCommitTarget({ projectId, commitTarget: relativeTo }));
 		focusCommitMessageInput();
 	};
 
-	const defaultCommitHotkeysEnabled =
-		isSelected && focusedPanel === "outline" && outlineMode._tag === "Default";
-	useHotkeys([
-		{
-			hotkey: hotkeys.amend,
-			callback: amendCommit,
-			options: {
-				conflictBehavior: "allow",
-				enabled: defaultCommitHotkeysEnabled,
-				meta: { group: "Commit", name: "Amend commit" },
-			},
-		},
-		{
-			hotkey: hotkeys.reword,
-			callback: startEditing,
-			options: {
-				conflictBehavior: "allow",
-				enabled: defaultCommitHotkeysEnabled && !isCommitMessagePending,
-				meta: { group: "Commit", name: "Reword commit" },
-			},
-		},
-		{
-			hotkey: hotkeys.moveUp,
-			callback: () => moveCommit(-1),
-			options: {
-				conflictBehavior: "allow",
-				enabled: defaultCommitHotkeysEnabled && !runOperationMutation.isPending,
-				meta: { group: "Commit", name: "Move commit up" },
-			},
-		},
-		{
-			hotkey: hotkeys.moveDown,
-			callback: () => moveCommit(1),
-			options: {
-				conflictBehavior: "allow",
-				enabled: defaultCommitHotkeysEnabled && !runOperationMutation.isPending,
-				meta: { group: "Commit", name: "Move commit down" },
-			},
-		},
-		{
-			hotkey: hotkeys.composeCommitHere,
-			callback: composeCommitHere,
-			options: {
-				conflictBehavior: "allow",
-				enabled: defaultCommitHotkeysEnabled,
-				meta: { group: "Commit", name: "Compose commit here" },
-			},
-		},
-	]);
-
 	const amendCommitContextMenuItem: NativeMenuItem = {
 		_tag: "Item",
 		label: "Amend Commit",
 		enabled: true,
-		accelerator: toElectronAccelerator(hotkeys.amend),
+		accelerator: toElectronAccelerator(outlineHotkeys.amendCommit.hotkey),
 		onSelect: amendCommit,
 	};
 	const cutCommitContextMenuItem: NativeMenuItem = {
@@ -818,7 +954,7 @@ const CommitRow: FC<
 		_tag: "Item",
 		label: "Reword Commit",
 		enabled: !isCommitMessagePending,
-		accelerator: toElectronAccelerator(hotkeys.reword),
+		accelerator: toElectronAccelerator(outlineHotkeys.rewordCommit.hotkey),
 		onSelect: startEditing,
 	};
 	const insertBlankCommitAboveContextMenuItem: NativeMenuItem = {
@@ -842,7 +978,7 @@ const CommitRow: FC<
 	const setCommitTargetContextMenuItem: NativeMenuItem = {
 		_tag: "Item",
 		label: "Compose Commit Here",
-		accelerator: toElectronAccelerator(hotkeys.composeCommitHere),
+		accelerator: toElectronAccelerator(outlineHotkeys.composeCommitHere.hotkey),
 		onSelect: composeCommitHere,
 	};
 
@@ -927,7 +1063,8 @@ const CommitC: FC<{
 	commit: Commit;
 	projectId: string;
 	stackId: string;
-}> = ({ commit, projectId, stackId }) => {
+	isCommitTarget: boolean;
+}> = ({ commit, projectId, stackId, isCommitTarget }) => {
 	const operand = commitOperand({ stackId, commitId: commit.id });
 
 	return (
@@ -937,7 +1074,12 @@ const CommitC: FC<{
 			aria-label={commitTitle(commit.message)}
 			render={<OperandC projectId={projectId} operand={operand} />}
 		>
-			<CommitRow commit={commit} projectId={projectId} stackId={stackId} />
+			<CommitRow
+				commit={commit}
+				projectId={projectId}
+				stackId={stackId}
+				isCommitTarget={isCommitTarget}
+			/>
 		</TreeItem>
 	);
 };
@@ -947,13 +1089,7 @@ const ChangesSectionRow: FC<{
 
 	projectId: string;
 }> = ({ changes, projectId }) => {
-	const hotkeys = {
-		absorb: "A",
-	} satisfies Record<string, RegisterableHotkey>;
-
 	const operand = changesSectionOperand;
-	const isSelected = useIsSelected({ projectId, operand });
-	const focusedPanel = useFocusedProjectPanel(projectId);
 	const outlineMode = useAppSelector((state) => selectProjectOutlineModeState(state, projectId));
 
 	const dispatch = useAppDispatch();
@@ -965,21 +1101,11 @@ const ChangesSectionRow: FC<{
 		enterAbsorbMode(operand, { type: "all" });
 	};
 
-	useHotkey(hotkeys.absorb, absorb, {
-		conflictBehavior: "allow",
-		enabled:
-			changes.length > 0 &&
-			isSelected &&
-			focusedPanel === "outline" &&
-			outlineMode._tag === "Default",
-		meta: { group: "Changes", name: "Absorb" },
-	});
-
 	const absorbContextMenuItem: NativeMenuItem = {
 		_tag: "Item",
 		label: "Absorb",
 		enabled: changes.length > 0,
-		accelerator: toElectronAccelerator(hotkeys.absorb),
+		accelerator: toElectronAccelerator(outlineHotkeys.absorb.hotkey),
 		onSelect: absorb,
 	};
 
@@ -1122,15 +1248,6 @@ const selectCommitTargetComboboxItem = ({
 	items[0] ??
 	null;
 
-const useCommitTargetCombobox = (projectId: string) => {
-	const commitTargetState = useAppSelector((state) => selectProjectCommitTarget(state, projectId));
-	const { data: headInfo } = useQuery(headInfoQueryOptions(projectId));
-	const items = buildCommitTargetComboboxItems({ headInfo, commitTargetState });
-	const selectedItem = selectCommitTargetComboboxItem({ items, commitTargetState });
-
-	return { headInfo, items, selectedItem };
-};
-
 const CommitTargetComboboxPopup: FC = () => (
 	<Combobox.Popup className={classes(uiStyles.popup, styles.commitTargetComboboxPopup)}>
 		<Combobox.Input
@@ -1162,7 +1279,9 @@ const focusCommitMessageInput = () => {
 
 const Changes: FC<{
 	projectId: string;
-}> = ({ projectId }) => {
+	commitTarget: CommitTargetComboboxItem | null;
+	targetComboboxItems: Array<CommitTargetComboboxItem>;
+}> = ({ projectId, commitTarget, targetComboboxItems }) => {
 	const toastManager = Toast.useToastManager();
 	const queryClient = useQueryClient();
 	const dispatch = useAppDispatch();
@@ -1292,15 +1411,10 @@ const Changes: FC<{
 
 	const operand = changesSectionOperand;
 	const commitTextareaRef = useRef<HTMLTextAreaElement | null>(null);
-	const focusedPanel = useFocusedProjectPanel(projectId);
 
 	const outlineMode = useAppSelector((state) => selectProjectOutlineModeState(state, projectId));
 
-	const {
-		headInfo,
-		items: branchComboboxItems,
-		selectedItem: commitTarget,
-	} = useCommitTargetCombobox(projectId);
+	const { data: headInfo } = useQuery(headInfoQueryOptions(projectId));
 	const isAltHeld = useKeyHold("Alt");
 	const isAmendMode = isAltHeld;
 	const isCommitOrAmendPending = commitCreate.isPending || commitAmend.isPending;
@@ -1326,17 +1440,8 @@ const Changes: FC<{
 		setOpen(false);
 	};
 
-	const isSelected = useIsSelected({ projectId, operand });
 	const selectChanges = () => {
 		dispatch(projectActions.selectOutline({ projectId, selection: operand }));
-	};
-	const selectChangesAndFocusOutline = () => {
-		selectChanges();
-		focusPanel("outline");
-	};
-	const composeCommitMessage = () => {
-		selectChanges();
-		commitTextareaRef.current?.focus();
 	};
 	const submit: SubmitEventHandler = (event) => {
 		event.preventDefault();
@@ -1353,39 +1458,46 @@ const Changes: FC<{
 			_tag: "Item",
 			label: "Commit",
 			enabled: canCommit,
-			accelerator: toElectronAccelerator("Mod+Enter"),
+			accelerator: toElectronAccelerator(changesHotkeys.commit.hotkey),
 			onSelect: () => commitCreate.mutate(),
 		},
 		{
 			_tag: "Item",
 			label: "Amend Commit",
 			enabled: canAmend,
-			accelerator: toElectronAccelerator("Mod+Alt+Enter"),
+			accelerator: toElectronAccelerator(changesHotkeys.amendCommit.hotkey),
 			onSelect: () => commitAmend.mutate(),
 		},
 	];
 
 	useHotkeys([
 		{
-			hotkey: "Z",
-			callback: selectChangesAndFocusOutline,
-			options: { conflictBehavior: "allow", meta: { group: "Outline", name: "Select changes" } },
-		},
-		{
-			hotkey: "Shift+Z",
-			callback: composeCommitMessage,
+			hotkey: changesHotkeys.selectCommitBranch.hotkey,
+			callback: () => setOpen(true),
 			options: {
 				conflictBehavior: "allow",
-				meta: { group: "Outline", name: "Compose commit message" },
+				enabled: outlineMode._tag === "Default" && !isCommitOrAmendPending,
+				meta: changesHotkeys.selectCommitBranch.meta,
 			},
 		},
 		{
-			hotkey: "Enter",
-			callback: () => commitTextareaRef.current?.focus(),
+			hotkey: changesHotkeys.commit.hotkey,
+			callback: () => commitCreate.mutate(),
 			options: {
 				conflictBehavior: "allow",
-				enabled: isSelected && focusedPanel === "outline" && outlineMode._tag === "Default",
-				meta: { group: "Changes", name: "Compose commit message" },
+				enabled: canCommit,
+				ignoreInputs: false,
+				meta: changesHotkeys.commit.meta,
+			},
+		},
+		{
+			hotkey: changesHotkeys.amendCommit.hotkey,
+			callback: () => commitAmend.mutate(),
+			options: {
+				conflictBehavior: "allow",
+				enabled: canAmend,
+				ignoreInputs: false,
+				meta: changesHotkeys.amendCommit.meta,
 			},
 		},
 	]);
@@ -1420,7 +1532,7 @@ const Changes: FC<{
 
 			<div className={styles.commitControls}>
 				<Combobox.Root<CommitTargetComboboxItem>
-					items={branchComboboxItems}
+					items={targetComboboxItems}
 					open={open}
 					onOpenChange={setOpen}
 					// Note `undefined` means uncontrolled.
@@ -1437,10 +1549,8 @@ const Changes: FC<{
 						aria-label="Select branch"
 						render={
 							<ShortcutButton
-								hotkey="Mod+Shift+B"
-								hotkeyOptions={{
-									meta: { group: "Changes", name: "Select commit branch" },
-								}}
+								hotkey={changesHotkeys.selectCommitBranch.hotkey}
+								hotkeyOptions={{ meta: changesHotkeys.selectCommitBranch.meta }}
 							/>
 						}
 					>
@@ -1455,9 +1565,9 @@ const Changes: FC<{
 
 				<div className={styles.commitActionControls}>
 					<ShortcutButton
-						hotkey={isAmendMode ? "Mod+Alt+Enter" : "Mod+Enter"}
+						hotkey={isAmendMode ? changesHotkeys.amendCommit.hotkey : changesHotkeys.commit.hotkey}
 						hotkeyOptions={{
-							meta: { group: "Changes", name: isAmendMode ? "Amend" : "Commit" },
+							meta: isAmendMode ? changesHotkeys.amendCommit.meta : changesHotkeys.commit.meta,
 						}}
 						className={classes(uiStyles.button, styles.changesSectionCommitButton)}
 						type="submit"
@@ -1538,15 +1648,10 @@ const BranchRow: FC<
 		branchName: string;
 		branchRef: Array<number>;
 		stackId: string;
+		isCommitTarget: boolean;
 	} & ComponentProps<"div">
-> = ({ projectId, branchName, branchRef, stackId, ...restProps }) => {
-	const hotkeys = {
-		rename: "Enter",
-		composeCommitHere: "C",
-	} satisfies Record<string, RegisterableHotkey>;
-
+> = ({ projectId, branchName, branchRef, stackId, isCommitTarget, ...restProps }) => {
 	const outlineMode = useAppSelector((state) => selectProjectOutlineModeState(state, projectId));
-	const { selectedItem: commitTarget } = useCommitTargetCombobox(projectId);
 	const dispatch = useAppDispatch();
 	const branchOperandV: BranchOperand = {
 		stackId,
@@ -1581,8 +1686,6 @@ const BranchRow: FC<
 		dispatch(projectActions.selectOutline({ projectId, selection: operand }));
 		dispatch(projectActions.startRenameBranch({ projectId, branch: branchOperandV }));
 	};
-	const isSelected = useIsSelected({ projectId, operand });
-	const focusedPanel = useFocusedProjectPanel(projectId);
 
 	const endEditing = () => {
 		dispatch(projectActions.exitMode({ projectId }));
@@ -1591,6 +1694,31 @@ const BranchRow: FC<
 	};
 
 	const toastManager = Toast.useToastManager();
+
+	const tearOffBranchMutation = useMutation({
+		mutationFn: window.lite.tearOffBranch,
+		onSuccess: async (response, _input, _context, mutation) => {
+			dispatch(
+				projectActions.addReplacedCommits({
+					projectId,
+					replacedCommits: response.workspace.replacedCommits,
+				}),
+			);
+
+			await mutation.client.invalidateQueries();
+		},
+		onError: (error) => {
+			// oxlint-disable-next-line no-console
+			console.error(error);
+
+			toastManager.add({
+				type: "error",
+				title: "Failed to tear off branch",
+				description: errorMessageForToast(error),
+				priority: "high",
+			});
+		},
+	});
 
 	const saveBranchName = (newBranchName: string) => {
 		const trimmed = newBranchName.trim();
@@ -1619,45 +1747,45 @@ const BranchRow: FC<
 	};
 
 	const relativeTo: RelativeTo = { type: "referenceBytes", subject: branchRef };
-	const isCommitTarget = commitTarget && relativeToEquals(relativeTo, commitTarget.relativeTo);
 
 	const composeCommitHere = () => {
 		dispatch(projectActions.setCommitTarget({ projectId, commitTarget: relativeTo }));
 		focusCommitMessageInput();
 	};
 
-	const defaultBranchHotkeysEnabled =
-		isSelected && focusedPanel === "outline" && outlineMode._tag === "Default";
-
-	useHotkey(hotkeys.rename, startEditing, {
-		conflictBehavior: "allow",
-		enabled: defaultBranchHotkeysEnabled && !isRenamePending,
-		meta: { group: "Branch", name: "Rename branch" },
-	});
-
-	useHotkey(hotkeys.composeCommitHere, composeCommitHere, {
-		conflictBehavior: "allow",
-		enabled: defaultBranchHotkeysEnabled,
-		meta: { group: "Branch", name: "Compose commit here" },
-	});
+	const tearOffBranch = () => {
+		tearOffBranchMutation.mutate({
+			projectId,
+			subjectBranch: decodeRefName(branchRef),
+			dryRun: false,
+		});
+	};
 
 	const startEditingContextMenuItem: NativeMenuItem = {
 		_tag: "Item",
 		label: "Rename Branch",
 		enabled: !isRenamePending,
-		accelerator: toElectronAccelerator(hotkeys.rename),
+		accelerator: toElectronAccelerator(outlineHotkeys.renameBranch.hotkey),
 		onSelect: startEditing,
 	};
 	const setCommitTargetContextMenuItem: NativeMenuItem = {
 		_tag: "Item",
 		label: "Compose Commit Here",
-		accelerator: toElectronAccelerator(hotkeys.composeCommitHere),
+		accelerator: toElectronAccelerator(outlineHotkeys.composeCommitHere.hotkey),
 		onSelect: composeCommitHere,
+	};
+	const tearOffBranchContextMenuItem: NativeMenuItem = {
+		_tag: "Item",
+		label: "Tear Off Branch",
+		enabled: !tearOffBranchMutation.isPending,
+		onSelect: tearOffBranch,
 	};
 
 	const menuItems: Array<NativeMenuItem> = [
 		startEditingContextMenuItem,
 		setCommitTargetContextMenuItem,
+		{ _tag: "Separator" },
+		tearOffBranchContextMenuItem,
 	];
 
 	return (
@@ -1810,7 +1938,8 @@ const BranchSegment: FC<{
 	segment: Segment;
 	refName: BranchReference;
 	stackId: string;
-}> = ({ projectId, segment, refName, stackId }) => {
+	commitTarget: RelativeTo | null;
+}> = ({ projectId, segment, refName, stackId, commitTarget }) => {
 	const operand = branchOperand({ stackId, branchRef: refName.fullNameBytes });
 
 	return (
@@ -1830,6 +1959,14 @@ const BranchSegment: FC<{
 						branchName={refName.displayName}
 						branchRef={refName.fullNameBytes}
 						stackId={stackId}
+						isCommitTarget={
+							commitTarget
+								? relativeToEquals(commitTarget, {
+										type: "referenceBytes",
+										subject: refName.fullNameBytes,
+									})
+								: false
+						}
 					/>
 				}
 			/>
@@ -1839,7 +1976,17 @@ const BranchSegment: FC<{
 			) : (
 				<div role="group">
 					{segment.commits.map((commit) => (
-						<CommitC key={commit.id} commit={commit} projectId={projectId} stackId={stackId} />
+						<CommitC
+							key={commit.id}
+							commit={commit}
+							projectId={projectId}
+							stackId={stackId}
+							isCommitTarget={
+								commitTarget
+									? relativeToEquals(commitTarget, { type: "commit", subject: commit.id })
+									: false
+							}
+						/>
 					))}
 				</div>
 			)}
@@ -1851,10 +1998,21 @@ const BranchlessSegment: FC<{
 	projectId: string;
 	segment: Segment;
 	stackId: string;
-}> = ({ projectId, segment, stackId }) => (
+	commitTarget: RelativeTo | null;
+}> = ({ projectId, segment, stackId, commitTarget }) => (
 	<div className={classes(workspaceItemRowStyles.section, styles.segment)}>
 		{segment.commits.map((commit) => (
-			<CommitC key={commit.id} commit={commit} projectId={projectId} stackId={stackId} />
+			<CommitC
+				key={commit.id}
+				commit={commit}
+				projectId={projectId}
+				stackId={stackId}
+				isCommitTarget={
+					commitTarget
+						? relativeToEquals(commitTarget, { type: "commit", subject: commit.id })
+						: false
+				}
+			/>
 		))}
 	</div>
 );
@@ -1862,7 +2020,8 @@ const BranchlessSegment: FC<{
 const StackC: FC<{
 	projectId: string;
 	stack: Stack;
-}> = ({ projectId, stack }) => {
+	commitTarget: RelativeTo | null;
+}> = ({ projectId, stack, commitTarget }) => {
 	// From Caleb:
 	// > There shouldn't be a way within GitButler to end up with a stack without a
 	//   StackId. Users can disrupt our matching against our metadata by playing
@@ -1894,6 +2053,7 @@ const StackC: FC<{
 							segment={segment}
 							refName={segment.refName}
 							stackId={stackId}
+							commitTarget={commitTarget}
 						/>
 					) : (
 						// A segment should always either have a branch reference or at
@@ -1904,6 +2064,7 @@ const StackC: FC<{
 								projectId={projectId}
 								segment={segment}
 								stackId={stackId}
+								commitTarget={commitTarget}
 							/>
 						)
 					),

@@ -29,13 +29,17 @@ impl<'ws, 'graph, M: RefMetadata> Editor<'ws, 'graph, M> {
         // multiple.
 
         let mut ref_edits = vec![];
-        let steps_to_pick = order_steps_picking(
-            &self.graph,
-            &self
-                .graph
-                .externals(Direction::Incoming)
-                .collect::<Vec<_>>(),
-        );
+        let rebase_heads = self
+            .graph
+            .externals(Direction::Incoming)
+            .filter(|idx| {
+                !matches!(
+                    &self.graph[*idx],
+                    Step::Reference { refname } if self.immutable_references.contains(refname)
+                )
+            })
+            .collect::<Vec<_>>();
+        let steps_to_pick = order_steps_picking(&self.graph, &rebase_heads);
 
         // A 1 to 1 mapping between the incoming graph and the output graph
         let mut graph_mapping: HashMap<StepGraphIndex, StepGraphIndex> = HashMap::new();
@@ -118,6 +122,7 @@ impl<'ws, 'graph, M: RefMetadata> Editor<'ws, 'graph, M> {
                     }
                 }
                 Step::Reference { refname } => {
+                    let is_immutable = self.immutable_references.contains(&refname);
                     let graph_parents = collect_ordered_parents(&self.graph, step_idx);
                     let first_parent_idx = graph_parents
                         .first()
@@ -139,7 +144,7 @@ impl<'ws, 'graph, M: RefMetadata> Editor<'ws, 'graph, M> {
                             gix::refs::TargetRef::Object(id) => {
                                 if id == to_reference {
                                     unchanged_references.push(refname.clone());
-                                } else {
+                                } else if !is_immutable {
                                     ref_edits.push(RefEdit {
                                         name: refname.clone(),
                                         change: Change::Update {
@@ -151,13 +156,15 @@ impl<'ws, 'graph, M: RefMetadata> Editor<'ws, 'graph, M> {
                                         },
                                         deref: false,
                                     });
+                                } else {
+                                    unchanged_references.push(refname.clone());
                                 }
                             }
                             gix::refs::TargetRef::Symbolic(name) => {
                                 bail!("Attempted to update the symbolic reference {name}");
                             }
                         }
-                    } else {
+                    } else if !is_immutable {
                         ref_edits.push(RefEdit {
                             name: refname.clone(),
                             change: Change::Update {
@@ -167,7 +174,7 @@ impl<'ws, 'graph, M: RefMetadata> Editor<'ws, 'graph, M> {
                             },
                             deref: false,
                         });
-                    };
+                    }
 
                     output_graph.add_node(Step::Reference { refname })
                 }
@@ -194,6 +201,9 @@ impl<'ws, 'graph, M: RefMetadata> Editor<'ws, 'graph, M> {
 
         // Find deleted references
         for reference in self.initial_references.iter() {
+            if self.immutable_references.contains(reference) {
+                continue;
+            }
             if !ref_edits
                 .iter()
                 .any(|e| e.name.as_ref() == reference.as_ref())
@@ -221,6 +231,7 @@ impl<'ws, 'graph, M: RefMetadata> Editor<'ws, 'graph, M> {
             graph: output_graph,
             checkouts: self.checkouts.to_owned(),
             history,
+            immutable_references: self.immutable_references,
             workspace: self.workspace,
             meta: self.meta,
         })
@@ -330,7 +341,7 @@ fn format_base_merge_error(
 #[cfg(test)]
 mod test {
     mod order_steps_picking {
-        use std::str::FromStr;
+        use std::{collections::HashSet, str::FromStr};
 
         use anyhow::Result;
 
@@ -354,7 +365,7 @@ mod test {
             graph.add_edge(a, b, Edge { order: 0 });
             graph.add_edge(b, c, Edge { order: 0 });
 
-            insta::assert_snapshot!(render_ascii_graph(&graph, |_| None), @"
+            insta::assert_snapshot!(render_ascii_graph(&graph, &HashSet::new(), |_| None), @"
             ● 1000000
             ● 2000000
             ● 3000000
@@ -417,7 +428,7 @@ mod test {
 
             graph.add_edge(i, j, Edge { order: 0 });
 
-            insta::assert_snapshot!(render_ascii_graph(&graph, |_| None), @"
+            insta::assert_snapshot!(render_ascii_graph(&graph, &HashSet::new(), |_| None), @"
             ● 1000000
             ● 2000000
             │ ● 6000000
@@ -466,7 +477,7 @@ mod test {
             graph.add_edge(d, e, Edge { order: 0 });
             graph.add_edge(e, b, Edge { order: 0 });
 
-            insta::assert_snapshot!(render_ascii_graph(&graph, |_| None), @"
+            insta::assert_snapshot!(render_ascii_graph(&graph, &HashSet::new(), |_| None), @"
             ● 1000000
             ├─╮
             │ ● 4000000
@@ -509,7 +520,7 @@ mod test {
 
             graph.add_edge(a, b, Edge { order: 1 });
 
-            insta::assert_snapshot!(render_ascii_graph(&graph, |_| None), @"
+            insta::assert_snapshot!(render_ascii_graph(&graph, &HashSet::new(), |_| None), @"
             ● 1000000
             ├─╮
             ● │ 4000000

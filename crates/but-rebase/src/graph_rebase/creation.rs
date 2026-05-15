@@ -6,8 +6,8 @@ use but_graph::{Commit, SegmentIndex};
 use petgraph::{Direction, visit::EdgeRef as _};
 
 use crate::graph_rebase::{
-    Checkout, Edge, Editor, Pick, RevisionHistory, Selector, Step, StepGraph, StepGraphIndex,
-    SuccessfulRebase, util,
+    Checkout, Edge, Editor, ExtraRef, ExtraRefMutability, Pick, RevisionHistory, Selector, Step,
+    StepGraph, StepGraphIndex, SuccessfulRebase, util,
 };
 
 #[derive(Clone)]
@@ -18,8 +18,9 @@ pub struct GraphEditorOptions<'a> {
     /// Extra references that should be included in the editor.
     ///
     /// If the parentage of a commit in the extra references list gets modified,
-    /// the extra reference will be updated.
-    pub extra_refs: Vec<&'a gix::refs::FullNameRef>,
+    /// mutable extra references will be updated while immutable ones remain
+    /// traversal-only.
+    pub extra_refs: Vec<ExtraRef<'a>>,
 }
 
 impl Default for GraphEditorOptions<'_> {
@@ -35,7 +36,7 @@ impl Default for GraphEditorOptions<'_> {
 impl<'ws, 'meta, M: RefMetadata> Editor<'ws, 'meta, M> {
     /// Creates an editor out of the workspace graph with the default options.
     pub fn create(
-        workspace: &'ws mut but_graph::projection::Workspace,
+        workspace: &'ws mut but_graph::Workspace,
         meta: &'meta mut M,
         repo: &gix::Repository,
     ) -> Result<Self> {
@@ -44,7 +45,7 @@ impl<'ws, 'meta, M: RefMetadata> Editor<'ws, 'meta, M> {
 
     /// Creates an editor out of the workspace graph with the specified options.
     pub fn create_with_opts(
-        workspace: &'ws mut but_graph::projection::Workspace,
+        workspace: &'ws mut but_graph::Workspace,
         meta: &'meta mut M,
         repo: &gix::Repository,
         options: &GraphEditorOptions,
@@ -61,25 +62,59 @@ impl<'ws, 'meta, M: RefMetadata> Editor<'ws, 'meta, M> {
         // common base
         let entrypoint = workspace.graph.lookup_entrypoint()?;
 
-        let mut entrypoints = vec![entrypoint.segment_index];
+        let mut mutable_entrypoints = vec![entrypoint.segment_index];
+        let mut immutable_entrypoints = vec![];
 
         for extra_ref in &options.extra_refs {
-            let Some((segment, _)) = workspace.graph.segment_and_commit_by_ref_name(extra_ref)
+            let Some((segment, _)) = workspace
+                .graph
+                .segment_and_commit_by_ref_name(extra_ref.ref_name)
             else {
-                bail!("Failed to find corresponding segment for {extra_ref}");
+                bail!(
+                    "Failed to find corresponding segment for {}",
+                    extra_ref.ref_name
+                );
             };
-            entrypoints.push(segment.id);
+            if extra_ref.mutability == ExtraRefMutability::Mutable {
+                mutable_entrypoints.push(segment.id);
+            } else {
+                immutable_entrypoints.push(segment.id);
+            }
         }
 
         let mut segments_to_add = vec![];
         let mut seen_segments = HashSet::new();
 
-        for entrypoint in entrypoints {
+        for entrypoint in mutable_entrypoints {
             workspace.graph.visit_all_segments_including_start_until(
                 entrypoint,
                 Direction::Outgoing,
                 |segment| {
                     if seen_segments.insert(segment.id) {
+                        segments_to_add.push(segment.id);
+                        false
+                    } else {
+                        true
+                    }
+                },
+            );
+        }
+        let mut immutable_references = HashSet::new();
+        for entrypoint in immutable_entrypoints {
+            workspace.graph.visit_all_segments_including_start_until(
+                entrypoint,
+                Direction::Outgoing,
+                |segment| {
+                    if seen_segments.insert(segment.id) {
+                        immutable_references.extend(segment.ref_name().map(|r| r.to_owned()));
+                        immutable_references.extend(
+                            segment
+                                .commits
+                                .iter()
+                                .flat_map(|c| c.ref_iter())
+                                .map(|r| r.to_owned()),
+                        );
+
                         segments_to_add.push(segment.id);
                         false
                     } else {
@@ -306,6 +341,7 @@ impl<'ws, 'meta, M: RefMetadata> Editor<'ws, 'meta, M> {
                 .collect(),
             repo: repo.clone().with_object_memory(),
             history: RevisionHistory::new(),
+            immutable_references,
             workspace,
             meta,
         })
@@ -321,6 +357,7 @@ impl<'ws, 'meta, M: RefMetadata> SuccessfulRebase<'ws, 'meta, M> {
             checkouts: self.checkouts,
             repo: self.repo,
             history: self.history,
+            immutable_references: self.immutable_references,
             workspace: self.workspace,
             meta: self.meta,
         }
