@@ -466,7 +466,6 @@ pub fn graph_to_ref_info(
         stacks,
         target_ref,
         target_commit,
-        extra_target,
         metadata,
         lower_bound: _,
         lower_bound_segment_id,
@@ -481,7 +480,7 @@ pub fn graph_to_ref_info(
         }
         WorkspaceKind::AdHoc => (graph[*id].ref_info.as_ref(), false, None),
     };
-    let is_entrypoint = graph.lookup_entrypoint()?.segment_index == *id;
+    let is_entrypoint = graph.entrypoint()?.segment.id == *id;
     let mut info = RefInfo {
         workspace_ref_info: workspace_ref_info.cloned(),
         symbolic_remote_names: repo
@@ -490,7 +489,6 @@ pub fn graph_to_ref_info(
             .map(|n| n.into_owned().into())
             .collect(),
         lower_bound: *lower_bound_segment_id,
-        extra_target: *extra_target,
         stacks: stacks
             .iter()
             .map(|stack| branch::Stack::try_from_graph_stack(stack, repo))

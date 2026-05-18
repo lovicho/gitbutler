@@ -7,7 +7,7 @@ use petgraph::Direction;
 use tracing::instrument;
 
 use crate::{
-    CommitFlags, CommitIndex, Graph, Segment, SegmentIndex, Workspace, segment,
+    CommitFlags, CommitIndex, Graph, Segment, SegmentIndex, Workspace,
     workspace::{
         Stack, StackCommit, StackSegment, TargetRef, WorkspaceKind,
         workspace::find_segment_owner_indexes_by_refname,
@@ -17,10 +17,9 @@ use crate::{
 /// A utility type to represent `(stack_idx, segment_idx, commit_idx)`.
 pub type CommitOwnerIndexes = (usize, usize, CommitIndex);
 
-/// At the time this module was created, all of the functions in it were used by legacy crates.
-/// Feel free to promote them to non-legacy if the need arises, but mind the notes.
+mod queries;
 #[cfg(feature = "legacy")]
-pub(crate) mod legacy;
+pub use queries::legacy::HeadStatus;
 
 /// Lifecycle
 impl Workspace {
@@ -97,52 +96,26 @@ impl Workspace {
         }
     }
 
-    /// Return the segment index of the target, checking [`Self::target_ref`],
-    /// then [`Self::target_commit`], then [`Self::extra_target`] in that order.
-    ///
-    /// Returns `None` if no target is configured.
-    fn target_segment_index(&self) -> Option<SegmentIndex> {
-        self.target_ref
-            .as_ref()
-            .map(|t| t.segment_index)
-            .or(self.target_commit.as_ref().map(|t| t.segment_index))
-            .or(self.extra_target)
-    }
-
     /// Return the resolved target commit ID for use as a base for new branches.
     ///
     /// Prefers the stored [`Self::target_commit`] (the last-synced target SHA),
     /// falling back to the tip of [`Self::target_ref`] (the remote tracking branch).
-    /// Does not consider [`Self::extra_target`].
+    /// Does not consider additional traversal tips.
     ///
-    /// Use [`Self::target_commit_id()`] instead when callers need only the explicit
+    /// Use [`Self::stored_target_commit_id()`] instead when callers need only the explicit
     /// stored target commit without falling back to the target ref tip.
     ///
     /// Returns `None` if neither `target_commit` nor `target_ref` is configured.
     pub fn resolved_target_commit_id(&self) -> Option<gix::ObjectId> {
-        self.target_commit
-            .as_ref()
-            .map(|t| t.commit_id)
-            .or_else(|| {
-                self.target_ref
-                    .as_ref()
-                    .and_then(|t| self.graph.tip_skip_empty(t.segment_index).map(|c| c.id))
-            })
-    }
-
-    /// Return the stored target commit ID, if configured.
-    ///
-    /// This is the commit (supposedly) reachable by the target ref that the workspace chose
-    /// to keep as its base. Unlike [`Self::resolved_target_commit_id()`], this
-    /// does not fall back to the current target ref tip.
-    pub fn target_commit_id(&self) -> Option<gix::ObjectId> {
-        self.target_commit.as_ref().map(|target| target.commit_id)
+        self.stored_target_commit_id().or_else(|| {
+            self.target_ref
+                .as_ref()
+                .and_then(|t| self.tip_commit_by_segment_id(t.segment_index).map(|c| c.id))
+        })
     }
 
     /// Return the `(merge-base, target-commit-id)` of the merge-base between the `commit_to_merge`
-    /// and either the [target-branch](Self::target_ref), the [target-commit](Self::target_commit),
-    /// or the [extra-target](Self::extra_target), depending on which is set and encountered
-    /// in this order.
+    /// and the effective target side, see [Self::effective_target_segment_index()].
     /// Return `None` when none of these is set, or if there was no merge-base.
     ///
     /// Use this to get the merge-base for test-merges between `commit_to_merge` and the target,
@@ -159,18 +132,16 @@ impl Workspace {
                 .then_some(s.id)
         })?;
 
-        let target_segment_index = self.target_segment_index()?;
+        let target_segment_index = self.effective_target_segment_index()?;
 
         let merge_base_segment_index = self
             .graph
             .find_merge_base(commit_segment_index, target_segment_index)?;
 
-        self.graph
-            .tip_skip_empty(merge_base_segment_index)
+        self.tip_commit_by_segment_id(merge_base_segment_index)
             .map(|c| c.id)
             .zip(
-                self.graph
-                    .tip_skip_empty(target_segment_index)
+                self.tip_commit_by_segment_id(target_segment_index)
                     .map(|c| c.id),
             )
     }
@@ -209,16 +180,6 @@ impl Workspace {
                 .lookup_sibling_segment(t.segment_index)
                 .and_then(|local_tracking_segment| local_tracking_segment.ref_name())
                 .is_some_and(|local_tracking_ref| local_tracking_ref == name)
-    }
-
-    /// Return the `commit` at the tip of the workspace itself, and do so by following empty segments along the
-    /// first parent until the first commit is found.
-    /// This importantly is different from the [`Graph::lookup_entrypoint()`] `commit`, as the entrypoint could be anywhere
-    /// inside the workspace as well.
-    ///
-    /// Note that this commit could also be the base of the workspace, particularly if there is no commits in the workspace.
-    pub fn tip_commit(&self) -> Option<&segment::Commit> {
-        self.graph.tip_skip_empty(self.id)
     }
 
     /// Lookup a triple obtained by [`Self::find_owner_indexes_by_commit_id()`] or panic.
@@ -455,7 +416,7 @@ impl TargetRef {
     /// Visit all segments whose commits would be considered 'upstream', or part of the target branch
     /// whose tip is identified with `target_segment`. The `lower_bound_segment_and_generation` is another way
     /// to stop the traversal.
-    pub fn visit_upstream_commits(
+    pub(crate) fn visit_upstream_commits(
         graph: &Graph,
         target_segment: SegmentIndex,
         lower_bound_segment_and_generation: Option<(SegmentIndex, usize)>,
@@ -489,7 +450,6 @@ impl std::fmt::Debug for Workspace {
             .field("metadata", &self.metadata)
             .field("target_ref", &self.target_ref)
             .field("target_commit", &self.target_commit)
-            .field("extra_target", &self.extra_target)
             .finish()
     }
 }
