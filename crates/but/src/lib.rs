@@ -30,7 +30,7 @@ use clap::Parser;
 
 pub mod args;
 use args::{
-    Args, OutputFormat, Subcommands, actions, alias as alias_args, branch, claude, cursor, forge,
+    Args, OutputFormat, Subcommands, actions, alias as alias_args, branch, forge,
     update as update_args, worktree,
 };
 use but_settings::AppSettings;
@@ -41,7 +41,7 @@ use theme::Paint;
 use crate::command::legacy::ShowDiffInEditor;
 use crate::{
     setup::{BackgroundSync, InitCtxOptions},
-    utils::{OutputChannel, ResultErrorExt, ResultJsonExt, ResultMetricsExt},
+    utils::{OutputChannel, ResultErrorExt, ResultMetricsExt, envs},
 };
 
 mod id;
@@ -59,12 +59,30 @@ const CLI_DATE: CustomFormat = gix::date::time::format::ISO8601;
 
 /// Handle `args` which must be what's passed by `std::env::args_os()`.
 pub async fn handle_args(args: impl Iterator<Item = OsString>) -> Result<()> {
+    let theme_preset_from_env: anyhow::Result<theme::ThemePreset> =
+        if let Some(theme_name) = std::env::var_os(envs::BUT_THEME) {
+            theme_name.to_string_lossy().parse()
+        } else {
+            Ok(theme::ThemePreset::Dark)
+        };
+
     {
+        let theme_preset = match &theme_preset_from_env {
+            Ok(theme_preset) => theme_preset.clone(),
+            Err(_) => {
+                // ignore for now, we print a warning once the output channel has been initialized
+                theme::ThemePreset::Dark
+            }
+        };
+
+        // Note: Overrides in but-theme.json are hardwired to apply to the Dark theme at present.
+        // This is only for internal testing at the moment so it's not worthwhile to go through the
+        // motions of merging overrides with a configurable theme.
         let theme = dirs::config_dir()
             .map(|dir| dir.join("gitbutler").join("but-theme.json"))
             .filter(|p| p.exists())
             .and_then(|p| theme::load(&p).ok())
-            .unwrap_or_default();
+            .unwrap_or_else(|| theme::Theme::default_for(theme_preset));
         theme::init(theme);
     }
 
@@ -146,6 +164,14 @@ pub async fn handle_args(args: impl Iterator<Item = OsString>) -> Result<()> {
     but_secret::secret::set_application_namespace(namespace);
 
     let mut out = OutputChannel::new_with_optional_pager(output_format, use_pager);
+
+    if let (Err(theme_preset_err), Some(out)) = (theme_preset_from_env, out.for_human()) {
+        writeln!(
+            out,
+            "{}: {theme_preset_err}",
+            theme::get().attention.paint("Failed to set theme")
+        )?;
+    }
 
     #[cfg(feature = "agentlog")]
     if let Some(Subcommands::AgentLog { .. }) = &args.cmd {
@@ -471,89 +497,6 @@ async fn match_subcommand(
             None => {
                 let ctx = setup::init_ctx(&args, InitCtxOptions::default(), out)?;
                 command::legacy::actions::list_actions(&ctx, out, 0, 10)
-            }
-        },
-        #[cfg(feature = "legacy")]
-        Subcommands::Claude(claude::Platform { cmd }) => {
-            use but_claude::hooks::OutputClaudeJson;
-            let ctx = setup::init_ctx(&args, InitCtxOptions::default(), out)?;
-            match cmd {
-                claude::Subcommands::PreTool => {
-                    but_claude::hooks::handle_pre_tool_call(ctx, std::io::stdin().lock())
-                        .output_claude_json()
-                        .emit_metrics(metrics_ctx)
-                }
-                claude::Subcommands::PostTool => {
-                    but_claude::hooks::handle_post_tool_call(ctx, std::io::stdin().lock())
-                        .output_claude_json()
-                        .emit_metrics(metrics_ctx)
-                }
-                claude::Subcommands::Stop => {
-                    but_claude::hooks::handle_stop(ctx, std::io::stdin().lock())
-                        .output_claude_json()
-                        .emit_metrics(metrics_ctx)
-                }
-                claude::Subcommands::Last { offset } => {
-                    let message = but_claude::db::get_user_message(&ctx, Some(offset as i64))?;
-                    match message {
-                        Some(msg) => {
-                            if args.json {
-                                // For JSON output, include timestamp and message
-                                let output = serde_json::json!({
-                                    "timestamp": msg.created_at().format("%Y-%m-%d %H:%M:%S").to_string(),
-                                    "message": match msg.content() {
-                                        but_claude::MessagePayload::User(input) => &input.message,
-                                        _ => "",
-                                    }
-                                });
-                                println!("{}", serde_json::to_string_pretty(&output)?);
-                            } else {
-                                // For human-readable output, show timestamp and message
-                                println!(
-                                    "{} {}",
-                                    theme::get().important.paint("Timestamp:"),
-                                    theme::get().time.paint(
-                                        msg.created_at().format("%Y-%m-%d %H:%M:%S").to_string()
-                                    )
-                                );
-                                match msg.content() {
-                                    but_claude::MessagePayload::User(input) => {
-                                        println!("{}", input.message);
-                                    }
-                                    _ => {
-                                        println!(
-                                            "{}",
-                                            theme::get().error.paint("Not a user input message")
-                                        );
-                                    }
-                                }
-                            }
-                        }
-                        None => {
-                            if args.json {
-                                println!("null");
-                            } else {
-                                println!("No user message found at offset {offset}");
-                            }
-                        }
-                    }
-                    Ok(())
-                }
-            }
-        }
-        #[cfg(feature = "legacy")]
-        Subcommands::Cursor(cursor::Platform { cmd }) => match cmd {
-            cursor::Subcommands::AfterEdit => {
-                but_cursor::handle_after_edit(std::io::stdin().lock())
-                    .await
-                    .output_json(true)
-                    .emit_metrics(metrics_ctx)
-            }
-            cursor::Subcommands::Stop { nightly } => {
-                but_cursor::handle_stop(nightly, std::io::stdin().lock())
-                    .await
-                    .output_json(true)
-                    .emit_metrics(metrics_ctx)
             }
         },
         #[cfg(feature = "legacy")]

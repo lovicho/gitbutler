@@ -1,7 +1,7 @@
 use crate::{command::undo::run_mutate_undo_roundtrip_test, utils::Sandbox};
 
 // TODO: `but commit empty` doesn't support `--message`, it should so we don't need this hack
-fn commit_empty_with_message(env: &Sandbox, message: &str) -> String {
+pub(super) fn commit_empty_with_message(env: &Sandbox, message: &str) -> String {
     #[derive(serde::Deserialize)]
     struct CommitEmptyJson {
         commit_id: String,
@@ -100,7 +100,7 @@ fn can_undo_but_commit_dash_dash_create_existing_branch() {
 }
 
 #[test]
-#[ignore = "undoing assignments dont work"]
+#[ignore = "undoing assignments dont work. https://linear.app/gitbutler/issue/GB-1468/undoing-but-commit-only-to-commit-only-assigned-changes-doesnt-work"]
 fn can_undo_but_commit_dash_dash_only() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack").unwrap();
     env.setup_metadata_at_target(&["A"], "origin/main").unwrap();

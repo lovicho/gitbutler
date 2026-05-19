@@ -18,7 +18,6 @@
 	import ToastController from "$components/shared/ToastController.svelte";
 	import GlobalModalRouter from "$components/views/GlobalModalRouter.svelte";
 	import { initDependencies } from "$lib/bootstrap/deps";
-	import { MessageQueueProcessor } from "$lib/codegen/messageQueue.svelte";
 	import { GIT_CONFIG_SERVICE } from "$lib/config/gitConfigService";
 	import { fModeEnabled } from "$lib/config/uiFeatureFlags";
 	import { PROJECTS_SERVICE } from "$lib/project/projectsService";
@@ -45,8 +44,6 @@
 	const { backend } = untrack(() => data);
 	initDependencies(untrack(() => data));
 
-	new MessageQueueProcessor();
-
 	const clientState = inject(CLIENT_STATE);
 	const posthog = inject(POSTHOG_WRAPPER);
 	const uiState = inject(UI_STATE);
@@ -61,6 +58,28 @@
 
 	const userService = inject(USER_SERVICE);
 
+	let coldstartLinks = $state<string[] | undefined>(undefined);
+	backend
+		.getColdStartDeepLinkUrls()
+		.then((result) => (coldstartLinks = result))
+		.catch(() => (coldstartLinks = []));
+
+	$effect(() => {
+		if (coldstartLinks !== undefined) {
+			backend.initDeepLinking(
+				{
+					open: (path: string) => {
+						projectsService.handleDeepLinkOpen(path);
+					},
+					login: (accessToken: string) => {
+						userService.setUserAccessToken(accessToken);
+					},
+				},
+				coldstartLinks,
+			);
+		}
+	});
+
 	// Project tracking
 	const projectsService = inject(PROJECTS_SERVICE);
 	$effect(() => {
@@ -72,16 +91,6 @@
 	// Keyboard shortcuts
 	const shortcutService = inject(SHORTCUT_SERVICE);
 	$effect(() => shortcutService.listen());
-
-	// Deep linking
-	backend.initDeepLinking({
-		open: (path: string) => {
-			projectsService.handleDeepLinkOpen(path);
-		},
-		login: (accessToken: string) => {
-			userService.setUserAccessToken(accessToken);
-		},
-	});
 
 	// =============================================================================
 	// ANALYTICS & NAVIGATION

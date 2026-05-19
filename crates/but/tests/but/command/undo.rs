@@ -1,8 +1,23 @@
-use crate::utils::Sandbox;
+use crate::{
+    command::undo::undo_commit::commit_empty_with_message,
+    utils::{Sandbox, assert_ignored_tests_have_linear_ticket, make_absolute},
+};
 
 mod undo_commit;
 mod undo_redo;
 mod undo_rub;
+
+#[test]
+fn ignored_tests_have_linear_tickets() {
+    assert_ignored_tests_have_linear_ticket(file!());
+
+    let this_file = make_absolute(file!());
+    let this_dir = make_absolute(this_file.parent().unwrap()).join("undo");
+    for entry in this_dir.read_dir().unwrap() {
+        let entry = entry.unwrap();
+        assert_ignored_tests_have_linear_ticket(entry.path());
+    }
+}
 
 /// Run an undo test tests a roundtrip `mutate` -> `but undo`, and asserts that the status output is
 /// the same before and after the roundtrip.
@@ -82,7 +97,66 @@ fn can_undo_discard() {
 }
 
 #[test]
-#[ignore = "Test harness runs with cv3 feature flag, and but_core::worktree::safe_checkout_from_head does not restore the worktree file A for some reason"]
+fn can_undo_but_discard_file_modifications() -> anyhow::Result<()> {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack-two-commits")?;
+    env.setup_metadata(&["A"])?;
+
+    env.file("first", "This is new stuff");
+
+    run_mutate_undo_roundtrip_test(&env, |env| {
+        env.but("discard zz").assert().success();
+    });
+
+    Ok(())
+}
+
+#[test]
+fn can_undo_but_discard_new_file() -> anyhow::Result<()> {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack-two-commits")?;
+    env.setup_metadata(&["A"])?;
+
+    env.file("totally_new_file", "This is new stuff");
+
+    run_mutate_undo_roundtrip_test(&env, |env| {
+        env.but("discard zz").assert().success();
+    });
+
+    Ok(())
+}
+
+#[test]
+fn can_undo_but_discard_deletion() -> anyhow::Result<()> {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack-two-commits")?;
+    env.setup_metadata(&["A"])?;
+
+    let filepath = env.projects_root().join("first");
+    std::fs::remove_file(&filepath).expect("must be able to delete file");
+
+    run_mutate_undo_roundtrip_test(&env, |env| {
+        env.but("discard zz").assert().success();
+    });
+
+    Ok(())
+}
+
+#[test]
+fn can_undo_but_discard_rename() -> anyhow::Result<()> {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack-two-commits")?;
+    env.setup_metadata(&["A"])?;
+
+    let filepath = env.projects_root().join("first");
+    let new_filepath = env.projects_root().join("first_renamed");
+    std::fs::rename(&filepath, &new_filepath).expect("must be able to move file");
+
+    run_mutate_undo_roundtrip_test(&env, |env| {
+        env.but("discard zz").assert().success();
+    });
+
+    Ok(())
+}
+
+#[test]
+#[ignore = "Test harness runs with cv3 feature flag, and but_core::worktree::safe_checkout_from_head does not restore the worktree file A for some reason. https://linear.app/gitbutler/issue/GB-1403/run-test-both-with-and-without-cv3-feature-flag"]
 fn can_undo_unapply() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack").unwrap();
     env.setup_metadata(&["A"]).unwrap();
@@ -97,7 +171,7 @@ fn can_undo_unapply() {
 }
 
 #[test]
-#[ignore = "Test harness runs with cv3 feature flag, and but_core::worktree::safe_checkout_from_head does not remove the worktree file A for some reason"]
+#[ignore = "Test harness runs with cv3 feature flag, and but_core::worktree::safe_checkout_from_head does not remove the worktree file A for some reason. https://linear.app/gitbutler/issue/GB-1403/run-test-both-with-and-without-cv3-feature-flag"]
 fn can_undo_clean_apply() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack").unwrap();
     env.setup_metadata(&["A"]).unwrap();
@@ -212,4 +286,210 @@ fn can_undo_but_absorb() {
     run_mutate_undo_roundtrip_test(&env, |env| {
         env.but("absorb").assert().success();
     });
+}
+
+#[test]
+fn can_undo_but_squash_with_two_commits() {
+    let env =
+        Sandbox::init_scenario_with_target_and_default_settings("one-stack-two-commits").unwrap();
+    env.setup_metadata(&["A"]).unwrap();
+
+    let commit_one = commit_empty_with_message(&env, "one");
+    let commit_two = commit_empty_with_message(&env, "two");
+
+    run_mutate_undo_roundtrip_test(&env, |env| {
+        env.but(format!("squash {commit_one} {commit_two}"))
+            .assert()
+            .success();
+    });
+
+    // ensure we only create one oplog entry
+    env.but("oplog")
+        .args(["list"])
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+Operations History
+──────────────────────────────────────────────────
+c5d83d9 2000-01-02 00:00:00 [UNDO] Restored from snapshot: Squashed commit (32bd7b0)
+32bd7b0 2000-01-02 00:00:00 [SQUASH] Squashed commit
+68ab82c 2000-01-02 00:00:00 [REWORD] Updated commit message
+39c0943 2000-01-02 00:00:00 [INSERT_COMMIT] Inserted blank commit
+af394f9 2000-01-02 00:00:00 [REWORD] Updated commit message
+083e937 2000-01-02 00:00:00 [INSERT_COMMIT] Inserted blank commit
+
+"#]]);
+}
+
+#[test]
+fn can_undo_but_squash_with_three_commits() {
+    let env =
+        Sandbox::init_scenario_with_target_and_default_settings("one-stack-two-commits").unwrap();
+    env.setup_metadata(&["A"]).unwrap();
+
+    let commit_one = commit_empty_with_message(&env, "one");
+    let commit_two = commit_empty_with_message(&env, "two");
+    let commit_three = commit_empty_with_message(&env, "three");
+
+    run_mutate_undo_roundtrip_test(&env, |env| {
+        env.but(format!("squash {commit_one} {commit_two} {commit_three}"))
+            .assert()
+            .success();
+    });
+
+    // ensure we only create one oplog entry
+    env.but("oplog")
+        .args(["list"])
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+Operations History
+──────────────────────────────────────────────────
+177ce51 2000-01-02 00:00:00 [UNDO] Restored from snapshot: Squashed commit (a7a1cd4)
+a7a1cd4 2000-01-02 00:00:00 [SQUASH] Squashed commit
+c763bf9 2000-01-02 00:00:00 [REWORD] Updated commit message
+3d40c95 2000-01-02 00:00:00 [INSERT_COMMIT] Inserted blank commit
+68ab82c 2000-01-02 00:00:00 [REWORD] Updated commit message
+39c0943 2000-01-02 00:00:00 [INSERT_COMMIT] Inserted blank commit
+af394f9 2000-01-02 00:00:00 [REWORD] Updated commit message
+083e937 2000-01-02 00:00:00 [INSERT_COMMIT] Inserted blank commit
+
+"#]]);
+}
+
+#[test]
+fn can_undo_but_squash_with_range_of_commits() {
+    let env =
+        Sandbox::init_scenario_with_target_and_default_settings("one-stack-two-commits").unwrap();
+    env.setup_metadata(&["A"]).unwrap();
+
+    let commit_one = commit_empty_with_message(&env, "one");
+    commit_empty_with_message(&env, "two");
+    let commit_three = commit_empty_with_message(&env, "three");
+
+    run_mutate_undo_roundtrip_test(&env, |env| {
+        env.but(format!("squash {commit_one}..{commit_three}"))
+            .assert()
+            .success()
+            .stdout_eq(snapbox::str![[r#"
+Squashed 2 commits → [..]
+
+"#]]);
+    });
+
+    // ensure we only create one oplog entry
+    env.but("oplog")
+        .args(["list"])
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+Operations History
+──────────────────────────────────────────────────
+602cfc8 2000-01-02 00:00:00 [UNDO] Restored from snapshot: Squashed commit (a7a1cd4)
+a7a1cd4 2000-01-02 00:00:00 [SQUASH] Squashed commit
+c763bf9 2000-01-02 00:00:00 [REWORD] Updated commit message
+3d40c95 2000-01-02 00:00:00 [INSERT_COMMIT] Inserted blank commit
+68ab82c 2000-01-02 00:00:00 [REWORD] Updated commit message
+39c0943 2000-01-02 00:00:00 [INSERT_COMMIT] Inserted blank commit
+af394f9 2000-01-02 00:00:00 [REWORD] Updated commit message
+083e937 2000-01-02 00:00:00 [INSERT_COMMIT] Inserted blank commit
+
+"#]]);
+}
+
+#[test]
+fn can_undo_but_squash_with_two_commits_with_message() {
+    let env =
+        Sandbox::init_scenario_with_target_and_default_settings("one-stack-two-commits").unwrap();
+    env.setup_metadata(&["A"]).unwrap();
+
+    let commit_one = commit_empty_with_message(&env, "one");
+    let commit_two = commit_empty_with_message(&env, "two");
+
+    run_mutate_undo_roundtrip_test(&env, |env| {
+        env.but(format!(
+            "squash {commit_one} {commit_two} -m 'squashed message'"
+        ))
+        .assert()
+        .success();
+    });
+
+    // ensure we only create one oplog entry
+    env.but("oplog")
+        .args(["list"])
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+Operations History
+──────────────────────────────────────────────────
+e394b4a 2000-01-02 00:00:00 [UNDO] Restored from snapshot: Squashed commit (32bd7b0)
+32bd7b0 2000-01-02 00:00:00 [SQUASH] Squashed commit
+68ab82c 2000-01-02 00:00:00 [REWORD] Updated commit message
+39c0943 2000-01-02 00:00:00 [INSERT_COMMIT] Inserted blank commit
+af394f9 2000-01-02 00:00:00 [REWORD] Updated commit message
+083e937 2000-01-02 00:00:00 [INSERT_COMMIT] Inserted blank commit
+
+"#]]);
+}
+
+#[test]
+fn can_undo_but_squash_with_branch() {
+    let env =
+        Sandbox::init_scenario_with_target_and_default_settings("one-stack-two-commits").unwrap();
+    env.setup_metadata(&["A"]).unwrap();
+
+    commit_empty_with_message(&env, "one");
+    commit_empty_with_message(&env, "two");
+
+    run_mutate_undo_roundtrip_test(&env, |env| {
+        env.but("squash A").assert().success();
+    });
+
+    // ensure we only create one oplog entry
+    env.but("oplog")
+        .args(["list"])
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+Operations History
+──────────────────────────────────────────────────
+b4f79ed 2000-01-02 00:00:00 [UNDO] Restored from snapshot: Squashed commit (32bd7b0)
+32bd7b0 2000-01-02 00:00:00 [SQUASH] Squashed commit
+68ab82c 2000-01-02 00:00:00 [REWORD] Updated commit message
+39c0943 2000-01-02 00:00:00 [INSERT_COMMIT] Inserted blank commit
+af394f9 2000-01-02 00:00:00 [REWORD] Updated commit message
+083e937 2000-01-02 00:00:00 [INSERT_COMMIT] Inserted blank commit
+
+"#]]);
+}
+
+#[test]
+fn can_undo_but_squash_with_branch_and_drop_message() {
+    let env =
+        Sandbox::init_scenario_with_target_and_default_settings("one-stack-two-commits").unwrap();
+    env.setup_metadata(&["A"]).unwrap();
+
+    commit_empty_with_message(&env, "one");
+    commit_empty_with_message(&env, "two");
+
+    run_mutate_undo_roundtrip_test(&env, |env| {
+        env.but("squash A --drop-message").assert().success();
+    });
+
+    // ensure we only create one oplog entry
+    env.but("oplog")
+        .args(["list"])
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+Operations History
+──────────────────────────────────────────────────
+64f3cfa 2000-01-02 00:00:00 [UNDO] Restored from snapshot: Squashed commit (32bd7b0)
+32bd7b0 2000-01-02 00:00:00 [SQUASH] Squashed commit
+68ab82c 2000-01-02 00:00:00 [REWORD] Updated commit message
+39c0943 2000-01-02 00:00:00 [INSERT_COMMIT] Inserted blank commit
+af394f9 2000-01-02 00:00:00 [REWORD] Updated commit message
+083e937 2000-01-02 00:00:00 [INSERT_COMMIT] Inserted blank commit
+
+"#]]);
 }
