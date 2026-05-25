@@ -6,7 +6,8 @@ use std::{
 
 use bstr::{BStr, ByteSlice};
 use but_core::{
-    RefMetadata, RepositoryExt, TreeChange, TreeStatus, open_repo_for_merging,
+    RefMetadata, RepositoryExt, TreeChange, TreeStatus, is_workspace_ref_name,
+    open_repo_for_merging,
     ref_metadata::{Branch, ValueInfo, Workspace},
 };
 use but_meta::VirtualBranchesTomlMetadata;
@@ -225,10 +226,10 @@ fn workspace_snapshot(repo: &gix::Repository) -> anyhow::Result<WorkspaceObserva
     if legacy_metadata_exists
         && let Ok(meta) = VirtualBranchesTomlMetadata::from_path_read_only(&metadata_path)
     {
-        return workspace_snapshot_with_meta(repo, &meta);
+        return workspace_snapshot_with_current_branch_fallback(repo, &meta);
     }
 
-    let mut observation = workspace_snapshot_with_meta(repo, &EmptyRefMetadata)?;
+    let mut observation = workspace_snapshot_with_current_branch_fallback(repo, &EmptyRefMetadata)?;
     if legacy_metadata_exists && observation.error_kind.is_none() {
         observation.error_kind = Some(SnapshotErrorKind::Workspace);
     }
@@ -240,6 +241,65 @@ fn legacy_metadata_exists(metadata_path: &Path) -> bool {
         || metadata_path
             .parent()
             .is_some_and(|storage_path| storage_path.join("but.sqlite").is_file())
+}
+
+fn workspace_snapshot_with_current_branch_fallback(
+    repo: &gix::Repository,
+    meta: &impl RefMetadata,
+) -> anyhow::Result<WorkspaceObservation> {
+    match workspace_snapshot_with_meta(repo, meta) {
+        Ok(mut observation) => {
+            if observation.observed_targets.is_empty()
+                && let Ok(fallback) = current_branch_targets(repo, meta)
+                && !fallback.is_empty()
+            {
+                observation.observed_targets = fallback;
+            }
+            Ok(observation)
+        }
+        Err(error) => match current_branch_targets(repo, meta) {
+            Ok(fallback) if !fallback.is_empty() => Ok(WorkspaceObservation {
+                stacks: Vec::new(),
+                observed_targets: fallback,
+                error_kind: Some(SnapshotErrorKind::Workspace),
+            }),
+            _ => Err(error),
+        },
+    }
+}
+
+fn current_branch_targets(
+    repo: &gix::Repository,
+    meta: &impl RefMetadata,
+) -> anyhow::Result<ObservedTargets> {
+    let head = repo.head()?;
+    let Some(ref_name) = head.referent_name() else {
+        anyhow::bail!("HEAD is detached");
+    };
+    let full_ref_name = ref_name.to_string();
+    if !full_ref_name.starts_with("refs/heads/") {
+        anyhow::bail!("HEAD does not point to a local branch");
+    }
+    if is_workspace_ref_name(ref_name) {
+        anyhow::bail!("HEAD points to the GitButler workspace branch");
+    }
+    let branch = BranchTarget {
+        key: format!("ref:{full_ref_name}"),
+        name: ref_name.shorten().to_string(),
+    };
+    let reviews = meta
+        .branch_opt(ref_name)
+        .ok()
+        .flatten()
+        .map(|branch_metadata| review_targets(&branch.key, Some(&branch_metadata)))
+        .unwrap_or_default();
+    let mut observed_targets = ObservedTargets {
+        branches: vec![branch],
+        reviews,
+        changes: Vec::new(),
+    };
+    observed_targets.sort_and_dedup();
+    Ok(observed_targets)
 }
 
 fn workspace_snapshot_with_meta(
@@ -269,7 +329,8 @@ fn workspace_snapshot_with_meta(
                 key: format!("ref:{full_ref_name}"),
                 name: ref_info.ref_name.shorten().to_string(),
             };
-            let review = review_target(&branch.key, segment.metadata.as_ref());
+            let reviews = review_targets(&branch.key, segment.metadata.as_ref());
+            let review = reviews.first().cloned();
             for commit in &segment.commits {
                 let change_id = commit.change_id.as_ref().map(ToString::to_string);
                 if let Some(change_id) = &change_id {
@@ -281,9 +342,7 @@ fn workspace_snapshot_with_meta(
             }
 
             observed_targets.branches.push(branch.clone());
-            if let Some(review) = review.clone() {
-                observed_targets.reviews.push(review);
-            }
+            observed_targets.reviews.extend(reviews);
             branches.push(BranchSnapshot {
                 key: branch.key,
                 name: branch.name,
@@ -303,20 +362,26 @@ fn workspace_snapshot_with_meta(
     })
 }
 
-fn review_target(branch_key: &str, metadata: Option<&Branch>) -> Option<ReviewTarget> {
-    let review = &metadata?.review;
+fn review_targets(branch_key: &str, metadata: Option<&Branch>) -> Vec<ReviewTarget> {
+    let Some(review) = metadata.map(|metadata| &metadata.review) else {
+        return Vec::new();
+    };
+    let mut targets = Vec::new();
     if let Some(review_id) = &review.review_id {
-        return Some(ReviewTarget {
+        targets.push(ReviewTarget {
             key: format!("gitbutler-review:{review_id}"),
             pull_request: review.pull_request,
             review_id: Some(review_id.clone()),
         });
     }
-    review.pull_request.map(|pull_request| ReviewTarget {
-        key: format!("pull-request:{branch_key}#{pull_request}"),
-        pull_request: Some(pull_request),
-        review_id: None,
-    })
+    if let Some(pull_request) = review.pull_request {
+        targets.push(ReviewTarget {
+            key: format!("pull-request:{branch_key}#{pull_request}"),
+            pull_request: Some(pull_request),
+            review_id: None,
+        });
+    }
+    targets
 }
 
 fn paths_from_changes(changes: impl IntoIterator<Item = TreeChange>) -> Vec<String> {
@@ -359,6 +424,10 @@ impl PathList {
 }
 
 impl ObservedTargets {
+    fn is_empty(&self) -> bool {
+        self.branches.is_empty() && self.reviews.is_empty() && self.changes.is_empty()
+    }
+
     pub(crate) fn branch_keys(&self) -> impl Iterator<Item = &str> {
         self.branches.iter().map(|target| target.key.as_str())
     }
@@ -478,6 +547,31 @@ impl RefMetadata for EmptyRefMetadata {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn review_targets_include_review_id_and_pull_request() {
+        let mut metadata = Branch::default();
+        metadata.review.review_id = Some("review-1".to_owned());
+        metadata.review.pull_request = Some(42);
+
+        let targets = review_targets("ref:refs/heads/feature", Some(&metadata));
+
+        assert_eq!(
+            targets,
+            [
+                ReviewTarget {
+                    key: "gitbutler-review:review-1".to_owned(),
+                    pull_request: Some(42),
+                    review_id: Some("review-1".to_owned()),
+                },
+                ReviewTarget {
+                    key: "pull-request:ref:refs/heads/feature#42".to_owned(),
+                    pull_request: Some(42),
+                    review_id: None,
+                }
+            ]
+        );
+    }
 
     #[test]
     fn environment_from_parts_classifies_partial_and_failed_observations() {

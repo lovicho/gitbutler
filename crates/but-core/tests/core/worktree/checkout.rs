@@ -83,6 +83,33 @@ fn no_op_trees_never_touch_worktree() -> anyhow::Result<()> {
 }
 
 #[test]
+fn conflicted_commits_cannot_be_checked_out() -> anyhow::Result<()> {
+    let repo = crate::commit::conflict_repo("normal-and-artificial")?;
+    let normal = repo.rev_parse_single("normal")?.detach();
+    let conflicted = repo.rev_parse_single("conflicted")?.detach();
+
+    let err = safe_checkout(normal, conflicted, &repo, Default::default())
+        .expect_err("safe_checkout must reject GitButler-conflicted commits");
+    assert_eq!(
+        err.to_string(),
+        "Refusing to check out conflicted commit 84503317a1e1464381fcff65ece14bc1f4315b7c",
+    );
+
+    safe_checkout(
+        repo.head_id()?.detach(),
+        conflicted,
+        &repo,
+        checkout::Options {
+            allow_conflicted_commit_checkout: true,
+            ..Default::default()
+        },
+    )
+    .expect("internal callers can explicitly opt into conflicted commit checkout");
+
+    Ok(())
+}
+
+#[test]
 fn pure_deletion_checkout_does_not_restore_unrelated_worktree_deletions() -> anyhow::Result<()> {
     let (repo, _tmp) = writable_scenario_slow("all-file-types-renamed-and-modified");
     insta::assert_snapshot!(git_status(&repo)?, @r"
@@ -288,7 +315,7 @@ this will cause a conflict
     let err = safe_checkout(head_commit.id, new_commit.id, &repo, Default::default()).unwrap_err();
     assert_eq!(
         err.to_string(),
-        "Worktree changes would be overwritten by checkout: \"file\"",
+        "Uncommitted files would be overwritten by checkout: \"file\"",
         "we check for conflict markers, and fail."
     );
     // Nothing else changes
@@ -539,7 +566,7 @@ fn snapshot_fails_by_default_if_changed_file_turns_into_directory() -> anyhow::R
     let err = safe_checkout(head_commit.id, new_commit.id, &repo, Default::default()).unwrap_err();
     assert_eq!(
         err.to_string(),
-        "Worktree changes would be overwritten by checkout: \"file\", \"file-in-index\"",
+        "Uncommitted files would be overwritten by checkout: \"file\", \"file-in-index\"",
         "conflicting worktree changes prevent a commit"
     );
 
@@ -749,7 +776,7 @@ fn unrelated_additions_are_fine_even_with_conflicts_in_index() -> anyhow::Result
     let err = safe_checkout(head_commit.id, new_commit.id, &repo, Default::default()).unwrap_err();
     assert_eq!(
         err.to_string(),
-        "Worktree changes would be overwritten by checkout: \"file\"",
+        "Uncommitted files would be overwritten by checkout: \"file\"",
         "We don't allow to checkout conflicting files with default settings as there is no snapshot"
     );
 
@@ -1045,7 +1072,7 @@ fn partial_commit_with_adjacent_lines_conflicts_on_checkout() -> anyhow::Result<
     let err = safe_checkout(head_commit.id, new_commit.id, &repo, Default::default()).unwrap_err();
     assert!(
         err.to_string()
-            .contains("Worktree changes would be overwritten"),
+            .contains("Uncommitted files would be overwritten"),
         "checkout must abort on partial-commit conflict: {err}"
     );
 
@@ -1079,7 +1106,7 @@ fn partial_commit_with_deletion_plus_insertion_conflicts_on_checkout() -> anyhow
     let err = safe_checkout(head_commit.id, new_commit.id, &repo, Default::default()).unwrap_err();
     assert!(
         err.to_string()
-            .contains("Worktree changes would be overwritten"),
+            .contains("Uncommitted files would be overwritten"),
         "checkout must abort on partial-commit conflict: {err}"
     );
 
