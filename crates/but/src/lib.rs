@@ -45,7 +45,7 @@ use crate::{
 };
 
 mod error;
-pub(crate) use error::{BadInput, CliError, CliResult};
+pub(crate) use error::{CliError, CliResult, bad_input};
 
 mod id;
 pub use id::{CliId, IdMap};
@@ -132,11 +132,6 @@ pub async fn handle_args(args: impl Iterator<Item = OsString>) -> Result<()> {
     }
 
     let mut args: Args = Args::parse_from(args);
-    if args.path.is_some() && args.cmd.is_some() {
-        anyhow::bail!(
-            "PATH cannot be used together with a subcommand. To run a subcommand in a different directory, use `-C <path>` before the subcommand, for example: `but -C <path> status`"
-        );
-    }
     let output_format = if args.json {
         OutputFormat::Json
     } else {
@@ -176,7 +171,6 @@ pub async fn handle_args(args: impl Iterator<Item = OsString>) -> Result<()> {
         )?;
     }
 
-    #[cfg(feature = "agentlog")]
     if let Some(Subcommands::AgentLog { .. }) = &args.cmd {
         let Some(Subcommands::AgentLog { cmd }) = args.cmd.take() else {
             unreachable!("agentlog command was checked above")
@@ -187,27 +181,8 @@ pub async fn handle_args(args: impl Iterator<Item = OsString>) -> Result<()> {
     let app_settings = AppSettings::load_from_default_path_creating_without_customization()?;
 
     let result = match args.cmd.take() {
-        None if args.path.is_some() => {
-            // If one argument is provided without a subcommand, check if this is a valid path.
-            let maybe_path = args
-                .path
-                .as_ref()
-                .expect("path is checked to be Some in match guard");
-            let path = args.current_dir.join(maybe_path);
-
-            // Check if the path exists before trying to open the GUI
-            if !path.exists() {
-                anyhow::bail!(
-                    "\"but {}\" is not a command. Type \"but --help\" to see all available commands.",
-                    maybe_path.display()
-                );
-            }
-
-            command::gui::open(&path)?;
-            Ok(())
-        }
         None => {
-            // No subcommand and no path means run the default alias
+            // No arguments means run the default alias
             // The default alias expands to "status" which provides a helpful entry point
             let default_args = vec![OsString::from("but"), OsString::from("default")];
             let expanded = alias::expand_aliases(default_args)?;
@@ -262,7 +237,6 @@ async fn match_subcommand(
 ) -> CliResult<()> {
     let out = &mut output;
 
-    #[cfg(feature = "agentlog")]
     let cmd = match cmd {
         Subcommands::AgentLog { cmd } => {
             return Ok(run_agentlog_command(&args.current_dir, cmd, out)?);
@@ -284,9 +258,15 @@ async fn match_subcommand(
             utils::metrics::capture_event_blocking(&app_settings, event).await;
             Ok(())
         }
-        Subcommands::Gui => command::gui::open(&args.current_dir)
-            .emit_metrics(metrics_ctx)
-            .map_err(CliError::from),
+        Subcommands::Gui { path } => {
+            let path = path
+                .as_ref()
+                .map(|path| args.current_dir.join(path))
+                .unwrap_or_else(|| args.current_dir.clone());
+            command::gui::open(&path)
+                .emit_metrics(metrics_ctx)
+                .map_err(CliError::from)
+        }
         Subcommands::Completions { shell } => command::completions::generate_completions(shell)
             .emit_metrics(metrics_ctx)
             .map_err(CliError::from),
@@ -464,7 +444,6 @@ async fn match_subcommand(
                         out,
                     )?;
                     command::legacy::branch::new(&mut ctx, out, branch_name, anchor)
-                        .map_err(CliError::from)
                 }
                 #[cfg(feature = "legacy")]
                 Some(branch::Subcommands::Delete { branch_name, force }) => {
@@ -483,7 +462,7 @@ async fn match_subcommand(
                     let ctx = but_ctx::Context::discover(&args.current_dir)?;
                     command::branch::apply(ctx, &branch_name, out).map_err(CliError::from)
                 }
-                Some(branch::Subcommands::Move { .. }) => Err(BadInput::new(
+                Some(branch::Subcommands::Move { .. }) => Err(bad_input(
                     "`but branch move` has been removed. Use `but move` instead.",
                 )
                 .into()),
@@ -807,47 +786,46 @@ async fn match_subcommand(
 
                     // Validate that no regular commit options are specified with the empty subcommand
                     if commit_args.message.is_some() {
-                        return BadInput::new(
+                        return Err(bad_input(
                             "--message cannot be used with 'commit empty'. Empty commits have no message by default."
-                        ).into_cli_result();
+                        ).into());
                     }
                     if commit_args.message_file.is_some() {
-                        return BadInput::new(
+                        return Err(bad_input(
                             "--message-file cannot be used with 'commit empty'. Empty commits have no message by default."
-                        ).into_cli_result();
+                        ).into());
                     }
                     if commit_args.branch.is_some() {
-                        return BadInput::new(
+                        return Err(bad_input(
                             "branch argument cannot be used with 'commit empty'. Use the target positional argument or --before/--after flags."
-                        ).into_cli_result();
+                        ).into());
                     }
                     if commit_args.create {
-                        return BadInput::new("--create cannot be used with 'commit empty'.")
-                            .into_cli_result();
+                        return Err(
+                            bad_input("--create cannot be used with 'commit empty'.").into()
+                        );
                     }
                     if commit_args.only {
-                        return BadInput::new("--only cannot be used with 'commit empty'.")
-                            .into_cli_result();
+                        return Err(bad_input("--only cannot be used with 'commit empty'.").into());
                     }
                     if commit_args.all {
-                        return BadInput::new("--all cannot be used with 'commit empty'.")
-                            .into_cli_result();
+                        return Err(bad_input("--all cannot be used with 'commit empty'.").into());
                     }
                     if commit_args.no_hooks {
-                        return BadInput::new("--no-hooks cannot be used with 'commit empty'.")
-                            .into_cli_result();
+                        return Err(
+                            bad_input("--no-hooks cannot be used with 'commit empty'.").into()
+                        );
                     }
                     if commit_args.ai.is_some() {
-                        return BadInput::new("--ai cannot be used with 'commit empty'.")
-                            .into_cli_result();
+                        return Err(bad_input("--ai cannot be used with 'commit empty'.").into());
                     }
                     if commit_args.diff {
-                        return BadInput::new("--diff cannot be used with 'commit empty'.")
-                            .into_cli_result();
+                        return Err(bad_input("--diff cannot be used with 'commit empty'.").into());
                     }
                     if commit_args.no_diff {
-                        return BadInput::new("--no-diff cannot be used with 'commit empty'.")
-                            .into_cli_result();
+                        return Err(
+                            bad_input("--no-diff cannot be used with 'commit empty'.").into()
+                        );
                     }
                     // Note: --paths with commit empty is rejected by clap at parse time
                     // because --paths is not a flag on the empty subcommand
@@ -927,9 +905,9 @@ async fn match_subcommand(
                         && commit_args.message_file.is_none()
                         && commit_args.ai.is_none()
                     {
-                        return BadInput::new(
+                        return Err(bad_input(
                             "In JSON mode, either --message (-m), --message-file, or --ai (-i) must be specified"
-                        ).into_cli_result();
+                        ).into());
                     }
 
                     // Read message from file if provided, otherwise use message option
@@ -1159,15 +1137,15 @@ async fn match_subcommand(
                     // Check for non-interactive environment
                     if !out.can_prompt() {
                         if branch.is_none() {
-                            return BadInput::new(
+                            return Err(bad_input(
                                 "Non-interactive environment detected. Please specify a branch.",
                             )
-                            .into_cli_result();
+                            .into());
                         }
                         if review_message.is_none() && !default {
-                            return BadInput::new(
+                            return Err(bad_input(
                                 "Non-interactive environment detected. Provide one of: --message (-m), --file (-F), or --default (-t)."
-                            ).into_cli_result();
+                            ).into());
                         }
                     }
                     command::legacy::forge::review::create_review(
@@ -1328,9 +1306,9 @@ async fn match_subcommand(
                 // Interactive mode: but stage [--branch <branch>]
                 use std::io::IsTerminal;
                 if !std::io::stdout().is_terminal() {
-                    return BadInput::new(
+                    return Err(bad_input(
                         "Interactive stage requires a terminal. Use: but stage <file_or_hunk> <branch>"
-                    ).into_cli_result();
+                    ).into());
                 }
                 command::legacy::rub::handle_stage_tui(&mut ctx, out, branch.as_deref())
                     .context("Failed to stage.")
@@ -1458,14 +1436,12 @@ async fn match_subcommand(
                 .emit_metrics(metrics_ctx)
                 .show_root_cause_error_then_exit_without_destructors(output)
         }
-        #[cfg(feature = "agentlog")]
         Subcommands::AgentLog { .. } => {
             unreachable!("agentlog command is handled before metrics setup")
         }
     }
 }
 
-#[cfg(feature = "agentlog")]
 fn run_agentlog_command(
     current_dir: &std::path::Path,
     mut cmd: but_agentlog::Command,

@@ -7,7 +7,7 @@ import {
 } from "#ui/api/queries.ts";
 import { findCommit, renameBranchInHeadInfo, resolveRelativeTo } from "#ui/api/ref-info.ts";
 import { decodeRefName, encodeRefName } from "#ui/api/ref-name.ts";
-import { commitTitle, shortCommitId } from "#ui/commit.ts";
+import { commitIsDiverged, commitTitle, shortCommitId } from "#ui/commit.ts";
 import {
 	nativeMenuItem,
 	nativeMenuSeparator,
@@ -52,7 +52,7 @@ import {
 	Section,
 	type NavigationIndex,
 } from "#ui/workspace/navigation-index.ts";
-import { mergeProps, Toast, Tooltip, useRender } from "@base-ui/react";
+import { mergeProps, Toast, useRender } from "@base-ui/react";
 import { Combobox } from "@base-ui/react/combobox";
 import { Toolbar } from "@base-ui/react/toolbar";
 import {
@@ -108,6 +108,7 @@ import { useDryRunOperation } from "#ui/operations/operation.ts";
 import { isNonEmptyArray, NonEmptyArray } from "effect/Array";
 import { defaultOutlineSelection } from "#ui/projects/workspace/state.ts";
 import { ShortcutButton } from "#ui/components/ShortcutButton.tsx";
+import { Tooltip } from "#ui/components/Tooltip.tsx";
 import { Icon } from "#ui/components/Icon.tsx";
 import { createDiffSpec } from "#ui/operations/diff-specs.ts";
 import { rejectedChangesToastOptions } from "#ui/operations/rejectedChangesToastOptions.tsx";
@@ -647,7 +648,6 @@ export const OutlinePanel: FC<PanelProps> = ({ ...panelProps }) => {
 							</div>
 
 							<ShortcutButton
-								className={classes(uiStyles.button, styles.branchBtn)}
 								hotkey={workspaceHotkeys.applyBranch.hotkey}
 								hotkeyOptions={{ meta: workspaceHotkeys.applyBranch.meta }}
 								onClick={openApplyBranchPicker}
@@ -717,31 +717,26 @@ const ItemRowMenuButton: FC<{
 );
 
 const CommitTargetIndicator: FC = () => {
-	const [isTooltipOpen, setIsTooltipOpen] = useState(false);
+	const [open, setOpen] = useState(false);
 
 	return (
-		<Tooltip.Root
-			open={isTooltipOpen}
+		<Tooltip
+			open={open}
 			// [ref:tooltip-disable-hoverable-popup]
 			disableHoverablePopup
-		>
-			<Tooltip.Trigger
-				onMouseEnter={() => setIsTooltipOpen(true)}
-				onMouseLeave={() => setIsTooltipOpen(false)}
-				render={
-					<span className={styles.commitTargetIndicator} aria-label="Commit target">
-						<Icon name="bullseye" />
-					</span>
-				}
-			/>
-			<Tooltip.Portal>
-				<Tooltip.Positioner sideOffset={8}>
-					<Tooltip.Popup className={classes(uiStyles.popup, uiStyles.tooltip)}>
-						Commit target
-					</Tooltip.Popup>
-				</Tooltip.Positioner>
-			</Tooltip.Portal>
-		</Tooltip.Root>
+			trigger={
+				<span
+					className={styles.commitTargetIndicator}
+					aria-label="Commit target"
+					onMouseEnter={() => setOpen(true)}
+					onMouseLeave={() => setOpen(false)}
+				>
+					<Icon name="bullseye" />
+				</span>
+			}
+			content="Commit target"
+			positionerProps={{ sideOffset: 8 }}
+		/>
 	);
 };
 
@@ -869,7 +864,8 @@ const InlineRewordCommit: FC<{
 				ref={(el) => {
 					if (!el) return;
 					el.focus();
-					const cursorPosition = el.value.length;
+					const firstNewline = el.textContent.indexOf("\n");
+					const cursorPosition = firstNewline !== -1 ? firstNewline : el.value.length;
 					el.setSelectionRange(cursorPosition, cursorPosition);
 				}}
 				aria-label="Commit message"
@@ -1141,6 +1137,14 @@ const CommitRow: FC<
 		accelerator: toElectronAccelerator(outlineHotkeys.composeCommitHere.hotkey),
 		onSelect: composeCommitHere,
 	});
+	const copyChangeIdContextMenuItem = nativeMenuItem({
+		label: "Change ID",
+		onSelect: () => window.lite.clipboardWriteText(commit.changeId),
+	});
+	const copyCommitIdContextMenuItem = nativeMenuItem({
+		label: "Commit ID",
+		onSelect: () => window.lite.clipboardWriteText(commit.id),
+	});
 
 	const menuItems: Array<NativeMenuItem> = [
 		startEditingContextMenuItem,
@@ -1148,6 +1152,10 @@ const CommitRow: FC<
 		cutCommitContextMenuItem,
 		nativeMenuSeparator,
 		setCommitTargetContextMenuItem,
+		nativeMenuItem({
+			label: "Copy",
+			submenu: [copyChangeIdContextMenuItem, copyCommitIdContextMenuItem],
+		}),
 		nativeMenuItem({
 			label: "Add Empty Commit",
 			submenu: [insertBlankCommitAboveContextMenuItem, insertBlankCommitBelowContextMenuItem],
@@ -1175,19 +1183,26 @@ const CommitRow: FC<
 				/>
 			) : (
 				<>
-					<div
-						className={classes(workspaceItemRowStyles.itemRowLabel, styles.commitRowLabel)}
-						onDoubleClick={outlineMode._tag === "Default" ? startEditing : undefined}
-						onContextMenu={
-							outlineMode._tag === "Default"
-								? (event) => {
-										void showNativeContextMenu(event, menuItems);
-									}
-								: undefined
-						}
-					>
-						{commitTitle(commitWithOptimisticMessage.message)}
-						{hasConflicts && " ⚠️"}
+					<div className={styles.commitRowLabel}>
+						<span
+							className={styles.commitState}
+							data-status={commitIsDiverged(commit) ? "Diverged" : commit.state.type}
+						/>
+
+						<div
+							className={workspaceItemRowStyles.itemRowLabel}
+							onDoubleClick={outlineMode._tag === "Default" ? startEditing : undefined}
+							onContextMenu={
+								outlineMode._tag === "Default"
+									? (event) => {
+											void showNativeContextMenu(event, menuItems);
+										}
+									: undefined
+							}
+						>
+							{commitTitle(commitWithOptimisticMessage.message)}
+							{hasConflicts && " ⚠️"}
+						</div>
 					</div>
 					{outlineMode._tag === "Default" && (
 						<WorkspaceItemRowToolbar aria-label="Commit actions">
@@ -1650,7 +1665,7 @@ const Changes: FC<{
 						disabled={outlineMode._tag !== "Default" || isCommitOrAmendPending}
 					>
 						<Combobox.Trigger
-							className={classes(uiStyles.button, styles.commitTargetComboboxTrigger)}
+							className={classes(styles.commitTargetComboboxTrigger)}
 							aria-label="Select branch"
 							render={
 								<ShortcutButton
@@ -1746,6 +1761,7 @@ const BranchRow: FC<
 		stackId: string;
 		isCommitTarget: boolean;
 		canTearOffBranch: boolean;
+		canRemoveBranch: boolean;
 	} & ComponentProps<"div">
 > = ({
 	projectId,
@@ -1754,6 +1770,7 @@ const BranchRow: FC<
 	stackId,
 	isCommitTarget,
 	canTearOffBranch,
+	canRemoveBranch,
 	...restProps
 }) => {
 	const outlineMode = useAppSelector((state) => selectProjectOutlineModeState(state, projectId));
@@ -1858,6 +1875,27 @@ const BranchRow: FC<
 		},
 	});
 
+	// TODO: This mutation doesn't trigger any watcher events, hence the manual invalidation.
+	const removeBranchMutation = useMutation({
+		mutationFn: window.lite.removeBranch,
+		onSuccess: async (_response, input, _context, mutation) => {
+			await mutation.client.invalidateQueries({
+				queryKey: headInfoQueryOptions(input.projectId).queryKey,
+			});
+		},
+		onError: (error) => {
+			// oxlint-disable-next-line no-console
+			console.error(error);
+
+			toastManager.add({
+				type: "error",
+				title: "Failed to remove branch",
+				description: errorMessageForToast(error),
+				priority: "high",
+			});
+		},
+	});
+
 	const saveBranchName = (newBranchName: string) => {
 		const trimmed = newBranchName.trim();
 		if (trimmed === "" || trimmed === branchName) return;
@@ -1910,17 +1948,33 @@ const BranchRow: FC<
 		accelerator: toElectronAccelerator(outlineHotkeys.composeCommitHere.hotkey),
 		onSelect: composeCommitHere,
 	});
+	const copyBranchNameContextMenuItem = nativeMenuItem({
+		label: "Copy Branch Name",
+		onSelect: () => window.lite.clipboardWriteText(optimisticBranchName),
+	});
 	const tearOffBranchContextMenuItem = nativeMenuItem({
 		label: "Tear Off Branch",
 		enabled: canTearOffBranch && !tearOffBranchMutation.isPending,
 		onSelect: tearOffBranch,
 	});
+	const removeBranchContextMenuItem = nativeMenuItem({
+		label: "Remove Branch",
+		enabled: canRemoveBranch,
+		onSelect: () =>
+			removeBranchMutation.mutate({
+				projectId,
+				stackId,
+				branchName,
+			}),
+	});
 
 	const menuItems: Array<NativeMenuItem> = [
 		startEditingContextMenuItem,
+		copyBranchNameContextMenuItem,
 		setCommitTargetContextMenuItem,
 		nativeMenuSeparator,
 		tearOffBranchContextMenuItem,
+		removeBranchContextMenuItem,
 	];
 
 	return (
@@ -2046,7 +2100,16 @@ const BranchSegment: FC<{
 	stackId: string;
 	commitTarget: RelativeTo | null;
 	canTearOffBranch: boolean;
-}> = ({ projectId, segment, refName, stackId, commitTarget, canTearOffBranch }) => {
+	canRemoveBranch: boolean;
+}> = ({
+	projectId,
+	segment,
+	refName,
+	stackId,
+	commitTarget,
+	canTearOffBranch,
+	canRemoveBranch,
+}) => {
 	const operand = branchOperand({ stackId, branchRef: refName.fullNameBytes });
 
 	return (
@@ -2067,6 +2130,7 @@ const BranchSegment: FC<{
 						branchRef={refName.fullNameBytes}
 						stackId={stackId}
 						canTearOffBranch={canTearOffBranch}
+						canRemoveBranch={canRemoveBranch}
 						isCommitTarget={
 							commitTarget
 								? relativeToEquals(commitTarget, {
@@ -2080,7 +2144,9 @@ const BranchSegment: FC<{
 			/>
 
 			{segment.commits.length === 0 ? (
-				<div className={workspaceItemRowStyles.itemRowEmpty}>No commits.</div>
+				<div className={classes(workspaceItemRowStyles.itemRowEmpty, styles.noCommits)}>
+					No commits.
+				</div>
 			) : (
 				<div role="group">
 					{segment.commits.map((commit) => (
@@ -2142,6 +2208,10 @@ const StackC: FC<{
 	const operand = stackOperand({ stackId });
 	const canTearOffBranch = stack.segments.length > 1;
 
+	const hasAnyCommits = stack.segments.some((segment) => segment.commits.length > 0);
+	const numBranches = stack.segments.filter((segment) => segment.refName !== null).length;
+	const canRemoveBranches = !hasAnyCommits || numBranches > 1;
+
 	return (
 		<TreeItem
 			projectId={projectId}
@@ -2164,6 +2234,7 @@ const StackC: FC<{
 							stackId={stackId}
 							commitTarget={commitTarget}
 							canTearOffBranch={canTearOffBranch}
+							canRemoveBranch={canRemoveBranches}
 						/>
 					) : (
 						// A segment should always either have a branch reference or at
