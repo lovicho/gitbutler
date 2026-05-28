@@ -6,7 +6,15 @@
 ///
 /// Nearly all documentation for the CLI is defined here using `clap` attributes,
 /// which are then used to generate help messages and online documentation.
+#[cfg(unix)]
+use std::ffi::OsString;
 use std::path::PathBuf;
+
+#[cfg(feature = "legacy")]
+use crate::args::atoms::CliIdArg;
+
+#[cfg(feature = "legacy")]
+pub mod atoms;
 
 #[derive(Debug, clap::Parser)]
 #[clap(
@@ -50,7 +58,10 @@ pub struct Args {
     /// {"result": ..., "status_error": ...} if the status query fails (in which case "status" is absent).
     #[clap(long = "status-after", global = true)]
     pub status_after: bool,
-    /// Subcommand to run.
+    /// Subcommand to run (`but <COMMAND>`).
+    ///
+    /// On UNIX, if `<COMMAND>` is not built in and `but-<COMMAND>` exists on the PATH, that program
+    /// is executed with the remaining arguments (`but <COMMAND> [ARGS]`).
     #[clap(subcommand)]
     pub cmd: Option<Subcommands>,
 }
@@ -560,7 +571,7 @@ pub enum Subcommands {
     #[clap(verbatim_doc_comment)]
     Reword {
         /// Commit ID to edit the message for, or branch ID to rename
-        target: String,
+        target: CliIdArg,
         /// The new commit message or branch name. If not provided, opens an editor.
         #[clap(short = 'm', long = "message", conflicts_with = "format")]
         message: Option<String>,
@@ -1189,9 +1200,15 @@ pub enum Subcommands {
     #[clap(hide = true)]
     #[clap(verbatim_doc_comment)]
     EvalHook,
+
+    #[cfg(unix)]
+    #[strum(disabled)]
+    #[clap(hide = true, external_subcommand)]
+    External(Vec<OsString>),
 }
 
 pub mod alias;
+#[cfg(feature = "legacy")]
 pub mod commit;
 pub mod config;
 pub mod skill;

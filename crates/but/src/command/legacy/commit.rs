@@ -13,71 +13,105 @@ use gitbutler_repo::hooks;
 
 use super::{ShowDiffInEditor, estimate_diff_blob_size};
 use crate::{
-    CliId, IdMap, bad_input,
+    CliId, CliResult, IdMap,
+    args::atoms::{BranchArg, BranchOrCommit, CliIdArg, Priority, Purpose, ResolvedCliIdArg},
+    bad_input,
     command::legacy::status::assignment::{CLIHunkAssignment, FileAssignment},
     theme::{self, Paint},
     tui,
-    utils::{InputOutputChannel, OutputChannel, shorten_object_id},
+    utils::{InputOutputChannel, OutputChannel},
 };
 
 pub(crate) fn insert_blank_commit(
     ctx: &mut but_ctx::Context,
     out: &mut OutputChannel,
-    target: &str,
-    insert_side: InsertSide,
-) -> crate::CliResult<()> {
+    target: Option<CliIdArg>,
+    before: Option<CliIdArg>,
+    after: Option<CliIdArg>,
+) -> CliResult<()> {
     let mut guard = ctx.exclusive_worktree_access();
     let id_map = IdMap::new_from_context(ctx, None, guard.read_permission())?;
 
-    // Resolve the target ID
-    let cli_ids = id_map.parse_using_context(target, ctx)?;
+    let (target, insert_side) = if let Some(t) = before {
+        (
+            t.resolve_in_workspace(ctx, &id_map, Purpose::Target, None)?
+                .into_branch_or_commit()?,
+            InsertSide::Below,
+        )
+    } else if let Some(t) = after {
+        (
+            t.resolve_in_workspace(ctx, &id_map, Purpose::Target, None)?
+                .into_branch_or_commit()?,
+            InsertSide::Above,
+        )
+    } else if let Some(t) = target {
+        // Default to --before behavior when using positional argument
+        (
+            t.resolve_in_workspace(ctx, &id_map, Purpose::Target, None)?
+                .into_branch_or_commit()?,
+            InsertSide::Below,
+        )
+    } else {
+        // No arguments provided - default to inserting at top of first branch
 
-    if cli_ids.is_empty() {
-        return Err(bad_input(format!("Target '{target}' not found")).into());
-    }
+        let stack_entries = workspace::stacks(ctx, None)?;
+        let stacks: Vec<(
+            but_core::ref_metadata::StackId,
+            but_workspace::ui::StackDetails,
+        )> = stack_entries
+            .iter()
+            .filter_map(|s| {
+                s.id.and_then(|id| {
+                    workspace::stack_details(ctx, Some(id))
+                        .ok()
+                        .map(|details| (id, details))
+                })
+            })
+            .collect();
 
-    if cli_ids.len() > 1 {
-        return Err(bad_input(format!(
-            "Target '{target}' is ambiguous. Found {} matches",
-            cli_ids.len()
-        ))
-        .into());
-    }
+        // Find the first stack with branches and convert BString to String
+        let branch_name = stacks
+            .iter()
+            .find_map(|(_, stack_details)| {
+                stack_details
+                    .branch_details
+                    .first()
+                    .map(|b| b.name.to_string())
+            })
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "No branches found. Create a branch first or specify a target explicitly."
+                )
+            })?;
 
-    let cli_id = &cli_ids[0];
+        (
+            BranchOrCommit::Branch(BranchArg(branch_name)),
+            InsertSide::Below,
+        )
+    };
 
-    // Determine the position description for the success message
-    // Note: InsertSide::Above inserts as a child (after in time),
-    // InsertSide::Below inserts as a parent (before in time)
     let position_desc = match insert_side {
         InsertSide::Above => "after",
         InsertSide::Below => "before",
     };
 
     // Determine target commit ID and use provided insert_side
-    let (outcome, success_message) = match cli_id {
-        CliId::Commit { commit_id: oid, .. } => {
-            let short_oid = {
-                let repo = ctx.repo.get()?;
-                shorten_object_id(&repo, *oid)
-            };
+    let (outcome, success_message) = match target {
+        BranchOrCommit::Commit(oid) => {
             let outcome = but_api::commit::insert_blank::commit_insert_blank_with_perm(
                 ctx,
-                RelativeTo::Commit(*oid),
+                RelativeTo::Commit(oid),
                 insert_side,
                 DryRun::No,
                 guard.write_permission(),
             )?;
             (
                 outcome,
-                format!("Created blank commit {position_desc} commit {short_oid}"),
+                format!("Created blank commit {position_desc} commit {target}"),
             )
         }
-        CliId::Branch { name, .. } => {
-            let reference = {
-                let repo = ctx.repo.get()?;
-                repo.find_reference(name)?.detach()
-            };
+        BranchOrCommit::Branch(branch) => {
+            let reference = branch.resolve_local_branch_name()?;
 
             if matches!(insert_side, InsertSide::Above) {
                 // Must prevent inserting above a stack head, as that would create an anonymous
@@ -87,7 +121,7 @@ pub(crate) fn insert_blank_commit(
                 let head_info = but_api::legacy::workspace::head_info(ctx)?;
                 for stack in head_info.stacks {
                     if let Some(stack_head_ref) = stack.ref_name()
-                        && stack_head_ref == &reference.name
+                        && stack_head_ref == &reference
                     {
                         return Err(bad_input("Cannot insert empty commit above stack head")
                             .arg_name("--after")
@@ -99,25 +133,18 @@ pub(crate) fn insert_blank_commit(
 
             let outcome = but_api::commit::insert_blank::commit_insert_blank_with_perm(
                 ctx,
-                RelativeTo::Reference(reference.name),
+                RelativeTo::Reference(reference),
                 insert_side,
                 DryRun::No,
                 guard.write_permission(),
             )?;
             let success_message = match insert_side {
-                InsertSide::Above => format!("Created blank commit above branch '{name}'"),
+                InsertSide::Above => format!("Created blank commit above branch '{branch}'"),
                 InsertSide::Below => {
-                    format!("Created blank commit at the tip of branch '{name}'")
+                    format!("Created blank commit at the tip of branch '{branch}'")
                 }
             };
             (outcome, success_message)
-        }
-        _ => {
-            return Err(bad_input(format!(
-                "Target must be a commit ID or branch name, not {}",
-                cli_id.kind_for_humans()
-            ))
-            .into());
         }
     };
 
@@ -323,7 +350,7 @@ pub(crate) fn commit(
     ctx: &mut but_ctx::Context,
     out: &mut OutputChannel,
     message: Option<&str>,
-    branch_hint: Option<&str>,
+    branch_arg: Option<CliIdArg>,
     file_ids: &[String],
     only: bool,
     all: bool,
@@ -331,9 +358,29 @@ pub(crate) fn commit(
     no_hooks: bool,
     generate_message: Option<Option<String>>,
     show_diff_in_editor: ShowDiffInEditor,
-) -> anyhow::Result<()> {
+) -> CliResult<()> {
     let mut guard = ctx.exclusive_worktree_access();
     let id_map = IdMap::new_from_context(ctx, None, guard.read_permission())?;
+
+    let branch_hint = if let Some(branch_arg) = branch_arg {
+        if let Some(branch) = branch_arg
+            .try_resolve(ctx, &id_map, Purpose::Branch, Some(Priority::Branch))?
+            .and_then(|id| {
+                if let ResolvedCliIdArg::Branch(BranchArg(branch)) = id {
+                    Some(branch)
+                } else {
+                    None
+                }
+            })
+        {
+            Some(branch)
+        } else {
+            let repo = ctx.repo.get()?;
+            Some(BranchArg(branch_arg.0).resolve_for_creation(&repo)?)
+        }
+    } else {
+        None
+    };
 
     let t = theme::get();
 
@@ -359,14 +406,17 @@ pub(crate) fn commit(
 
     // In JSON mode with multiple branches, require branch specification
     if out.for_json().is_some() && stacks.len() > 1 && branch_hint.is_none() {
-        bail!("Multiple branches found. Specify a branch to commit to using the branch argument");
+        return Err(anyhow::anyhow!(
+            "Multiple branches found. Specify a branch to commit to using the branch argument"
+        )
+        .into());
     }
 
     let (target_stack_id, target_stack) = select_stack(
         &id_map,
         ctx,
         &stacks,
-        branch_hint,
+        branch_hint.as_deref(),
         create_branch,
         out,
         guard.write_permission(),
@@ -407,7 +457,7 @@ pub(crate) fn commit(
     };
 
     if files_to_commit.is_empty() {
-        bail!("No changes to commit.")
+        return Err(anyhow::anyhow!("No changes to commit.").into());
     }
 
     // Convert files to DiffSpec early so we can run pre-commit hooks before prompting for message
@@ -423,10 +473,11 @@ pub(crate) fn commit(
                 // Hook passed or not configured, proceed with commit
             }
             hooks::HookResult::Failure(error_data) => {
-                bail!(
+                return Err(anyhow::anyhow!(
                     "pre-commit hook failed:\n{}\n\nTo bypass the hook, run: but commit --no-hooks",
                     error_data.error
-                );
+                )
+                .into());
             }
         }
     }
@@ -441,15 +492,15 @@ pub(crate) fn commit(
         // In JSON mode, we should have already validated that a message was provided
         // This is a safeguard in case the validation was missed
         if out.for_json().is_some() {
-            bail!(
+            return Err(anyhow::anyhow!(
                 "In JSON mode, a commit message must be provided via --message (-m), --message-file, or --ai (-i)"
-            );
+            ).into());
         }
         get_commit_message_from_editor(ctx, &files_to_commit, &changes, show_diff_in_editor)?
     };
 
     if commit_message.trim().is_empty() {
-        bail!("Aborting commit due to empty commit message.");
+        return Err(anyhow::anyhow!("Aborting commit due to empty commit message.").into());
     }
 
     // Run commit-msg hook unless --no-hooks was specified
@@ -470,10 +521,11 @@ pub(crate) fn commit(
                 commit_message
             }
             gitbutler_repo::hooks::MessageHookResult::Failure(error_data) => {
-                bail!(
+                return Err(anyhow::anyhow!(
                     "commit-msg hook failed:\n{}\n\nTo bypass the hook, run: but commit --no-hooks",
                     error_data.error
-                );
+                )
+                .into());
             }
         }
     } else {
@@ -481,15 +533,15 @@ pub(crate) fn commit(
     };
 
     // If a branch hint was provided, find that specific branch; otherwise use first branch
-    let target_branch = if let Some(hint) = branch_hint {
+    let target_branch = if let Some(branch_hint) = branch_hint.as_deref() {
         // First try exact name match
         target_stack
             .branch_details
             .iter()
-            .find(|branch| branch.name == hint)
+            .find(|branch| branch.name == branch_hint)
             .or_else(|| {
                 // If no exact match, try to parse as CLI ID and match
-                if let Ok(cli_ids) = id_map.parse_using_context(hint, ctx) {
+                if let Ok(cli_ids) = id_map.parse_using_context(branch_hint, ctx) {
                     for cli_id in cli_ids {
                         if let CliId::Branch { name, .. } = cli_id
                             && let Some(branch) =
@@ -501,7 +553,7 @@ pub(crate) fn commit(
                 }
                 None
             })
-            .ok_or_else(|| anyhow::anyhow!("Branch '{hint}' not found in target stack"))?
+            .ok_or_else(|| anyhow::anyhow!("Branch '{branch_hint}' not found in target stack"))?
     } else {
         // No branch hint, use first branch (HEAD of stack)
         target_stack

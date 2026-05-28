@@ -1,3 +1,5 @@
+use crate::args::atoms::CliIdArg;
+
 #[derive(Debug, clap::Parser)]
 pub struct Platform {
     /// Commit message
@@ -7,7 +9,7 @@ pub struct Platform {
     #[clap(long = "message-file", value_name = "FILE", conflicts_with = "message")]
     pub message_file: Option<std::path::PathBuf>,
     /// Branch CLI ID or name to derive the stack to commit to
-    pub branch: Option<String>,
+    pub branch: Option<CliIdArg>,
     /// Whether to create a new branch for this commit.
     /// If the branch name given matches an existing branch, that branch will be used instead.
     /// If no branch name is given, a new branch with a generated name will be created.
@@ -105,12 +107,12 @@ pub enum Subcommands {
         /// If a target is provided without --before or --after, defaults to --before behavior.
         /// If no arguments are provided at all, inserts at the top of the first branch.
         #[arg(group = "position")]
-        target: Option<String>,
+        target: Option<CliIdArg>,
         /// Insert the blank commit before this commit or branch
         #[arg(long, group = "position")]
-        before: Option<String>,
+        before: Option<CliIdArg>,
         /// Insert the blank commit after this commit or branch
         #[arg(long, group = "position")]
-        after: Option<String>,
+        after: Option<CliIdArg>,
     },
 }
