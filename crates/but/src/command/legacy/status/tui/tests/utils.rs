@@ -1,4 +1,4 @@
-use std::{convert::Infallible, sync::atomic::AtomicBool, time::Duration};
+use std::{convert::Infallible, path::PathBuf, sync::atomic::AtomicBool, time::Duration};
 
 use but_testsupport::Sandbox;
 use crossterm::event::*;
@@ -31,6 +31,12 @@ pub(super) struct TestTui {
     async_runtime: tokio::runtime::Runtime,
     width: u16,
     height: u16,
+    svg_snapshot_comparison: Option<SvgSnapshotComparison>,
+}
+
+enum SvgSnapshotComparison {
+    Html(PathBuf),
+    Hint,
 }
 
 pub(super) fn test_tui(env: Sandbox) -> TestTui {
@@ -84,6 +90,7 @@ pub(super) fn test_tui_with_size(env: Sandbox, width: u16, height: u16) -> TestT
         async_runtime,
         width,
         height,
+        svg_snapshot_comparison: None,
     }
 }
 
@@ -162,13 +169,13 @@ impl Drop for TestTui {
         // much of it depends on getting the cursor on the right line.
 
         let render_result = self.input_then_render(None);
-        let selected_row = render_result.selected_row() as usize;
+        let selected_row = render_result.selected_row().map(|row| row as usize);
 
         eprintln!("\nCurrent terminal state:");
 
         for (idx, line) in render_result.output().lines().enumerate() {
             let line = line.trim_matches('"');
-            if idx == selected_row {
+            if selected_row.is_some_and(|row| row == idx) {
                 colored::control::set_override(true);
                 eprintln!(
                     "\"{}\"",
@@ -182,6 +189,17 @@ impl Drop for TestTui {
             } else {
                 eprintln!("\"{line}\"");
             }
+        }
+
+        match &self.svg_snapshot_comparison {
+            Some(SvgSnapshotComparison::Html(path)) => eprintln!(
+                "\nSVG snapshot comparison written to:\n  {}\n",
+                path.display()
+            ),
+            Some(SvgSnapshotComparison::Hint) => eprintln!(
+                "\nHint: set GITBUTLER_TUI_SVG_SNAPSHOT_HTML=1 to write an HTML comparison for SVG snapshot mismatches.\n"
+            ),
+            None => {}
         }
     }
 }
@@ -218,7 +236,9 @@ impl TestTuiInputThenRenderResult<'_> {
         self.0.terminal.backend().to_string()
     }
 
-    fn selected_row(&self) -> u16 {
+    /// We might not be able to find the selected row for example if we're in full screen details
+    /// view.
+    fn selected_row(&self) -> Option<u16> {
         let backend = self.0.terminal.backend();
         let buffer = backend.buffer();
         let area = *buffer.area();
@@ -227,12 +247,9 @@ impl TestTuiInputThenRenderResult<'_> {
             .bg
             .expect("background must be set on selection_highlight");
 
-        (area.y..area.y.saturating_add(area.height))
-            .find(|&y| {
-                (area.x..area.x.saturating_add(area.width))
-                    .any(|x| buffer[(x, y)].bg == selected_bg)
-            })
-            .unwrap_or_else(|| panic!("failed to find selected row in rendered output:\n{backend}"))
+        (area.y..area.y.saturating_add(area.height)).find(|&y| {
+            (area.x..area.x.saturating_add(area.width)).any(|x| buffer[(x, y)].bg == selected_bg)
+        })
     }
 
     #[track_caller]
@@ -241,7 +258,9 @@ impl TestTuiInputThenRenderResult<'_> {
         let buffer = backend.buffer();
         let area = *buffer.area();
 
-        let selected_row = self.selected_row();
+        let selected_row = self
+            .selected_row()
+            .expect("failed to find selected row in rendered output");
 
         let mut line = String::new();
         for x in area.x..area.x.saturating_add(area.width) {
@@ -262,9 +281,107 @@ impl TestTuiInputThenRenderResult<'_> {
     #[track_caller]
     pub(super) fn assert_rendered_term_svg_eq(self, expected: snapbox::Data) -> Self {
         let svg = backend_to_svg(self.0.terminal.backend());
+        self.0.svg_snapshot_comparison = write_svg_snapshot_comparison_if_enabled(
+            &expected,
+            &svg,
+            std::panic::Location::caller(),
+        );
         snapbox::assert_data_eq!(svg, expected);
         self
     }
+}
+
+fn write_svg_snapshot_comparison_if_enabled(
+    expected: &snapbox::Data,
+    actual_svg: &str,
+    caller: &std::panic::Location<'_>,
+) -> Option<SvgSnapshotComparison> {
+    let expected_svg = expected.render()?;
+
+    if expected_svg == actual_svg {
+        return None;
+    }
+
+    if std::env::var_os("GITBUTLER_TUI_SVG_SNAPSHOT_HTML").is_none() {
+        return Some(SvgSnapshotComparison::Hint);
+    }
+
+    match write_svg_snapshot_comparison_html(&expected_svg, actual_svg, caller) {
+        Ok(path) => Some(SvgSnapshotComparison::Html(path)),
+        Err(err) => {
+            eprintln!("\nFailed to write SVG snapshot comparison HTML: {err}\n");
+            None
+        }
+    }
+}
+
+fn write_svg_snapshot_comparison_html(
+    expected_svg: &str,
+    actual_svg: &str,
+    caller: &std::panic::Location<'_>,
+) -> std::io::Result<PathBuf> {
+    let dir = tempfile::Builder::new()
+        .prefix(&format!(
+            "gitbutler-tui-svg-snapshot-{}-",
+            svg_snapshot_file_stem(caller)
+        ))
+        .tempdir()?;
+
+    let path = dir.path().join("comparison.html");
+    std::fs::write(
+        &path,
+        format!(
+            r#"<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Status TUI SVG snapshot mismatch</title>
+<style>
+body {{ font-family: sans-serif; background: #111; color: #eee; }}
+.grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }}
+.panel {{ background: #222; padding: 12px; overflow: auto; border: 1px solid #444; }}
+h2 {{ margin-top: 0; }}
+svg {{ background: black; }}
+</style>
+</head>
+<body>
+<h1>Status TUI SVG snapshot mismatch</h1>
+<div class="grid">
+  <section class="panel">
+    <h2>Expected snapshot</h2>
+    {expected_svg}
+  </section>
+  <section class="panel">
+    <h2>Actual render</h2>
+    {actual_svg}
+  </section>
+</div>
+</body>
+</html>
+"#
+        ),
+    )?;
+
+    let kept_dir = dir.keep();
+    Ok(kept_dir.join("comparison.html"))
+}
+
+fn svg_snapshot_file_stem(caller: &std::panic::Location<'_>) -> String {
+    let file = caller
+        .file()
+        .rsplit_once('/')
+        .map_or_else(|| caller.file(), |(_, file)| file);
+    let raw = format!("{file}-{}", caller.line());
+
+    raw.chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
+                ch
+            } else {
+                '-'
+            }
+        })
+        .collect()
 }
 
 fn backend_to_svg(backend: &TestBackend) -> String {

@@ -52,12 +52,12 @@ use crate::{
                     KeyBinds, branch_picker_key_binds, confirm_key_binds, default_key_binds,
                     help_key_binds, normal_with_marks_key_binds,
                 },
-                marking::{Markable, Marks},
+                marking::{MarkClasses, Markable, Marks},
                 message_on_drop::MessageOnDrop,
                 mode::{
                     CommandMode, CommandModeKind, CommitMessageComposer, CommitMode, CommitSource,
-                    InlineRewordMode, Mode, ModeDiscriminant, MoveMode, MoveSource, NormalMode,
-                    RubMode, RubSource, StackCommitSource, UnassignedCommitSource,
+                    DetailsMode, InlineRewordMode, Mode, ModeDiscriminant, MoveMode, MoveSource,
+                    NormalMode, RubMode, RubSource, StackCommitSource, UnassignedCommitSource,
                 },
                 operations::stack_has_assigned_changes,
                 toast::{ToastKind, Toasts},
@@ -274,7 +274,7 @@ where
     app.updates += 1;
 
     // update at full speed while we're rendering the diff
-    let event_poll_timeout = if app.details.needs_update() {
+    let event_poll_timeout = if app.details.needs_update(app.is_details_visible) {
         Duration::from_millis(0)
     } else {
         Duration::from_millis(30)
@@ -353,7 +353,11 @@ where
         app.should_render = true;
     }
 
-    if app.details.needs_update() {
+    if app.details.update_highlight() {
+        app.should_render = true;
+    }
+
+    if app.details.needs_update(app.is_details_visible) {
         let selection = app
             .cursor
             .selected_line(&app.status_lines)
@@ -412,9 +416,10 @@ struct App {
     renders: u64,
     updates: u64,
     app_key_binds: AppKeyBinds,
-    highlight: Highlights,
+    highlight: Highlights<CliId>,
     modal: Option<Modal>,
     details: Details,
+    is_details_visible: bool,
     options: TuiLaunchOptions,
     delayed_messages: Vec<Message>,
     incoming_out_of_band_messages: Vec<Rc<Receiver<Message>>>,
@@ -464,11 +469,10 @@ impl App {
 
         let theme = crate::theme::get();
 
-        let details = if options.show_diff {
-            Details::new_visible(theme)
-        } else {
-            Details::new_hidden(theme)
-        };
+        let (mut details, is_details_visible) = (Details::new(theme), options.show_diff);
+        if is_details_visible {
+            details.mark_dirty();
+        }
 
         let app_key_binds = AppKeyBinds {
             key_binds: default_key_binds(),
@@ -496,6 +500,7 @@ impl App {
             previous_reload_caused_by_mutation_timestamp: Default::default(),
             fps: FpsCounter::new(),
             details,
+            is_details_visible,
             options,
             status_width_percentage: 50,
             theme,
@@ -561,7 +566,10 @@ impl App {
         let terminal_area: Rect = terminal_guard.terminal_mut().size()?.into();
         let visible_height = status_viewport_height(self, terminal_area);
 
-        if self.details.needs_update_after_message(&msg) {
+        if self
+            .details
+            .needs_update_after_message(self.is_details_visible, &msg)
+        {
             self.details.mark_dirty();
         }
 
@@ -675,9 +683,20 @@ impl App {
             Message::EnterNormalModeAfterConfirmingOperation => {
                 self.handle_enter_normal_mode_after_confirming_operation(messages);
             }
-            Message::EnterDetailsMode => {
-                self.handle_enter_details_mode(messages);
-            }
+            Message::DetailsLayout(details_layout_message) => match details_layout_message {
+                DetailsLayoutMessage::Focus { full_screen } => {
+                    self.handle_focus_details(full_screen, messages);
+                }
+                DetailsLayoutMessage::ToggleFullScreen => {
+                    self.handle_toggle_details_full_screen(messages);
+                }
+                DetailsLayoutMessage::ToggleVisibility => {
+                    self.handle_toggle_details_visibility(messages);
+                }
+                DetailsLayoutMessage::Dismiss => {
+                    self.handle_dismiss_details(messages);
+                }
+            },
             Message::Files(files_message) => match files_message {
                 FilesMessage::ToggleGlobalFilesList => {
                     self.handle_files_toggle_global_files_list(messages)
@@ -853,6 +872,19 @@ impl App {
     }
 
     fn handle_unfocus_details(&mut self, messages: &mut Vec<Message>) {
+        if let Mode::Details(DetailsMode { full_screen }) = &*self.mode
+            && *full_screen
+        {
+            return;
+        }
+
+        self.unfocus_details_regardless_if_we_are_full_screen_or_not(messages);
+    }
+
+    fn unfocus_details_regardless_if_we_are_full_screen_or_not(
+        &mut self,
+        messages: &mut Vec<Message>,
+    ) {
         self.mode.update(&mut self.backstack, |backstack, mode| {
             *mode = Mode::Normal(Default::default());
             backstack.remove_leave_normal_mode();
@@ -864,15 +896,20 @@ impl App {
     fn handle_enter_normal_mode_after_confirming_operation(&mut self, messages: &mut Vec<Message>) {
         let mut entries_to_handle = Vec::new();
         self.mode.update(&mut self.backstack, |backstack, mode| {
-            *mode = Mode::Normal(NormalMode::default());
-
             backstack.retain(|entry| match entry {
                 BackstackEntry::ShowFileList => true,
                 BackstackEntry::LeaveNormalMode | BackstackEntry::Mark => {
                     entries_to_handle.push(entry);
                     false
                 }
+                BackstackEntry::OpenSplitDetailsView => true,
+                BackstackEntry::OpenFullScreenDetailsView => {
+                    entries_to_handle.push(entry);
+                    false
+                }
             });
+
+            *mode = Mode::Normal(NormalMode::default());
         });
 
         for entry in entries_to_handle {
@@ -891,6 +928,17 @@ impl App {
     fn handle_backstack_entry(&mut self, entry: BackstackEntry, messages: &mut Vec<Message>) {
         match entry {
             BackstackEntry::LeaveNormalMode => {
+                if let Mode::Details(details_mode) = &*self.mode {
+                    if details_mode.full_screen {
+                        messages.extend([
+                            Message::UnfocusDetails,
+                            Message::DetailsLayout(DetailsLayoutMessage::ToggleVisibility),
+                        ]);
+                    } else {
+                        messages.push(Message::UnfocusDetails);
+                    }
+                }
+
                 *self
                     .mode
                     .get_mut_without_updating_backstack_and_i_promise_not_to_change_state() =
@@ -923,8 +971,13 @@ impl App {
                 | Mode::Command(..)
                 | Mode::Commit(..)
                 | Mode::Move(..)
-                | Mode::Details => {}
+                | Mode::Details(..) => {}
             },
+            BackstackEntry::OpenSplitDetailsView | BackstackEntry::OpenFullScreenDetailsView => {
+                messages.push(Message::DetailsLayout(
+                    DetailsLayoutMessage::ToggleVisibility,
+                ));
+            }
         }
     }
 
@@ -955,22 +1008,83 @@ impl App {
         }
     }
 
-    fn handle_enter_details_mode(&mut self, messages: &mut Vec<Message>) {
-        self.mode
-            .update_and_push_leave_normal_mode(&mut self.backstack, |mode| {
-                *mode = Mode::Details;
-            });
-
-        if self.details.is_visible() {
+    fn handle_focus_details(&mut self, full_screen: bool, messages: &mut Vec<Message>) {
+        if self.is_details_visible {
             messages.push(Message::Details(DetailsMessage::SelectFirstSection));
         } else {
-            messages.push(Message::Details(DetailsMessage::ToggleVisibility));
+            messages.push(Message::DetailsLayout(
+                DetailsLayoutMessage::ToggleVisibility,
+            ));
 
             // We can't select the first section on the same frame that we show the detail view.
             // The incremental diff rendering introduces a one frame delay before the first section
             // is shown.
             messages
                 .push(Message::Details(DetailsMessage::SelectFirstSection).with_one_frame_delay());
+
+            self.backstack.push_open_details_view(full_screen);
+        }
+
+        self.mode
+            .update_and_push_leave_normal_mode(&mut self.backstack, |mode| {
+                *mode = Mode::Details(DetailsMode { full_screen });
+            });
+    }
+
+    fn handle_toggle_details_full_screen(&mut self, messages: &mut Vec<Message>) {
+        match &*self.mode {
+            Mode::Normal(..) => {
+                messages.push(Message::DetailsLayout(DetailsLayoutMessage::Focus {
+                    full_screen: true,
+                }));
+            }
+            Mode::Details(DetailsMode { full_screen }) => {
+                if *full_screen {
+                    self.unfocus_details_regardless_if_we_are_full_screen_or_not(messages);
+                    messages.push(Message::DetailsLayout(
+                        DetailsLayoutMessage::ToggleVisibility,
+                    ));
+                } else {
+                    messages.push(Message::DetailsLayout(DetailsLayoutMessage::Focus {
+                        full_screen: true,
+                    }));
+                }
+            }
+            Mode::Rub(..)
+            | Mode::InlineReword(..)
+            | Mode::Command(..)
+            | Mode::Commit(..)
+            | Mode::Move(..) => {}
+        }
+    }
+
+    fn handle_toggle_details_visibility(&mut self, messages: &mut Vec<Message>) {
+        self.is_details_visible = !self.is_details_visible;
+
+        if self.is_details_visible {
+            self.details.mark_dirty();
+
+            if matches!(&*self.mode, Mode::Normal(..)) {
+                self.backstack.push_open_details_view(false);
+            }
+        } else {
+            self.backstack.remove_open_details_view();
+            self.details.reset_scroll();
+            messages.push(Message::UnfocusDetails);
+        }
+    }
+
+    fn handle_dismiss_details(&mut self, messages: &mut Vec<Message>) {
+        if let Mode::Details(details_mode) = &*self.mode
+            && details_mode.full_screen
+        {
+            messages.push(Message::DetailsLayout(
+                DetailsLayoutMessage::ToggleFullScreen,
+            ));
+        } else {
+            messages.push(Message::DetailsLayout(
+                DetailsLayoutMessage::ToggleVisibility,
+            ));
         }
     }
 
@@ -1183,6 +1297,26 @@ impl App {
         ctx: &mut Context,
         messages: &mut Vec<Message>,
     ) -> anyhow::Result<()> {
+        if let Mode::Normal(normal_mode) = &*self.mode
+            && !normal_mode.marks.is_empty()
+        {
+            let MarkClasses { marked_commits } = normal_mode.marks.classify();
+            if marked_commits {
+                match self.flags.show_files {
+                    FilesStatusFlag::None => {
+                        return Ok(());
+                    }
+                    FilesStatusFlag::Commit(_) => {}
+                    FilesStatusFlag::All => {
+                        self.flags.show_files = FilesStatusFlag::None;
+                        self.backstack.remove_show_file_list();
+                        messages.push(Message::Reload(None, ReloadCause::ViewOnly));
+                        return Ok(());
+                    }
+                }
+            }
+        }
+
         if let Some(selection) = self.cursor.selected_line(&self.status_lines)
             && let Some(cli_id) = selection.data.cli_id()
             && let CliId::Commit { commit_id, .. } = &**cli_id
@@ -2327,7 +2461,8 @@ impl App {
             .and_then(|mut clipboard| clipboard.set_text(what_to_copy))
             .context("failed to copy to system clipboard")?;
 
-        self.highlight.insert(Arc::clone(cli_id));
+        self.highlight
+            .insert(Arc::unwrap_or_clone(Arc::clone(cli_id)));
 
         Ok(())
     }
@@ -2684,7 +2819,7 @@ impl App {
     }
 
     fn update_status_width_percentage(&mut self, new: u16, terminal_area: Rect) {
-        if !self.details.is_visible() {
+        if !self.is_details_visible {
             return;
         }
 
@@ -2976,7 +3111,7 @@ fn event_to_messages(
                             messages.push(Message::Command(CommandMessage::Input(ev)));
                         }
                         Mode::Normal(..)
-                        | Mode::Details
+                        | Mode::Details(..)
                         | Mode::Rub(..)
                         | Mode::Commit(..)
                         | Mode::Move(..) => {}
@@ -2995,7 +3130,7 @@ fn event_to_messages(
                 messages.push(Message::Command(CommandMessage::Input(ev)));
             }
             Mode::Normal(..)
-            | Mode::Details
+            | Mode::Details(..)
             | Mode::Rub(..)
             | Mode::Commit(..)
             | Mode::Move(..) => {
@@ -3081,7 +3216,7 @@ fn handle_mark_commit(commit: &CliId, mode: &mut Mode) -> bool {
         | Mode::Command(..)
         | Mode::Commit(..)
         | Mode::Move(..)
-        | Mode::Details => {
+        | Mode::Details(..) => {
             return false;
         }
     }
@@ -3202,9 +3337,9 @@ enum Message {
     Files(FilesMessage),
     Move(MoveMessage),
     Details(DetailsMessage),
+    DetailsLayout(DetailsLayoutMessage),
     BranchPicker(BranchPickerMessage),
     Help(HelpMessage),
-    EnterDetailsMode,
     NewBranch,
     ToggleHelp,
     Mark,
@@ -3223,6 +3358,21 @@ enum Message {
     },
     #[allow(dead_code)]
     Debug(&'static str),
+}
+
+#[derive(Debug, Clone)]
+enum DetailsLayoutMessage {
+    /// Focus the details view, showing it first if needed.
+    ///
+    /// `full_screen` controls whether focus enters the split view or expands details to cover the
+    /// status view.
+    Focus { full_screen: bool },
+    /// Toggle between split details and full-screen details.
+    ToggleFullScreen,
+    /// Show or hide the details view without necessarily focusing it.
+    ToggleVisibility,
+    /// Close the full-screen details view if active, otherwise toggle details visibility.
+    Dismiss,
 }
 
 impl Message {

@@ -6,7 +6,6 @@
 ///
 /// Nearly all documentation for the CLI is defined here using `clap` attributes,
 /// which are then used to generate help messages and online documentation.
-#[cfg(unix)]
 use std::ffi::OsString;
 use std::path::PathBuf;
 
@@ -51,12 +50,8 @@ pub struct Args {
     /// Whether to use JSON output format.
     #[clap(long, short = 'j', global = true)]
     pub json: bool,
-    /// After a mutation command completes, also output workspace status.
-    ///
-    /// In human mode, prints status after the command output.
-    /// In JSON mode, wraps both in {"result": ..., "status": ...} on success, or
-    /// {"result": ..., "status_error": ...} if the status query fails (in which case "status" is absent).
-    #[clap(long = "status-after", global = true)]
+    /// Whether mutation commands should append workspace status.
+    #[clap(skip)]
     pub status_after: bool,
     /// Subcommand to run (`but <COMMAND>`).
     ///
@@ -1201,7 +1196,10 @@ pub enum Subcommands {
     #[clap(verbatim_doc_comment)]
     EvalHook,
 
-    #[cfg(unix)]
+    /// External commands and aliases are resolved to this variant.
+    ///
+    /// External commands are currently only supported on UNIX platforms, but this is available on
+    /// Windows for alias resolution.
     #[strum(disabled)]
     #[clap(hide = true, external_subcommand)]
     External(Vec<OsString>),

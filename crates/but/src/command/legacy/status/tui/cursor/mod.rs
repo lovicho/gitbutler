@@ -10,6 +10,7 @@ use crate::{
         output::StatusOutputLineData,
         tui::{
             Mode, MoveSource, SelectAfterReload,
+            marking::MarkClasses,
             render::{commit_operation_display, move_operation_display},
         },
     },
@@ -545,7 +546,7 @@ fn is_section_header(line: &StatusOutputLine, mode: &Mode) -> bool {
         | Mode::Command(..)
         | Mode::Commit(..)
         | Mode::Move(..)
-        | Mode::Details => {
+        | Mode::Details(..) => {
             matches!(
                 line.data,
                 StatusOutputLineData::Branch { .. }
@@ -695,11 +696,43 @@ pub(super) fn is_selectable_in_mode(
                 return true;
             }
         }
-        Mode::Command(..) | Mode::InlineReword(..) | Mode::Normal(..) | Mode::Details => {}
+        Mode::Command(..) | Mode::InlineReword(..) | Mode::Normal(..) | Mode::Details(..) => {}
+    }
+
+    if let Mode::Normal(normal_mode) = mode
+        && !normal_mode.marks.is_empty()
+    {
+        let MarkClasses { marked_commits } = normal_mode.marks.classify();
+
+        match &line.data {
+            StatusOutputLineData::Branch { .. } | StatusOutputLineData::Commit { .. } => {
+                // you're allowed to select branches and commits regardless of markings
+            }
+            StatusOutputLineData::UpdateNotice
+            | StatusOutputLineData::Connector
+            | StatusOutputLineData::StagedChanges { .. }
+            | StatusOutputLineData::StagedFile { .. }
+            | StatusOutputLineData::UnassignedChanges { .. }
+            | StatusOutputLineData::UnassignedFile { .. }
+            | StatusOutputLineData::CommitMessage
+            | StatusOutputLineData::EmptyCommitMessage
+            | StatusOutputLineData::File { .. }
+            | StatusOutputLineData::MergeBase
+            | StatusOutputLineData::UpstreamChanges
+            | StatusOutputLineData::Warning
+            | StatusOutputLineData::Hint
+            | StatusOutputLineData::NoAssignmentsUnstaged => {
+                // we currently don't allow mixing marks, i.e., you cannot mark both commits and
+                // files, so don't allow selecting them
+                if marked_commits {
+                    return false;
+                }
+            }
+        }
     }
 
     match mode {
-        Mode::Normal(..) | Mode::Details => match show_files_flag {
+        Mode::Normal(..) | Mode::Details(..) => match show_files_flag {
             FilesStatusFlag::None | FilesStatusFlag::All => true,
             FilesStatusFlag::Commit(object_id) => {
                 if let Some(cli_id) = line.data.cli_id()

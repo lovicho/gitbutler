@@ -26,7 +26,6 @@ use std::ffi::OsString;
 
 use anyhow::{Context as _, Result};
 use cfg_if::cfg_if;
-#[cfg(unix)]
 use clap::CommandFactory;
 use clap::Parser;
 
@@ -110,8 +109,7 @@ pub async fn handle_args(args: impl Iterator<Item = OsString>) -> Result<()> {
         return Ok(());
     }
 
-    // Expand aliases before parsing arguments
-    let args = alias::expand_aliases(args)?;
+    let args = expand_aliases(args);
 
     // The `but push --help` output is different if gerrit mode is enabled, hence the special handling
     let args_vec: Vec<String> = std::env::args().collect();
@@ -134,6 +132,7 @@ pub async fn handle_args(args: impl Iterator<Item = OsString>) -> Result<()> {
     }
 
     let mut args: Args = Args::parse_from(args);
+    args.status_after = utils::detect_agent::detect().is_some();
     let output_format = if args.json {
         OutputFormat::Json
     } else {
@@ -182,16 +181,16 @@ pub async fn handle_args(args: impl Iterator<Item = OsString>) -> Result<()> {
     let app_settings = AppSettings::load_from_default_path_creating_without_customization()?;
 
     let result = match args.cmd.take() {
-        #[cfg(unix)]
         Some(Subcommands::External(extra)) => {
             command::external::dispatch(&args.current_dir, &extra)
         }
         None => {
             // No arguments means run the default alias
             // The default alias expands to "status" which provides a helpful entry point
-            let default_args = vec![OsString::from("but"), OsString::from("default")];
-            let expanded = alias::expand_aliases(default_args)?;
-            let mut default_alias_args: Args = clap::Parser::parse_from(expanded);
+            let mut default_args: Vec<OsString> = vec!["but".into()];
+            let expanded_alias = alias::expand_alias("default")?;
+            default_args.extend_from_slice(&expanded_alias);
+            let mut default_alias_args: Args = clap::Parser::parse_from(default_args);
 
             // Preserve globals from the default alias, while letting explicit user globals
             // take precedence (e.g. `but -C <dir>` without a subcommand).
@@ -226,7 +225,6 @@ pub async fn handle_args(args: impl Iterator<Item = OsString>) -> Result<()> {
     match result {
         Err(CliError::Internal(err)) => Err(err),
         Err(CliError::BadInput(bad_input)) => print_and_exit_non_zero(bad_input),
-        #[cfg(unix)]
         Err(CliError::ExternalCommandNotFound(command_name)) => {
             // We reparse without external subcommands allowed, which _should_ result in a proper
             // clap error, including suggestions for "near matches". This gives richer error
@@ -248,10 +246,96 @@ pub async fn handle_args(args: impl Iterator<Item = OsString>) -> Result<()> {
     }
 }
 
-fn print_and_exit_non_zero<T: std::fmt::Display>(err: T) -> ! {
+/// Expand aliases in the argument list.
+///
+/// The parser treats aliases in the same way as external subcommands, so they end up inside of
+/// [`Subcommands::External`]. Anytime we find an external subcommand, we attempt to expand the
+/// first word in the command string as an alias.
+///
+/// This also has the intended effect of allowing aliases to shadow external commands. For example,
+/// if there is an external command `but-b` on the PATH and an alias `b=branch`, then `but b` will
+/// expand to `but branch` rather than be executed as `but-b`.
+///
+/// Cargo considers this shadowing behavior to be a security concern due to the fact that Cargo
+/// aliases can be defined in the worktree of a repository (see
+/// https://github.com/rust-lang/cargo/issues/10049). We don't have that problem as `but` aliases
+/// can only ever be defined in Git config, which is trusted and does not follow with clones.
+///
+/// Root options are consumed by the parser separately from [`Subcommands::External`], so e.g. `but
+/// -C some-alias a -b c` resolves into `External(["some-alias", "a", "-b", "c"])`, and the root
+/// options are correctly parsed into the [`Args`] struct.
+///
+/// Note that at present, aliases are resolved from the real working directory ("."). If you pass
+/// `-C /repo`, aliases from `/repo` are _not_ resolved.
+///
+/// # Examples
+///
+/// ```bash
+/// # Set up aliases
+/// but alias add b branch
+/// but alias add bl 'branch list --local'
+///
+/// # Use them
+/// but b                       # Expands to: but branch
+/// but bl                      # Expands to: but branch list --local
+/// but bl --review             # Expands to: but branch list --local --review
+/// but -C /repo bl --review    # Expands to: but -C /repo branch list --local --review
+/// ```
+///
+/// This function never fails - any unexpected situation leads to the original args being returned.
+fn expand_aliases(args: Vec<OsString>) -> Vec<OsString> {
+    let parsed_args = match Args::try_parse_from(&args) {
+        Ok(parsed) => parsed,
+        Err(_) => {
+            // We let the core parsing logic handle hard parse errors as there is special handling
+            // of e.g. help output. If we get rid of that bespoke parsing we can also get rid of
+            // this early return and let Clap handle parse errors with [`Args::parse_from`].
+            return args;
+        }
+    };
+
+    match &parsed_args.cmd {
+        Some(Subcommands::External(subcommand_args))
+            if let Some(command_name) = subcommand_args.first() =>
+        {
+            if let Some(command_name) = command_name.to_str() {
+                let subcommand_start = args.len() - subcommand_args.len();
+
+                let expanded = match alias::expand_alias(command_name) {
+                    Ok(expanded) => expanded,
+                    Err(err) => {
+                        print_err_infallible(theme::get().attention.paint(format!(
+                            "Failed to expand alias '{command_name}': {err}\nSkipping alias expansion\n",
+                        )));
+                        return args;
+                    }
+                };
+
+                Vec::<OsString>::new()
+                    .iter()
+                    .chain(args[..subcommand_start].iter())
+                    .chain(expanded.iter())
+                    .chain(args[subcommand_start + 1..].iter())
+                    .cloned()
+                    .collect()
+            } else {
+                args
+            }
+        }
+        _ => args,
+    }
+}
+
+/// Print to stderr, ignoring any errors in printing. Use this when printing to stderr is the only
+/// reasonable thing to do and there are no other options left.
+fn print_err_infallible<T: std::fmt::Display>(err: T) {
     use std::io::Write;
     // We swallow this error, there is nothing more to do at this point
     let _ = write!(std::io::stderr(), "{err}");
+}
+
+fn print_and_exit_non_zero<T: std::fmt::Display>(err: T) -> ! {
+    print_err_infallible(err);
     std::process::exit(1)
 }
 
@@ -1400,7 +1484,6 @@ async fn match_subcommand(
         Subcommands::AgentLog { .. } => {
             unreachable!("agentlog command is handled before metrics setup")
         }
-        #[cfg(unix)]
         Subcommands::External(_) => {
             unreachable!("external commands are delegated before reaching match_subcommand")
         }
@@ -1486,7 +1569,7 @@ fn is_not_in_git_repository_error(err: &anyhow::Error) -> bool {
     )
 }
 
-/// If `--status-after` was requested, appends workspace status to the output.
+/// If requested, appends workspace status to the output.
 ///
 /// Call `out.begin_status_after(status_after)` *before* the mutation to set up
 /// JSON buffering, then call this *after* to conditionally emit the combined output.
@@ -1516,7 +1599,7 @@ async fn maybe_run_status_after<T, E>(
     }
 }
 
-/// Ignore `--status-after` in non-legacy builds until a non-legacy status command exists.
+/// Ignore mutation status output in non-legacy builds until a non-legacy status command exists.
 #[cfg(not(feature = "legacy"))]
 async fn maybe_run_status_after(
     _status_after: bool,
@@ -1561,7 +1644,7 @@ async fn run_status_after(
             }),
             Err(err) => {
                 eprintln!(
-                    "warning: --status-after failed: {err:#}. Run 'but status' separately to check workspace state."
+                    "warning: status after mutation failed: {err:#}. Run 'but status' separately to check workspace state."
                 );
                 serde_json::json!({
                     "result": mutation_json.unwrap_or(serde_json::Value::Null),
@@ -1570,7 +1653,7 @@ async fn run_status_after(
             }
         };
         if let Err(err) = out.write_value(combined) {
-            eprintln!("warning: failed to write --status-after output: {err}");
+            eprintln!("warning: failed to write status after mutation: {err}");
         }
     } else {
         if let Some(human) = out.for_human() {
@@ -1590,7 +1673,7 @@ async fn run_status_after(
         .await
         {
             eprintln!(
-                "warning: --status-after failed: {err:#}. Run 'but status' separately to check workspace state."
+                "warning: status after mutation failed: {err:#}. Run 'but status' separately to check workspace state."
             );
         }
     }

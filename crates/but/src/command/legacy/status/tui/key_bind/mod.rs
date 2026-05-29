@@ -4,8 +4,9 @@ use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use strum::IntoEnumIterator;
 
 use crate::command::legacy::status::tui::{
-    BranchPickerMessage, CommandMessage, CommitMessageComposer, ConfirmMessage, Message,
-    RewordMessage, RubMessage, help::HelpMessage, mode::ModeDiscriminant,
+    BranchPickerMessage, CommandMessage, CommitMessageComposer, ConfirmMessage,
+    DetailsLayoutMessage, Message, RewordMessage, RubMessage, help::HelpMessage,
+    mode::ModeDiscriminant,
 };
 
 use super::{
@@ -51,14 +52,16 @@ pub(super) fn default_key_binds() -> KeyBinds {
                 builder.details_scroll_up(scroll_distance).register();
 
                 builder.details_rub().register();
+                builder.details_copy().register();
                 builder.details_top().register();
                 builder.details_bottom().register();
+                builder.toggle_full_screen_details().register();
 
                 builder
                     .key_bind(
                         "hide details",
                         press().code(KeyCode::Char('d')),
-                        Message::Details(DetailsMessage::ToggleVisibility),
+                        Message::DetailsLayout(DetailsLayoutMessage::Dismiss),
                     )
                     .register();
                 builder.grow_details().register();
@@ -72,19 +75,20 @@ pub(super) fn default_key_binds() -> KeyBinds {
                 builder.quit().register();
 
                 builder.normal_mode().register();
+                builder.back().register();
             }
             ModeDiscriminant::InlineReword => {
                 builder.reword_confirm().register();
                 builder.reword_open_editor().register();
 
-                builder.back().register();
                 builder.normal_mode().register();
+                builder.back().register();
             }
             ModeDiscriminant::Command => {
                 builder.command_confirm().register();
 
-                builder.back().register();
                 builder.normal_mode().register();
+                builder.back().register();
             }
         }
     }
@@ -404,9 +408,20 @@ impl KeyBindsBuilder<'_> {
         self.key_bind(
             "details",
             press().code(KeyCode::Char('d')),
-            Message::Details(DetailsMessage::ToggleVisibility),
+            Message::DetailsLayout(DetailsLayoutMessage::ToggleVisibility),
         )
         .long_description("Toggle the details view")
+        .show_only_in_normal_mode_help_section()
+    }
+
+    fn toggle_full_screen_details(&mut self) -> KeyBindsInModesBuilder<'_> {
+        self.key_bind(
+            "full screen details",
+            press().shift().code(KeyCode::Char('D')),
+            Message::DetailsLayout(DetailsLayoutMessage::ToggleFullScreen),
+        )
+        .hide_from_hotbar()
+        .long_description("Toggle the full screen details view")
         .show_only_in_normal_mode_help_section()
     }
 
@@ -572,7 +587,7 @@ impl KeyBindsBuilder<'_> {
         self.key_bind(
             "focus details",
             press().code(KeyCode::Char('l')),
-            Message::EnterDetailsMode,
+            Message::DetailsLayout(DetailsLayoutMessage::Focus { full_screen: false }),
         )
     }
 
@@ -802,6 +817,16 @@ impl KeyBindsBuilder<'_> {
         )
     }
 
+    fn details_copy(&mut self) -> KeyBindsInModesBuilder<'_> {
+        self.key_bind(
+            "copy hunk",
+            press().shift().code(KeyCode::Char('C')),
+            Message::Details(DetailsMessage::CopyCurrentHunk),
+        )
+        .hide_from_hotbar()
+        .long_description("Copy current hunk to clipboard")
+    }
+
     fn details_focus_status(&mut self) -> KeyBindsInModesBuilder<'_> {
         self.key_bind(
             "focus status",
@@ -844,6 +869,7 @@ fn register_normal_mode_key_binds(builder: &mut KeyBindsBuilder<'_>, without_mar
     }
 
     builder.toggle_details().register();
+    builder.toggle_full_screen_details().register();
     builder.focus_details().register();
     builder.grow_details().register();
     builder.shrink_details().register();
@@ -885,6 +911,7 @@ fn register_non_mode_specific_key_binds(builder: &mut KeyBindsBuilder<'_>) {
     builder.next_section().register();
     builder.prev_section().register();
     builder.toggle_details().register();
+    builder.toggle_full_screen_details().register();
     builder.grow_details().register();
     builder.shrink_details().register();
     builder.branch_picker().register();
