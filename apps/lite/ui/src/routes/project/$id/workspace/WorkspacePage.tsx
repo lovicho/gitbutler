@@ -15,7 +15,7 @@ import {
 	selectProjectOutlineModeState,
 	selectProjectPanelsState,
 } from "#ui/projects/state.ts";
-import { Button } from "#ui/components/Button.tsx";
+import { getButtonClassName } from "#ui/components/Button.tsx";
 import { Kbd } from "#ui/components/Kbd.tsx";
 import { globalHotkeys, workspaceHotkeys, type CommandGroup } from "#ui/hotkeys.ts";
 import { type AppThunk, useAppDispatch, useAppSelector } from "#ui/store.ts";
@@ -37,7 +37,6 @@ import {
 import { useParams } from "@tanstack/react-router";
 import { Match, Order } from "effect";
 import { type FC, Component, ReactNode } from "react";
-import { Group, Separator, useDefaultLayout } from "react-resizable-panels";
 import { branchOperand, type BranchOperand } from "#ui/operands.ts";
 import { PickerDialog, type PickerDialogGroup } from "#ui/components/PickerDialog.tsx";
 import { DetailsPanel } from "./DetailsPanel.tsx";
@@ -224,17 +223,10 @@ const branchListingToApplyBranchPickerOptions = (
 	}));
 };
 
-const ApplyBranchPicker: FC<{
-	open: boolean;
-	onOpenChange: (open: boolean) => void;
-	projectId: string;
-}> = ({ open, onOpenChange, projectId }) => {
-	const branchesQuery = useQuery(
-		listBranchesQueryOptions({ projectId, filter: { local: null, applied: false } }),
-	);
-	const items = (branchesQuery.data ?? []).flatMap(branchListingToApplyBranchPickerOptions);
+const useApplyBranch = () => {
 	const toastManager = Toast.useToastManager();
-	const applyBranch = useMutation({
+
+	return useMutation({
 		mutationFn: window.lite.apply,
 		onError: (error) => {
 			// oxlint-disable-next-line no-console
@@ -248,6 +240,18 @@ const ApplyBranchPicker: FC<{
 			});
 		},
 	});
+};
+
+const ApplyBranchPicker: FC<{
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
+	projectId: string;
+}> = ({ open, onOpenChange, projectId }) => {
+	const branchesQuery = useQuery(
+		listBranchesQueryOptions({ projectId, filter: { local: null, applied: false } }),
+	);
+	const items = (branchesQuery.data ?? []).flatMap(branchListingToApplyBranchPickerOptions);
+	const applyBranch = useApplyBranch();
 	const statusLabel =
 		items.length === 0
 			? branchesQuery.isPending
@@ -286,15 +290,10 @@ const ApplyBranchPicker: FC<{
 	);
 };
 
-const useWorkspaceHotkeys = (projectId: string) => {
-	const dispatch = useAppDispatch();
-	const dialog = useAppSelector((state) => selectProjectDialogState(state, projectId));
-	const panelsState = useAppSelector((state) => selectProjectPanelsState(state, projectId));
-	const focusedPanel = useFocusedProjectPanel(projectId);
+const useRestoreSnapshot = ({ projectId }: { projectId: string }) => {
 	const toastManager = Toast.useToastManager();
-	const outlineMode = useAppSelector((state) => selectProjectOutlineModeState(state, projectId));
 
-	const restoreSnapshotMutation = useMutation({
+	return useMutation({
 		mutationFn: async (direction: "redo" | "undo"): Promise<Snapshot | null> => {
 			const snapshot =
 				direction === "redo"
@@ -350,6 +349,16 @@ const useWorkspaceHotkeys = (projectId: string) => {
 			});
 		},
 	});
+};
+
+const useWorkspaceHotkeys = (projectId: string) => {
+	const dispatch = useAppDispatch();
+	const dialog = useAppSelector((state) => selectProjectDialogState(state, projectId));
+	const panelsState = useAppSelector((state) => selectProjectPanelsState(state, projectId));
+	const focusedPanel = useFocusedProjectPanel(projectId);
+	const outlineMode = useAppSelector((state) => selectProjectOutlineModeState(state, projectId));
+
+	const restoreSnapshotMutation = useRestoreSnapshot({ projectId });
 
 	useHotkeys([
 		{
@@ -430,15 +439,9 @@ const WorkspacePage: FC = () => {
 	const { id: projectId } = useParams({ from: "/project/$id/workspace" });
 
 	const dialog = useAppSelector((state) => selectProjectDialogState(state, projectId));
-	const panelsState = useAppSelector((state) => selectProjectPanelsState(state, projectId));
 	const focusedPanel = useFocusedProjectPanel(projectId);
 
 	useWorkspaceHotkeys(projectId);
-
-	const { defaultLayout, onLayoutChanged } = useDefaultLayout({
-		id: `project:${projectId}:workspace`,
-		panelIds: ["outline", "details-files-container"],
-	});
 
 	const selectBranch = (branch: BranchOperand) => {
 		dispatch(
@@ -467,20 +470,16 @@ const WorkspacePage: FC = () => {
 
 	return (
 		<>
-			<Group className={styles.page} defaultLayout={defaultLayout} onLayoutChange={onLayoutChanged}>
+			<div className={styles.page}>
 				<OutlinePanel
 					id={"outline" satisfies PanelType}
-					minSize={300}
-					defaultSize={500}
-					groupResizeBehavior="preserve-pixel-size"
+					data-panel
 					tabIndex={0}
-					elementRef={(el) => el?.focus({ focusVisible: false })}
+					ref={(el) => el?.focus({ focusVisible: false })}
 				/>
 
-				<Separator className={styles.panelResizeHandle} />
-
-				<DetailsPanel id="details-files-container" minSize={panelsState.filesVisible ? 650 : 400} />
-			</Group>
+				<DetailsPanel />
+			</div>
 
 			{Match.value(dialog).pipe(
 				Match.tagsExhaustive({
@@ -530,9 +529,13 @@ class WorkspacePageErrorBoundary extends Component<
 			<div className={styles.error}>
 				<h1 className={styles.errorTitle}>Something went wrong.</h1>
 				<div className={styles.errorActions}>
-					<Button type="button" onClick={() => this.handleRetry()}>
+					<button
+						type="button"
+						className={getButtonClassName({})}
+						onClick={() => this.handleRetry()}
+					>
 						Retry
-					</Button>
+					</button>
 				</div>
 				<code className={styles.errorMessage}>{this.state.error.message}</code>
 			</div>

@@ -2,7 +2,6 @@
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	margin-block-start: var(--panel-padding);
 	margin-block-end: 4px;
 	overflow: hidden;
 	gap: 6px;
@@ -31,9 +30,19 @@
 
 .panel {
 	display: grid;
+
+	/* `operationSourcePreview` is relative to this. */
+	position: relative;
 	grid-template-rows: auto auto minmax(0, 1fr);
-	padding-inline: var(--panel-padding);
+	grid-template-columns: minmax(0, 1fr);
+	padding: var(--panel-padding);
 	gap: 12px;
+	border-right: 1px solid var(--border-3);
+
+	&:focus {
+		/* The focus state is displayed on the item row instead. */
+		outline: none;
+	}
 }
 
 .headInfo {
@@ -61,10 +70,6 @@
 .stack {
 	display: flex;
 	flex-direction: column;
-
-	&:last-child {
-		margin-block-end: var(--panel-padding);
-	}
 }
 
 .stackRowLabel::before {
@@ -203,6 +208,23 @@
 	display: flex;
 	column-gap: 10px;
 	padding: 12px;
+}
+
+.commitDropdownButton {
+	display: inline-flex;
+	flex-shrink: 0;
+
+	& > :first-child {
+		border-right: 0;
+		border-start-end-radius: 0;
+		border-end-end-radius: 0;
+	}
+
+	& > :last-child {
+		border-left: 1px solid var(--button-group-divider-color, transparent);
+		border-start-start-radius: 0;
+		border-end-start-radius: 0;
+	}
 }
 
 .commitTargetComboboxTrigger {
