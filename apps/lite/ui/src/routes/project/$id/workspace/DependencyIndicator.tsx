@@ -8,7 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Array, pipe } from "effect";
 import { ComponentProps, FC } from "react";
 
-export const DependencyIndicatorButton: FC<
+export const DependencyIndicator: FC<
 	{
 		projectId: string;
 		commitIds: Array.NonEmptyArray<string>;
@@ -44,6 +44,7 @@ export const DependencyIndicatorButton: FC<
 			<Popover.Trigger
 				{...restProps}
 				onMouseEnter={highlightCommitIds}
+				// TODO: we should also clear if the element unmounts
 				onMouseLeave={clearHighlightedCommitIds}
 				onFocus={highlightCommitIds}
 				onBlur={clearHighlightedCommitIds}
