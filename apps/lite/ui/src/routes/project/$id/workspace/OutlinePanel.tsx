@@ -31,7 +31,6 @@ import {
 	filterNavigationIndexForOutlineMode,
 	getTransferOperation,
 	keyboardTransferOperationMode,
-	getOperationSource,
 } from "#ui/outline/mode.ts";
 import { focusPanel, useNavigationIndexHotkeys } from "#ui/panels.ts";
 import {
@@ -90,7 +89,6 @@ import {
 	ComponentProps,
 	createContext,
 	FC,
-	Fragment,
 	SubmitEventHandler,
 	use,
 	useEffect,
@@ -684,8 +682,6 @@ export const OutlinePanel: FC<ComponentProps<"div">> = ({ ref: refProp, ...panel
 		ref,
 	});
 
-	const operationSource = getOperationSource(outlineMode);
-
 	const commitTargetState = useAppSelector((state) => selectProjectCommitTarget(state, projectId));
 	const targetComboboxItems = buildCommitTargetComboboxItems({ headInfo, commitTargetState });
 	const commitTarget = selectCommitTargetComboboxItem({
@@ -758,14 +754,28 @@ export const OutlinePanel: FC<ComponentProps<"div">> = ({ ref: refProp, ...panel
 							))}
 						</div>
 
-						{operationSource && headInfo && (
-							<div className={styles.operationSourcePreview}>
-								<OperationSourceLabel headInfo={headInfo} source={operationSource} />
-								{outlineMode._tag === "Absorb" && absorptionPlanQuery?.isPending && (
-									<Icon name="spinner" aria-label="Loading absorb plan" />
-								)}
-							</div>
-						)}
+						{headInfo &&
+							Match.value(outlineMode).pipe(
+								Match.tagsExhaustive({
+									Default: () => null,
+									Absorb: (x) => (
+										<div className={classes("text-14", styles.operationSourcePreview)}>
+											Absorb source: <OperationSourceLabel headInfo={headInfo} source={x.source} />
+											{absorptionPlanQuery?.isPending && (
+												<Icon name="spinner" aria-label="Loading absorb plan" />
+											)}
+										</div>
+									),
+									Transfer: (x) => (
+										<div className={classes("text-14", styles.operationSourcePreview)}>
+											Transfer source:{" "}
+											<OperationSourceLabel headInfo={headInfo} source={x.value.source} />
+										</div>
+									),
+									RenameBranch: () => null,
+									RewordCommit: () => null,
+								}),
+							)}
 					</div>
 				</DryRunWorkspaceContext>
 			</AbsorptionTargetKeysContext>
@@ -887,15 +897,19 @@ const OperandC: FC<
 };
 
 const EditorHelp: FC<{
-	hotkeys: Array<{ hotkey: string; name: string }>;
-}> = ({ hotkeys }) => (
+	buttons: Array<{ hotkey: string; name: string; callback: () => void }>;
+}> = ({ buttons }) => (
 	<div className={styles.editorHelp}>
-		{hotkeys.map((hotkey, index) => (
-			<Fragment key={hotkey.hotkey}>
-				{index > 0 && " • "}
-				<kbd className={styles.editorShortcut}>{formatForDisplay(hotkey.hotkey)}</kbd>
-				<span className={styles.editorShortcutLabel}> to {hotkey.name}</span>
-			</Fragment>
+		{buttons.map((button) => (
+			<button
+				type="button"
+				onClick={button.callback}
+				key={button.hotkey}
+				className={getButtonClassName({ size: "small", variant: "inverted" })}
+			>
+				<kbd className={styles.editorShortcut}>{formatForDisplay(button.hotkey)}</kbd>
+				<span className={styles.editorShortcutLabel}> to {button.name}</span>
+			</button>
 		))}
 	</div>
 );
@@ -942,9 +956,9 @@ const InlineRewordCommit: FC<{
 				className={classes(styles.editorInput, styles.rewordCommitInput)}
 			/>
 			<EditorHelp
-				hotkeys={[
-					{ hotkey: "Enter", name: "Save" },
-					{ hotkey: "Escape", name: "Cancel" },
+				buttons={[
+					{ hotkey: "Enter", name: "Save", callback: () => formRef.current?.requestSubmit() },
+					{ hotkey: "Escape", name: "Cancel", callback: onExit },
 				]}
 			/>
 		</form>
@@ -1829,9 +1843,9 @@ const InlineRenameBranch: FC<{
 				className={classes("text-bold", styles.editorInput)}
 			/>
 			<EditorHelp
-				hotkeys={[
-					{ hotkey: "Enter", name: "Save" },
-					{ hotkey: "Escape", name: "Cancel" },
+				buttons={[
+					{ hotkey: "Enter", name: "Save", callback: () => formRef.current?.requestSubmit() },
+					{ hotkey: "Escape", name: "Cancel", callback: onExit },
 				]}
 			/>
 		</form>
