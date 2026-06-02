@@ -1,3 +1,4 @@
+import uiStyles from "#ui/components/ui.module.css";
 import { SuspenseQuery } from "@suspensive/react-query";
 import {
 	branchDetailsQueryOptions,
@@ -8,10 +9,10 @@ import {
 } from "#ui/api/queries.ts";
 import { decodeRefName } from "#ui/api/ref-name.ts";
 import { commitBody, commitTitle, shortCommitId } from "#ui/commit.ts";
-import { commitOperand, type Operand } from "#ui/operands.ts";
+import { branchOperand, changesSectionOperand, commitOperand, type Operand } from "#ui/operands.ts";
 import {
 	projectActions,
-	selectProjectPanelsState,
+	selectProjectFilesVisible,
 	selectProjectSelectionFiles,
 	selectProjectSelectionOutline,
 } from "#ui/projects/state.ts";
@@ -29,10 +30,14 @@ import { useSuspenseQueries } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
 import { Array, Hash, Match } from "effect";
 import { ComponentProps, FC, Suspense, useDeferredValue } from "react";
-import { FilesPanel } from "./FilesPanel.tsx";
-import styles from "./DetailsPanel.module.css";
+import styles from "./Details.module.css";
 import { workspaceHotkeys } from "#ui/hotkeys.ts";
-import { Panel } from "#ui/panels.ts";
+import { SelectionScope } from "#ui/selection-scopes.ts";
+import {
+	BranchFilesTree,
+	ChangesFilesTree,
+	CommitFilesTree,
+} from "#ui/routes/project/$id/workspace/FilesTree.tsx";
 
 const lineEndingForDiff = (diff: string): string => (diff.includes("\r\n") ? "\r\n" : "\n");
 
@@ -129,7 +134,7 @@ const ChangesFileDiffList: FC<{
 		<p className="text-13">No changes.</p>
 	) : (
 		<CodeView
-			className={styles.detailsVirtualizer}
+			className={classes(styles.diffContentsVirtualizer, uiStyles.scrollerWithSeparator)}
 			items={items}
 			options={{
 				diffStyle: "unified",
@@ -151,7 +156,7 @@ const Header: FC<{
 	Match.value(selection).pipe(
 		Match.tagsExhaustive({
 			Stack: () => null,
-			Branch: ({ branchRef }) => {
+			Branch: ({ stackId, branchRef }) => {
 				const decodedBranchRef = decodeRefName(branchRef);
 
 				return (
@@ -164,22 +169,32 @@ const Header: FC<{
 						})}
 					>
 						{({ data: branchDetails }) => (
-							<header className={styles.header}>
+							<OperationSourceC
+								projectId={projectId}
+								selectionScope="outline"
+								source={branchOperand({ stackId, branchRef })}
+								render={<header className={styles.header} />}
+							>
 								<h3 className={classes("text-14", "text-semibold")}>{branchDetails.name}</h3>
 								{branchDetails.prNumber != null && (
-									<h4 className={classes("text-13", "text-bold", styles.pr)}>
+									<div className={classes("text-13", "text-bold", styles.pr)}>
 										PR #{branchDetails.prNumber}
-									</h4>
+									</div>
 								)}
-							</header>
+							</OperationSourceC>
 						)}
 					</SuspenseQuery>
 				);
 			},
 			ChangesSection: () => (
-				<header className={styles.header}>
+				<OperationSourceC
+					projectId={projectId}
+					selectionScope="outline"
+					source={changesSectionOperand}
+					render={<header className={styles.header} />}
+				>
 					<h3 className={classes("text-14", "text-semibold")}>Changes</h3>
-				</header>
+				</OperationSourceC>
 			),
 			File: () => null,
 			Commit: ({ commitId, stackId }) => {
@@ -188,17 +203,20 @@ const Header: FC<{
 				return (
 					<SuspenseQuery {...commitDetailsWithLineStatsQueryOptions({ projectId, commitId })}>
 						{({ data: commitDetails }) => (
-							<OperationSourceC projectId={projectId} selectionScope="outline" source={source}>
-								<header className={styles.header}>
-									<Icon name="commit" />
-									<h3 className={classes("text-14", "text-semibold")}>
-										{commitTitle(commitDetails.commit.message)}
-										{commitDetails.commit.hasConflicts && " ⚠️"}
-									</h3>
-									<span className={classes("text-13", styles.commitMeta)}>
-										#{shortCommitId(commitDetails.commit.id)}
-									</span>
-								</header>
+							<OperationSourceC
+								projectId={projectId}
+								selectionScope="outline"
+								source={source}
+								render={<header className={styles.header} />}
+							>
+								<Icon name="commit" />
+								<h3 className={classes("text-14", "text-semibold")}>
+									{commitTitle(commitDetails.commit.message)}
+									{commitDetails.commit.hasConflicts && " ⚠️"}
+								</h3>
+								<span className={classes("text-13", styles.commitMeta)}>
+									#{shortCommitId(commitDetails.commit.id)}
+								</span>
 							</OperationSourceC>
 						)}
 					</SuspenseQuery>
@@ -211,21 +229,21 @@ const Header: FC<{
 const FilesToggle: FC = () => {
 	const { id: projectId } = useParams({ from: "/project/$id/workspace" });
 	const dispatch = useAppDispatch();
-	const panelsState = useAppSelector((state) => selectProjectPanelsState(state, projectId));
+	const filesVisible = useAppSelector((state) => selectProjectFilesVisible(state, projectId));
 
 	return (
 		<Tooltip.Root>
 			<Tooltip.Trigger
 				className={getButtonClassName({})}
-				aria-pressed={panelsState.filesVisible}
-				onClick={() => dispatch(projectActions.toggleFilesPanel({ projectId }))}
+				aria-pressed={filesVisible}
+				onClick={() => dispatch(projectActions.toggleFiles({ projectId }))}
 			>
 				Files
 			</Tooltip.Trigger>
 			<Tooltip.Portal>
 				<Tooltip.Positioner sideOffset={4}>
-					<Tooltip.Popup render={<TooltipPopup kbd={workspaceHotkeys.toggleFilesPanel.hotkey} />}>
-						{workspaceHotkeys.toggleFilesPanel.meta.name}
+					<Tooltip.Popup render={<TooltipPopup kbd={workspaceHotkeys.toggleFiles.hotkey} />}>
+						{workspaceHotkeys.toggleFiles.meta.name}
 					</Tooltip.Popup>
 				</Tooltip.Positioner>
 			</Tooltip.Portal>
@@ -387,9 +405,74 @@ const DiffContents: FC<{
 		}),
 	);
 
-export const DetailsPanel: FC<ComponentProps<"div">> = (panelProps) => {
+const FilesTree: FC<ComponentProps<"div">> = (props) => {
 	const { id: projectId } = useParams({ from: "/project/$id/workspace" });
-	const panelsState = useAppSelector((state) => selectProjectPanelsState(state, projectId));
+
+	const outlineSelection = useAppSelector((state) =>
+		selectProjectSelectionOutline(state, projectId),
+	);
+
+	return (
+		<Suspense
+			fallback={
+				<div {...props} className={classes(props.className, "text-13")}>
+					Loading files…
+				</div>
+			}
+		>
+			{Match.value(outlineSelection).pipe(
+				Match.tag("Commit", (commit) => (
+					<SuspenseQuery
+						{...commitDetailsWithLineStatsQueryOptions({
+							projectId,
+							commitId: commit.commitId,
+						})}
+					>
+						{({ data: commitDetails }) => (
+							<CommitFilesTree
+								{...props}
+								projectId={projectId}
+								commit={commit}
+								commitDetails={commitDetails}
+							/>
+						)}
+					</SuspenseQuery>
+				)),
+				Match.tag("ChangesSection", () => (
+					<SuspenseQuery {...changesInWorktreeQueryOptions(projectId)}>
+						{({ data: worktreeChanges }) => (
+							<ChangesFilesTree
+								{...props}
+								projectId={projectId}
+								worktreeChanges={worktreeChanges}
+							/>
+						)}
+					</SuspenseQuery>
+				)),
+				Match.tag("Branch", ({ stackId, branchRef }) => (
+					<SuspenseQuery
+						{...branchDiffQueryOptions({ projectId, branch: decodeRefName(branchRef) })}
+					>
+						{({ data: branchDiff }) => (
+							<BranchFilesTree
+								{...props}
+								projectId={projectId}
+								stackId={stackId}
+								branchRef={branchRef}
+								branchDiff={branchDiff}
+							/>
+						)}
+					</SuspenseQuery>
+				)),
+				Match.orElse(() => <div {...props} />),
+			)}
+		</Suspense>
+	);
+};
+
+export const Details: FC<ComponentProps<"div">> = (props) => {
+	const { id: projectId } = useParams({ from: "/project/$id/workspace" });
+	const filesVisible = useAppSelector((state) => selectProjectFilesVisible(state, projectId));
 	const urgentOutlineSelection = useAppSelector((state) =>
 		selectProjectSelectionOutline(state, projectId),
 	);
@@ -403,8 +486,8 @@ export const DetailsPanel: FC<ComponentProps<"div">> = (panelProps) => {
 
 	return (
 		<div
-			{...panelProps}
-			className={classes(panelProps.className, styles.panel)}
+			{...props}
+			className={classes(props.className, styles.container)}
 			style={{ opacity: urgentOutlineSelection !== outlineSelection ? 0.5 : 1 }}
 		>
 			<div className={styles.headerWrap}>
@@ -421,22 +504,22 @@ export const DetailsPanel: FC<ComponentProps<"div">> = (panelProps) => {
 				</div>
 			</div>
 
-			<div className={classes(styles.panels, panelsState.filesVisible && styles.panelsWithFiles)}>
-				{panelsState.filesVisible && (
-					<FilesPanel
-						id={"files" satisfies Panel}
-						data-panel
+			<div className={classes(styles.diff, filesVisible && styles.diffWithFiles)}>
+				{filesVisible && (
+					<FilesTree
+						id={"files" satisfies SelectionScope}
+						data-selection-scope
 						tabIndex={0}
-						className={styles.filesPanel}
+						className={classes(styles.diffFiles, uiStyles.scrollerWithSeparator)}
 					/>
 				)}
 
 				<div
-					id={"details" satisfies Panel}
-					data-panel
+					id={"diff" satisfies SelectionScope}
+					data-selection-scope
 					// oxlint-disable-next-line jsx_a11y/no-noninteractive-tabindex -- Revisit this when we add hunk/line selection.
 					tabIndex={0}
-					className={styles.detailsContentPanel}
+					className={styles.diffContents}
 					style={{ opacity: urgentFilesSelection !== filesSelection ? 0.5 : 1 }}
 				>
 					<Suspense fallback={<p className="text-13">Loading diff…</p>}>

@@ -32,3 +32,38 @@
 	font-size: 13px;
 	word-break: break-word;
 }
+
+.outlinePanel {
+	display: grid;
+	grid-template-rows: auto minmax(0, 1fr);
+	gap: 12px;
+	border-right: 1px solid var(--border-3);
+}
+
+.workspaceControls {
+	display: flex;
+	align-items: center;
+	padding-top: var(--panel-padding);
+	padding-inline: var(--panel-padding);
+	gap: 6px;
+}
+
+.workspaceControlsLeft {
+	display: flex;
+	align-items: center;
+	overflow: hidden;
+	gap: 4px;
+}
+
+.workspaceControlsActions {
+	display: flex;
+	align-items: center;
+	margin-inline-start: auto;
+	gap: 4px;
+}
+
+.workspaceName {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
