@@ -18,6 +18,7 @@ import {
 import { getButtonClassName } from "#ui/components/Button.tsx";
 import { Kbd } from "#ui/components/Kbd.tsx";
 import { globalHotkeys, workspaceHotkeys, type CommandGroup } from "#ui/hotkeys.ts";
+import { stackToBottomRebaseUpdate } from "#ui/api/stack.ts";
 import { type AppThunk, useAppDispatch, useAppSelector } from "#ui/store.ts";
 import { BottomUpdate, BranchListing, Segment, Snapshot, Stack } from "@gitbutler/but-sdk";
 import {
@@ -174,27 +175,6 @@ const stackToBranchPickerOptions = (stack: Stack): Array<BranchPickerOption> => 
 		const option = segmentToBranchPickerOption({ segment, stackId });
 		return option ? [option] : [];
 	});
-};
-
-const stackToBottomRebaseUpdate = (stack: Stack): BottomUpdate | null => {
-	const bottomSegment = stack.segments.at(-1);
-	if (!bottomSegment) return null;
-
-	const bottomCommit = bottomSegment.commits.at(-1);
-	if (bottomCommit)
-		return {
-			kind: "rebase",
-			selector: { type: "commit", subject: bottomCommit.id },
-		};
-
-	const bottomRef = bottomSegment.refName?.fullNameBytes;
-	if (bottomRef)
-		return {
-			kind: "rebase",
-			selector: { type: "referenceBytes", subject: bottomRef },
-		};
-
-	return null;
 };
 
 const BranchPicker: FC<{
@@ -590,14 +570,24 @@ const WorkspacePage: FC = () => {
 						</div>
 
 						<div className={styles.workspaceControlsActions}>
-							<button
-								type="button"
-								disabled={!canRebaseAllStacks}
-								className={getButtonClassName({})}
-								onClick={rebaseAllStacks}
-							>
-								Rebase all
-							</button>
+							<Tooltip.Root>
+								<Tooltip.Trigger
+									type="button"
+									aria-label="Rebase all"
+									className={getButtonClassName({ iconOnly: true })}
+									onClick={rebaseAllStacks}
+									// This is needed to ensure the `disabled` attribute is passed
+									// to the button element. Other props should be passed above.
+									render={<button type="submit" disabled={!canRebaseAllStacks} />}
+								>
+									<Icon name="arrow-line-down" />
+								</Tooltip.Trigger>
+								<Tooltip.Portal>
+									<Tooltip.Positioner sideOffset={4}>
+										<Tooltip.Popup render={<TooltipPopup />}>Rebase all</Tooltip.Popup>
+									</Tooltip.Positioner>
+								</Tooltip.Portal>
+							</Tooltip.Root>
 
 							<Tooltip.Root>
 								<Tooltip.Trigger className={getButtonClassName({})} onClick={openApplyBranchPicker}>
