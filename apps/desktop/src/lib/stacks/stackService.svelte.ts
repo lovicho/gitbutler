@@ -1,4 +1,5 @@
 import { getBranchNameFromRef } from "$lib/branches/branchUtils";
+import { newPushFeature } from "$lib/config/uiFeatureFlags";
 import { sortLikeFileTree } from "$lib/files/filetreeV3";
 import { showToast } from "$lib/notifications/toasts";
 import {
@@ -10,6 +11,7 @@ import {
 	commitSelectors,
 	selectChangesByPaths,
 	stackSelectors,
+	type BranchPushResult,
 	upstreamCommitSelectors,
 } from "$lib/stacks/stackEndpoints";
 import {
@@ -23,6 +25,7 @@ import { type UiState } from "$lib/state/uiState.svelte";
 import { InjectionToken } from "@gitbutler/core/context";
 import { reactive } from "@gitbutler/shared/reactiveUtils.svelte";
 import { isDefined } from "@gitbutler/ui/utils/typeguards";
+import { get } from "svelte/store";
 import type { ReduxError } from "$lib/error/reduxError";
 import type { DefaultForgeFactory } from "$lib/forge/forgeFactory.svelte";
 import type { BackendApi } from "$lib/state/backendApi";
@@ -383,8 +386,8 @@ export class StackService {
 	}
 
 	get pushStack() {
-		return this.backendApi.endpoints.pushStack.useMutation({
-			sideEffect: (result, _) => {
+		const options = {
+			sideEffect: (result: BranchPushResult) => {
 				// Timeout to accommodate eventual consistency.
 				setTimeout(() => {
 					const invalidations = [invalidatesList(ReduxTag.PullRequests)];
@@ -416,7 +419,13 @@ export class StackService {
 				});
 			},
 			throwSilentError: true,
-		});
+		};
+
+		if (get(newPushFeature)) {
+			return this.backendApi.endpoints.pushWorkspaceBranchAndAncestors.useMutation(options);
+		} else {
+			return this.backendApi.endpoints.pushStack.useMutation(options);
+		}
 	}
 
 	createCommit() {
@@ -497,12 +506,11 @@ export class StackService {
 	/**
 	 * Gets the changes for a given branch.
 	 */
-	branchChanges(args: { projectId: string; stackId?: string; branch: string }) {
+	branchChanges(args: { projectId: string; branch: string }) {
 		return this.backendApi.endpoints.branchChanges.useQuery(
 			{
 				projectId: args.projectId,
 				branch: args.branch,
-				stackId: args.stackId,
 			},
 			{
 				transform: (result) => ({
@@ -513,27 +521,20 @@ export class StackService {
 		);
 	}
 
-	branchChange(args: { projectId: string; stackId?: string; branch: string; path: string }) {
+	branchChange(args: { projectId: string; branch: string; path: string }) {
 		return this.backendApi.endpoints.branchChanges.useQuery(
 			{
 				projectId: args.projectId,
-				stackId: args.stackId,
 				branch: args.branch,
 			},
 			{ transform: (result) => changesSelectors.selectById(result.changes, args.path) },
 		);
 	}
 
-	async branchChangesByPaths(args: {
-		projectId: string;
-		stackId?: string;
-		branch: string;
-		paths: string[];
-	}) {
+	async branchChangesByPaths(args: { projectId: string; branch: string; paths: string[] }) {
 		const result = await this.backendApi.endpoints.branchChanges.fetch(
 			{
 				projectId: args.projectId,
-				stackId: args.stackId,
 				branch: args.branch,
 			},
 			{ transform: (result) => selectChangesByPaths(result.changes, args.paths) },
@@ -549,11 +550,13 @@ export class StackService {
 		return this.backendApi.endpoints.newBranch.useMutation();
 	}
 
-	async uncommit(args: { projectId: string; stackId: string; commitIds: string[] }) {
+	async uncommit(args: { projectId: string; stackId?: string; commitIds: string[] }) {
 		const result = await this.backendApi.endpoints.uncommit.mutate(args);
-		const selection = this.uiState.lane(args.stackId).selection;
-		if (selection.current?.commitId && args.commitIds.includes(selection.current.commitId)) {
-			selection.set(undefined);
+		if (args.stackId) {
+			const selection = this.uiState.lane(args.stackId).selection;
+			if (selection.current?.commitId && args.commitIds.includes(selection.current.commitId)) {
+				selection.set(undefined);
+			}
 		}
 		return result;
 	}
@@ -750,7 +753,6 @@ export class StackService {
 
 		await this.squashCommits({
 			projectId,
-			stackId,
 			sourceCommitIds: squashCommits.map((commit) => commit.id),
 			targetCommitId: targetCommit.id,
 		});

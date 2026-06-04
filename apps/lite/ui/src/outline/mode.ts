@@ -10,7 +10,6 @@ import {
 	type Operand,
 } from "#ui/operands.ts";
 import { getOperation, getOperations, OperationType } from "#ui/operations/operation.ts";
-import { filterNavigationIndex, NavigationIndex } from "#ui/workspace/navigation-index.ts";
 import { AbsorptionTarget } from "@gitbutler/but-sdk";
 import { SelectionState } from "#ui/projects/workspace/state.ts";
 
@@ -149,40 +148,34 @@ const hasAnyOperation = (source: Operand, target: Operand) => {
 	return !!operations.rub || !!operations.moveAbove || !!operations.moveBelow;
 };
 
-export const filterNavigationIndexForOutlineMode = ({
-	navigationIndex: navigationIndexUnfiltered,
+export const filterNavigationItemsForOutlineMode = ({
+	items,
 	outlineMode,
 	absorptionTargetKeys,
 }: {
-	navigationIndex: NavigationIndex;
+	items: Array<Operand>;
 	outlineMode: OutlineMode;
 	absorptionTargetKeys: ReadonlySet<string>;
 }) =>
 	Match.value(outlineMode).pipe(
 		Match.tagsExhaustive({
-			Default: () => navigationIndexUnfiltered,
+			Default: () => items,
 			Absorb: (activeMode) =>
-				filterNavigationIndex(
-					navigationIndexUnfiltered,
+				items.filter(
 					(operand) =>
 						operandContains(operand, activeMode.source) ||
 						absorptionTargetKeys.has(operandIdentityKey(operand)),
 				),
 			Transfer: (activeMode) =>
-				filterNavigationIndex(
-					navigationIndexUnfiltered,
+				items.filter(
 					(operand) =>
 						operandContains(operand, activeMode.value.source) ||
 						hasAnyOperation(activeMode.value.source, operand),
 				),
 			RenameBranch: (x) =>
-				filterNavigationIndex(navigationIndexUnfiltered, (operand) =>
-					operandEquals(operand, branchOperand(x.operand)),
-				),
+				items.filter((operand) => operandEquals(operand, branchOperand(x.operand))),
 			RewordCommit: (x) =>
-				filterNavigationIndex(navigationIndexUnfiltered, (operand) =>
-					operandEquals(operand, commitOperand(x.operand)),
-				),
+				items.filter((operand) => operandEquals(operand, commitOperand(x.operand))),
 		}),
 	);
 

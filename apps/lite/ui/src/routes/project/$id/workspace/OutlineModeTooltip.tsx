@@ -14,7 +14,7 @@ import {
 } from "#ui/operations/operation.ts";
 import { projectActions, selectProjectOutlineModeState } from "#ui/projects/state.ts";
 import { useAppDispatch, useAppSelector } from "#ui/store.ts";
-import { Tooltip, useRender } from "@base-ui/react";
+import { Button, Tooltip, useRender } from "@base-ui/react";
 import { Toggle } from "@base-ui/react/toggle";
 import { ToggleGroup } from "@base-ui/react/toggle-group";
 import { type AbsorptionTarget } from "@gitbutler/but-sdk";
@@ -64,13 +64,13 @@ const AbsorbControls: FC<{
 
 	return (
 		<div className={styles.controls}>
-			<Tooltip.Root disabled={!canAbsorb}>
+			<Tooltip.Root>
 				<Tooltip.Trigger
 					className={getButtonClassName({})}
 					onClick={confirm}
-					// This is needed to ensure the `disabled` attribute is passed to the
-					// button element. Other props should be passed above.
-					render={<button type="button" disabled={!canAbsorb} />}
+					// We pass `disabled` here because we want to disable the button, not
+					// the tooltip. Other props should be passed above.
+					render={<Button focusableWhenDisabled disabled={!canAbsorb} />}
 				>
 					Absorb
 				</Tooltip.Trigger>
@@ -252,13 +252,13 @@ const TransferOperationControls: FC<{
 
 	return (
 		<div className={styles.controls}>
-			<Tooltip.Root disabled={!operation}>
+			<Tooltip.Root>
 				<Tooltip.Trigger
 					className={getButtonClassName({})}
 					onClick={run}
-					// This is needed to ensure the `disabled` attribute is passed
-					// to the button element. Other props should be passed above.
-					render={<button type="button" disabled={!operation} />}
+					// We pass `disabled` here because we want to disable the button, not
+					// the tooltip. Other props should be passed above.
+					render={<Button focusableWhenDisabled disabled={!operation} />}
 				>
 					Confirm
 				</Tooltip.Trigger>

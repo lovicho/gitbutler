@@ -15,7 +15,6 @@ import {
 	useUpdateBranchName,
 } from "#ui/api/mutations.ts";
 import {
-	absorptionPlanQueryOptions,
 	changesInWorktreeQueryOptions,
 	headInfoQueryOptions,
 	listProjectsQueryOptions,
@@ -42,12 +41,13 @@ import {
 	type Operand,
 } from "#ui/operands.ts";
 import { getButtonClassName } from "#ui/components/Button.tsx";
+import { getTransferOperation, keyboardTransferOperationMode } from "#ui/outline/mode.ts";
 import {
-	filterNavigationIndexForOutlineMode,
-	getTransferOperation,
-	keyboardTransferOperationMode,
-} from "#ui/outline/mode.ts";
-import { focusSelectionScope, useNavigationIndexHotkeys } from "#ui/selection-scopes.ts";
+	focusSelectionScope,
+	resolveNavigationIndexSelection,
+	useNavigationIndexHotkeys,
+	useOutlineSelection,
+} from "#ui/selection-scopes.ts";
 import {
 	projectActions,
 	selectProjectCommitTarget,
@@ -60,13 +60,8 @@ import { OperationSourceLabel } from "#ui/routes/project/$id/workspace/Operation
 import { OperationTarget } from "#ui/routes/project/$id/workspace/OperationTarget.tsx";
 import { useAppDispatch, useAppSelector } from "#ui/store.ts";
 import { classes } from "#ui/components/classes.ts";
-import {
-	buildNavigationIndex,
-	navigationIndexIncludes,
-	Section,
-	type NavigationIndex,
-} from "#ui/workspace/navigation-index.ts";
-import { mergeProps, Popover, Toast, Tooltip, useRender } from "@base-ui/react";
+import { navigationIndexIncludes, type NavigationIndex } from "#ui/workspace/navigation-index.ts";
+import { Button, mergeProps, Popover, Toast, Tooltip, useRender } from "@base-ui/react";
 import { Combobox } from "@base-ui/react/combobox";
 import { Toolbar } from "@base-ui/react/toolbar";
 import {
@@ -81,6 +76,7 @@ import {
 	PushStatus,
 	TreeChange,
 	WorkspaceState,
+	CommitAbsorption,
 } from "@gitbutler/but-sdk";
 import {
 	formatForDisplay,
@@ -89,7 +85,7 @@ import {
 	useHotkeys,
 	useKeyHold,
 } from "@tanstack/react-hotkeys";
-import { useQueries, useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery, UseQueryResult, useSuspenseQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
 import { Match } from "effect";
 import {
@@ -98,7 +94,6 @@ import {
 	FC,
 	SubmitEventHandler,
 	use,
-	useEffect,
 	useOptimistic,
 	useRef,
 	useState,
@@ -112,8 +107,7 @@ import {
 	WorkspaceItemRowToolbar,
 } from "./WorkspaceItemRow.tsx";
 import { useDryRunOperation } from "#ui/operations/operation.ts";
-import { initNonEmpty, isNonEmptyArray, NonEmptyArray, scanRight } from "effect/Array";
-import { defaultOutlineSelection } from "#ui/projects/workspace/state.ts";
+import { initNonEmpty, isNonEmptyArray, scanRight } from "effect/Array";
 import { TooltipPopup } from "#ui/components/Tooltip.tsx";
 import { Icon } from "#ui/components/Icon.tsx";
 import { changesHotkeys, outlineHotkeys, toElectronAccelerator } from "#ui/hotkeys.ts";
@@ -137,86 +131,6 @@ const useDryRunCommit = (commitId: string) => {
 	return findCommit({ headInfo: dryRunWorkspace.headInfo, commitId: dryRunCommitId });
 };
 
-const sections = (headInfo: RefInfo | undefined): NonEmptyArray<Section> => {
-	const changesSection: Section = {
-		section: changesSectionOperand,
-		children: [],
-	};
-
-	const segmentChildren = (stackId: string, segment: Segment): Array<Operand> =>
-		segment.commits.map((commit) => commitOperand({ stackId, commitId: commit.id }));
-
-	const segmentSection = (stackId: string, segment: Segment): Section | null => {
-		const children = segmentChildren(stackId, segment);
-		const branchRef = segment.refName?.fullNameBytes;
-		if (!branchRef && children.length === 0) return null;
-
-		return {
-			section: branchRef ? branchOperand({ stackId, branchRef }) : null,
-			children,
-		};
-	};
-
-	return [
-		changesSection,
-
-		...(headInfo?.stacks.flatMap((stack) => {
-			// oxlint-disable-next-line typescript/no-non-null-assertion -- [ref:stack-id-required]
-			const stackId = stack.id!;
-			const stackOperandSection: Section = {
-				section: stackOperand({ stackId }),
-				children: [],
-			};
-			return [
-				stackOperandSection,
-				...stack.segments.flatMap((segment) => {
-					const section = segmentSection(stackId, segment);
-					return section ? [section] : [];
-				}),
-			];
-		}) ?? []),
-	];
-};
-
-const useNavigationIndex = ({
-	projectId,
-	absorptionTargetKeys,
-}: {
-	projectId: string;
-	absorptionTargetKeys: ReadonlySet<string>;
-}) => {
-	const { data: headInfo } = useQuery(headInfoQueryOptions(projectId));
-
-	const dispatch = useAppDispatch();
-
-	const navigationIndexUnfiltered = buildNavigationIndex(sections(headInfo));
-
-	const selection = useAppSelector((state) => selectProjectSelectionOutline(state, projectId));
-
-	// React allows state updates on render, but not for external stores.
-	// https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
-	useEffect(() => {
-		//
-		// Reset selection when it's no longer part of the workspace.
-		//
-		if (!navigationIndexIncludes(navigationIndexUnfiltered, selection))
-			dispatch(
-				projectActions.selectOutline({
-					projectId,
-					selection: defaultOutlineSelection,
-				}),
-			);
-	}, [navigationIndexUnfiltered, selection, projectId, dispatch]);
-
-	const outlineMode = useAppSelector((state) => selectProjectOutlineModeState(state, projectId));
-
-	return filterNavigationIndexForOutlineMode({
-		navigationIndex: navigationIndexUnfiltered,
-		outlineMode,
-		absorptionTargetKeys,
-	});
-};
-
 const useOutlineTreeHotkeys = ({
 	navigationIndex,
 	projectId,
@@ -227,7 +141,7 @@ const useOutlineTreeHotkeys = ({
 	ref: React.RefObject<HTMLElement | null>;
 }) => {
 	const { data: headInfo } = useQuery(headInfoQueryOptions(projectId));
-	const selection = useAppSelector((state) => selectProjectSelectionOutline(state, projectId));
+	const selection = useOutlineSelection({ projectId, navigationIndex });
 	const outlineMode = useAppSelector((state) => selectProjectOutlineModeState(state, projectId));
 
 	const dispatch = useAppDispatch();
@@ -237,6 +151,7 @@ const useOutlineTreeHotkeys = ({
 
 	const commitMoveMutation = useCommitMove();
 	const pushStackMutation = usePushStack();
+	const rebaseStackMutation = useRebaseStack({ projectId });
 
 	const openBranchPicker = () => {
 		dispatch(projectActions.openBranchPicker({ projectId }));
@@ -265,7 +180,7 @@ const useOutlineTreeHotkeys = ({
 	};
 
 	const moveSelectedCommit = (offset: -1 | 1) => {
-		if (selection._tag !== "Commit") return;
+		if (!selection || selection._tag !== "Commit") return;
 
 		const source = commitOperand(selection);
 		const selectionIdx = navigationIndex.indexByKey.get(operandIdentityKey(source));
@@ -296,6 +211,11 @@ const useOutlineTreeHotkeys = ({
 	};
 
 	const selectedPushContext = pushContextForSelection({ headInfo, selection });
+	const selectedStack =
+		selection && "stackId" in selection
+			? headInfo?.stacks.find((stack) => stack.id === selection.stackId)
+			: undefined;
+	const selectedStackRebaseUpdate = selectedStack ? stackToBottomRebaseUpdate(selectedStack) : null;
 
 	const pushSelectedBranch = () => {
 		if (!selectedPushContext) return;
@@ -306,7 +226,6 @@ const useOutlineTreeHotkeys = ({
 
 		pushStackMutation.mutate({
 			projectId,
-			stackId: selectedPushContext.stackId,
 			branch: selectedPushContext.refName.displayName,
 			withForce: partialStackState.pushWithForce,
 			skipForcePushProtection: false,
@@ -315,9 +234,13 @@ const useOutlineTreeHotkeys = ({
 		});
 	};
 
+	const rebaseSelectedStack = () => {
+		if (selectedStackRebaseUpdate) rebaseStackMutation.mutate(selectedStackRebaseUpdate);
+	};
+
 	const defaultOutlineHotkeysEnabled = outlineMode._tag === "Default";
-	const isSelectedCommit = selection._tag === "Commit";
-	const isSelectedChanges = selection._tag === "ChangesSection";
+	const isSelectedCommit = selection?._tag === "Commit";
+	const isSelectedChanges = selection?._tag === "ChangesSection";
 	const canPushSelectedBranch =
 		!!selectedPushContext &&
 		!pushStackMutation.isPending &&
@@ -333,6 +256,8 @@ const useOutlineTreeHotkeys = ({
 		selectionScope: "outline",
 		select,
 		selection,
+		selectSectionPredicate: (operand) =>
+			operand._tag === "Branch" || operand._tag === "ChangesSection" || operand._tag === "Stack",
 	});
 
 	useHotkeys([
@@ -450,6 +375,19 @@ const useOutlineTreeHotkeys = ({
 				meta: outlineHotkeys.pushStack.meta,
 			},
 		},
+		{
+			hotkey: outlineHotkeys.rebaseStack.hotkey,
+			callback: rebaseSelectedStack,
+			options: {
+				conflictBehavior: "allow",
+				enabled:
+					defaultOutlineHotkeysEnabled &&
+					!!selectedStackRebaseUpdate &&
+					!rebaseStackMutation.isPending,
+				target: ref,
+				meta: outlineHotkeys.rebaseStack.meta,
+			},
+		},
 		...Match.value(selection).pipe(
 			Match.tags({
 				Commit: (selection): RelativeTo => ({ type: "commit", subject: selection.commitId }),
@@ -490,37 +428,21 @@ const useOutlineTreeHotkeys = ({
 	]);
 };
 
-export const OutlineTree: FC<ComponentProps<"div">> = ({ ref: refProp, ...props }) => {
+export const OutlineTree: FC<
+	{
+		navigationIndex: NavigationIndex;
+		absorptionTargetKeys: ReadonlySet<string>;
+		absorptionPlanQuery: UseQueryResult<Array<CommitAbsorption>> | undefined;
+	} & ComponentProps<"div">
+> = ({ navigationIndex, absorptionTargetKeys, absorptionPlanQuery, ref: refProp, ...props }) => {
 	const { id: projectId } = useParams({ from: "/project/$id/workspace" });
 
-	const selection = useAppSelector((state) => selectProjectSelectionOutline(state, projectId));
-
+	const selection = useOutlineSelection({ projectId, navigationIndex });
 	const outlineMode = useAppSelector((state) => selectProjectOutlineModeState(state, projectId));
 
-	const absorptionPlanTarget = Match.value(outlineMode).pipe(
-		Match.tag("Absorb", ({ sourceTarget }) => sourceTarget),
-		Match.orElse(() => null),
-	);
-	const [absorptionPlanQuery] = useQueries({
-		queries: (absorptionPlanTarget ? [absorptionPlanTarget] : []).map((target) =>
-			absorptionPlanQueryOptions({ projectId, target }),
-		),
-	});
-	const absorptionTargetKeys = new Set(
-		absorptionPlanQuery?.data?.map(({ stackId, commitId }) =>
-			operandIdentityKey(commitOperand({ stackId, commitId })),
-		),
-	);
-
-	const navigationIndex = useNavigationIndex({
-		projectId,
-		absorptionTargetKeys,
-	});
-
 	const dryRunOperation = Match.value(outlineMode).pipe(
-		Match.tag(
-			"Transfer",
-			({ value: mode }) => getTransferOperation({ mode, target: selection }) ?? undefined,
+		Match.tag("Transfer", ({ value: mode }) =>
+			selection ? (getTransferOperation({ mode, target: selection }) ?? undefined) : undefined,
 		),
 		Match.orElse(() => undefined),
 	);
@@ -558,7 +480,7 @@ export const OutlineTree: FC<ComponentProps<"div">> = ({ ref: refProp, ...props 
 						{...props}
 						tabIndex={0}
 						role="tree"
-						aria-activedescendant={treeItemId(selection)}
+						aria-activedescendant={selection ? treeItemId(selection) : undefined}
 						className={classes(props.className, styles.tree)}
 						ref={useMergedRefs(refProp, ref)}
 					>
@@ -612,12 +534,21 @@ export const OutlineTree: FC<ComponentProps<"div">> = ({ ref: refProp, ...props 
 	);
 };
 
-const useIsSelected = ({ projectId, operand }: { projectId: string; operand: Operand }): boolean =>
-	useAppSelector((state) => {
-		const selection = selectProjectSelectionOutline(state, projectId);
+const useIsSelected = ({
+	projectId,
+	operand,
+}: {
+	projectId: string;
+	operand: Operand;
+}): boolean => {
+	const navigationIndex = assert(use(NavigationIndexContext));
+	return useAppSelector((state) => {
+		const selectionState = selectProjectSelectionOutline(state, projectId);
+		const selection = resolveNavigationIndexSelection(navigationIndex, selectionState);
 
-		return operandEquals(selection, operand);
+		return selection ? operandEquals(selection, operand) : false;
 	});
+};
 
 const treeItemId = (operand: Operand): string =>
 	`outline-treeitem-${encodeURIComponent(operandIdentityKey(operand))}`;
@@ -1425,14 +1356,7 @@ const Changes: FC<{
 							<Combobox.Trigger
 								className={classes(getButtonClassName({}), styles.commitTargetComboboxTrigger)}
 								aria-label="Select branch"
-								render={(props, state) => (
-									<Tooltip.Trigger
-										{...props}
-										// This is needed to ensure the `disabled` attribute is passed
-										// to the button element. Other props should be passed above.
-										render={<button type="button" disabled={state.disabled} />}
-									/>
-								)}
+								render={<Button focusableWhenDisabled render={<Tooltip.Trigger />} />}
 							>
 								<Combobox.Value placeholder="Select branch" />
 							</Combobox.Trigger>
@@ -1454,12 +1378,12 @@ const Changes: FC<{
 					</Combobox.Root>
 
 					<div role="group" className={styles.commitDropdownButton}>
-						<Tooltip.Root disabled={!canCommitOrAmend}>
+						<Tooltip.Root>
 							<Tooltip.Trigger
 								className={getButtonClassName({})}
-								// This is needed to ensure the `disabled` attribute is passed
-								// to the button element. Other props should be passed above.
-								render={<button type="submit" disabled={!canCommitOrAmend} />}
+								// We pass `disabled` here because we want to disable the button, not
+								// the tooltip. Other props should be passed above.
+								render={<Button focusableWhenDisabled type="submit" disabled={!canCommitOrAmend} />}
 							>
 								{isAmendMode ? "Amend" : "Commit"}
 							</Tooltip.Trigger>
@@ -1596,17 +1520,14 @@ const partialStackStatesFromSegments = (segments: Array<Segment>): Array<Partial
 	initNonEmpty(scanRight(segments, emptyPartialStackState, addSegmentToPartialStackState));
 
 type PushContext = {
-	stackId: string;
 	refName: BranchReference;
 	partialStackSegments: Array<Segment>;
 };
 
 const pushContextForSegment = ({
-	stackId,
 	segments,
 	segmentIndex,
 }: {
-	stackId: string;
 	segments: Array<Segment>;
 	segmentIndex: number;
 }): PushContext | null => {
@@ -1616,7 +1537,6 @@ const pushContextForSegment = ({
 	const partialStackSegments = segments.slice(segmentIndex);
 
 	return {
-		stackId,
 		refName: segment.refName,
 		partialStackSegments,
 	};
@@ -1627,7 +1547,7 @@ const pushContextForSelection = ({
 	selection,
 }: {
 	headInfo: RefInfo | undefined;
-	selection: Operand;
+	selection: Operand | null;
 }): PushContext | null =>
 	Match.value(selection).pipe(
 		Match.tags({
@@ -1641,7 +1561,7 @@ const pushContextForSelection = ({
 				);
 				if (segmentIndex === -1) return null;
 
-				return pushContextForSegment({ stackId: stack.id, segments: stack.segments, segmentIndex });
+				return pushContextForSegment({ segments: stack.segments, segmentIndex });
 			},
 			Commit: (selection) => {
 				const stack = headInfo?.stacks.find((stack) => stack.id === selection.stackId);
@@ -1652,7 +1572,7 @@ const pushContextForSelection = ({
 				);
 				if (segmentIndex === -1) return null;
 
-				return pushContextForSegment({ stackId: stack.id, segments: stack.segments, segmentIndex });
+				return pushContextForSegment({ segments: stack.segments, segmentIndex });
 			},
 		}),
 		Match.orElse(() => null),
@@ -1768,7 +1688,6 @@ const BranchRow: FC<
 	const pushStack = () => {
 		pushStackMutation.mutate({
 			projectId,
-			stackId,
 			branch: branchName,
 			withForce: partialStackState.pushWithForce,
 			skipForcePushProtection: false,
@@ -1900,7 +1819,7 @@ const BranchRow: FC<
 								</Tooltip.Trigger>
 								<Tooltip.Portal>
 									<Tooltip.Positioner sideOffset={4}>
-										<Tooltip.Popup render={<TooltipPopup />}>
+										<Tooltip.Popup render={<TooltipPopup kbd={outlineHotkeys.pushStack.hotkey} />}>
 											{pushStackDisabledReason ?? pushButtonLabel}
 										</Tooltip.Popup>
 									</Tooltip.Positioner>
@@ -1952,6 +1871,7 @@ const StackRow: FC<
 		nativeMenuItem({
 			label: "Rebase Stack",
 			enabled: !!rebaseUpdate,
+			accelerator: toElectronAccelerator(outlineHotkeys.rebaseStack.hotkey),
 			onSelect: rebase,
 		}),
 		nativeMenuItem({
