@@ -127,7 +127,11 @@ export const outlineHotkeys = {
 		hotkey: "Shift+Z",
 		meta: { group: "Outline", name: "Compose commit message" },
 	},
-	editChangesCommitMessage: {
+	deleteCommit: {
+		hotkey: "Mod+Backspace",
+		meta: { group: "Commit", name: "Delete commit" },
+	},
+	composeCommitMessageFromChanges: {
 		hotkey: "Enter",
 		meta: { group: "Changes", name: "Compose commit message" },
 	},

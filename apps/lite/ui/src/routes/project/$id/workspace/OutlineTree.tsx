@@ -55,6 +55,7 @@ import {
 	selectProjectOutlineModeState,
 	selectProjectSelectionOutline,
 } from "#ui/projects/state.ts";
+import { rewrittenCommitSelection } from "#ui/projects/workspace/state.ts";
 import { OperationSourceC } from "#ui/routes/project/$id/workspace/OperationSourceC.tsx";
 import { OperationSourceLabel } from "#ui/routes/project/$id/workspace/OperationSourceLabel.tsx";
 import { OperationTarget } from "#ui/routes/project/$id/workspace/OperationTarget.tsx";
@@ -110,6 +111,7 @@ import { useDryRunOperation } from "#ui/operations/operation.ts";
 import { initNonEmpty, isNonEmptyArray, scanRight } from "effect/Array";
 import { TooltipPopup } from "#ui/components/Tooltip.tsx";
 import { Icon } from "#ui/components/Icon.tsx";
+import { Kbd } from "#ui/components/Kbd.tsx";
 import { changesHotkeys, outlineHotkeys, toElectronAccelerator } from "#ui/hotkeys.ts";
 import { stackToBottomRebaseUpdate } from "#ui/api/stack.ts";
 import { assert } from "#ui/assert.ts";
@@ -117,11 +119,40 @@ import { errorMessageForToast } from "#ui/errors.ts";
 import { OutlineModeTooltip } from "./OutlineModeTooltip.tsx";
 import { useMergedRefs } from "@base-ui/utils/useMergedRefs";
 
-const NavigationIndexContext = createContext<NavigationIndex | null>(null);
+const NavigationIndexContext = createContext<NavigationIndex<Operand> | null>(null);
 
 const DryRunWorkspaceContext = createContext<WorkspaceState | null>(null);
 
 const AbsorptionTargetKeysContext = createContext<ReadonlySet<string> | null>(null);
+
+const isCommitDiscardBoundary = (operand: Operand): boolean =>
+	operand._tag === "Branch" || operand._tag === "Stack" || operand._tag === "ChangesSection";
+
+const selectAfterDiscardedCommit = ({
+	navigationIndex,
+	commit,
+}: {
+	navigationIndex: NavigationIndex<Operand>;
+	commit: CommitOperand;
+}): Operand | null => {
+	const commitIndex = navigationIndex.indexByKey.get(operandIdentityKey(commitOperand(commit)));
+	if (commitIndex === undefined) return null;
+
+	for (const item of navigationIndex.items.slice(commitIndex + 1)) {
+		if (isCommitDiscardBoundary(item)) break;
+		if (item._tag === "Commit" && item.commitId !== commit.commitId) return item;
+	}
+
+	for (const item of navigationIndex.items.slice(0, commitIndex).reverse()) {
+		if (isCommitDiscardBoundary(item)) break;
+		if (item._tag === "Commit" && item.commitId !== commit.commitId) return item;
+	}
+
+	for (const item of navigationIndex.items.slice(0, commitIndex + 1).reverse())
+		if (isCommitDiscardBoundary(item)) return item;
+
+	return null;
+};
 
 const useDryRunCommit = (commitId: string) => {
 	const dryRunWorkspace = use(DryRunWorkspaceContext);
@@ -136,7 +167,7 @@ const useOutlineTreeHotkeys = ({
 	projectId,
 	ref,
 }: {
-	navigationIndex: NavigationIndex;
+	navigationIndex: NavigationIndex<Operand>;
 	projectId: string;
 	ref: React.RefObject<HTMLElement | null>;
 }) => {
@@ -150,6 +181,7 @@ const useOutlineTreeHotkeys = ({
 		dispatch(projectActions.selectOutline({ projectId, selection: newItem }));
 
 	const commitMoveMutation = useCommitMove();
+	const commitDiscardMutation = useCommitDiscard();
 	const pushStackMutation = usePushStack();
 	const rebaseStackMutation = useRebaseStack({ projectId });
 
@@ -210,6 +242,37 @@ const useOutlineTreeHotkeys = ({
 		});
 	};
 
+	const deleteSelectedCommit = () => {
+		if (!selection || selection._tag !== "Commit") return;
+
+		const selectionAfterDiscard = selectAfterDiscardedCommit({
+			navigationIndex,
+			commit: { stackId: selection.stackId, commitId: selection.commitId },
+		});
+
+		commitDiscardMutation.mutate(
+			{
+				projectId,
+				subjectCommitId: selection.commitId,
+				dryRun: false,
+			},
+			{
+				onSuccess: (response) => {
+					dispatch(
+						projectActions.selectOutline({
+							projectId,
+							selection: rewrittenCommitSelection({
+								selection: selectionAfterDiscard,
+								replacedCommits: response.workspace.replacedCommits,
+								headInfo: response.workspace.headInfo,
+							}),
+						}),
+					);
+				},
+			},
+		);
+	};
+
 	const selectedPushContext = pushContextForSelection({ headInfo, selection });
 	const selectedStack =
 		selection && "stackId" in selection
@@ -256,6 +319,8 @@ const useOutlineTreeHotkeys = ({
 		selectionScope: "outline",
 		select,
 		selection,
+		getKey: operandIdentityKey,
+		operationSourceForItem: (operand) => operand,
 		selectSectionPredicate: (operand) =>
 			operand._tag === "Branch" || operand._tag === "ChangesSection" || operand._tag === "Stack",
 	});
@@ -322,13 +387,13 @@ const useOutlineTreeHotkeys = ({
 			Match.tag(
 				"ChangesSection",
 				(): UseHotkeyDefinition => ({
-					hotkey: outlineHotkeys.editChangesCommitMessage.hotkey,
+					hotkey: outlineHotkeys.composeCommitMessageFromChanges.hotkey,
 					callback: focusCommitMessageInput,
 					options: {
 						conflictBehavior: "allow",
 						enabled: defaultOutlineHotkeysEnabled,
 						target: ref,
-						meta: outlineHotkeys.editChangesCommitMessage.meta,
+						meta: outlineHotkeys.composeCommitMessageFromChanges.meta,
 					},
 				}),
 			),
@@ -343,6 +408,17 @@ const useOutlineTreeHotkeys = ({
 				enabled: defaultOutlineHotkeysEnabled && isSelectedCommit,
 				target: ref,
 				meta: outlineHotkeys.amendCommit.meta,
+			},
+		},
+		{
+			hotkey: outlineHotkeys.deleteCommit.hotkey,
+			callback: deleteSelectedCommit,
+			options: {
+				conflictBehavior: "allow",
+				enabled:
+					defaultOutlineHotkeysEnabled && isSelectedCommit && !commitDiscardMutation.isPending,
+				target: ref,
+				meta: outlineHotkeys.deleteCommit.meta,
 			},
 		},
 		{
@@ -430,7 +506,7 @@ const useOutlineTreeHotkeys = ({
 
 export const OutlineTree: FC<
 	{
-		navigationIndex: NavigationIndex;
+		navigationIndex: NavigationIndex<Operand>;
 		absorptionTargetKeys: ReadonlySet<string>;
 		absorptionPlanQuery: UseQueryResult<Array<CommitAbsorption>> | undefined;
 	} & ComponentProps<"div">
@@ -544,7 +620,11 @@ const useIsSelected = ({
 	const navigationIndex = assert(use(NavigationIndexContext));
 	return useAppSelector((state) => {
 		const selectionState = selectProjectSelectionOutline(state, projectId);
-		const selection = resolveNavigationIndexSelection(navigationIndex, selectionState);
+		const selection = resolveNavigationIndexSelection(
+			navigationIndex,
+			selectionState,
+			operandIdentityKey,
+		);
 
 		return selection ? operandEquals(selection, operand) : false;
 	});
@@ -595,7 +675,7 @@ const ItemRow: FC<
 			render={
 				<WorkspaceItemRow
 					{...props}
-					inert={!navigationIndexIncludes(navigationIndex, operand)}
+					inert={!navigationIndexIncludes(navigationIndex, operand, operandIdentityKey)}
 					isSelected={isSelected}
 					onSelect={selectItem}
 				/>
@@ -641,7 +721,7 @@ const OperandC: FC<
 				source={operand}
 				render={
 					<OperationTarget
-						enabled={navigationIndexIncludes(navigationIndex, operand)}
+						enabled={navigationIndexIncludes(navigationIndex, operand, operandIdentityKey)}
 						projectId={projectId}
 						target={operand}
 						isSelected={isSelected}
@@ -740,6 +820,7 @@ const CommitRow: FC<
 	const outlineMode = useAppSelector((state) => selectProjectOutlineModeState(state, projectId));
 
 	const dispatch = useAppDispatch();
+	const navigationIndex = assert(use(NavigationIndexContext));
 	const commitOperandV: CommitOperand = {
 		stackId,
 		commitId: commit.id,
@@ -786,11 +867,32 @@ const CommitRow: FC<
 	};
 
 	const deleteCommit = () => {
-		commitDiscardMutation.mutate({
-			projectId,
-			subjectCommitId: commit.id,
-			dryRun: false,
+		const selectionAfterDiscard = selectAfterDiscardedCommit({
+			navigationIndex,
+			commit: commitOperandV,
 		});
+
+		commitDiscardMutation.mutate(
+			{
+				projectId,
+				subjectCommitId: commit.id,
+				dryRun: false,
+			},
+			{
+				onSuccess: (response) => {
+					dispatch(
+						projectActions.selectOutline({
+							projectId,
+							selection: rewrittenCommitSelection({
+								selection: selectionAfterDiscard,
+								replacedCommits: response.workspace.replacedCommits,
+								headInfo: response.workspace.headInfo,
+							}),
+						}),
+					);
+				},
+			},
+		);
 	};
 
 	const cutCommit = () => {
@@ -886,6 +988,7 @@ const CommitRow: FC<
 			label: "Compose Commit Here",
 			accelerator: toElectronAccelerator(outlineHotkeys.composeCommitHere.hotkey),
 			onSelect: composeCommitHere,
+			enabled: outlineMode._tag === "Default",
 		}),
 		nativeMenuItem({
 			label: "Copy",
@@ -917,6 +1020,7 @@ const CommitRow: FC<
 		nativeMenuItem({
 			label: "Delete Commit",
 			enabled: !commitDiscardMutation.isPending,
+			accelerator: toElectronAccelerator(outlineHotkeys.deleteCommit.hotkey),
 			onSelect: deleteCommit,
 		}),
 		nativeMenuItem({
@@ -939,13 +1043,9 @@ const CommitRow: FC<
 			operand={operand}
 			isHighlighted={isHighlighted}
 			onDoubleClick={outlineMode._tag === "Default" ? startEditing : undefined}
-			onContextMenu={
-				outlineMode._tag === "Default"
-					? (event) => {
-							void showNativeContextMenu(event, menuItems);
-						}
-					: undefined
-			}
+			onContextMenu={(event) => {
+				void showNativeContextMenu(event, menuItems);
+			}}
 		>
 			<span
 				className={styles.commitState}
@@ -1038,7 +1138,19 @@ const ChangesSectionRow: FC<{
 		enterAbsorbMode(operand, { type: "all" });
 	};
 
+	const composeCommitMessage = () => {
+		dispatch(projectActions.selectOutline({ projectId, selection: changesSectionOperand }));
+		focusCommitMessageInput();
+	};
+
 	const menuItems: Array<NativeMenuItem> = [
+		nativeMenuItem({
+			label: "Compose Commit Message",
+			accelerator: toElectronAccelerator(outlineHotkeys.composeCommitMessageFromChanges.hotkey),
+			onSelect: composeCommitMessage,
+			enabled: outlineMode._tag === "Default",
+		}),
+		nativeMenuSeparator,
 		nativeMenuItem({
 			label: "Absorb",
 			accelerator: toElectronAccelerator(outlineHotkeys.absorb.hotkey),
@@ -1309,6 +1421,10 @@ const Changes: FC<{
 		},
 	]);
 
+	const focusCommitMessageHotkeyLabel = formatForDisplay(
+		outlineHotkeys.composeCommitMessage.hotkey,
+	);
+
 	return (
 		<TreeItem
 			projectId={projectId}
@@ -1328,7 +1444,7 @@ const Changes: FC<{
 					aria-label="Compose commit message"
 					disabled={outlineMode._tag !== "Default"}
 					readOnly={isCommitOrAmendPending}
-					placeholder="Commit message..."
+					placeholder={`Compose commit message ${focusCommitMessageHotkeyLabel}`}
 					className={classes("text-14", styles.commitTextarea)}
 					onFocus={selectChanges}
 					onKeyDown={(event) => {
@@ -1386,6 +1502,11 @@ const Changes: FC<{
 								render={<Button focusableWhenDisabled type="submit" disabled={!canCommitOrAmend} />}
 							>
 								{isAmendMode ? "Amend" : "Commit"}
+								<Kbd
+									hotkey={
+										isAmendMode ? changesHotkeys.amendCommit.hotkey : changesHotkeys.commit.hotkey
+									}
+								/>
 							</Tooltip.Trigger>
 							<Tooltip.Portal>
 								<Tooltip.Positioner sideOffset={4}>
@@ -1762,13 +1883,9 @@ const BranchRow: FC<
 			projectId={projectId}
 			operand={operand}
 			onDoubleClick={outlineMode._tag === "Default" ? startEditing : undefined}
-			onContextMenu={
-				outlineMode._tag === "Default"
-					? (event) => {
-							void showNativeContextMenu(event, menuItems);
-						}
-					: undefined
-			}
+			onContextMenu={(event) => {
+				void showNativeContextMenu(event, menuItems);
+			}}
 		>
 			{/* This will be replaced with a different icon. */}
 			<span
@@ -1887,13 +2004,9 @@ const StackRow: FC<
 			projectId={projectId}
 			operand={operand}
 			forceVisibleToolbar
-			onContextMenu={
-				outlineMode._tag === "Default"
-					? (event) => {
-							void showNativeContextMenu(event, menuItems);
-						}
-					: undefined
-			}
+			onContextMenu={(event) => {
+				void showNativeContextMenu(event, menuItems);
+			}}
 		>
 			<div className={workspaceItemRowStyles.itemRowLabel} />
 
@@ -2034,7 +2147,7 @@ const StackC: FC<{
 	const partialStackStates = partialStackStatesFromSegments(stack.segments);
 	// This should never fail because we always have at least one segment.
 	const stackState = assert(partialStackStates[0]);
-	const canRemoveBranches = stackState.commitsCount === 0 || stackState.branchCount > 1;
+	const topBranchIndex = stack.segments.findIndex((segment) => segment.refName);
 
 	return (
 		<TreeItem
@@ -2050,6 +2163,14 @@ const StackC: FC<{
 			<div role="group" className={styles.segments}>
 				{stack.segments.map((segment, index) => {
 					const partialStackState = assert(partialStackStates[index]);
+					const canRemoveBranch =
+						segment.commits.length === 0 ||
+						// We disallow deleting the top branch reference inside a stack of
+						// multiple branches because (1) the backend misbehaves (2) and we
+						// want to discourage users from creating branchless segments. See
+						// discussion in
+						// https://github.com/gitbutlerapp/gitbutler/pull/14059.
+						(stackState.branchCount > 1 && index !== topBranchIndex);
 
 					return segment.refName ? (
 						<BranchSegment
@@ -2060,7 +2181,7 @@ const StackC: FC<{
 							stackId={stackId}
 							commitTarget={commitTarget}
 							canTearOffBranch={canTearOffBranch}
-							canRemoveBranch={canRemoveBranches}
+							canRemoveBranch={canRemoveBranch}
 							partialStackState={partialStackState}
 						/>
 					) : (
