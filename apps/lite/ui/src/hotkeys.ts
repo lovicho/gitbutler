@@ -108,6 +108,10 @@ export const workspaceHotkeys = {
 		hotkey: "F",
 		meta: { group: "Files", name: "Toggle files" },
 	},
+	toggleDetailsFullscreen: {
+		hotkey: ".",
+		meta: { group: "Details", name: "Toggle fullscreen details" },
+	},
 } satisfies Record<string, HotkeyWithMeta>;
 
 export const outlineHotkeys = {
@@ -122,6 +126,22 @@ export const outlineHotkeys = {
 	composeCommitHere: {
 		hotkey: "C",
 		meta: { group: "Commit", name: "Compose commit here" },
+	},
+	checkCommit: {
+		hotkey: "Space",
+		meta: { group: "Commit", name: "Check commit" },
+	},
+	checkBranchCommits: {
+		hotkey: "Space",
+		meta: { group: "Branch", name: "Check branch commits" },
+	},
+	clearCheckedCommits: {
+		hotkey: "Escape",
+		meta: { group: "Commit", name: "Clear checked commits" },
+	},
+	setCommitTarget: {
+		hotkey: "Shift+C",
+		meta: { group: "Commit", name: "Set commit target" },
 	},
 	composeCommitMessage: {
 		hotkey: "Shift+Z",

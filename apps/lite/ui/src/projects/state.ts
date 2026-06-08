@@ -18,6 +18,7 @@ type Dialog =
 	| { _tag: "CommandPalette" };
 
 type ProjectState = {
+	detailsFullscreen: boolean;
 	dialog: Dialog;
 	filesVisible: boolean;
 	workspace: workspace.WorkspaceState;
@@ -28,6 +29,7 @@ type ProjectSliceState = {
 };
 
 const initialProjectState: ProjectState = {
+	detailsFullscreen: false,
 	dialog: { _tag: "None" },
 	filesVisible: true,
 	workspace: workspace.initialState,
@@ -38,6 +40,7 @@ const initialState: ProjectSliceState = {
 };
 
 const createProjectState = (): ProjectState => ({
+	detailsFullscreen: false,
 	dialog: { _tag: "None" },
 	filesVisible: true,
 	workspace: workspace.createInitialState(),
@@ -156,6 +159,27 @@ const projectSlice = createSlice({
 			const { projectId, commitIds } = action.payload;
 			workspace.setHighlightedCommitIds(ensureProjectState(state, projectId).workspace, commitIds);
 		},
+		setCommitChecked: (
+			state,
+			action: PayloadAction<{ projectId: string; commitId: string; checked: boolean }>,
+		) => {
+			const { projectId, commitId, checked } = action.payload;
+			workspace.setCommitChecked(ensureProjectState(state, projectId).workspace, commitId, checked);
+		},
+		setCommitsChecked: (
+			state,
+			action: PayloadAction<{ projectId: string; commitIds: Array<string>; checked: boolean }>,
+		) => {
+			const { projectId, commitIds, checked } = action.payload;
+			workspace.setCommitsChecked(
+				ensureProjectState(state, projectId).workspace,
+				commitIds,
+				checked,
+			);
+		},
+		clearCheckedCommits: (state, action: PayloadAction<{ projectId: string }>) => {
+			workspace.clearCheckedCommits(ensureProjectState(state, action.payload.projectId).workspace);
+		},
 		setCommitTarget: (
 			state,
 			action: PayloadAction<{ projectId: string; commitTarget: RelativeTo | null }>,
@@ -181,6 +205,17 @@ const projectSlice = createSlice({
 		toggleFiles: (state, action: PayloadAction<{ projectId: string }>) => {
 			const projectState = ensureProjectState(state, action.payload.projectId);
 			projectState.filesVisible = !projectState.filesVisible;
+		},
+		setDetailsFullscreen: (
+			state,
+			action: PayloadAction<{ projectId: string; fullscreen: boolean }>,
+		) => {
+			const { projectId, fullscreen } = action.payload;
+			ensureProjectState(state, projectId).detailsFullscreen = fullscreen;
+		},
+		toggleDetailsFullscreen: (state, action: PayloadAction<{ projectId: string }>) => {
+			const projectState = ensureProjectState(state, action.payload.projectId);
+			projectState.detailsFullscreen = !projectState.detailsFullscreen;
 		},
 		openCommandPalette: (
 			state,
@@ -218,6 +253,9 @@ const selectProjectState = (state: RootState, projectId: string): ProjectState =
 export const selectProjectFilesVisible = (state: RootState, projectId: string) =>
 	selectProjectState(state, projectId).filesVisible;
 
+export const selectProjectDetailsFullscreen = (state: RootState, projectId: string) =>
+	selectProjectState(state, projectId).detailsFullscreen;
+
 export const selectProjectDialogState = (state: RootState, projectId: string) =>
 	selectProjectState(state, projectId).dialog;
 
@@ -235,6 +273,12 @@ export const selectProjectOutlineModeState = (state: RootState, projectId: strin
 
 export const selectProjectHighlightedCommitIds = (state: RootState, projectId: string) =>
 	workspace.selectHighlightedCommitIds(selectProjectWorkspaceState(state, projectId));
+
+export const selectProjectCommitChecked = (state: RootState, projectId: string, commitId: string) =>
+	workspace.selectCommitChecked(selectProjectWorkspaceState(state, projectId), commitId);
+
+export const selectProjectHasCheckedCommits = (state: RootState, projectId: string) =>
+	workspace.selectHasCheckedCommits(selectProjectWorkspaceState(state, projectId));
 
 export const selectProjectCommitTarget = (state: RootState, projectId: string) =>
 	workspace.selectCommitTarget(selectProjectWorkspaceState(state, projectId));

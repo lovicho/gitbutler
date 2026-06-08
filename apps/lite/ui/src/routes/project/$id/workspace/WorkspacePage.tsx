@@ -14,6 +14,7 @@ import {
 } from "#ui/selection-scopes.ts";
 import {
 	projectActions,
+	selectProjectDetailsFullscreen,
 	selectProjectDialogState,
 	selectProjectFilesVisible,
 	selectProjectOutlineModeState,
@@ -68,14 +69,17 @@ const toggleFiles =
 	({
 		projectId,
 		focusedSelectionScope,
+		outlineVisible,
 	}: {
 		projectId: string;
 		focusedSelectionScope: SelectionScope | null;
+		outlineVisible: boolean;
 	}): AppThunk =>
 	(dispatch, getState) => {
 		const filesVisible = selectProjectFilesVisible(getState(), projectId);
 
-		if (focusedSelectionScope === "files" && filesVisible) focusSelectionScope("outline");
+		if (focusedSelectionScope === "files" && filesVisible)
+			focusSelectionScope(outlineVisible ? "outline" : "diff");
 
 		dispatch(projectActions.toggleFiles({ projectId }));
 	};
@@ -297,11 +301,15 @@ const ApplyBranchPicker: FC<{
 
 const useWorkspaceHotkeys = (projectId: string) => {
 	const dispatch = useAppDispatch();
+	const detailsFullscreen = useAppSelector((state) =>
+		selectProjectDetailsFullscreen(state, projectId),
+	);
 	const dialog = useAppSelector((state) => selectProjectDialogState(state, projectId));
 	const filesVisible = useAppSelector((state) => selectProjectFilesVisible(state, projectId));
 	const activeElement = useActiveElement();
 	const focusedSelectionScope = getFocusedSelectionScope(activeElement);
 	const outlineMode = useAppSelector((state) => selectProjectOutlineModeState(state, projectId));
+	const outlineVisible = !detailsFullscreen;
 
 	const restoreSnapshotMutation = useRestoreSnapshot({ projectId });
 
@@ -348,7 +356,7 @@ const useWorkspaceHotkeys = (projectId: string) => {
 		{
 			hotkey: workspaceHotkeys.toggleFiles.hotkey,
 			callback: () => {
-				dispatch(toggleFiles({ projectId, focusedSelectionScope }));
+				dispatch(toggleFiles({ projectId, focusedSelectionScope, outlineVisible }));
 			},
 			options: {
 				conflictBehavior: "allow",
@@ -358,7 +366,7 @@ const useWorkspaceHotkeys = (projectId: string) => {
 		{
 			hotkey: workspaceHotkeys.focusPreviousSelectionScope.hotkey,
 			callback: () => {
-				focusAdjacentSelectionScope(filesVisible, -1);
+				focusAdjacentSelectionScope({ filesVisible, offset: -1, outlineVisible });
 			},
 			options: {
 				conflictBehavior: "allow",
@@ -368,7 +376,7 @@ const useWorkspaceHotkeys = (projectId: string) => {
 		{
 			hotkey: workspaceHotkeys.focusNextSelectionScope.hotkey,
 			callback: () => {
-				focusAdjacentSelectionScope(filesVisible, 1);
+				focusAdjacentSelectionScope({ filesVisible, offset: 1, outlineVisible });
 			},
 			options: {
 				conflictBehavior: "allow",
@@ -444,6 +452,9 @@ const WorkspacePage: FC = () => {
 
 	const { id: projectId } = useParams({ from: "/project/$id/workspace" });
 
+	const detailsFullscreen = useAppSelector((state) =>
+		selectProjectDetailsFullscreen(state, projectId),
+	);
 	const dialog = useAppSelector((state) => selectProjectDialogState(state, projectId));
 	const outlineMode = useAppSelector((state) => selectProjectOutlineModeState(state, projectId));
 
@@ -488,6 +499,15 @@ const WorkspacePage: FC = () => {
 	const rebaseAllStacks = () => {
 		rebaseAllStacksMutation.mutate(rebaseUpdates);
 	};
+	const toggleDetailsFullscreen = () => {
+		if (
+			!detailsFullscreen &&
+			getFocusedSelectionScope(document.activeElement) === ("outline" satisfies SelectionScope)
+		)
+			requestAnimationFrame(() => focusSelectionScope("diff"));
+
+		dispatch(projectActions.toggleDetailsFullscreen({ projectId }));
+	};
 	// This should be false if all stacks are up-to-date, but we're currently
 	// lacking this information:
 	// https://linear.app/gitbutler/issue/GB-1560/add-information-about-the-relation-to-the-upstream-to-the-head-info
@@ -504,6 +524,15 @@ const WorkspacePage: FC = () => {
 				conflictBehavior: "allow",
 				enabled: canRebaseAllStacks,
 				meta: workspaceHotkeys.rebaseAllStacks.meta,
+				ignoreInputs: true,
+			},
+		},
+		{
+			hotkey: workspaceHotkeys.toggleDetailsFullscreen.hotkey,
+			callback: toggleDetailsFullscreen,
+			options: {
+				conflictBehavior: "allow",
+				meta: workspaceHotkeys.toggleDetailsFullscreen.meta,
 				ignoreInputs: true,
 			},
 		},
@@ -542,68 +571,85 @@ const WorkspacePage: FC = () => {
 
 	return (
 		<>
-			<div className={styles.page}>
-				<div className={styles.outlinePanel}>
-					<header className={styles.workspaceControls}>
-						<div className={styles.workspaceControlsLeft}>
-							<h1 className={classes("text-15", "text-bold", styles.workspaceName)}>
-								{selectedProject.title}
-							</h1>
-							<ActivitySpinner />
-						</div>
+			<div className={classes(styles.page, detailsFullscreen && styles.pageDetailsFullscreen)}>
+				{!detailsFullscreen && (
+					<div className={styles.outlinePanel}>
+						<header className={styles.workspaceControls}>
+							<div className={styles.workspaceControlsLeft}>
+								<h1 className={classes("text-15", "text-bold", styles.workspaceName)}>
+									{selectedProject.title}
+								</h1>
+								<ActivitySpinner />
+							</div>
 
-						<div className={styles.workspaceControlsActions}>
-							<Tooltip.Root>
-								<Tooltip.Trigger
-									aria-label={rebaseAllLabel}
-									className={getButtonClassName({ iconOnly: true })}
-									onClick={rebaseAllStacks}
-									// We pass `disabled` here because we want to disable the button, not
-									// the tooltip. Other props should be passed above.
-									render={<Button focusableWhenDisabled disabled={!canRebaseAllStacks} />}
-								>
-									<Icon name="arrow-line-down" />
-								</Tooltip.Trigger>
-								<Tooltip.Portal>
-									<Tooltip.Positioner sideOffset={4}>
-										<Tooltip.Popup
-											render={<TooltipPopup kbd={workspaceHotkeys.rebaseAllStacks.hotkey} />}
-										>
-											{rebaseAllLabel}
-										</Tooltip.Popup>
-									</Tooltip.Positioner>
-								</Tooltip.Portal>
-							</Tooltip.Root>
+							<div className={styles.workspaceControlsActions}>
+								<Tooltip.Root>
+									<Tooltip.Trigger
+										aria-label={rebaseAllLabel}
+										className={getButtonClassName({ iconOnly: true })}
+										onClick={rebaseAllStacks}
+										// We pass `disabled` here because we want to disable the button, not
+										// the tooltip. Other props should be passed above.
+										render={<Button focusableWhenDisabled disabled={!canRebaseAllStacks} />}
+									>
+										<Icon name="arrow-line-down" />
+									</Tooltip.Trigger>
+									<Tooltip.Portal>
+										<Tooltip.Positioner sideOffset={4}>
+											<Tooltip.Popup
+												render={<TooltipPopup kbd={workspaceHotkeys.rebaseAllStacks.hotkey} />}
+											>
+												{rebaseAllLabel}
+											</Tooltip.Popup>
+										</Tooltip.Positioner>
+									</Tooltip.Portal>
+								</Tooltip.Root>
 
-							<Tooltip.Root>
-								<Tooltip.Trigger className={getButtonClassName({})} onClick={openApplyBranchPicker}>
-									Apply branch
-								</Tooltip.Trigger>
-								<Tooltip.Portal>
-									<Tooltip.Positioner sideOffset={4}>
-										<Tooltip.Popup
-											render={<TooltipPopup kbd={workspaceHotkeys.applyBranch.hotkey} />}
-										>
-											{workspaceHotkeys.applyBranch.meta.name}
-										</Tooltip.Popup>
-									</Tooltip.Positioner>
-								</Tooltip.Portal>
-							</Tooltip.Root>
-						</div>
-					</header>
+								<Tooltip.Root>
+									<Tooltip.Trigger
+										className={getButtonClassName({})}
+										onClick={openApplyBranchPicker}
+									>
+										Apply branch
+									</Tooltip.Trigger>
+									<Tooltip.Portal>
+										<Tooltip.Positioner sideOffset={4}>
+											<Tooltip.Popup
+												render={<TooltipPopup kbd={workspaceHotkeys.applyBranch.hotkey} />}
+											>
+												{workspaceHotkeys.applyBranch.meta.name}
+											</Tooltip.Popup>
+										</Tooltip.Positioner>
+									</Tooltip.Portal>
+								</Tooltip.Root>
+							</div>
+						</header>
 
-					<OutlineTree
-						id={"outline" satisfies SelectionScope}
-						data-selection-scope
-						tabIndex={0}
-						navigationIndex={outlineNavigationIndex}
-						absorptionTargetKeys={absorptionTargetKeys}
-						absorptionPlanQuery={absorptionPlanQuery}
-						ref={(el) => el?.focus({ focusVisible: false })}
-					/>
-				</div>
+						<OutlineTree
+							id={"outline" satisfies SelectionScope}
+							data-selection-scope
+							tabIndex={0}
+							navigationIndex={outlineNavigationIndex}
+							absorptionTargetKeys={absorptionTargetKeys}
+							absorptionPlanQuery={absorptionPlanQuery}
+							// Focus on page load.
+							ref={(el) => {
+								// Don't steal focus if this component is mounted later on.
+								if (document.activeElement !== document.body) return;
 
-				<Details outlineSelection={outlineSelection} />
+								el?.focus({ focusVisible: false });
+							}}
+						/>
+					</div>
+				)}
+
+				<Details
+					outlineSelection={outlineSelection}
+					detailsFullscreen={detailsFullscreen}
+					onDetailsFullscreenChange={(fullscreen) =>
+						dispatch(projectActions.setDetailsFullscreen({ projectId, fullscreen }))
+					}
+				/>
 			</div>
 
 			{Match.value(dialog).pipe(
