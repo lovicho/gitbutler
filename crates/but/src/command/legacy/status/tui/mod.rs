@@ -1138,12 +1138,8 @@ impl App {
             RubSource::Marks(marks) => {
                 let marks = marks
                     .iter()
-                    .map(|mark| match mark {
-                        Markable::Commit { commit_id, id } => CliId::Commit {
-                            commit_id: *commit_id,
-                            id: id.clone(),
-                        },
-                    })
+                    .cloned()
+                    .map(|mark| mark.into_cli_id())
                     .collect::<Vec<_>>();
                 self.status_lines
                     .iter()
@@ -1303,7 +1299,13 @@ impl App {
         if let Mode::Normal(normal_mode) = &*self.mode
             && !normal_mode.marks.is_empty()
         {
-            let MarkClasses { marked_commits } = normal_mode.marks.classify();
+            let MarkClasses {
+                marked_commits,
+                // with marked uncommitted files the cursor cannot move out of the unassigned
+                // changes section, thus you can never toggle files for a commit because that
+                // requires selecting the commit
+                marked_uncommitted: _,
+            } = normal_mode.marks.classify();
             if marked_commits {
                 match self.flags.show_files {
                     FilesStatusFlag::None => {
@@ -1430,9 +1432,7 @@ impl App {
                 let sources = marks
                     .iter()
                     .cloned()
-                    .map(|markable| match markable {
-                        Markable::Commit { commit_id, id } => CliId::Commit { commit_id, id },
-                    })
+                    .map(|mark| mark.into_cli_id())
                     .filter(|source| source != &**target)
                     .collect::<Vec<_>>();
                 let mut iter = sources.iter();
@@ -1562,7 +1562,7 @@ impl App {
         if self.marks().is_none_or(|marks| marks.is_empty()) {
             self.handle_discard_selection(ctx, messages)
         } else {
-            self.handle_discard_marks(messages)
+            self.handle_discard_marks(ctx, messages)
         }
     }
 
@@ -1623,7 +1623,7 @@ impl App {
                     let drop_to_be_discarded =
                         message_on_drop::message_on_drop(Message::DropToBeDiscarded, messages);
                     Confirm::new(
-                        NonEmpty::new(format!("Discard {}?", uncommitted.describe()).into()),
+                        NonEmpty::new("Discard uncommitted file?".into()),
                         self.theme,
                         move |ctx, messages| {
                             let hunk_assignments = uncommitted
@@ -1754,7 +1754,11 @@ impl App {
         Ok(())
     }
 
-    fn handle_discard_marks(&mut self, messages: &mut Vec<Message>) -> anyhow::Result<()> {
+    fn handle_discard_marks(
+        &mut self,
+        ctx: &mut Context,
+        messages: &mut Vec<Message>,
+    ) -> anyhow::Result<()> {
         let Mode::Normal(normal_mode) = &*self.mode else {
             return Ok(());
         };
@@ -1766,42 +1770,49 @@ impl App {
         let commits = normal_mode
             .marks
             .iter()
-            .map(|mark| match mark {
-                Markable::Commit { commit_id, .. } => *commit_id,
+            .filter_map(|mark| match mark {
+                Markable::Commit { commit_id, .. } => Some(*commit_id),
+                Markable::Uncommitted(..) => None,
             })
             .collect::<Vec<_>>();
+
+        let uncommitted_diff_specs = {
+            let context_lines = ctx.settings.context_lines;
+            let (_guard, repo, ws, mut db) = ctx.workspace_and_db_mut()?;
+            let mut builder = DiffSpecBuilder::new(&mut db, &repo, &ws, context_lines);
+
+            for mark in &normal_mode.marks {
+                match mark {
+                    Markable::Uncommitted(uncommitted) => {
+                        builder.push_changes_from_uncommitted(uncommitted)?;
+                    }
+                    Markable::Commit { .. } => {}
+                }
+            }
+
+            builder.into_diff_specs()
+        };
 
         self.to_be_discarded = normal_mode
             .marks
             .iter()
-            .map(|mark| match mark {
-                Markable::Commit { commit_id, id } => Arc::new(CliId::Commit {
-                    commit_id: *commit_id,
-                    id: id.clone(),
-                }),
-            })
+            .cloned()
+            .map(|mark| Arc::new(mark.into_cli_id()))
             .collect::<Vec<_>>();
 
         let select_after_reload = self
             .cursor
-            .select_after_discarded_commits(&self.status_lines, &commits);
+            .select_after_discarded_marks(&self.status_lines, &normal_mode.marks);
 
         let drop_to_be_discarded =
             message_on_drop::message_on_drop(Message::DropToBeDiscarded, messages);
 
         let confirm = Confirm::new(
-            NonEmpty::new(
-                if commits.len() == 1 {
-                    "Discard 1 commit?".to_owned()
-                } else {
-                    format!("Discard {} commits?", commits.len())
-                }
-                .into(),
-            ),
+            NonEmpty::new("Discard?".into()),
             self.theme,
             move |ctx, messages| {
                 let mut meta = ctx.meta()?;
-                let snapshot_details = SnapshotDetails::new(OperationKind::DiscardCommit);
+                let snapshot_details = SnapshotDetails::new(OperationKind::Discard);
                 let workspace = but_transaction::with_transaction(
                     ctx,
                     &mut meta,
@@ -1811,6 +1822,15 @@ impl App {
                         if !commits.is_empty() {
                             tx.discard_commits(commits)?;
                         }
+
+                        if !uncommitted_diff_specs.is_empty() {
+                            but_workspace::discard_workspace_changes(
+                                tx.repo(),
+                                uncommitted_diff_specs,
+                                tx.context_lines(),
+                            )?;
+                        }
+
                         Ok(())
                     },
                 )?;
@@ -1899,6 +1919,15 @@ impl App {
     }
 
     fn handle_commit_start(&mut self, ctx: &mut Context) -> anyhow::Result<()> {
+        if self.marks().is_none_or(|marks| marks.is_empty()) {
+            self.handle_commit_start_selection(ctx)?;
+        } else {
+            self.handle_commit_start_marks();
+        }
+        Ok(())
+    }
+
+    fn handle_commit_start_selection(&mut self, ctx: &mut Context) -> anyhow::Result<()> {
         let Some(selection) = self.cursor.selected_line(&self.status_lines) else {
             return Ok(());
         };
@@ -1995,6 +2024,51 @@ impl App {
         Ok(())
     }
 
+    fn handle_commit_start_marks(&mut self) {
+        let Mode::Normal(normal_mode) = &*self.mode else {
+            return;
+        };
+
+        if normal_mode.marks.is_empty() {
+            return;
+        }
+
+        let uncommitted = normal_mode
+            .marks
+            .iter()
+            .cloned()
+            .map(|mark| match mark {
+                Markable::Uncommitted(uncommitted_cli_id) => Some(uncommitted_cli_id),
+                Markable::Commit { .. } => None,
+            })
+            .collect::<Option<Vec<_>>>();
+        let Some(uncommitted) = uncommitted else {
+            return;
+        };
+
+        let Some(uncommitted) = NonEmpty::from_vec(uncommitted) else {
+            return;
+        };
+
+        let source = Arc::new(CommitSource::Uncommitted(uncommitted));
+
+        if let Some(cursor) = self
+            .cursor
+            .select_closest_commit_source(&self.status_lines, &source)
+        {
+            self.cursor = cursor;
+        }
+
+        self.mode
+            .update_and_push_leave_normal_mode(&mut self.backstack, |mode| {
+                *mode = Mode::Commit(CommitMode {
+                    source,
+                    scope_to_stack: None,
+                    message_composer: CommitMessageComposer::default(),
+                });
+            });
+    }
+
     fn handle_commit_confirm<T>(
         &mut self,
         ctx: &mut Context,
@@ -2021,7 +2095,7 @@ impl App {
         if selection
             .data
             .cli_id()
-            .is_some_and(|target| **source == **target)
+            .is_some_and(|target| source.contains(target))
         {
             messages.push(Message::EnterNormalModeAfterConfirmingOperation);
             return Ok(());
@@ -2064,8 +2138,10 @@ impl App {
                 CommitSource::Unassigned(UnassignedCommitSource { id }) => {
                     builder.push_changes_from_unassigned(id)?;
                 }
-                CommitSource::Uncommitted(uncommitted_cli_id) => {
-                    builder.push_changes_from_uncommitted(uncommitted_cli_id)?;
+                CommitSource::Uncommitted(uncommitted) => {
+                    for id in uncommitted {
+                        builder.push_changes_from_uncommitted(id)?;
+                    }
                 }
                 CommitSource::Stack(StackCommitSource { stack_id }) => {
                     builder.push_changes_from_stack(*stack_id)?;
@@ -2941,7 +3017,7 @@ impl App {
         };
 
         match &**selection {
-            CliId::Commit { .. } => {
+            CliId::Commit { .. } | CliId::Uncommitted(..) => {
                 if handle_mark_commit(
                     selection,
                     self.mode
@@ -2968,11 +3044,16 @@ impl App {
                     handle_mark_branch(&mut normal_mode.marks, ctx, stack_id, name)?;
                 }
             }
-            CliId::Uncommitted(..)
-            | CliId::PathPrefix { .. }
-            | CliId::CommittedFile { .. }
-            | CliId::Unassigned { .. }
-            | CliId::Stack { .. } => {}
+            CliId::Unassigned { .. } => {
+                // you cannot select unassigned changes in rub mode so we don't need to care about that
+                if let Mode::Normal(normal_mode) = self
+                    .mode
+                    .get_mut_without_updating_backstack_and_i_promise_not_to_change_state()
+                {
+                    handle_mark_unassigned(&mut normal_mode.marks, &self.status_lines);
+                }
+            }
+            CliId::PathPrefix { .. } | CliId::CommittedFile { .. } | CliId::Stack { .. } => {}
         }
 
         if let Some(marks) = self.marks() {
@@ -3191,24 +3272,13 @@ fn handle_mark_commit(commit: &CliId, mode: &mut Mode) -> bool {
                     marks.toggle(markable.clone());
 
                     match marks.len() {
-                        0 => match markable {
-                            Markable::Commit { commit_id, id } => {
-                                rub_mode.source =
-                                    RubSource::CliId(Arc::new(CliId::Commit { commit_id, id }))
-                            }
-                        },
+                        0 => {
+                            rub_mode.source = RubSource::CliId(Arc::new(markable.into_cli_id()));
+                        }
                         1 => {
                             let only_remaining_mark = marks.iter().next().cloned();
                             if let Some(mark) = only_remaining_mark {
-                                match mark {
-                                    Markable::Commit { commit_id, id } => {
-                                        rub_mode.source =
-                                            RubSource::CliId(Arc::new(CliId::Commit {
-                                                commit_id,
-                                                id,
-                                            }))
-                                    }
-                                }
+                                rub_mode.source = RubSource::CliId(Arc::new(mark.into_cli_id()));
                             }
                         }
                         _ => {
@@ -3249,29 +3319,56 @@ fn handle_mark_branch(
         return Ok(());
     };
 
-    let (marked, unmarked) = commits
+    toggle_markables(marks, commits);
+
+    Ok(())
+}
+
+fn handle_mark_unassigned(marks: &mut Marks, status_lines: &[StatusOutputLine]) {
+    let unassigned_files = status_lines.iter().filter_map(|line| match &line.data {
+        StatusOutputLineData::UnassignedFile { cli_id } => Markable::try_from_cli_id(cli_id),
+        StatusOutputLineData::UpdateNotice
+        | StatusOutputLineData::Connector
+        | StatusOutputLineData::StagedChanges { .. }
+        | StatusOutputLineData::StagedFile { .. }
+        | StatusOutputLineData::UnassignedChanges { .. }
+        | StatusOutputLineData::Branch { .. }
+        | StatusOutputLineData::Commit { .. }
+        | StatusOutputLineData::CommitMessage
+        | StatusOutputLineData::EmptyCommitMessage
+        | StatusOutputLineData::File { .. }
+        | StatusOutputLineData::MergeBase
+        | StatusOutputLineData::UpstreamChanges
+        | StatusOutputLineData::Warning
+        | StatusOutputLineData::Hint
+        | StatusOutputLineData::NoAssignmentsUnstaged => None,
+    });
+
+    toggle_markables(marks, unassigned_files);
+}
+
+fn toggle_markables(marks: &mut Marks, markables: impl IntoIterator<Item = Markable>) {
+    let (marked, unmarked) = markables
         .into_iter()
-        .partition::<Vec<_>, _>(|commit| marks.contains(commit));
+        .partition::<Vec<_>, _>(|markable| marks.contains(markable));
 
     match (marked.is_empty(), unmarked.is_empty()) {
         (true, false) => {
-            for commit in unmarked {
-                marks.insert(commit);
+            for markable in unmarked {
+                marks.insert(markable);
             }
         }
         (false, true) => {
-            for commit in marked {
-                marks.remove(&commit);
+            for markable in marked {
+                marks.remove(&markable);
             }
         }
         _ => {
-            for commit in unmarked {
-                marks.insert(commit);
+            for markable in unmarked {
+                marks.insert(markable);
             }
         }
     }
-
-    Ok(())
 }
 
 fn commits_on_branch(
