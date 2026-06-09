@@ -1,8 +1,12 @@
+import {
+	buildUpstreamIntegrationUpdates,
+	clearUpstreamIntegrationStatuses,
+	deriveUpstreamIntegrationStatuses,
+	type UpstreamIntegrationStatuses,
+} from "$lib/upstream/types";
 import { InjectionToken } from "@gitbutler/core/context";
-import { isDefined } from "@gitbutler/ui/utils/typeguards";
 import type { StackService } from "$lib/stacks/stackService.svelte";
 import type { BackendApi } from "$lib/state/backendApi";
-import type { StackStatusesWithBranchesV3 } from "$lib/upstream/types";
 
 export const UPSTREAM_INTEGRATION_SERVICE = new InjectionToken<UpstreamIntegrationService>(
 	"UpstreamIntegrationService",
@@ -14,35 +18,29 @@ export class UpstreamIntegrationService {
 		private stackService: StackService,
 	) {}
 
-	async upstreamStatuses(
-		projectId: string,
-		targetCommitOid: string | undefined,
-	): Promise<StackStatusesWithBranchesV3 | undefined> {
+	async upstreamStatuses(projectId: string): Promise<UpstreamIntegrationStatuses> {
 		const stacks = await this.stackService.fetchStacks(projectId);
-		const branchStatuses = await this.backendApi.endpoints.upstreamIntegrationStatuses.fetch({
+		const updates = buildUpstreamIntegrationUpdates(stacks);
+
+		if (updates.length === 0) {
+			return {
+				subject: clearUpstreamIntegrationStatuses(stacks),
+				updates,
+				worktreeConflicts: [],
+			};
+		}
+
+		const preview = await this.backendApi.endpoints.workspaceIntegrateUpstream.mutate({
 			projectId,
-			targetCommitOid,
+			updates,
+			dryRun: true,
 		});
 
-		if (branchStatuses.type === "upToDate") return branchStatuses;
-
-		const stackStatusesWithBranches: StackStatusesWithBranchesV3 = {
-			type: "updatesRequired",
-			worktreeConflicts: branchStatuses.subject.worktreeConflicts,
-			subject: branchStatuses.subject.statuses
-				.map((status) => {
-					const stack = stacks.find((appliedBranch) => appliedBranch.id === status[0]);
-
-					if (!stack) return;
-					return {
-						stack,
-						status: status[1],
-					};
-				})
-				.filter(isDefined),
+		return {
+			subject: deriveUpstreamIntegrationStatuses(stacks, preview.workspaceState.headInfo),
+			updates,
+			worktreeConflicts: preview.worktreeConflicts,
 		};
-
-		return stackStatusesWithBranches;
 	}
 
 	resolveUpstreamIntegration() {
@@ -54,6 +52,6 @@ export class UpstreamIntegrationService {
 	}
 
 	integrateUpstream() {
-		return this.backendApi.endpoints.integrateUpstream.useMutation();
+		return this.backendApi.endpoints.workspaceIntegrateUpstream.useMutation();
 	}
 }
