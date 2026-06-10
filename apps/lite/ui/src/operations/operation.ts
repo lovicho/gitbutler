@@ -9,64 +9,42 @@ import {
 	type CommitMoveChangesBetweenParams,
 	type CommitUncommitChangesParams,
 	type MoveBranchParams,
-	type TearOffBranchParams,
 	CommitSquashParams,
 	CommitUncommitParams,
 } from "#electron/ipc.ts";
 import { headInfoQueryOptions, QueryKey } from "#ui/api/queries.ts";
-import { rejectedChangesToastOptions } from "#ui/operations/rejectedChangesToastOptions.tsx";
+import { rejectedChangesToastOptions } from "#ui/operations/toastOptions.tsx";
 import { DiffSpec, InsertSide, RelativeTo } from "@gitbutler/but-sdk";
 import { Operand, operandEquals, operandFileParent } from "#ui/operands.ts";
 import { resolveDiffSpecs, useResolveDiffSpecs } from "#ui/operations/diff-specs.ts";
-import { decodeRefName } from "#ui/api/ref-name.ts";
+import { decodeBytes } from "#ui/api/ref-name.ts";
 import { projectActions } from "#ui/projects/state.ts";
 import { useAppDispatch } from "#ui/store.ts";
 import { useParams } from "@tanstack/react-router";
 import { errorMessageForToast } from "#ui/errors.ts";
 
-/** @public */
-export type CommitAmendOperation = Omit<CommitAmendParams, "dryRun" | "projectId" | "changes"> & {
+type CommitAmendOperation = Omit<CommitAmendParams, "dryRun" | "projectId" | "changes"> & {
 	source: Operand;
 };
-/** @public */
-export type CommitCreateOperation = Omit<CommitCreateParams, "dryRun" | "projectId" | "changes"> & {
+type CommitCreateOperation = Omit<CommitCreateParams, "dryRun" | "projectId" | "changes"> & {
 	source: Operand;
 };
-/** @public */
-export type CommitSplitOperation = Omit<CommitInsertBlankParams, "dryRun" | "projectId"> &
+type CommitSplitOperation = Omit<CommitInsertBlankParams, "dryRun" | "projectId"> &
 	Pick<CommitMoveChangesBetweenParams, "sourceCommitId"> & {
 		source: Operand;
 	};
-/** @public */
-export type CommitMoveOperation = Omit<CommitMoveParams, "dryRun" | "projectId"> & {
-	source: Operand;
-};
-/** @public */
-export type CommitMoveChangesBetweenOperation = Omit<
+type CommitMoveOperation = Omit<CommitMoveParams, "dryRun" | "projectId">;
+type CommitMoveChangesBetweenOperation = Omit<
 	CommitMoveChangesBetweenParams,
 	"dryRun" | "projectId" | "changes"
 > & { source: Operand };
-/** @public */
-export type CommitSquashOperation = Omit<CommitSquashParams, "dryRun" | "projectId"> & {
-	source: Operand;
-};
-/** @public */
-export type CommitUncommitOperation = Omit<CommitUncommitParams, "dryRun" | "projectId"> & {
-	source: Operand;
-};
-/** @public */
-export type CommitUncommitChangesOperation = Omit<
+type CommitSquashOperation = Omit<CommitSquashParams, "dryRun" | "projectId">;
+type CommitUncommitOperation = Omit<CommitUncommitParams, "dryRun" | "projectId">;
+type CommitUncommitChangesOperation = Omit<
 	CommitUncommitChangesParams,
 	"dryRun" | "projectId" | "changes"
 > & { source: Operand };
-/** @public */
-export type MoveBranchOperation = Omit<MoveBranchParams, "dryRun" | "projectId"> & {
-	source: Operand;
-};
-/** @public */
-export type TearOffBranchOperation = Omit<TearOffBranchParams, "dryRun" | "projectId"> & {
-	source: Operand;
-};
+type MoveBranchOperation = Omit<MoveBranchParams, "dryRun" | "projectId">;
 
 export type Operation =
 	| ({ _tag: "CommitAmend" } & CommitAmendOperation)
@@ -77,70 +55,52 @@ export type Operation =
 	| ({ _tag: "CommitSquash" } & CommitSquashOperation)
 	| ({ _tag: "CommitUncommit" } & CommitUncommitOperation)
 	| ({ _tag: "CommitUncommitChanges" } & CommitUncommitChangesOperation)
-	| ({ _tag: "MoveBranch" } & MoveBranchOperation)
-	| ({ _tag: "TearOffBranch" } & TearOffBranchOperation);
+	| ({ _tag: "MoveBranch" } & MoveBranchOperation);
 
-/** @public */
-export const commitAmendOperation = (operation: CommitAmendOperation): Operation => ({
+const commitAmendOperation = (operation: CommitAmendOperation): Operation => ({
 	_tag: "CommitAmend",
 	...operation,
 });
 
-/** @public */
-export const commitCreateOperation = (operation: CommitCreateOperation): Operation => ({
+const commitCreateOperation = (operation: CommitCreateOperation): Operation => ({
 	_tag: "CommitCreate",
 	...operation,
 });
 
-/** @public */
-export const commitSplitOperation = (operation: CommitSplitOperation): Operation => ({
+const commitSplitOperation = (operation: CommitSplitOperation): Operation => ({
 	_tag: "CommitSplit",
 	...operation,
 });
 
-/** @public */
-export const commitMoveOperation = (operation: CommitMoveOperation): Operation => ({
+const commitMoveOperation = (operation: CommitMoveOperation): Operation => ({
 	_tag: "CommitMove",
 	...operation,
 });
 
-/** @public */
-export const commitMoveChangesBetweenOperation = (
+const commitMoveChangesBetweenOperation = (
 	operation: CommitMoveChangesBetweenOperation,
 ): Operation => ({
 	_tag: "CommitMoveChangesBetween",
 	...operation,
 });
 
-/** @public */
-export const commitSquashOperation = (operation: CommitSquashOperation): Operation => ({
+const commitSquashOperation = (operation: CommitSquashOperation): Operation => ({
 	_tag: "CommitSquash",
 	...operation,
 });
 
-/** @public */
-export const commitUncommitOperation = (operation: CommitUncommitOperation): Operation => ({
+const commitUncommitOperation = (operation: CommitUncommitOperation): Operation => ({
 	_tag: "CommitUncommit",
 	...operation,
 });
 
-/** @public */
-export const commitUncommitChangesOperation = (
-	operation: CommitUncommitChangesOperation,
-): Operation => ({
+const commitUncommitChangesOperation = (operation: CommitUncommitChangesOperation): Operation => ({
 	_tag: "CommitUncommitChanges",
 	...operation,
 });
 
-/** @public */
-export const moveBranchOperation = (operation: MoveBranchOperation): Operation => ({
+const moveBranchOperation = (operation: MoveBranchOperation): Operation => ({
 	_tag: "MoveBranch",
-	...operation,
-});
-
-/** @public */
-export const tearOffBranchOperation = (operation: TearOffBranchOperation): Operation => ({
-	_tag: "TearOffBranch",
 	...operation,
 });
 
@@ -171,7 +131,6 @@ export const operationLabel = (operation: Operation): string =>
 			CommitUncommit: () => "Uncommit",
 			CommitUncommitChanges: () => "Uncommit",
 			MoveBranch: () => "Move above",
-			TearOffBranch: () => "Tear off branch",
 		}),
 	);
 
@@ -286,12 +245,6 @@ const runOperation = async ({
 					targetBranch: operation.targetBranch,
 					dryRun,
 				}),
-			TearOffBranch: (operation) =>
-				window.lite.tearOffBranch({
-					projectId,
-					subjectBranch: operation.subjectBranch,
-					dryRun,
-				}),
 		}),
 	);
 
@@ -304,7 +257,7 @@ export const useDryRunOperation = ({
 }) => {
 	const changes = useResolveDiffSpecs({
 		projectId,
-		operand: operation ? operation.source : undefined,
+		operand: operation && "source" in operation ? operation.source : undefined,
 	});
 
 	return useQuery({
@@ -394,7 +347,6 @@ const squashOperation = ({
 			},
 			({ source, target }) =>
 				commitSquashOperation({
-					source,
 					sourceCommitIds: [source.commitId],
 					destinationCommitId: target.commitId,
 				}),
@@ -406,7 +358,6 @@ const squashOperation = ({
 			},
 			({ source }) =>
 				commitUncommitOperation({
-					source,
 					subjectCommitIds: [source.commitId],
 					assignTo: null,
 				}),
@@ -471,9 +422,8 @@ const moveOperation = ({
 			},
 			({ source, target }) =>
 				moveBranchOperation({
-					source,
-					subjectBranch: decodeRefName(source.branchRef),
-					targetBranch: decodeRefName(target.branchRef),
+					subjectBranch: decodeBytes(source.branchRef),
+					targetBranch: decodeBytes(target.branchRef),
 				}),
 		),
 		Match.orElse(() => null),
@@ -497,7 +447,6 @@ const moveOperation = ({
 	return Match.value({ source, sourceFileParent: operandFileParent(source) }).pipe(
 		Match.when({ source: { _tag: "Commit" } }, ({ source }) =>
 			commitMoveOperation({
-				source,
 				subjectCommitIds: [source.commitId],
 				relativeTo,
 				side,

@@ -9,8 +9,10 @@ import {
 	type BranchDiffParams,
 	type CommitAmendParams,
 	type CommitCreateParams,
+	type CommitDiscardChangesParams,
 	type CommitDiscardParams,
 	type CommitDetailsWithLineStatsParams,
+	type DiscardWorktreeChangesParams,
 	type CommitInsertBlankParams,
 	type CommitMoveParams,
 	type CommitSquashParams,
@@ -24,6 +26,7 @@ import {
 	type TreeChangeDiffParams,
 	type UpdateBranchNameParams,
 	type ApplyParams,
+	type AskpassSubmitPromptResponseParams,
 	type ShowNativeMenuParams,
 	type UnapplyStackParams,
 	type WatcherSubscribeParams,
@@ -45,6 +48,8 @@ import {
 	commitAmend,
 	commitCreate,
 	commitDiscard,
+	commitDiscardChanges,
+	discardWorktreeChanges,
 	commitInsertBlank,
 	commitSquash,
 	commitReword,
@@ -69,6 +74,8 @@ import {
 	getRedoTargetSnapshot,
 	peelRestoreSnapshot,
 	workspaceIntegrateUpstream,
+	askpassInit,
+	askpassSubmitPromptResponse,
 } from "@gitbutler/but-sdk";
 import {
 	app,
@@ -121,6 +128,8 @@ const trustedOriginDefaultPermissions: Array<
 const liteProtocolScheme = "lite";
 const liteProtocolHost = "app";
 const contentRootURL = pathToFileURL(path.join(currentDirPath, "../ui"));
+const askpassExecutableName =
+	process.platform === "win32" ? "gitbutler-git-askpass.exe" : "gitbutler-git-askpass";
 
 // Custom scheme to serve files. This is necessary for two reasons:
 //
@@ -166,6 +175,36 @@ const registerLiteProtocolHandler = () => {
 
 		return net.fetch(urlToServe.toString());
 	});
+};
+
+const askpassBinDir = (): string =>
+	app.isPackaged
+		? path.join(process.resourcesPath, "bin")
+		: path.join(currentDirPath, "../../resources/bin");
+
+const configureAskpass = (): void => {
+	if (app.isPackaged)
+		process.env.GITBUTLER_ASKPASS_BIN = path.join(askpassBinDir(), askpassExecutableName);
+	else process.env.GITBUTLER_ASKPASS_BIN ??= path.join(askpassBinDir(), askpassExecutableName);
+
+	try {
+		askpassInit((err, event) => {
+			if (err) {
+				// oxlint-disable-next-line no-console
+				console.error(`Error encountered while initializing askpass:\n${err}`);
+				return;
+			}
+
+			// Send the prompt to all windows.
+			// TODO: Probably not what we want if we have multiple windows. We should
+			// figure out how to send it to the right one.
+			for (const window of BrowserWindow.getAllWindows())
+				window.webContents.send(liteIpcChannels.askpassPrompt, event);
+		});
+	} catch (err) {
+		// oxlint-disable-next-line no-console
+		console.error(`Error encountered while configuring askpass:\n${String(err)}`);
+	}
 };
 
 // Dev-only runtime icons path (packaged builds rely on electron-builder icons).
@@ -258,6 +297,11 @@ const registerIpcHandlers = (): void => {
 		(_e, { projectId, target }: AbsorptionPlanParams) => absorptionPlan(projectId, target),
 	);
 	senderValidatingHandle(
+		liteIpcChannels.askpassSubmitResponse,
+		(_e, { id, response }: AskpassSubmitPromptResponseParams) =>
+			askpassSubmitPromptResponse(id, response),
+	);
+	senderValidatingHandle(
 		liteIpcChannels.absorb,
 		(_e, { projectId, absorptionPlan }: AbsorbParams) => absorb(projectId, absorptionPlan),
 	);
@@ -299,9 +343,19 @@ const registerIpcHandlers = (): void => {
 			commitDiscard(projectId, subjectCommitId, dryRun),
 	);
 	senderValidatingHandle(
+		liteIpcChannels.commitDiscardChanges,
+		(_e, { projectId, commitId, changes, dryRun }: CommitDiscardChangesParams) =>
+			commitDiscardChanges(projectId, commitId, changes, dryRun),
+	);
+	senderValidatingHandle(
 		liteIpcChannels.commitDetailsWithLineStats,
 		(_e, { projectId, commitId }: CommitDetailsWithLineStatsParams) =>
 			commitDetailsWithLineStats(projectId, commitId),
+	);
+	senderValidatingHandle(
+		liteIpcChannels.discardWorktreeChanges,
+		(_e, { projectId, changes }: DiscardWorktreeChangesParams) =>
+			discardWorktreeChanges(projectId, changes),
 	);
 	senderValidatingHandle(
 		liteIpcChannels.commitInsertBlank,
@@ -495,6 +549,8 @@ const createMainWindow = async (): Promise<void> => {
 
 app.enableSandbox(); // forces sandboxing for all renderers, even if they try to launch without
 void app.whenReady().then(async () => {
+	configureAskpass();
+
 	if (app.isPackaged) {
 		registerLiteProtocolHandler();
 

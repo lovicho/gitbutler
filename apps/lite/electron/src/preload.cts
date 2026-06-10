@@ -7,6 +7,7 @@ import type {
 	BranchDetails,
 	BranchListing,
 	CommitDetails,
+	DiffSpec,
 	ProjectForFrontend,
 	PushResult,
 	RefInfo,
@@ -25,6 +26,7 @@ import type {
 	WorkspaceState,
 	UncommitResult,
 	Snapshot,
+	AskpassPromptEvent,
 } from "@gitbutler/but-sdk";
 
 /**
@@ -46,6 +48,15 @@ const api: LiteElectronApi = {
 		ipcRenderer.invoke("workspace:absorption-plan", params) as Promise<Array<CommitAbsorption>>,
 	absorb: (params) => ipcRenderer.invoke("workspace:absorb", params) as Promise<number>,
 	apply: (params) => ipcRenderer.invoke("workspace:apply", params) as Promise<ApplyOutcome>,
+	onAskpassPrompt: (callback) => {
+		const listener = (_event: Electron.IpcRendererEvent, payload: AskpassPromptEvent) => {
+			callback(payload);
+		};
+		ipcRenderer.on("askpass:prompt", listener);
+		return () => ipcRenderer.removeListener("askpass:prompt", listener);
+	},
+	submitAskpassPromptResponse: (params) =>
+		ipcRenderer.invoke("askpass:submit-response", params) as Promise<void>,
 	assignHunk: (params) => ipcRenderer.invoke("workspace:assign-hunk", params) as Promise<void>,
 	branchDetails: (params) =>
 		ipcRenderer.invoke("workspace:branch-details", params) as Promise<BranchDetails>,
@@ -61,11 +72,15 @@ const api: LiteElectronApi = {
 		ipcRenderer.invoke("workspace:commit-create", params) as Promise<CommitCreateResult>,
 	commitDiscard: (params) =>
 		ipcRenderer.invoke("workspace:commit-discard", params) as Promise<CommitDiscardResult>,
+	commitDiscardChanges: (params) =>
+		ipcRenderer.invoke("workspace:commit-discard-changes", params) as Promise<MoveChangesResult>,
 	commitDetailsWithLineStats: (params) =>
 		ipcRenderer.invoke(
 			"workspace:commit-details-with-line-stats",
 			params,
 		) as Promise<CommitDetails>,
+	discardWorktreeChanges: (params) =>
+		ipcRenderer.invoke("workspace:discard-worktree-changes", params) as Promise<Array<DiffSpec>>,
 	commitInsertBlank: (params) =>
 		ipcRenderer.invoke("workspace:commit-insert-blank", params) as Promise<CommitInsertBlankResult>,
 	commitMove: (params) =>

@@ -3,6 +3,7 @@ import {
 	useCommitAmend,
 	useCommitCreate,
 	useCommitDiscard,
+	useDiscardWorktreeChanges,
 	useCommitInsertBlank,
 	useCommitMove,
 	useCommitReword,
@@ -20,7 +21,7 @@ import {
 	listProjectsQueryOptions,
 } from "#ui/api/queries.ts";
 import { findCommit, resolveRelativeTo } from "#ui/api/ref-info.ts";
-import { decodeRefName, refNamesEqual } from "#ui/api/ref-name.ts";
+import { decodeBytes, refNamesEqual } from "#ui/api/ref-name.ts";
 import { commitIsDiverged, commitTitle } from "#ui/commit.ts";
 import {
 	nativeMenuItem,
@@ -103,13 +104,16 @@ import {
 } from "react";
 import styles from "./OutlineTree.module.css";
 import { Checkbox } from "#ui/components/Checkbox.tsx";
-import workspaceItemRowStyles from "./WorkspaceItemRow.module.css";
 import {
 	WorkspaceItemRow,
 	WorkspaceItemRowEmpty,
+	WorkspaceItemRowIconButton,
+	WorkspaceItemRowLabel,
 	WorkspaceItemRowToolbar,
+	WorkspaceSection,
 } from "./WorkspaceItemRow.tsx";
 import { useDryRunOperation } from "#ui/operations/operation.ts";
+import { createDiffSpec } from "#ui/operations/diff-specs.ts";
 import { initNonEmpty, isNonEmptyArray, scanRight } from "effect/Array";
 import { TooltipPopup } from "#ui/components/Tooltip.tsx";
 import { Icon } from "#ui/components/Icon.tsx";
@@ -365,7 +369,7 @@ const useOutlineTreeHotkeys = ({
 
 		pushStackMutation.mutate({
 			projectId,
-			branch: selectedPushContext.refName.displayName,
+			branch: decodeBytes(selectedPushContext.refName.fullNameBytes),
 			withForce: partialStackState.pushWithForce,
 			skipForcePushProtection: false,
 			runHooks: true,
@@ -374,7 +378,7 @@ const useOutlineTreeHotkeys = ({
 	};
 
 	const rebaseSelectedStack = () => {
-		if (selectedStackRebaseUpdate) rebaseStackMutation.mutate(selectedStackRebaseUpdate);
+		if (selectedStackRebaseUpdate) rebaseStackMutation.mutate([selectedStackRebaseUpdate]);
 	};
 
 	const defaultOutlineHotkeysEnabled = outlineMode._tag === "Default";
@@ -670,7 +674,6 @@ export const OutlineTree: FC<
 							props.className,
 							styles.tree,
 							hasCheckedCommits && styles.treeWithCheckedCommits,
-							outlineMode._tag === "Default" && styles.treeWithDefaultOutlineMode,
 						)}
 						ref={useMergedRefs(refProp, ref)}
 					>
@@ -729,15 +732,9 @@ const treeItemId = (operand: Operand): string =>
 const CommitTargetIndicator: FC<{ isSelected: boolean }> = ({ isSelected }) => (
 	<Popover.Root>
 		<Popover.Trigger
-			className={classes(
-				workspaceItemRowStyles.itemRowIconButton,
-				getButtonClassName({
-					variant: isSelected ? "inverted" : "ghost",
-					size: "small",
-				}),
-			)}
 			aria-label="Commit target"
 			openOnHover
+			render={<WorkspaceItemRowIconButton isSelected={isSelected} />}
 		>
 			<Icon name="bullseye" />
 		</Popover.Trigger>
@@ -804,6 +801,7 @@ const TreeItem: FC<
 		}),
 	});
 };
+
 const OperandC: FC<
 	{
 		projectId: string;
@@ -1205,26 +1203,20 @@ const CommitRow: FC<
 				/>
 			) : (
 				<>
-					<div className={workspaceItemRowStyles.itemRowLabel}>
+					<WorkspaceItemRowLabel>
 						{commitTitle(commitWithOptimisticMessage.message)}
 						{hasConflicts && " ⚠️"}
-					</div>
+					</WorkspaceItemRowLabel>
 
-					<WorkspaceItemRowToolbar forceVisibleToolbar>
+					<WorkspaceItemRowToolbar forceVisible>
 						{outlineMode._tag === "Default" && (
 							<Toolbar.Root aria-label="Commit actions" render={<WorkspaceItemRowToolbar />}>
 								<Toolbar.Button
 									aria-label="Commit menu"
-									className={classes(
-										workspaceItemRowStyles.itemRowIconButton,
-										getButtonClassName({
-											variant: isSelected ? "inverted" : "ghost",
-											size: "small",
-										}),
-									)}
 									onClick={(event) => {
 										void showNativeMenuFromTrigger(event.currentTarget, menuItems);
 									}}
+									render={<WorkspaceItemRowIconButton isSelected={isSelected} />}
 								>
 									<Icon name="kebab" />
 								</Toolbar.Button>
@@ -1277,6 +1269,7 @@ const ChangesSectionRow: FC<{
 	const operand = changesSectionOperand;
 	const isSelected = useIsSelected({ projectId, operand });
 	const outlineMode = useAppSelector((state) => selectProjectOutlineModeState(state, projectId));
+	const discardWorktreeChanges = useDiscardWorktreeChanges();
 
 	const dispatch = useAppDispatch();
 	const enterAbsorbMode = (source: Operand, sourceTarget: AbsorptionTarget) => {
@@ -1292,6 +1285,13 @@ const ChangesSectionRow: FC<{
 		focusCommitMessageInput();
 	};
 
+	const discardChanges = () => {
+		discardWorktreeChanges.mutate({
+			projectId,
+			changes: changes.map((change) => createDiffSpec(change, [])),
+		});
+	};
+
 	const menuItems: Array<NativeMenuItem> = [
 		nativeMenuItem({
 			label: "Compose Commit Message",
@@ -1305,6 +1305,11 @@ const ChangesSectionRow: FC<{
 			accelerator: toElectronAccelerator(outlineHotkeys.absorb.hotkey),
 			onSelect: absorb,
 		}),
+		nativeMenuItem({
+			label: "Discard Changes",
+			enabled: changes.length > 0 && !discardWorktreeChanges.isPending,
+			onSelect: discardChanges,
+		}),
 	];
 
 	return (
@@ -1314,35 +1319,26 @@ const ChangesSectionRow: FC<{
 			onContextMenu={(event) => {
 				void showNativeContextMenu(event, menuItems);
 			}}
+			heading
 		>
-			<div
-				className={classes(
-					"text-bold",
-					workspaceItemRowStyles.itemRowLabel,
-					isSelected && styles.selected,
-				)}
-			>
+			<WorkspaceItemRowLabel className={classes(isSelected && styles.selected)}>
 				Changes
-				<span className={styles.changesCountBubble}>{changes.length}</span>
-			</div>
+				<span className={classes("text-11", "text-semibold", styles.changesCountBubble)}>
+					{changes.length}
+				</span>
+			</WorkspaceItemRowLabel>
 
 			{outlineMode._tag === "Default" && (
 				<Toolbar.Root
 					aria-label="Changes actions"
-					render={<WorkspaceItemRowToolbar forceVisibleToolbar />}
+					render={<WorkspaceItemRowToolbar forceVisible />}
 				>
 					<Toolbar.Button
 						aria-label="Changes menu"
-						className={classes(
-							workspaceItemRowStyles.itemRowIconButton,
-							getButtonClassName({
-								variant: isSelected ? "inverted" : "ghost",
-								size: "small",
-							}),
-						)}
 						onClick={(event) => {
 							void showNativeMenuFromTrigger(event.currentTarget, menuItems);
 						}}
+						render={<WorkspaceItemRowIconButton isSelected={isSelected} />}
 					>
 						<Icon name="kebab" />
 					</Toolbar.Button>
@@ -1587,9 +1583,17 @@ const Changes: FC<{
 			projectId={projectId}
 			operand={operand}
 			aria-label={`Changes (${worktreeChanges?.changes.length ?? 0})`}
-			className={classes(workspaceItemRowStyles.section, styles.changesSection)}
 			render={
-				<OperandC projectId={projectId} operand={operand} render={<form onSubmit={submit} />} />
+				<OperandC
+					projectId={projectId}
+					operand={operand}
+					render={
+						<WorkspaceSection
+							className={styles.changesSection}
+							render={<form onSubmit={submit} />}
+						/>
+					}
+				/>
 			}
 		>
 			<ChangesSectionRow changes={worktreeChanges?.changes ?? []} projectId={projectId} />
@@ -1685,8 +1689,8 @@ const Changes: FC<{
 								</Tooltip.Positioner>
 							</Tooltip.Portal>
 						</Tooltip.Root>
-						<button
-							type="button"
+						<Button
+							focusableWhenDisabled
 							disabled={!canCommitOrAmend}
 							aria-label="Commit options"
 							className={getButtonClassName({ iconOnly: true })}
@@ -1695,7 +1699,7 @@ const Changes: FC<{
 							}}
 						>
 							<Icon name="chevron-down" />
-						</button>
+						</Button>
 					</div>
 				</div>
 			</div>
@@ -1704,10 +1708,10 @@ const Changes: FC<{
 };
 
 const InlineRenameBranch: FC<{
-	branchName: string;
+	branchDisplayName: string;
 	onSubmit: (value: string) => void;
 	onExit: () => void;
-}> = ({ branchName, onSubmit, onExit }) => {
+}> = ({ branchDisplayName, onSubmit, onExit }) => {
 	const formRef = useRef<HTMLFormElement | null>(null);
 	const textareaRef = useRef<HTMLInputElement>(null);
 	const submitAction = (formData: FormData) => {
@@ -1739,8 +1743,8 @@ const InlineRenameBranch: FC<{
 					el.select();
 				})}
 				name="branchName"
-				defaultValue={branchName}
-				className={classes("text-bold", styles.editorInput)}
+				defaultValue={branchDisplayName}
+				className={styles.editorInput}
 			/>
 			<EditorHelp
 				buttons={[
@@ -1823,8 +1827,7 @@ const pushContextForSegment = ({
 const BranchRow: FC<
 	{
 		projectId: string;
-		branchName: string;
-		branchRef: Array<number>;
+		refName: BranchReference;
 		stackId: string;
 		isCommitTarget: boolean;
 		canTearOffBranch: boolean;
@@ -1834,8 +1837,7 @@ const BranchRow: FC<
 	} & ComponentProps<"div">
 > = ({
 	projectId,
-	branchName,
-	branchRef,
+	refName,
 	stackId,
 	isCommitTarget,
 	canTearOffBranch,
@@ -1848,14 +1850,14 @@ const BranchRow: FC<
 	const dispatch = useAppDispatch();
 	const branchOperandV: BranchOperand = {
 		stackId,
-		branchRef,
+		branchRef: refName.fullNameBytes,
 	};
 	const operand = branchOperand(branchOperandV);
 	const isRenaming =
 		outlineMode._tag === "RenameBranch" &&
 		operandEquals(operand, branchOperand(outlineMode.operand));
-	const [optimisticBranchName, setOptimisticBranchName] = useOptimistic(
-		branchName,
+	const [optimisticBranchDisplayName, setOptimisticBranchDisplayName] = useOptimistic(
+		refName.displayName,
 		(_currentBranchName, nextBranchName: string) => nextBranchName,
 	);
 	const [isRenamePending, startRenameTransition] = useTransition();
@@ -1863,7 +1865,7 @@ const BranchRow: FC<
 	const updateBranchNameMutation = useUpdateBranchName({
 		projectId,
 		stackId,
-		branchRef,
+		branchRef: refName.fullNameBytes,
 		oldBranch: branchOperandV,
 	});
 
@@ -1888,14 +1890,14 @@ const BranchRow: FC<
 
 	const saveBranchName = (newBranchName: string) => {
 		const trimmed = newBranchName.trim();
-		if (trimmed === "" || trimmed === branchName) return;
+		if (trimmed === "" || trimmed === refName.displayName) return;
 		startRenameTransition(async () => {
-			setOptimisticBranchName(trimmed);
+			setOptimisticBranchDisplayName(trimmed);
 			try {
 				await updateBranchNameMutation.mutateAsync({
 					projectId,
 					stackId,
-					branchName,
+					branchName: refName.displayName,
 					newName: trimmed,
 				});
 			} catch (error) {
@@ -1912,7 +1914,7 @@ const BranchRow: FC<
 		});
 	};
 
-	const relativeTo: RelativeTo = { type: "referenceBytes", subject: branchRef };
+	const relativeTo: RelativeTo = { type: "referenceBytes", subject: refName.fullNameBytes };
 
 	const setCommitTarget = () => {
 		dispatch(projectActions.setCommitTarget({ projectId, commitTarget: relativeTo }));
@@ -1926,7 +1928,7 @@ const BranchRow: FC<
 	const tearOffBranch = () => {
 		tearOffBranchMutation.mutate({
 			projectId,
-			subjectBranch: decodeRefName(branchRef),
+			subjectBranch: decodeBytes(refName.fullNameBytes),
 			dryRun: false,
 		});
 	};
@@ -1934,7 +1936,7 @@ const BranchRow: FC<
 	const pushStack = () => {
 		pushStackMutation.mutate({
 			projectId,
-			branch: branchName,
+			branch: decodeBytes(refName.fullNameBytes),
 			withForce: partialStackState.pushWithForce,
 			skipForcePushProtection: false,
 			runHooks: true,
@@ -1977,7 +1979,7 @@ const BranchRow: FC<
 		}),
 		nativeMenuItem({
 			label: "Copy Branch Name",
-			onSelect: () => window.lite.clipboardWriteText(optimisticBranchName),
+			onSelect: () => window.lite.clipboardWriteText(optimisticBranchDisplayName),
 		}),
 		nativeMenuItem({
 			label: "Compose Commit Here",
@@ -2004,7 +2006,7 @@ const BranchRow: FC<
 				removeBranchMutation.mutate({
 					projectId,
 					stackId,
-					branchName,
+					branchName: decodeBytes(refName.fullNameBytes),
 				}),
 		}),
 	];
@@ -2020,6 +2022,7 @@ const BranchRow: FC<
 			onContextMenu={(event) => {
 				void showNativeContextMenu(event, menuItems);
 			}}
+			heading
 		>
 			{/* This will be replaced with a different icon. */}
 			<CommitStateIndicator
@@ -2040,35 +2043,27 @@ const BranchRow: FC<
 
 			{isRenaming ? (
 				<InlineRenameBranch
-					branchName={optimisticBranchName}
+					branchDisplayName={optimisticBranchDisplayName}
 					onSubmit={saveBranchName}
 					onExit={endEditing}
 				/>
 			) : (
 				<>
-					<div className={classes("text-bold", workspaceItemRowStyles.itemRowLabel)}>
-						{optimisticBranchName}
-					</div>
+					<WorkspaceItemRowLabel>{optimisticBranchDisplayName}</WorkspaceItemRowLabel>
 
-					<WorkspaceItemRowToolbar forceVisibleToolbar>
+					<WorkspaceItemRowToolbar forceVisible>
 						{outlineMode._tag === "Default" && (
 							<Toolbar.Root aria-label="Branch actions" render={<WorkspaceItemRowToolbar />}>
 								<Tooltip.Root>
 									<Tooltip.Trigger
 										render={
 											<Toolbar.Button
-												className={classes(
-													workspaceItemRowStyles.itemRowIconButton,
-													getButtonClassName({
-														variant: isSelected ? "inverted" : "ghost",
-														size: "small",
-													}),
-												)}
 												aria-label={pushButtonLabel}
 												onClick={pushStack}
 												// Note this prevents the tooltip from showing, but it
 												// shouldn't: https://github.com/mui/base-ui/issues/4966
 												disabled={!canPushStack}
+												render={<WorkspaceItemRowIconButton isSelected={isSelected} />}
 											/>
 										}
 									>
@@ -2092,16 +2087,10 @@ const BranchRow: FC<
 								</Tooltip.Root>
 								<Toolbar.Button
 									aria-label="Branch menu"
-									className={classes(
-										workspaceItemRowStyles.itemRowIconButton,
-										getButtonClassName({
-											variant: isSelected ? "inverted" : "ghost",
-											size: "small",
-										}),
-									)}
 									onClick={(event) => {
 										void showNativeMenuFromTrigger(event.currentTarget, menuItems);
 									}}
+									render={<WorkspaceItemRowIconButton isSelected={isSelected} />}
 								>
 									<Icon name="kebab" />
 								</Toolbar.Button>
@@ -2127,13 +2116,14 @@ const StackRow: FC<
 	const outlineMode = useAppSelector((state) => selectProjectOutlineModeState(state, projectId));
 
 	const unapplyStackMutation = useUnapplyStack();
-	const rebaseStackMutation = useRebaseStack({ projectId });
 	const unapply = () => {
 		// oxlint-disable-next-line typescript/no-non-null-assertion -- [ref:stack-id-required]
 		unapplyStackMutation.mutate({ projectId, stackId: stack.id! });
 	};
+
+	const rebaseStackMutation = useRebaseStack({ projectId });
 	const rebase = () => {
-		if (rebaseUpdate) rebaseStackMutation.mutate(rebaseUpdate);
+		if (rebaseUpdate) rebaseStackMutation.mutate([rebaseUpdate]);
 	};
 
 	const menuItems: Array<NativeMenuItem> = [
@@ -2164,25 +2154,16 @@ const StackRow: FC<
 				void showNativeContextMenu(event, menuItems);
 			}}
 		>
-			<div className={workspaceItemRowStyles.itemRowLabel} />
+			<WorkspaceItemRowLabel />
 
 			{outlineMode._tag === "Default" && (
-				<Toolbar.Root
-					aria-label="Stack actions"
-					render={<WorkspaceItemRowToolbar forceVisibleToolbar />}
-				>
+				<Toolbar.Root aria-label="Stack actions" render={<WorkspaceItemRowToolbar forceVisible />}>
 					<Toolbar.Button
 						aria-label="Stack menu"
-						className={classes(
-							workspaceItemRowStyles.itemRowIconButton,
-							getButtonClassName({
-								variant: isSelected ? "inverted" : "ghost",
-								size: "small",
-							}),
-						)}
 						onClick={(event) => {
 							void showNativeMenuFromTrigger(event.currentTarget, menuItems);
 						}}
+						render={<WorkspaceItemRowIconButton isSelected={isSelected} />}
 					>
 						<Icon name="kebab" />
 					</Toolbar.Button>
@@ -2227,8 +2208,7 @@ const BranchSegment: FC<{
 				render={
 					<BranchRow
 						projectId={projectId}
-						branchName={refName.displayName}
-						branchRef={refName.fullNameBytes}
+						refName={refName}
 						stackId={stackId}
 						canTearOffBranch={canTearOffBranch}
 						canRemoveBranch={canRemoveBranch}
@@ -2320,8 +2300,13 @@ const StackC: FC<{
 			operand={operand}
 			aria-label="Stack"
 			aria-expanded
-			className={classes(styles.stack, workspaceItemRowStyles.section)}
-			render={<OperandC projectId={projectId} operand={operand} />}
+			render={
+				<OperandC
+					projectId={projectId}
+					operand={operand}
+					render={<WorkspaceSection className={styles.stack} />}
+				/>
+			}
 		>
 			<StackRow projectId={projectId} stack={stack} />
 

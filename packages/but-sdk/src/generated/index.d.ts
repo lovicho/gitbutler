@@ -124,6 +124,17 @@ export declare function commitDetailsWithLineStats(projectId: string, commitId: 
 export declare function commitDiscard(projectId: string, subjectCommitId: string, dryRun: boolean): Promise<CommitDiscardResult>
 
 /**
+ * Discard specific changes from `commit_id`, removing them from the commit
+ * and the workspace.
+ *
+ * Unlike [`super::uncommit::commit_uncommit_changes()`], the selected changes
+ * are not surfaced as uncommitted workspace modifications. When `dry_run` is
+ * enabled, the returned workspace previews the discard and no oplog entry is
+ * persisted. See [`commit_discard_changes_with_perm()`] for details.
+ */
+export declare function commitDiscardChanges(projectId: string, commitId: string, changes: Array<DiffSpec>, dryRun: boolean): Promise<MoveChangesResult>
+
+/**
  * Inserts a blank commit on `side` of `relative_to` and records an oplog
  * snapshot on success.
  *
@@ -203,6 +214,15 @@ export declare function commitUncommit(projectId: string, subjectCommitIds: Arra
  * [`commit_uncommit_changes_with_perm()`] for details.
  */
 export declare function commitUncommitChanges(projectId: string, commitId: string, changes: Array<DiffSpec>, assignTo: string | null, dryRun: boolean): Promise<MoveChangesResult>
+
+/**
+ * Discard all worktree changes that match the specs in `worktree_changes`.
+ *
+ * If whole files should be discarded, be sure to not pass any hunks
+ *
+ * Returns the `worktree_changes` that couldn't be applied,
+ */
+export declare function discardWorktreeChanges(projectId: string, worktreeChanges: Array<DiffSpec>): Promise<Array<DiffSpec>>
 
 /**
  * Web compare URL for a branch — drives the "Open in browser"
@@ -413,6 +433,29 @@ export declare class WatcherHandle {
   /** Returns true if this handle still owns a running watcher. */
   get active(): boolean
 }
+
+/** Additional context sent alongside a credential prompt. */
+export type AskpassContext =
+  | { type: 'Push', /** The stack being pushed, if one is associated with the prompt. */
+branchId?: string }
+| { type: 'Fetch', /** The user-visible action associated with the fetch. */
+action: string }
+| { type: 'SignedCommit', /** The stack being signed, if one is associated with the prompt. */
+branchId?: string }
+| { type: 'Clone', /** The URL being cloned. */
+url: string }
+
+/** Initialize the process-global askpass broker and forward prompt events to JavaScript. */
+export declare function askpassInit(callback: ((err: Error | null, arg: AskpassPromptEvent) => any)): void
+
+export interface AskpassPromptEvent {
+  id: string
+  prompt: string
+  context: AskpassContext
+}
+
+/** Submit a response for a pending askpass prompt. */
+export declare function askpassSubmitPromptResponse(id: string, response?: string | undefined | null): Promise<void>
 
 export interface WatcherEvent {
   name: string
@@ -849,8 +892,10 @@ export type Commit = {
    * Note that remote only commits in the context of a branch are expressed with the [`UpstreamCommit`] struct instead of this.
    */
   state: CommitState;
-  /** Commit creation time in Epoch milliseconds. */
-  createdAt: number;
+  /** Time at which the commit was authored, in Epoch milliseconds. */
+  authoredAt: number;
+  /** Time at which the commit was committed, in Epoch milliseconds. */
+  committedAt: number;
   /** The author of the commit. */
   author: Author;
   /**
@@ -1872,7 +1917,8 @@ export type RelativeTo = {
 export type RemoteCommit = {
   id: string;
   description: string;
-  createdAt: number;
+  authoredAt: number;
+  committedAt: number;
   author: Author;
   changeId: string | null;
   parentIds: Array<string>;
@@ -2334,8 +2380,10 @@ export type UpstreamCommit = {
   id: string;
   /** The message of the commit. */
   message: string;
-  /** Commit creation time in Epoch milliseconds. */
-  createdAt: number;
+  /** Time at which the commit was authored, in Epoch milliseconds. */
+  authoredAt: number;
+  /** Time at which the commit was committed, in Epoch milliseconds. */
+  committedAt: number;
   /** The author of the commit. */
   author: Author;
   /** The GitButler change-id associated with this commit, if available. */

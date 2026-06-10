@@ -1,7 +1,18 @@
 import { classes } from "#ui/components/classes.ts";
+import { getButtonClassName } from "#ui/components/Button.tsx";
 import { useMergedRefs } from "@base-ui/utils/useMergedRefs";
 import { ComponentProps, FC, useLayoutEffect, useRef } from "react";
 import styles from "./WorkspaceItemRow.module.css";
+import { mergeProps, useRender } from "@base-ui/react";
+
+export const WorkspaceSection: FC<useRender.ComponentProps<"div">> = ({ render, ...props }) =>
+	useRender({
+		render,
+		defaultTagName: "div",
+		props: mergeProps<"div">(props, {
+			className: styles.section,
+		}),
+	});
 
 export const WorkspaceItemRow: FC<
 	{
@@ -9,8 +20,9 @@ export const WorkspaceItemRow: FC<
 		onSelect?: () => void;
 		/** @default false */
 		isHighlighted?: boolean;
+		heading?: boolean;
 	} & Omit<ComponentProps<"div">, "onSelect">
-> = ({ isSelected, onSelect, isHighlighted, ref: refProp, ...props }) => {
+> = ({ isSelected, onSelect, isHighlighted, heading, ref: refProp, ...props }) => {
 	const rowRef = useRef<HTMLDivElement | null>(null);
 	const mergedRef = useMergedRefs(rowRef, refProp);
 
@@ -30,8 +42,10 @@ export const WorkspaceItemRow: FC<
 			ref={mergedRef}
 			className={classes(
 				props.className,
-				"text-13",
+				heading ? "text-14" : "text-13",
+				heading && "text-bold",
 				styles.itemRow,
+				heading && styles.itemRowHeading,
 				isSelected && styles.itemRowSelected,
 				isHighlighted && styles.itemRowHighlighted,
 			)}
@@ -51,15 +65,37 @@ export const WorkspaceItemRowEmpty: FC<ComponentProps<"div">> = (props) => (
 	<div {...props} className={classes(props.className, "text-13", styles.itemRowEmpty)} />
 );
 
-export const WorkspaceItemRowToolbar: FC<
-	{ forceVisibleToolbar?: boolean } & ComponentProps<"div">
-> = ({ forceVisibleToolbar, ...props }) => (
+export const WorkspaceItemRowLabel: FC<ComponentProps<"div">> = (props) => (
+	<div {...props} className={classes(props.className, styles.itemRowLabel)} />
+);
+
+export const WorkspaceItemRowToolbar: FC<{ forceVisible?: boolean } & ComponentProps<"div">> = ({
+	forceVisible,
+	...props
+}) => (
 	<div
 		{...props}
 		className={classes(
 			props.className,
 			styles.itemRowToolbar,
-			forceVisibleToolbar && styles.forceVisibleToolbar,
+			forceVisible && styles.itemRowToolbarForceVisible,
 		)}
 	/>
 );
+
+export const WorkspaceItemRowIconButton: FC<
+	{ isSelected: boolean } & useRender.ComponentProps<"button">
+> = ({ isSelected, render, ...props }) =>
+	useRender({
+		render,
+		defaultTagName: "button",
+		props: mergeProps<"button">(props, {
+			className: classes(
+				styles.itemRowIconButton,
+				getButtonClassName({
+					variant: isSelected ? "inverted" : "ghost",
+					size: "small",
+				}),
+			),
+		}),
+	});

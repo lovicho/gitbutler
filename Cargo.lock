@@ -1112,8 +1112,8 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "but-core",
+ "but-ctx",
  "but-db",
- "but-error",
  "but-graph",
  "but-meta",
  "but-path",
@@ -1124,6 +1124,7 @@ dependencies = [
  "git2",
  "gitbutler-project",
  "gix",
+ "insta",
  "serde_json",
  "tracing",
 ]
@@ -1436,6 +1437,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "but-api",
+ "but-askpass",
  "but-ctx",
  "but-path",
  "but-settings",
