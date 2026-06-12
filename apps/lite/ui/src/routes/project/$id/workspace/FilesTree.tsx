@@ -1,21 +1,5 @@
-import {
-	changesInWorktreeQueryOptions,
-	listEditorsQueryOptions,
-	listProjectsQueryOptions,
-} from "#ui/api/queries.ts";
-import {
-	useCommitDiscardChanges,
-	useCommitUncommitChanges,
-	useDiscardWorktreeChanges,
-	useOpenInEditor,
-} from "#ui/api/mutations.ts";
-import {
-	nativeMenuItem,
-	nativeMenuItemsFromGroups,
-	showNativeContextMenu,
-	showNativeMenuFromTrigger,
-	type NativeMenuItem,
-} from "#ui/native-menu.ts";
+import { changesInWorktreeQueryOptions } from "#ui/api/queries.ts";
+import { showNativeContextMenu, showNativeMenuFromTrigger } from "#ui/native-menu.ts";
 import { fileOperand, operandIdentityKey, type FileOperand } from "#ui/operands.ts";
 import {
 	projectActions,
@@ -30,16 +14,16 @@ import { classes } from "#ui/components/classes.ts";
 import { mergeProps, Tooltip, useRender } from "@base-ui/react";
 import { Toolbar } from "@base-ui/react/toolbar";
 import type { TreeChange, TreeStatus } from "@gitbutler/but-sdk";
-import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Array, Match } from "effect";
 import { ComponentProps, createContext, FC, use, useRef } from "react";
 import styles from "./FilesTree.module.css";
 import {
 	WorkspaceItemRow,
 	WorkspaceItemRowEmpty,
-	WorkspaceItemRowIconButton,
 	WorkspaceItemRowLabel,
 	WorkspaceItemRowToolbar,
+	getWorkspaceItemRowButtonClassName,
 } from "./WorkspaceItemRow.tsx";
 import { OperationSourceC } from "#ui/routes/project/$id/workspace/OperationSourceC.tsx";
 import { DependencyIndicator } from "#ui/routes/project/$id/workspace/DependencyIndicator.tsx";
@@ -50,13 +34,12 @@ import {
 	useNavigationIndexHotkeys,
 } from "#ui/selection-scopes.ts";
 import { navigationIndexIncludes, type NavigationIndex } from "#ui/workspace/navigation-index.ts";
-import { changesFileHotkeys, toElectronAccelerator } from "#ui/hotkeys.ts";
+import { changesFileHotkeys } from "#ui/hotkeys.ts";
 import { assert } from "#ui/assert.ts";
 import { useHotkeys } from "@tanstack/react-hotkeys";
-import { createDiffSpec } from "#ui/operations/diff-specs.ts";
 import { useMergedRefs } from "@base-ui/utils/useMergedRefs";
-import { NonEmptyArray } from "effect/Array";
 import { TooltipPopup } from "#ui/components/Tooltip.tsx";
+import { useFileMenuItems } from "#ui/routes/project/$id/workspace/useFileMenuItems.ts";
 
 const fileOperandIdentityKey = (operand: FileOperand): string =>
 	operandIdentityKey(fileOperand(operand));
@@ -315,136 +298,12 @@ const FileRow: FC<
 	const relativePath = item._tag === "Change" ? item.change.path : item.path;
 
 	const outlineMode = useAppSelector((state) => selectProjectOutlineModeState(state, projectId));
-	const dispatch = useAppDispatch();
-
-	const { data: projects } = useSuspenseQuery(listProjectsQueryOptions);
-	const { data: editors } = useQuery(listEditorsQueryOptions);
-
-	const selectedProject = projects.find((project) => project.id === projectId);
-	if (!selectedProject) throw new Error("Could not find selected project");
-
-	const commitUncommitChanges = useCommitUncommitChanges();
-	const commitDiscardChanges = useCommitDiscardChanges();
-	const discardWorktreeChanges = useDiscardWorktreeChanges();
-	const openInEditor = useOpenInEditor();
-
-	const menuItemGroups: Array<NonEmptyArray<NativeMenuItem>> = [
-		[
-			nativeMenuItem({
-				label: "Open In Editor",
-				submenu:
-					editors?.map((editor) =>
-						nativeMenuItem({
-							label: editor.name,
-							enabled: !openInEditor.isPending,
-							onSelect: () =>
-								openInEditor.mutate({
-									projectId,
-									editorId: editor.id,
-									path: relativePath,
-								}),
-						}),
-					) ?? [],
-			}),
-			nativeMenuItem({
-				label: "Copy Path",
-				submenu: [
-					nativeMenuItem({
-						label: "Absolute Path",
-						onSelect: async () => {
-							const absolutePath = await window.lite.pathJoin(selectedProject.path, relativePath);
-							await window.lite.clipboardWriteText(absolutePath);
-						},
-					}),
-					nativeMenuItem({
-						label: "Relative Path",
-						onSelect: () => window.lite.clipboardWriteText(relativePath),
-					}),
-				],
-			}),
-		],
-		...Match.value(item).pipe(
-			Match.withReturnType<Array<NonEmptyArray<NativeMenuItem>>>(),
-			Match.when(
-				{ _tag: "Change", operand: { parent: { _tag: "Commit" } } },
-				({ change, operand }) => {
-					const uncommit = () =>
-						commitUncommitChanges.mutate({
-							projectId,
-							commitId: operand.parent.commitId,
-							assignTo: null,
-							changes: [createDiffSpec(change, [])],
-							dryRun: false,
-						});
-					const discard = () =>
-						commitDiscardChanges.mutate({
-							projectId,
-							commitId: operand.parent.commitId,
-							changes: [createDiffSpec(change, [])],
-							dryRun: false,
-						});
-
-					return [
-						[
-							nativeMenuItem({
-								label: "Uncommit",
-								enabled: !commitUncommitChanges.isPending,
-								onSelect: uncommit,
-							}),
-							nativeMenuItem({
-								label: "Discard Changes",
-								enabled: !commitDiscardChanges.isPending,
-								onSelect: discard,
-							}),
-						],
-					];
-				},
-			),
-			Match.when(
-				{ _tag: "Change", operand: { parent: { _tag: "Changes" } } },
-				({ change, operand }) => {
-					const absorb = () => {
-						dispatch(
-							projectActions.enterAbsorbMode({
-								projectId,
-								source: fileOperand(operand),
-								sourceTarget: {
-									type: "treeChanges",
-									subject: {
-										changes: [change],
-										assignedStackId: null,
-									},
-								},
-							}),
-						);
-						focusSelectionScope("outline");
-					};
-					const discard = () =>
-						discardWorktreeChanges.mutate({
-							projectId,
-							changes: [createDiffSpec(change, [])],
-						});
-
-					return [
-						[
-							nativeMenuItem({
-								label: "Absorb",
-								accelerator: toElectronAccelerator(changesFileHotkeys.absorb.hotkey),
-								onSelect: absorb,
-							}),
-							nativeMenuItem({
-								label: "Discard Changes",
-								enabled: !discardWorktreeChanges.isPending,
-								onSelect: discard,
-							}),
-						],
-					];
-				},
-			),
-			Match.orElse(() => []),
-		),
-	];
-	const menuItems = nativeMenuItemsFromGroups(menuItemGroups);
+	const menuItems = useFileMenuItems({
+		projectId,
+		operand: item.operand,
+		path: relativePath,
+		change: item._tag === "Change" ? item.change : undefined,
+	});
 
 	const hasCheckedCommits = useAppSelector((state) =>
 		selectProjectHasCheckedCommits(state, projectId),
@@ -457,6 +316,9 @@ const FileRow: FC<
 			operand={item.operand}
 			onFileSelection={onFileSelection}
 			className={classes(restProps.className, styles.fileRow)}
+			onContextMenu={(event) => {
+				void showNativeContextMenu(event, menuItems);
+			}}
 		>
 			<div className={styles.fileIconWithCheckbox}>
 				<Icon name="file" />
@@ -479,11 +341,7 @@ const FileRow: FC<
 					</Tooltip.Portal>
 				</Tooltip.Root>
 			</div>
-			<WorkspaceItemRowLabel
-				onContextMenu={(event) => {
-					void showNativeContextMenu(event, menuItems);
-				}}
-			>
+			<WorkspaceItemRowLabel>
 				{item._tag === "Change" ? item.change.path : item.path}
 			</WorkspaceItemRowLabel>
 
@@ -497,13 +355,10 @@ const FileRow: FC<
 									item.dependencyCommitIds && (
 										<Toolbar.Button
 											render={
-												<WorkspaceItemRowIconButton
-													render={
-														<DependencyIndicator
-															projectId={projectId}
-															commitIds={item.dependencyCommitIds}
-														/>
-													}
+												<DependencyIndicator
+													projectId={projectId}
+													commitIds={item.dependencyCommitIds}
+													className={getWorkspaceItemRowButtonClassName({ iconOnly: true })}
 												/>
 											}
 										>
@@ -518,7 +373,7 @@ const FileRow: FC<
 							onClick={(event) => {
 								void showNativeMenuFromTrigger(event.currentTarget, menuItems);
 							}}
-							render={<WorkspaceItemRowIconButton />}
+							className={getWorkspaceItemRowButtonClassName({ iconOnly: true })}
 						>
 							<Icon name="kebab" />
 						</Toolbar.Button>
