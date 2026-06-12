@@ -1,6 +1,7 @@
 import workspaceItemRowStyles from "./WorkspaceItemRow.module.css";
 import uiStyles from "#ui/components/ui.module.css";
 import {
+	useBranchCreate,
 	useCommitAmend,
 	useCommitCreate,
 	useCommitDiscard,
@@ -21,8 +22,8 @@ import {
 	headInfoQueryOptions,
 	listProjectsQueryOptions,
 } from "#ui/api/queries.ts";
-import { findCommit, resolveRelativeTo } from "#ui/api/ref-info.ts";
-import { decodeBytes, refNamesEqual } from "#ui/api/ref-name.ts";
+import { findBranchOperandByRef, findCommit, resolveRelativeTo } from "#ui/api/ref-info.ts";
+import { decodeBytes, encodeBytes, refNamesEqual } from "#ui/api/ref-name.ts";
 import { commitIsDiverged, commitTitle } from "#ui/commit.ts";
 import {
 	nativeMenuItem,
@@ -81,6 +82,7 @@ import {
 	PushStatus,
 	TreeChange,
 	WorkspaceState,
+	InsertSide,
 } from "@gitbutler/but-sdk";
 import {
 	formatForDisplay,
@@ -129,6 +131,7 @@ import { assert } from "#ui/assert.ts";
 import { errorMessageForToast } from "#ui/errors.ts";
 import { useMergedRefs } from "@base-ui/utils/useMergedRefs";
 import { OperationControls } from "#ui/routes/project/$id/workspace/OperationControls.tsx";
+import { randomBranchRef } from "#ui/routes/project/$id/workspace/branchRef.ts";
 
 const DryRunWorkspaceContext = createContext<WorkspaceState | null>(null);
 
@@ -215,6 +218,7 @@ const useOutlineTreeHotkeys = ({
 	const commitDiscardMutation = useCommitDiscard();
 	const pushStackMutation = usePushStack();
 	const rebaseStackMutation = useRebaseStack({ projectId });
+	const branchCreateMutation = useBranchCreate();
 
 	const openBranchPicker = () => {
 		dispatch(projectActions.openBranchPicker({ projectId }));
@@ -244,6 +248,38 @@ const useOutlineTreeHotkeys = ({
 	const composeCommitHere = (relativeTo: RelativeTo) => {
 		setCommitTarget(relativeTo);
 		focusCommitMessageInput();
+	};
+
+	const createDependentBranchAbove = (relativeTo: RelativeTo) => {
+		const newRef = randomBranchRef();
+		branchCreateMutation.mutate(
+			{
+				projectId,
+				newRef,
+				placement: {
+					type: "dependent",
+					subject: {
+						relativeTo,
+						side: "above",
+					},
+				},
+			},
+			{
+				onSuccess: (response) => {
+					const newBranch = findBranchOperandByRef({
+						headInfo: response.workspace.headInfo,
+						branchRef: encodeBytes(newRef),
+					});
+					if (newBranch)
+						dispatch(
+							projectActions.selectOutline({
+								projectId,
+								selection: branchOperand(newBranch),
+							}),
+						);
+				},
+			},
+		);
 	};
 
 	const toggleSelectedCommitChecked = () => {
@@ -577,6 +613,17 @@ const useOutlineTreeHotkeys = ({
 			(relativeTo) =>
 				relativeTo
 					? [
+							{
+								hotkey: outlineHotkeys.createDependentBranchAbove.hotkey,
+								callback: () => createDependentBranchAbove(relativeTo),
+								options: {
+									conflictBehavior: "allow",
+									enabled: defaultOutlineHotkeysEnabled,
+									target: ref,
+									meta: outlineHotkeys.createDependentBranchAbove.meta,
+									requireReset: true,
+								},
+							} satisfies UseHotkeyDefinition,
 							{
 								hotkey: outlineHotkeys.composeCommitHere.hotkey,
 								callback: () => composeCommitHere(relativeTo),
@@ -978,6 +1025,7 @@ const CommitRow: FC<
 	const commitDiscardMutation = useCommitDiscard();
 	const commitUncommitMutation = useCommitUncommit();
 	const commitRewordMutation = useCommitReword();
+	const branchCreateMutation = useBranchCreate();
 
 	const insertBlankCommit = (side: "above" | "below") => {
 		commitInsertBlankMutation.mutate({
@@ -986,6 +1034,38 @@ const CommitRow: FC<
 			side,
 			dryRun: false,
 		});
+	};
+
+	const createDependentBranch = (side: "above" | "below") => {
+		const newRef = randomBranchRef();
+		branchCreateMutation.mutate(
+			{
+				projectId,
+				newRef,
+				placement: {
+					type: "dependent",
+					subject: {
+						relativeTo: { type: "commit", subject: commit.id },
+						side,
+					},
+				},
+			},
+			{
+				onSuccess: (response) => {
+					const newBranch = findBranchOperandByRef({
+						headInfo: response.workspace.headInfo,
+						branchRef: encodeBytes(newRef),
+					});
+					if (newBranch)
+						dispatch(
+							projectActions.selectOutline({
+								projectId,
+								selection: branchOperand(newBranch),
+							}),
+						);
+				},
+			},
+		);
 	};
 
 	const deleteCommit = () => {
@@ -1137,6 +1217,21 @@ const CommitRow: FC<
 			],
 		}),
 		insertBlankCommitMenuItem(insertBlankCommit),
+		nativeMenuSeparator,
+		nativeMenuItem({
+			label: "Create Branch",
+			submenu: [
+				nativeMenuItem({
+					label: "Above",
+					accelerator: toElectronAccelerator(outlineHotkeys.createDependentBranchAbove.hotkey),
+					onSelect: () => createDependentBranch("above"),
+				}),
+				nativeMenuItem({
+					label: "Below",
+					onSelect: () => createDependentBranch("below"),
+				}),
+			],
+		}),
 		nativeMenuSeparator,
 		nativeMenuItem({
 			label: "Delete Commit",
@@ -1829,6 +1924,7 @@ const BranchRow: FC<
 		canRemoveBranch: boolean;
 		partialStackState: PartialStackState;
 		pushStatus: PushStatus;
+		bottomCommitId: string | undefined;
 	} & ComponentProps<"div">
 > = ({
 	projectId,
@@ -1839,6 +1935,7 @@ const BranchRow: FC<
 	canRemoveBranch,
 	partialStackState,
 	pushStatus,
+	bottomCommitId,
 	...restProps
 }) => {
 	const outlineMode = useAppSelector((state) => selectProjectOutlineModeState(state, projectId));
@@ -1881,6 +1978,7 @@ const BranchRow: FC<
 	const commitInsertBlankMutation = useCommitInsertBlank();
 	const tearOffBranchMutation = useTearOffBranch();
 	const removeBranchMutation = useRemoveBranch();
+	const branchCreateMutation = useBranchCreate();
 
 	const pushesMultipleBranches = partialStackState.branchCount > 1;
 
@@ -1911,6 +2009,10 @@ const BranchRow: FC<
 	};
 
 	const relativeTo: RelativeTo = { type: "referenceBytes", subject: refName.fullNameBytes };
+	const bucketRelativeTo = (side: InsertSide): RelativeTo =>
+		side === "below" && bottomCommitId !== undefined
+			? { type: "commit", subject: bottomCommitId }
+			: relativeTo;
 
 	const setCommitTarget = () => {
 		dispatch(projectActions.setCommitTarget({ projectId, commitTarget: relativeTo }));
@@ -1928,6 +2030,38 @@ const BranchRow: FC<
 			side,
 			dryRun: false,
 		});
+	};
+
+	const createDependentBranch = (side: "above" | "below") => {
+		const newRef = randomBranchRef();
+		branchCreateMutation.mutate(
+			{
+				projectId,
+				newRef,
+				placement: {
+					type: "dependent",
+					subject: {
+						relativeTo: bucketRelativeTo(side),
+						side,
+					},
+				},
+			},
+			{
+				onSuccess: (response) => {
+					const newBranch = findBranchOperandByRef({
+						headInfo: response.workspace.headInfo,
+						branchRef: encodeBytes(newRef),
+					});
+					if (newBranch)
+						dispatch(
+							projectActions.selectOutline({
+								projectId,
+								selection: branchOperand(newBranch),
+							}),
+						);
+				},
+			},
+		);
 	};
 
 	const tearOffBranch = () => {
@@ -2000,6 +2134,21 @@ const BranchRow: FC<
 			enabled: outlineMode._tag === "Default",
 		}),
 		insertBlankCommitMenuItem(insertBlankCommit),
+		nativeMenuSeparator,
+		nativeMenuItem({
+			label: "Create Branch",
+			submenu: [
+				nativeMenuItem({
+					label: "Above",
+					accelerator: toElectronAccelerator(outlineHotkeys.createDependentBranchAbove.hotkey),
+					onSelect: () => createDependentBranch("above"),
+				}),
+				nativeMenuItem({
+					label: "Below",
+					onSelect: () => createDependentBranch("below"),
+				}),
+			],
+		}),
 		nativeMenuSeparator,
 		nativeMenuItem({
 			label: "Tear Off Branch",
@@ -2224,6 +2373,7 @@ const BranchSegment: FC<{
 								: false
 						}
 						pushStatus={segment.pushStatus}
+						bottomCommitId={segment.commits.at(-1)?.id}
 					/>
 				}
 			/>

@@ -93,6 +93,10 @@ export const workspaceHotkeys = {
 		hotkey: "Mod+Shift+A",
 		meta: { group: "Branches", name: "Apply branch" },
 	},
+	createIndependentBranch: {
+		hotkey: "Mod+N",
+		meta: { group: "Branches", name: "Create independent branch" },
+	},
 	rebaseAllStacks: {
 		hotkey: "Alt+Shift+R",
 		meta: { group: "Stack", name: "Rebase all stacks" },
@@ -135,6 +139,10 @@ export const outlineHotkeys = {
 	checkBranchCommits: {
 		hotkey: "Space",
 		meta: { group: "Branch", name: "Check branch commits" },
+	},
+	createDependentBranchAbove: {
+		hotkey: "N", // like lazygit
+		meta: { group: "Branch", name: "Create dependent branch above" },
 	},
 	setCommitTarget: {
 		hotkey: "Shift+C",
