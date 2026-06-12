@@ -7,6 +7,7 @@ import type {
 	BranchListing,
 	BranchListingFilter,
 	BottomUpdate,
+	Editor,
 	CommitAbsorption,
 	HunkAssignmentRequest,
 	CommitDetails,
@@ -35,6 +36,7 @@ import type {
 	RestoreKind,
 	Snapshot,
 	AskpassPromptEvent,
+	MaybeLossyFullNameRef,
 } from "@gitbutler/but-sdk";
 import type { UpdateDownloadedEvent } from "electron-updater";
 
@@ -65,7 +67,7 @@ export interface AssignHunkParams {
 
 export interface BranchCreateParams {
 	projectId: string;
-	newRef: string;
+	newRef: MaybeLossyFullNameRef;
 	placement: BranchCreatePlacement;
 }
 
@@ -181,6 +183,12 @@ export interface MoveBranchParams {
 	subjectBranch: string;
 	targetBranch: string;
 	dryRun: boolean;
+}
+
+export interface OpenInEditorParams {
+	projectId: string;
+	editorId: string;
+	path: string;
 }
 
 export interface PeelRestoreSnapshotParams {
@@ -306,8 +314,10 @@ export interface LiteElectronApi {
 		projectId: string,
 		filter: BranchListingFilter | null,
 	) => Promise<Array<BranchListing>>;
+	listEditors: () => Promise<Array<Editor>>;
 	listProjects: () => Promise<Array<ProjectForFrontend>>;
 	moveBranch: (params: MoveBranchParams) => Promise<MoveBranchResult>;
+	openInEditor: (params: OpenInEditorParams) => Promise<void>;
 	pathJoin: (...paths: Array<string>) => Promise<string>;
 	updateBranchName: (params: UpdateBranchNameParams) => Promise<void>;
 	tearOffBranch: (params: TearOffBranchParams) => Promise<MoveBranchResult>;
@@ -357,8 +367,10 @@ export const liteIpcChannels = {
 	getVersion: "lite:get-version",
 	headInfo: "workspace:head-info",
 	listBranches: "workspace:list-branches",
+	listEditors: "workspace:list-editors",
 	listProjects: "projects:list",
 	moveBranch: "workspace:move-branch",
+	openInEditor: "workspace:open-in-editor",
 	pathJoin: "lite:path-join",
 	updateBranchName: "workspace:update-branch-name",
 	tearOffBranch: "workspace:tear-off-branch",

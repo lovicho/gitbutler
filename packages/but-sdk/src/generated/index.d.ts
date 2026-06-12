@@ -55,7 +55,7 @@ export declare function assignHunk(projectId: string, assignments: Array<HunkAss
  * and records an oplog snapshot on success. For lower-level implementation
  * details, see [`but_workspace::branch::create_reference()`].
  */
-export declare function branchCreate(projectId: string, newRef: string, placement: BranchCreatePlacement): Promise<BranchCreateResult>
+export declare function branchCreate(projectId: string, newRef: MaybeLossyFullNameRef, placement: BranchCreatePlacement): Promise<BranchCreateResult>
 
 export declare function branchDetails(projectId: string, branchName: string, remote: string | null): Promise<BranchDetails>
 
@@ -233,6 +233,14 @@ export declare function commitUncommitChanges(projectId: string, commitId: strin
  */
 export declare function discardWorktreeChanges(projectId: string, worktreeChanges: Array<DiffSpec>): Promise<Array<DiffSpec>>
 
+/** Supported editor configuration for API clients. */
+export interface Editor {
+  /** Identifier used to refer to the editor. */
+  id: string
+  /** Name of the editor. */
+  name: string
+}
+
 /**
  * Web compare URL for a branch — drives the "Open in browser"
  * affordances without making the renderer hold per-forge URL
@@ -287,6 +295,9 @@ export declare function listBranches(projectId: string, filter: BranchListingFil
 
 export declare function listCiChecks(projectId: string, reference: string, cacheConfig: CacheConfig | null): Promise<Array<CiCheck>>
 
+/** List all supported editors. */
+export declare function listEditors(): Promise<Array<Editor>>
+
 export declare function listProjectsStateless(): Promise<Array<ProjectForFrontend>>
 
 export declare function listReviews(projectId: string, cacheConfig: CacheConfig | null): Promise<Array<ForgeReview>>
@@ -305,6 +316,16 @@ export declare function mergeReview(projectId: string, reviewId: number, mergeMe
  * entry is persisted.
  */
 export declare function moveBranch(projectId: string, subjectBranch: string, targetBranch: string, dryRun: boolean): Promise<MoveBranchResult>
+
+/**
+ * Open `path` within the given project's workdir.
+ *
+ * `path` must be relative to the workdir of the repository and must resolve to a file or directory
+ * within the workdir, including the workdir root itself. Otherwise an error is returned.
+ *
+ * [`list_editors`] provides the available `editor_id`s.
+ */
+export declare function openInEditor(projectId: string, editorId: string, path: string): Promise<void>
 
 /**
  * Find the final snapshot that a restore snapshot will restore from.
@@ -647,6 +668,8 @@ export type BranchCreatePlacement = {
 export type BranchCreateResult = {
   /** Workspace state after creating the branch. */
   workspace: WorkspaceState;
+  /** The name of the crated reference */
+  newRef: BranchReference;
 };
 
 /** Information about the current state of a branch. */
@@ -1735,6 +1758,15 @@ export type LineStats = {
   /** The number of files that contributed to these statistics as they were added, removed or modified. */
   filesChanged: number;
 };
+
+/**
+ * An optional full reference name accepted as a string like `refs/heads/main`,
+ * for use as a parameter transport via `#[but_api(...)]`.
+ *
+ * The name is validated during deserialization. Note that it is lossy: a name
+ * that can't be represented in Unicode can't be passed through this type.
+ */
+export type MaybeLossyFullNameRef = string | null;
 
 /** How to combine messages of commits being squashed. */
 export type MessageCombinationStrategy = "KeepBoth" | "KeepSubject" | "KeepTarget";

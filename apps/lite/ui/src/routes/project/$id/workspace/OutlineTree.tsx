@@ -23,7 +23,7 @@ import {
 	listProjectsQueryOptions,
 } from "#ui/api/queries.ts";
 import { findBranchOperandByRef, findCommit, resolveRelativeTo } from "#ui/api/ref-info.ts";
-import { decodeBytes, encodeBytes, refNamesEqual } from "#ui/api/ref-name.ts";
+import { decodeBytes, refNamesEqual } from "#ui/api/ref-name.ts";
 import { commitIsDiverged, commitTitle } from "#ui/commit.ts";
 import {
 	nativeMenuItem,
@@ -74,7 +74,6 @@ import {
 	AbsorptionTarget,
 	BranchReference,
 	Commit,
-	CommitState,
 	RefInfo,
 	RelativeTo,
 	Segment,
@@ -118,6 +117,7 @@ import { useDryRunOperation } from "#ui/operations/operation.ts";
 import { createDiffSpec } from "#ui/operations/diff-specs.ts";
 import { initNonEmpty, isNonEmptyArray, scanRight } from "effect/Array";
 import { TooltipPopup } from "#ui/components/Tooltip.tsx";
+import { GraphSegment } from "#ui/components/GraphSegment.tsx";
 import { Icon } from "#ui/components/Icon.tsx";
 import { Kbd } from "#ui/components/Kbd.tsx";
 import {
@@ -131,7 +131,6 @@ import { assert } from "#ui/assert.ts";
 import { errorMessageForToast } from "#ui/errors.ts";
 import { useMergedRefs } from "@base-ui/utils/useMergedRefs";
 import { OperationControls } from "#ui/routes/project/$id/workspace/OperationControls.tsx";
-import { randomBranchRef } from "#ui/routes/project/$id/workspace/branchRef.ts";
 
 const DryRunWorkspaceContext = createContext<WorkspaceState | null>(null);
 
@@ -251,11 +250,10 @@ const useOutlineTreeHotkeys = ({
 	};
 
 	const createDependentBranchAbove = (relativeTo: RelativeTo) => {
-		const newRef = randomBranchRef();
 		branchCreateMutation.mutate(
 			{
 				projectId,
-				newRef,
+				newRef: null,
 				placement: {
 					type: "dependent",
 					subject: {
@@ -268,7 +266,7 @@ const useOutlineTreeHotkeys = ({
 				onSuccess: (response) => {
 					const newBranch = findBranchOperandByRef({
 						headInfo: response.workspace.headInfo,
-						branchRef: encodeBytes(newRef),
+						branchRef: response.newRef.fullNameBytes,
 					});
 					if (newBranch)
 						dispatch(
@@ -803,16 +801,6 @@ const CommitTargetIndicator: FC = () => (
 	</Tooltip.Root>
 );
 
-type CommitStatusType = "Diverged" | CommitState["type"];
-
-const CommitStateIndicator: FC<{
-	status: CommitStatusType;
-}> = ({ status }) => (
-	<div className={styles.commitState}>
-		<span className={styles.commitStateIcon} data-status={status} />
-	</div>
-);
-
 const ItemRow: FC<
 	{
 		projectId: string;
@@ -1037,11 +1025,10 @@ const CommitRow: FC<
 	};
 
 	const createDependentBranch = (side: "above" | "below") => {
-		const newRef = randomBranchRef();
 		branchCreateMutation.mutate(
 			{
 				projectId,
-				newRef,
+				newRef: null,
 				placement: {
 					type: "dependent",
 					subject: {
@@ -1054,7 +1041,7 @@ const CommitRow: FC<
 				onSuccess: (response) => {
 					const newBranch = findBranchOperandByRef({
 						headInfo: response.workspace.headInfo,
-						branchRef: encodeBytes(newRef),
+						branchRef: response.newRef.fullNameBytes,
 					});
 					if (newBranch)
 						dispatch(
@@ -1266,7 +1253,10 @@ const CommitRow: FC<
 			isCommitTarget={isCommitTarget}
 		>
 			<div className={styles.commitStateWithCheckbox}>
-				<CommitStateIndicator status={commitIsDiverged(commit) ? "Diverged" : commit.state.type} />
+				<GraphSegment
+					glyph="commit"
+					status={commitIsDiverged(commit) ? "Diverged" : commit.state.type}
+				/>
 				<Tooltip.Root
 					// This gets in the way when the user tries to move their hover to a
 					// sibling row.
@@ -2033,11 +2023,10 @@ const BranchRow: FC<
 	};
 
 	const createDependentBranch = (side: "above" | "below") => {
-		const newRef = randomBranchRef();
 		branchCreateMutation.mutate(
 			{
 				projectId,
-				newRef,
+				newRef: null,
 				placement: {
 					type: "dependent",
 					subject: {
@@ -2050,7 +2039,7 @@ const BranchRow: FC<
 				onSuccess: (response) => {
 					const newBranch = findBranchOperandByRef({
 						headInfo: response.workspace.headInfo,
-						branchRef: encodeBytes(newRef),
+						branchRef: response.newRef.fullNameBytes,
 					});
 					if (newBranch)
 						dispatch(
@@ -2179,8 +2168,8 @@ const BranchRow: FC<
 			heading
 			isCommitTarget={isCommitTarget}
 		>
-			{/* This will be replaced with a different icon. */}
-			<CommitStateIndicator
+			<GraphSegment
+				glyph="forkRight"
 				status={(() => {
 					switch (pushStatus) {
 						case "nothingToPush":
@@ -2324,6 +2313,15 @@ const StackRow: FC<
 	);
 };
 
+const BranchTail: FC<{ commit?: Commit }> = ({ commit }) => (
+	<div className={styles.branchTail} aria-hidden="true">
+		<GraphSegment
+			glyph="parent"
+			status={commit ? (commitIsDiverged(commit) ? "Diverged" : commit.state.type) : "LocalOnly"}
+		/>
+	</div>
+);
+
 const BranchSegment: FC<{
 	projectId: string;
 	segment: Segment;
@@ -2379,7 +2377,13 @@ const BranchSegment: FC<{
 			/>
 
 			{segment.commits.length === 0 ? (
-				<WorkspaceItemRowEmpty>No commits.</WorkspaceItemRowEmpty>
+				<>
+					<WorkspaceItemRowEmpty>
+						<GraphSegment glyph="parent" status="LocalOnly" />
+						<WorkspaceItemRowLabel>No commits.</WorkspaceItemRowLabel>
+					</WorkspaceItemRowEmpty>
+					<BranchTail />
+				</>
 			) : (
 				<div role="group">
 					{segment.commits.map((commit) => (
@@ -2395,6 +2399,7 @@ const BranchSegment: FC<{
 							}
 						/>
 					))}
+					<BranchTail commit={assert(segment.commits.at(-1))} />
 				</div>
 			)}
 		</TreeItem>
