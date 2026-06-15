@@ -38,11 +38,9 @@
 }
 
 .segmentParentItemRow {
-	.segment:last-child & {
-		height: 8px;
-		min-height: auto;
-		overflow: hidden;
-	}
+	height: 8px;
+	min-height: auto;
+	overflow: hidden;
 }
 
 .stack {
