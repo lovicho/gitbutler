@@ -113,8 +113,8 @@ import {
 	WorkspaceItemRow,
 	WorkspaceItemRowLabel,
 	WorkspaceItemRowToolbar,
-	getWorkspaceItemRowButtonClassName,
 } from "./WorkspaceItemRow.tsx";
+import { getWorkspaceItemRowButtonClassName } from "./WorkspaceItemRow-utils.ts";
 import { getOperation, useDryRunOperation } from "#ui/operations/operation.ts";
 import { createDiffSpec } from "#ui/operations/diff-specs.ts";
 import { initNonEmpty, reverse, scanRight } from "effect/Array";
@@ -1081,7 +1081,7 @@ const CommitRow: FC<
 
 	const commitInsertBlankMutation = useCommitInsertBlank();
 	const commitDiscardMutation = useCommitDiscard();
-	const commitUncommitMutation = useCommitUncommit();
+	const commitUncommitMutation = useCommitUncommit({ projectId });
 	const commitRewordMutation = useCommitReword();
 	const branchCreateMutation = useBranchCreate();
 
