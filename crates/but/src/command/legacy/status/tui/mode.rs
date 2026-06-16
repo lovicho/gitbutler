@@ -59,11 +59,8 @@ impl Mode {
                 | CommitSource::Stack(..) => None,
             },
             Mode::PickChanges(pick_uncommitted_mode) => Some(&pick_uncommitted_mode.marks),
-            Mode::InlineReword(..)
-            | Mode::Command(..)
-            | Mode::Move(..)
-            | Mode::Details(..)
-            | Mode::Stack(..) => None,
+            Mode::Details(details_mode) => Some(details_mode.return_mode.marks()),
+            Mode::InlineReword(..) | Mode::Command(..) | Mode::Move(..) | Mode::Stack(..) => None,
         }
     }
 }
@@ -371,6 +368,22 @@ impl PartialEq<CliId> for MoveSource {
 #[derive(Debug)]
 pub(super) struct DetailsMode {
     pub(super) full_screen: bool,
+    pub(super) return_mode: DetailsReturnMode,
+}
+
+#[derive(Debug)]
+pub(super) enum DetailsReturnMode {
+    Normal(NormalMode),
+    PickChanges(PickUncommittedMode),
+}
+
+impl DetailsReturnMode {
+    fn marks(&self) -> &Marks {
+        match self {
+            DetailsReturnMode::Normal(normal_mode) => &normal_mode.marks,
+            DetailsReturnMode::PickChanges(pick_uncommitted_mode) => &pick_uncommitted_mode.marks,
+        }
+    }
 }
 
 #[derive(Debug)]
