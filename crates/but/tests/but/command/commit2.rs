@@ -928,9 +928,9 @@ fn refuses_above_and_below() {
         .assert()
         .failure()
         .stderr_eq(snapbox::str![[r#"
-error: the argument '--above <ABOVE>' cannot be used with '--below <BELOW>'
+error: the argument '--above <BRANCH_OR_COMMIT>' cannot be used with '--below <BRANCH_OR_COMMIT>'
 
-Usage: but commit2 --above <ABOVE> [CHANGES]...
+Usage: but commit2 --above <BRANCH_OR_COMMIT> [CHANGES]...
 
 For more information, try '--help'.
 
@@ -946,9 +946,9 @@ fn refuses_above_and_branch() {
         .assert()
         .failure()
         .stderr_eq(snapbox::str![[r#"
-error: the argument '--above <ABOVE>' cannot be used with '--branch [<BRANCH>]'
+error: the argument '--above <BRANCH_OR_COMMIT>' cannot be used with '--branch [<BRANCH>]'
 
-Usage: but commit2 --above <ABOVE> [CHANGES]...
+Usage: but commit2 --above <BRANCH_OR_COMMIT> [CHANGES]...
 
 For more information, try '--help'.
 
@@ -964,9 +964,9 @@ fn refuses_below_and_branch() {
         .assert()
         .failure()
         .stderr_eq(snapbox::str![[r#"
-error: the argument '--below <BELOW>' cannot be used with '--branch [<BRANCH>]'
+error: the argument '--below <BRANCH_OR_COMMIT>' cannot be used with '--branch [<BRANCH>]'
 
-Usage: but commit2 --below <BELOW> [CHANGES]...
+Usage: but commit2 --below <BRANCH_OR_COMMIT> [CHANGES]...
 
 For more information, try '--help'.
 
@@ -1104,6 +1104,22 @@ fn committing_something_that_isnt_a_cli_id() {
         .failure()
         .stderr_eq(snapbox::str![[r#"
 Error: Invalid uncommitted change. 'A' is a branch
+
+"#]]);
+}
+
+#[test]
+fn requires_specifying_stack_when_there_are_multiple() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks").unwrap();
+    env.setup_metadata(&["A", "B"]).unwrap();
+
+    env.but("commit2 --empty --no-message")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: Unclear where to commit. Found more than one stack
+
+Hint: You can specify where to commit with `--branch [<BRANCH>]`
 
 "#]]);
 }
