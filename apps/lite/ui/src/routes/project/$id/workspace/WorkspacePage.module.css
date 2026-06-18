@@ -39,7 +39,7 @@
 
 .outlinePanel {
 	display: grid;
-	grid-template-rows: auto minmax(0, 1fr);
+	grid-template-rows: auto auto minmax(0, 1fr);
 	grid-template-columns: minmax(0, 1fr);
 	gap: 12px;
 	border-right: 1px solid var(--border-3);
@@ -53,6 +53,11 @@
 	gap: 6px;
 }
 
+.navContainer {
+	display: grid;
+	padding-inline: var(--panel-padding);
+}
+
 .workspaceControlsLeft {
 	display: flex;
 	align-items: center;
@@ -62,12 +67,9 @@
 
 .workspaceControlsActions {
 	display: flex;
-	z-index: 1;
-	position: relative;
 	align-items: center;
 	margin-inline-start: auto;
 	gap: 4px;
-	app-region: no-drag;
 }
 
 .workspaceName {

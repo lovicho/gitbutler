@@ -50,7 +50,7 @@ import {
 } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
 import { Match, Order } from "effect";
-import { type FC, Component, ReactNode } from "react";
+import { type FC, Component, ReactNode, useDeferredValue } from "react";
 import {
 	branchOperand,
 	changesSectionOperand,
@@ -66,7 +66,7 @@ import { PickerDialog, type PickerDialogGroup } from "#ui/components/PickerDialo
 import { Details } from "./Details.tsx";
 import styles from "./WorkspacePage.module.css";
 import { OutlineTree } from "#ui/routes/project/$id/workspace/OutlineTree.tsx";
-import { Button, Tooltip } from "@base-ui/react";
+import { Button, Toggle, ToggleGroup, Tooltip } from "@base-ui/react";
 import { useActiveElement } from "#ui/focus.ts";
 import { classes } from "#ui/components/classes.ts";
 import { Icon } from "#ui/components/Icon.tsx";
@@ -74,6 +74,7 @@ import { TooltipPopup } from "#ui/components/Tooltip.tsx";
 import { buildIndexByKey, NavigationIndex } from "#ui/workspace/navigation-index.ts";
 import { reverse } from "effect/Array";
 import { getOperations } from "#ui/operations/operation.ts";
+import { ToggleGroupStyles, ToggleStyles } from "#ui/components/ToggleGroup.tsx";
 
 const toggleFiles =
 	({
@@ -554,9 +555,9 @@ const WorkspacePage: FC = () => {
 			const relativeTo = stackBottomRelativeTo(stack);
 			return relativeTo ? [{ kind: "rebase", selector: relativeTo }] : [];
 		}) ?? [];
-	const workspaceIntegrateUpstreamMutation = useWorkspaceIntegrateUpstream({ projectId });
+	const workspaceIntegrateUpstreamMutation = useWorkspaceIntegrateUpstream();
 	const updateWorkspace = () => {
-		workspaceIntegrateUpstreamMutation.mutate(rebaseUpdates);
+		workspaceIntegrateUpstreamMutation.mutate({ projectId, updates: rebaseUpdates, dryRun: false });
 	};
 	const toggleDetailsFullscreen = () => {
 		if (
@@ -657,6 +658,8 @@ const WorkspacePage: FC = () => {
 		navigationIndex: outlineNavigationIndex,
 	});
 
+	const deferredOutlineSelection = useDeferredValue(outlineSelection);
+
 	const { data: projects } = useSuspenseQuery(listProjectsQueryOptions);
 	const selectedProject = projects.find((project) => project.id === projectId);
 	if (!selectedProject) throw new Error("Could not find selected project");
@@ -743,6 +746,27 @@ const WorkspacePage: FC = () => {
 							</div>
 						</header>
 
+						<div className={styles.navContainer}>
+							<ToggleGroup
+								render={<ToggleGroupStyles />}
+								aria-label="Navigation"
+								value={["workspace"]}
+							>
+								<Toggle render={<ToggleStyles />} value="workspace">
+									<Icon name="workbench" />
+									Workspace
+								</Toggle>
+								<Toggle render={<ToggleStyles />} value="upstream" disabled>
+									<Icon name="inbox" />
+									Upstream
+								</Toggle>
+								<Toggle render={<ToggleStyles />} value="branches" disabled>
+									<Icon name="branch" />
+									Branches
+								</Toggle>
+							</ToggleGroup>
+						</div>
+
 						<OutlineTree
 							id={"outline" satisfies SelectionScope}
 							data-selection-scope
@@ -761,7 +785,9 @@ const WorkspacePage: FC = () => {
 				)}
 
 				<Details
-					outlineSelection={outlineSelection}
+					key={deferredOutlineSelection ? operandIdentityKey(deferredOutlineSelection) : null}
+					style={{ opacity: deferredOutlineSelection !== outlineSelection ? 0.5 : 1 }}
+					outlineSelection={deferredOutlineSelection}
 					detailsFullscreen={detailsFullscreen}
 					onDetailsFullscreenChange={(fullscreen) =>
 						dispatch(projectActions.setDetailsFullscreen({ projectId, fullscreen }))
