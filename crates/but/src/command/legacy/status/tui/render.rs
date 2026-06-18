@@ -9,6 +9,7 @@ use ratatui::{
     prelude::*,
     widgets::{Block, BorderType, Borders, List, ListItem},
 };
+use ratatui_textarea::TextArea;
 use unicode_width::UnicodeWidthStr;
 
 use crate::{
@@ -16,7 +17,10 @@ use crate::{
     command::legacy::status::{
         CommitLineContent, FileLineContent, StatusOutputLine,
         output::{BranchLineContent, StatusOutputContent, StatusOutputLineData},
-        tui::{Markable, mode::StackMode},
+        tui::{
+            Markable,
+            mode::{MoveStackMode, StackMode},
+        },
     },
     theme::Theme,
 };
@@ -109,8 +113,8 @@ pub(super) fn render_app(app: &App, frame: &mut Frame) {
 
     match &app.modal {
         Some(Modal::Confirm { confirm, .. }) => confirm.render(app.has_focus, frame.area(), frame),
-        Some(Modal::BranchPicker { branch_picker, .. }) => {
-            branch_picker.render(app.has_focus, frame.area(), frame);
+        Some(Modal::BranchPicker { picker, .. }) => {
+            picker.render(app.has_focus, frame.area(), frame);
         }
         Some(Modal::Help { help, .. }) => help.render(frame.area(), frame),
         None => {}
@@ -258,7 +262,7 @@ fn row_stack_ids(lines: &[StatusOutputLine]) -> Vec<Option<StackId>> {
             StatusOutputLineData::StagedFile { .. }
             | StatusOutputLineData::CommitMessage
             | StatusOutputLineData::EmptyCommitMessage => current_stack_id,
-            StatusOutputLineData::Connector => None,
+            StatusOutputLineData::Connector | StatusOutputLineData::BetweenStacks => None,
             StatusOutputLineData::File { cli_id } => match &**cli_id {
                 CliId::CommittedFile { commit_id, .. } => {
                     let stack_id = commit_stack_ids
@@ -418,6 +422,14 @@ fn render_status_list_item_with_stack_highlight(
                     render_move_labels_for_selected_line(app, data, move_mode, &mut line);
                 }
             }
+            Mode::MoveStack(move_mode) => {
+                if data
+                    .cli_id()
+                    .is_some_and(|target| move_mode.source.matches(target))
+                {
+                    render_reorder_labels_for_selected_line(app, data, move_mode, &mut line);
+                }
+            }
             Mode::Stack(stack_mode) => {
                 if let Some(display) = stack_operation_display(data, stack_mode) {
                     line.extend([
@@ -459,6 +471,13 @@ fn render_status_list_item_with_stack_highlight(
             Mode::Move(MoveMode { source, .. }) => {
                 if let Some(cli_id) = data.cli_id()
                     && **source == **cli_id
+                {
+                    line.extend([source_span(app.theme), Span::raw(" ")]);
+                }
+            }
+            Mode::MoveStack(MoveStackMode { source, .. }) => {
+                if let Some(cli_id) = data.cli_id()
+                    && source.matches(cli_id)
                 {
                     line.extend([source_span(app.theme), Span::raw(" ")]);
                 }
@@ -550,7 +569,8 @@ fn render_status_list_item_with_stack_highlight(
                                 .first()
                                 .map(|line| line.width())
                                 .unwrap_or(0);
-                            line.push_span(Span::raw(" ".repeat(len + 1)));
+                            let padding = if cursor_at_end(textarea) { 1 } else { 0 };
+                            line.push_span(Span::raw(" ".repeat(len + padding)));
 
                             line.extend(branch_content.decoration_end.iter().cloned());
                             line.extend(branch_content.suffix.iter().cloned());
@@ -565,6 +585,7 @@ fn render_status_list_item_with_stack_highlight(
         | Mode::PickChanges(..)
         | Mode::Details(..)
         | Mode::Move(..)
+        | Mode::MoveStack(..)
         | Mode::Stack(..)
         | Mode::Command(..)
         | Mode::Rub(..)
@@ -650,6 +671,11 @@ fn render_status_list_item_with_stack_highlight(
                         );
                         return StatusListItem::Double(extension_line, line);
                     }
+                }
+            }
+            Mode::MoveStack(move_mode) => {
+                if !data.cli_id().is_some_and(|id| move_mode.source.matches(id)) {
+                    render_reorder_labels_for_selected_line(app, data, move_mode, &mut line);
                 }
             }
             Mode::Normal(..)
@@ -816,6 +842,33 @@ fn render_move_labels_for_selected_line(
     }
 }
 
+fn render_reorder_labels_for_selected_line(
+    app: &App,
+    data: &StatusOutputLineData,
+    mode: &MoveStackMode,
+    line: &mut Line<'static>,
+) {
+    if data
+        .cli_id()
+        .is_some_and(|target| mode.source.matches(target))
+    {
+        line.extend([source_span(app.theme), Span::raw(" ")]);
+        line.extend([
+            Span::raw("<< ").mode_colors(&*app.mode, app.theme),
+            Span::raw(NOOP).mode_colors(&*app.mode, app.theme),
+            Span::raw(" >>").mode_colors(&*app.mode, app.theme),
+            Span::raw(" "),
+        ]);
+    } else if let Some(display) = reorder_operation_display(data, mode) {
+        line.extend([
+            Span::raw("<< ").mode_colors(&*app.mode, app.theme),
+            Span::raw(display).mode_colors(&*app.mode, app.theme),
+            Span::raw(" >>").mode_colors(&*app.mode, app.theme),
+            Span::raw(" "),
+        ]);
+    }
+}
+
 fn render_hotbar(app: &App, area: Rect, frame: &mut Frame) {
     let mode_span = Span::raw(format!(
         "  {}  ",
@@ -841,6 +894,7 @@ fn render_hotbar(app: &App, area: Rect, frame: &mut Frame) {
         | Mode::Rub(..)
         | Mode::Commit(..)
         | Mode::Move(..)
+        | Mode::MoveStack(..)
         | Mode::Stack(..)
         | Mode::InlineReword(..) => {
             let separator = Span::styled(" • ", app.theme.hint);
@@ -1119,6 +1173,7 @@ pub(super) fn commit_operation_display(
         | StatusOutputLineData::UnassignedFile { .. }
         | StatusOutputLineData::UpdateNotice
         | StatusOutputLineData::Connector
+        | StatusOutputLineData::BetweenStacks
         | StatusOutputLineData::CommitMessage
         | StatusOutputLineData::EmptyCommitMessage
         | StatusOutputLineData::File { .. }
@@ -1141,6 +1196,7 @@ pub(super) fn move_operation_display(
             }
             StatusOutputLineData::UpdateNotice
             | StatusOutputLineData::Connector
+            | StatusOutputLineData::BetweenStacks
             | StatusOutputLineData::StagedChanges { .. }
             | StatusOutputLineData::StagedFile { .. }
             | StatusOutputLineData::UnassignedChanges { .. }
@@ -1160,6 +1216,7 @@ pub(super) fn move_operation_display(
             StatusOutputLineData::UpdateNotice
             | StatusOutputLineData::Commit { .. }
             | StatusOutputLineData::Connector
+            | StatusOutputLineData::BetweenStacks
             | StatusOutputLineData::StagedChanges { .. }
             | StatusOutputLineData::StagedFile { .. }
             | StatusOutputLineData::UnassignedChanges { .. }
@@ -1172,6 +1229,31 @@ pub(super) fn move_operation_display(
             | StatusOutputLineData::Hint
             | StatusOutputLineData::NoAssignmentsUnstaged => None,
         },
+    }
+}
+
+pub(super) fn reorder_operation_display(
+    data: &StatusOutputLineData,
+    _mode: &MoveStackMode,
+) -> Option<&'static str> {
+    match data {
+        StatusOutputLineData::BetweenStacks => Some("move stack"),
+        StatusOutputLineData::UpdateNotice
+        | StatusOutputLineData::Connector
+        | StatusOutputLineData::StagedChanges { .. }
+        | StatusOutputLineData::StagedFile { .. }
+        | StatusOutputLineData::UnassignedChanges { .. }
+        | StatusOutputLineData::UnassignedFile { .. }
+        | StatusOutputLineData::Branch { .. }
+        | StatusOutputLineData::Commit { .. }
+        | StatusOutputLineData::CommitMessage
+        | StatusOutputLineData::EmptyCommitMessage
+        | StatusOutputLineData::File { .. }
+        | StatusOutputLineData::MergeBase
+        | StatusOutputLineData::UpstreamChanges
+        | StatusOutputLineData::Warning
+        | StatusOutputLineData::Hint
+        | StatusOutputLineData::NoAssignmentsUnstaged => None,
     }
 }
 
@@ -1193,6 +1275,7 @@ pub(super) fn stack_operation_display(
         }
         StatusOutputLineData::UpdateNotice
         | StatusOutputLineData::Connector
+        | StatusOutputLineData::BetweenStacks
         | StatusOutputLineData::StagedChanges { .. }
         | StatusOutputLineData::StagedFile { .. }
         | StatusOutputLineData::UnassignedChanges { .. }
@@ -1341,4 +1424,9 @@ pub(super) fn ensure_cursor_visible(app: &mut App, visible_height: usize) {
     }
 
     clamp_scroll_top(app, visible_height);
+}
+
+fn cursor_at_end(textarea: &TextArea<'_>) -> bool {
+    let (_, col) = textarea.cursor();
+    col == textarea.lines()[0].chars().count()
 }

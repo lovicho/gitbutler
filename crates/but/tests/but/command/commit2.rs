@@ -1123,3 +1123,203 @@ Hint: You can specify where to commit with `--branch [<BRANCH>]`
 
 "#]]);
 }
+
+#[test]
+fn committing_above_an_empty_branch() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks").unwrap();
+    env.setup_metadata(&[]).unwrap();
+
+    env.file("one", "one content");
+
+    env.but("branch new top").assert().success();
+    env.but("commit2 one -m 'add one' --above top")
+        .assert()
+        .success();
+
+    env.but("status")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [unassigned changes] (no changes)
+┊
+┊╭┄br [a-branch-1]
+┊●   75b9f19 add one
+┊│
+┊├┄to [top] (no commits)
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}
+
+#[test]
+fn committing_below_empty_branch_with_empty_branch_below() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks").unwrap();
+    env.setup_metadata(&[]).unwrap();
+
+    env.file("one", "one content");
+
+    env.but("branch new middle").assert().success();
+    env.but("branch new --anchor middle top").assert().success();
+    env.but("commit2 one -m 'add one' --below top")
+        .assert()
+        .success();
+
+    env.but("status")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [unassigned changes] (no changes)
+┊
+┊╭┄to [top] (no commits)
+┊│
+┊├┄br [a-branch-1]
+┊●   75b9f19 add one
+┊│
+┊├┄mi [middle] (no commits)
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}
+
+#[test]
+fn committing_below_non_top_empty_branch() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks").unwrap();
+    env.setup_metadata(&[]).unwrap();
+
+    env.file("one", "one content");
+    env.file("two", "two content");
+
+    env.but("commit2 one -m 'add one' -b bottom")
+        .assert()
+        .success();
+    env.but("branch new --anchor bottom middle")
+        .assert()
+        .success();
+    env.but("branch new --anchor middle top").assert().success();
+    env.but("commit2 two -m 'add two' --below middle")
+        .assert()
+        .success();
+
+    env.but("status")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [unassigned changes] (no changes)
+┊
+┊╭┄op [top] (no commits)
+┊│
+┊├┄mi [middle] (no commits)
+┊│
+┊├┄br [a-branch-1]
+┊●   af4ddbe add two
+┊│
+┊├┄bo [bottom]
+┊●   75b9f19 add one
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}
+
+#[test]
+fn committing_below_an_empty_branch() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks").unwrap();
+    env.setup_metadata(&[]).unwrap();
+
+    env.file("one", "one content");
+    env.file("two", "two content");
+
+    env.but("branch new top").assert().success();
+
+    env.but("status")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [unassigned changes]
+┊     kl A one
+┊   twop A two
+┊
+┊╭┄to [top] (no commits)
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage them to a branch
+
+"#]]);
+
+    env.but("commit2 one -m 'add one' --below top")
+        .assert()
+        .success();
+
+    env.but("status")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [unassigned changes]
+┊   twop A two
+┊
+┊╭┄to [top] (no commits)
+┊│
+┊├┄br [a-branch-1]
+┊●   75b9f19 add one
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage them to a branch
+
+"#]]);
+
+    env.but("reword a-branch-1 -m bottom").assert().success();
+
+    env.but("commit2 two -m 'add two' --below top")
+        .assert()
+        .success();
+
+    env.but("status")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [unassigned changes] (no changes)
+┊
+┊╭┄op [top] (no commits)
+┊│
+┊├┄br [a-branch-1]
+┊●   af4ddbe add two
+┊│
+┊├┄bo [bottom]
+┊●   75b9f19 add one
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}
+
+#[test]
+fn gives_good_error_when_your_terminal_doesnt_support_input() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks").unwrap();
+    env.setup_metadata(&[]).unwrap();
+
+    env.but("commit2 --interactive")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: Terminal doesn't support interactivity
+
+"#]]);
+}

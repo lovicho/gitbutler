@@ -11,7 +11,7 @@ fn branch_key_from_unassigned_creates_new_branch() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render(None)
+    tui.reload()
         .assert_current_line_eq(str!["╭┄zz [unassigned changes] (no changes)"]);
 
     tui.input_then_render('b')
@@ -94,7 +94,7 @@ fn deleted_branch_name_can_be_reused_without_restoring_old_branch() {
 
     tui.input_then_render('y');
 
-    tui.input_then_render(None)
+    tui.reload()
         .assert_current_line_eq(str!["╭┄zz [unassigned changes] (no changes)"]);
 
     tui.input_then_render('b')
@@ -114,8 +114,7 @@ fn deleted_branch_name_can_be_reused_without_restoring_old_branch() {
         .assert_current_line_eq(str!["┊╭┄g0 [A] (no commits)"]);
 
     let mut tui = tui.recreate();
-    tui.input_then_render(None)
-        .assert_rendered_contains("[A] (no commits)");
+    tui.reload().assert_rendered_contains("[A] (no commits)");
 }
 
 #[test]
@@ -209,4 +208,22 @@ fn inline_branch_reword_preserves_selection_after_reload_with_multiple_branches(
 
     tui.input_then_render((KeyModifiers::SHIFT, KeyCode::Char('J')))
         .assert_current_line_eq(str!["[..] [B]"]);
+}
+
+#[test]
+fn inline_branch_reword_space_before_close_bracket() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack").unwrap();
+    env.setup_metadata(&["A"]).unwrap();
+
+    let mut tui = test_tui(env);
+
+    tui.input_then_render('j');
+
+    // when the insertion point is at the end show a space before `]`
+    tui.input_then_render(KeyCode::Enter)
+        .assert_current_line_eq(str!["┊╭┄g0 [A ]"]);
+
+    // dont show a space when the cursor isn't at the end
+    tui.input_then_render(KeyCode::Left)
+        .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
 }

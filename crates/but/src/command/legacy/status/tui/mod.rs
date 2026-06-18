@@ -40,16 +40,16 @@ use crate::{
             StatusFlags, StatusOutputLine, TuiLaunchOptions, TuiOutcome, TuiRunOptions,
             tui::{
                 backstack::{Backstack, BackstackEntry, RememberToUpdateBackstack},
-                branch_picker::{BranchPicker, BranchPickerMessage},
                 confirm::{Confirm, ConfirmMessage},
                 cursor::{Cursor, is_selectable_in_mode},
                 details::{Details, DetailsMessage, RenderNextChunkResult},
                 event_polling::{CrosstermEventPolling, EventPolling, NoopEventPolling},
                 fps::FpsCounter,
+                fuzzy_picker::{FuzzyPicker, FuzzyPickerMessage},
                 help::{Help, HelpMessage},
                 highlight::Highlights,
                 key_bind::{
-                    KeyBinds, branch_picker_key_binds, confirm_key_binds, default_key_binds,
+                    KeyBinds, confirm_key_binds, default_key_binds, fuzzy_picker_key_binds,
                     help_key_binds, normal_with_marks_key_binds,
                 },
                 marking::{MarkClasses, Markable, Marks},
@@ -57,8 +57,9 @@ use crate::{
                 mode::{
                     CommandMode, CommandModeKind, CommitMessageComposer, CommitMode, CommitSource,
                     DetailsMode, DetailsReturnMode, InlineRewordMode, Mode, ModeDiscriminant,
-                    MoveMode, MoveSource, NormalMode, PickUncommittedMode, RubMode, RubSource,
-                    StackCommitSource, StackMode, UnassignedCommitSource,
+                    MoveMode, MoveSource, MoveStackMode, NormalMode, PickUncommittedMode,
+                    ReorderStackSource, RubMode, RubSource, StackCommitSource, StackMode,
+                    UnassignedCommitSource,
                 },
                 operations::stack_has_assigned_changes,
                 toast::{ToastKind, Toasts},
@@ -69,7 +70,7 @@ use crate::{
     theme::Theme,
     tui::{CrosstermTerminalGuard, HeadlessTerminalGuard, TerminalGuard},
     utils::{
-        DebugAsType, IntermediateChannel, WriteWithUtils, binary_path::current_exe_for_but_exec,
+        DebugAsType, InputOutputChannel, WriteWithUtils, binary_path::current_exe_for_but_exec,
         diff_specs::DiffSpecBuilder,
     },
 };
@@ -79,12 +80,12 @@ use super::{FilesStatusFlag, output::StatusOutputLineData};
 use render::{details_viewport, ensure_cursor_visible, render_app, status_viewport_height};
 
 mod backstack;
-mod branch_picker;
 mod confirm;
 mod cursor;
 mod details;
 mod event_polling;
 mod fps;
+mod fuzzy_picker;
 mod graph_extension;
 mod help;
 mod highlight;
@@ -122,7 +123,7 @@ const WATCHER_SELF_ECHO_SUPPRESSION: Duration = if cfg!(windows) {
 
 pub(super) fn render_tui(
     ctx: &mut Context,
-    out: &mut IntermediateChannel<'_>,
+    out: &mut InputOutputChannel<'_>,
     mode: &OperatingMode,
     flags: StatusFlags,
     status_lines: Vec<StatusOutputLine>,
@@ -155,7 +156,7 @@ pub(super) fn render_tui(
         let (_watcher_handle, received_watcher_event) =
             start_watcher(ctx).context("failed to start filesystem watcher")?;
 
-        let mut terminal_guard = CrosstermTerminalGuard::new(true)?;
+        let mut terminal_guard = CrosstermTerminalGuard::alt_screen(true)?;
         let event_polling = CrosstermEventPolling;
 
         render_loop(
@@ -182,7 +183,7 @@ fn render_loop<T, E>(
     other_messages: &mut Vec<Message>,
     received_watcher_event: Arc<AtomicBool>,
     ctx: &mut Context,
-    out: &mut IntermediateChannel<'_>,
+    out: &mut dyn TuiInputOutputChannel,
     mode: &OperatingMode,
 ) -> anyhow::Result<TuiOutcome>
 where
@@ -228,7 +229,7 @@ fn render_loop_once<T, E>(
     other_messages: &mut Vec<Message>,
     received_watcher_event: &AtomicBool,
     ctx: &mut Context,
-    out: &mut IntermediateChannel<'_>,
+    out: &mut dyn TuiInputOutputChannel,
     mode: &OperatingMode,
 ) -> anyhow::Result<()>
 where
@@ -264,7 +265,7 @@ fn update<T, E>(
     other_messages: &mut Vec<Message>,
     received_watcher_event: &AtomicBool,
     ctx: &mut Context,
-    out: &mut IntermediateChannel<'_>,
+    out: &mut dyn TuiInputOutputChannel,
     mode: &OperatingMode,
 ) -> anyhow::Result<()>
 where
@@ -282,17 +283,11 @@ where
     };
     // poll terminal events
     for event in event_polling.poll(event_poll_timeout)? {
-        let branch_picker = match &app.modal {
-            Some(Modal::BranchPicker { branch_picker, .. }) => Some(&**branch_picker),
+        let picker = match &app.modal {
+            Some(Modal::BranchPicker { picker, .. }) => Some(&**picker),
             Some(Modal::Confirm { .. }) | Some(Modal::Help { .. }) | None => None,
         };
-        event_to_messages(
-            event,
-            app.active_key_binds(),
-            &app.mode,
-            branch_picker,
-            messages,
-        );
+        event_to_messages(event, app.active_key_binds(), &app.mode, picker, messages);
     }
 
     // check for any out of band messages
@@ -439,7 +434,7 @@ enum Modal {
         key_binds: KeyBinds,
     },
     BranchPicker {
-        branch_picker: Box<BranchPicker>,
+        picker: Box<FuzzyPicker<fuzzy_picker::BranchItem>>,
         key_binds: KeyBinds,
     },
     Help {
@@ -535,7 +530,7 @@ impl App {
     fn handle_message<T>(
         &mut self,
         ctx: &mut Context,
-        out: &mut IntermediateChannel<'_>,
+        out: &mut dyn TuiInputOutputChannel,
         mode: &OperatingMode,
         terminal_guard: &mut T,
         messages: &mut Vec<Message>,
@@ -552,7 +547,7 @@ impl App {
     fn try_handle_message<T>(
         &mut self,
         ctx: &mut Context,
-        out: &mut IntermediateChannel<'_>,
+        out: &mut dyn TuiInputOutputChannel,
         mode: &OperatingMode,
         terminal_guard: &mut T,
         messages: &mut Vec<Message>,
@@ -767,17 +762,15 @@ impl App {
                 }
                 modal => self.modal = modal,
             },
-            Message::BranchPicker(branch_picker_message) => match self.modal.take() {
-                Some(Modal::BranchPicker {
-                    branch_picker,
-                    key_binds,
-                }) => {
-                    self.modal = branch_picker
-                        .handle_message(branch_picker_message, messages)?
-                        .map(|branch_picker| Modal::BranchPicker {
-                            branch_picker: Box::new(branch_picker),
-                            key_binds,
-                        });
+            Message::FuzzyPicker(fuzzy_picker_message) => match self.modal.take() {
+                Some(Modal::BranchPicker { picker, key_binds }) => {
+                    self.modal =
+                        picker
+                            .handle_message(fuzzy_picker_message, messages)?
+                            .map(|picker| Modal::BranchPicker {
+                                picker: Box::new(picker),
+                                key_binds,
+                            });
                 }
                 modal => self.modal = modal,
             },
@@ -857,6 +850,8 @@ impl App {
             Message::Stack(stack_message) => match stack_message {
                 StackMessage::Enter => self.handle_stack_enter(ctx)?,
                 StackMessage::Unapply => self.handle_stack_unapply(),
+                StackMessage::MoveStart => self.handle_stack_move_start(),
+                StackMessage::MoveConfirm => self.handle_stack_move_confirm(ctx, messages)?,
             },
         }
 
@@ -892,7 +887,8 @@ impl App {
             | Mode::Commit(..)
             | Mode::Move(..)
             | Mode::Details(..)
-            | Mode::Stack(..) => Some(TuiOutcome::None),
+            | Mode::Stack(..)
+            | Mode::MoveStack(..) => Some(TuiOutcome::None),
             Mode::PickChanges(PickUncommittedMode { marks }) => {
                 let ids = marks
                     .iter()
@@ -1006,6 +1002,7 @@ impl App {
                 | Mode::Commit(..)
                 | Mode::Move(..)
                 | Mode::Stack(..)
+                | Mode::MoveStack(..)
                 | Mode::Details(..) => {}
             },
             BackstackEntry::OpenSplitDetailsView | BackstackEntry::OpenFullScreenDetailsView => {
@@ -1111,6 +1108,7 @@ impl App {
                     | Mode::Command(..)
                     | Mode::Commit(..)
                     | Mode::Move(..)
+                    | Mode::MoveStack(..)
                     | Mode::Stack(..) => DetailsReturnMode::Normal(NormalMode::default()),
                 };
                 *mode = Mode::Details(DetailsMode {
@@ -1141,6 +1139,7 @@ impl App {
             | Mode::Command(..)
             | Mode::Commit(..)
             | Mode::Stack(..)
+            | Mode::MoveStack(..)
             | Mode::Move(..) => {}
         }
     }
@@ -1562,7 +1561,7 @@ impl App {
     fn handle_reload(
         &mut self,
         ctx: &mut Context,
-        out: &mut dyn WriteWithUtils,
+        out: &mut dyn TuiInputOutputChannel,
         mode: &OperatingMode,
         select_after_reload: Option<SelectAfterReload>,
         cause: ReloadCause,
@@ -1995,6 +1994,7 @@ impl App {
             }
             StatusOutputLineData::UpdateNotice
             | StatusOutputLineData::Connector
+            | StatusOutputLineData::BetweenStacks
             | StatusOutputLineData::StagedChanges { .. }
             | StatusOutputLineData::StagedFile { .. }
             | StatusOutputLineData::UnassignedChanges { .. }
@@ -2100,6 +2100,7 @@ impl App {
             }
             StatusOutputLineData::UpdateNotice
             | StatusOutputLineData::Connector
+            | StatusOutputLineData::BetweenStacks
             | StatusOutputLineData::CommitMessage
             | StatusOutputLineData::EmptyCommitMessage
             | StatusOutputLineData::File { .. }
@@ -2200,6 +2201,7 @@ impl App {
             | StatusOutputLineData::Commit { cli_id, .. } => cli_id,
             StatusOutputLineData::UpdateNotice
             | StatusOutputLineData::Connector
+            | StatusOutputLineData::BetweenStacks
             | StatusOutputLineData::StagedChanges { .. }
             | StatusOutputLineData::StagedFile { .. }
             | StatusOutputLineData::UnassignedChanges { .. }
@@ -2441,6 +2443,7 @@ impl App {
             }
             StatusOutputLineData::UpdateNotice
             | StatusOutputLineData::Connector
+            | StatusOutputLineData::BetweenStacks
             | StatusOutputLineData::StagedChanges { .. }
             | StatusOutputLineData::StagedFile { .. }
             | StatusOutputLineData::UnassignedChanges { .. }
@@ -2508,6 +2511,7 @@ impl App {
             StatusOutputLineData::MergeBase => MoveTarget::MergeBase,
             StatusOutputLineData::UpdateNotice
             | StatusOutputLineData::Connector
+            | StatusOutputLineData::BetweenStacks
             | StatusOutputLineData::StagedChanges { .. }
             | StatusOutputLineData::StagedFile { .. }
             | StatusOutputLineData::UnassignedChanges { .. }
@@ -2601,6 +2605,7 @@ impl App {
             | StatusOutputLineData::UnassignedFile { .. } => operations::create_branch_legacy(ctx)?,
             StatusOutputLineData::UpdateNotice
             | StatusOutputLineData::Connector
+            | StatusOutputLineData::BetweenStacks
             | StatusOutputLineData::StagedChanges { .. }
             | StatusOutputLineData::StagedFile { .. }
             | StatusOutputLineData::Commit { .. }
@@ -2907,7 +2912,7 @@ impl App {
     fn handle_command_confirm<T>(
         &mut self,
         terminal_guard: &mut T,
-        out: &mut IntermediateChannel<'_>,
+        out: &mut dyn TuiInputOutputChannel,
         messages: &mut Vec<Message>,
     ) -> anyhow::Result<()>
     where
@@ -2952,8 +2957,8 @@ impl App {
 
         let status = cmd.spawn()?.wait()?;
 
-        if !IN_TEST && let Some(mut input_channel) = out.prepare_for_terminal_input() {
-            input_channel.prompt_single_line("\npress enter to continue...")?;
+        if !IN_TEST {
+            out.prompt_single_line("\npress enter to continue...")?;
         }
 
         if status.success() {
@@ -3069,24 +3074,31 @@ impl App {
                     is_selectable_in_mode(unassigned, &self.mode, self.flags.show_files)
                 });
 
+            let picker_items = if include_unassigned {
+                let mut mapped_items = NonEmpty::new(fuzzy_picker::BranchItem::Unassigned);
+                mapped_items.extend(branch_names.map(fuzzy_picker::BranchItem::Branch));
+                mapped_items
+            } else {
+                branch_names.map(fuzzy_picker::BranchItem::Branch)
+            };
+
             self.modal = Some(Modal::BranchPicker {
-                branch_picker: Box::new(BranchPicker::new(
-                    branch_names,
+                picker: Box::new(FuzzyPicker::new(
+                    picker_items,
                     self.theme,
-                    include_unassigned,
                     |item, messages| {
                         match item {
-                            branch_picker::Item::Branch(branch_name) => {
+                            fuzzy_picker::BranchItem::Branch(branch_name) => {
                                 messages.push(Message::SelectBranch(branch_name));
                             }
-                            branch_picker::Item::Unassigned => {
+                            fuzzy_picker::BranchItem::Unassigned => {
                                 messages.push(Message::SelectUnassigned);
                             }
                         }
                         Ok(())
                     },
                 )),
-                key_binds: branch_picker_key_binds(),
+                key_binds: fuzzy_picker_key_binds(),
             });
         }
 
@@ -3148,6 +3160,7 @@ impl App {
                         | Mode::Commit(..)
                         | Mode::Move(..)
                         | Mode::Details(..)
+                        | Mode::MoveStack(..)
                         | Mode::Stack(..) => {}
                     }
                 }
@@ -3168,6 +3181,7 @@ impl App {
                     | Mode::Commit(..)
                     | Mode::Move(..)
                     | Mode::Details(..)
+                    | Mode::MoveStack(..)
                     | Mode::Stack(..) => {}
                 }
             }
@@ -3304,6 +3318,100 @@ impl App {
         });
     }
 
+    fn handle_stack_move_start(&mut self) {
+        let Some(selection) = self.cursor.selected_line(&self.status_lines) else {
+            return;
+        };
+        let Some(CliId::Branch {
+            name,
+            stack_id: Some(stack),
+            ..
+        }) = selection.data.cli_id().map(|id| &**id)
+        else {
+            return;
+        };
+        self.mode
+            .update_and_push_leave_normal_mode(&mut self.backstack, |mode| {
+                let source = ReorderStackSource {
+                    stack: *stack,
+                    branch: name.to_owned(),
+                };
+                *mode = Mode::MoveStack(MoveStackMode { source });
+            });
+    }
+
+    fn handle_stack_move_confirm(
+        &mut self,
+        ctx: &mut Context,
+        messages: &mut Vec<Message>,
+    ) -> anyhow::Result<()> {
+        let Mode::MoveStack(MoveStackMode { source }) = &*self.mode else {
+            return Ok(());
+        };
+
+        let selection_index = self.cursor.index();
+        let Some(selection) = self.status_lines.get(selection_index) else {
+            return Ok(());
+        };
+
+        if selection
+            .data
+            .cli_id()
+            .is_some_and(|target| source.matches(target))
+        {
+            messages.push(Message::EnterNormalModeAfterConfirmingOperation);
+            return Ok(());
+        }
+
+        if !matches!(selection.data, StatusOutputLineData::BetweenStacks) {
+            return Ok(());
+        }
+
+        let current_stack_order = stack_ids_in_display_order(&self.status_lines);
+        let Some(source_index) = current_stack_order
+            .iter()
+            .position(|stack| *stack == source.stack)
+        else {
+            return Ok(());
+        };
+
+        let target_index = stack_ids_in_display_order(&self.status_lines[..selection_index]).len();
+        let mut new_stack_order = current_stack_order.clone();
+        let source_stack = new_stack_order.remove(source_index);
+        let insert_index = if target_index > source_index {
+            target_index - 1
+        } else {
+            target_index
+        };
+        new_stack_order.insert(insert_index.min(new_stack_order.len()), source_stack);
+
+        if new_stack_order == current_stack_order {
+            messages.push(Message::EnterNormalModeAfterConfirmingOperation);
+            return Ok(());
+        }
+
+        let updates = new_stack_order
+            .into_iter()
+            .enumerate()
+            .map(|(order, stack)| gitbutler_branch::BranchUpdateRequest {
+                id: Some(stack),
+                order: Some(order),
+            })
+            .collect();
+
+        but_api::legacy::virtual_branches::update_stack_order(ctx, updates)?;
+
+        messages.extend([
+            Message::EnterNormalModeAfterConfirmingOperation,
+            Message::Reload(
+                Some(SelectAfterReload::Branch(source.branch.clone())),
+                ReloadCause::Mutation,
+            ),
+        ]);
+
+        Ok(())
+    }
+
     fn restore_to_target_snapshot(
         &mut self,
         kind: UndoOrRedo,
@@ -3381,11 +3489,11 @@ enum UndoOrRedo {
     Redo,
 }
 
-fn event_to_messages(
+fn event_to_messages<T>(
     ev: Event,
     key_binds: &KeyBinds,
     mode: &Mode,
-    branch_picker: Option<&BranchPicker>,
+    picker: Option<&FuzzyPicker<T>>,
     messages: &mut Vec<Message>,
 ) {
     match ev {
@@ -3400,8 +3508,8 @@ fn event_to_messages(
             }
 
             if !handled {
-                if branch_picker.is_some() {
-                    messages.push(Message::BranchPicker(BranchPickerMessage::Input(ev)));
+                if picker.is_some() {
+                    messages.push(Message::FuzzyPicker(FuzzyPickerMessage::Input(ev)));
                 } else {
                     match mode {
                         Mode::InlineReword(..) => {
@@ -3416,6 +3524,7 @@ fn event_to_messages(
                         | Mode::Commit(..)
                         | Mode::Stack(..)
                         | Mode::PickChanges(..)
+                        | Mode::MoveStack(..)
                         | Mode::Move(..) => {}
                     }
                 }
@@ -3437,6 +3546,7 @@ fn event_to_messages(
             | Mode::Commit(..)
             | Mode::Stack(..)
             | Mode::PickChanges(..)
+            | Mode::MoveStack(..)
             | Mode::Move(..) => {
                 messages.push(Message::JustRender);
             }
@@ -3513,6 +3623,7 @@ fn handle_mark_cli_id(commit: &CliId, mode: &mut Mode) -> bool {
         | Mode::Commit(..)
         | Mode::Move(..)
         | Mode::Stack(..)
+        | Mode::MoveStack(..)
         | Mode::Details(..) => {
             return false;
         }
@@ -3555,6 +3666,7 @@ fn line_uses_top_stack_for_stack_mode(line: &StatusOutputLine) -> bool {
         }
         StatusOutputLineData::UpdateNotice
         | StatusOutputLineData::Connector
+        | StatusOutputLineData::BetweenStacks
         | StatusOutputLineData::StagedChanges { .. }
         | StatusOutputLineData::Branch { .. }
         | StatusOutputLineData::Commit { .. }
@@ -3566,6 +3678,22 @@ fn line_uses_top_stack_for_stack_mode(line: &StatusOutputLine) -> bool {
         | StatusOutputLineData::Hint
         | StatusOutputLineData::NoAssignmentsUnstaged => false,
     }
+}
+
+fn stack_ids_in_display_order(status_lines: &[StatusOutputLine]) -> Vec<StackId> {
+    let mut stack_ids = Vec::new();
+    for line in status_lines {
+        if let StatusOutputLineData::Branch { cli_id } = &line.data
+            && let CliId::Branch {
+                stack_id: Some(stack_id),
+                ..
+            } = &**cli_id
+            && !stack_ids.contains(stack_id)
+        {
+            stack_ids.push(*stack_id);
+        }
+    }
+    stack_ids
 }
 
 fn stack_id_for_line(
@@ -3581,6 +3709,7 @@ fn stack_id_for_line(
         StatusOutputLineData::Commit { stack_id, .. } => *stack_id,
         StatusOutputLineData::UpdateNotice
         | StatusOutputLineData::Connector
+        | StatusOutputLineData::BetweenStacks
         | StatusOutputLineData::UnassignedChanges { .. }
         | StatusOutputLineData::CommitMessage
         | StatusOutputLineData::EmptyCommitMessage
@@ -3617,6 +3746,7 @@ fn stack_id_for_cli_id(cli_id: &CliId, status_lines: &[StatusOutputLine]) -> Opt
                 },
                 StatusOutputLineData::UpdateNotice
                 | StatusOutputLineData::Connector
+                | StatusOutputLineData::BetweenStacks
                 | StatusOutputLineData::StagedChanges { .. }
                 | StatusOutputLineData::StagedFile { .. }
                 | StatusOutputLineData::UnassignedChanges { .. }
@@ -3643,6 +3773,7 @@ fn handle_mark_unassigned(marks: &mut Marks, status_lines: &[StatusOutputLine]) 
         StatusOutputLineData::UnassignedFile { cli_id } => Markable::try_from_cli_id(cli_id),
         StatusOutputLineData::UpdateNotice
         | StatusOutputLineData::Connector
+        | StatusOutputLineData::BetweenStacks
         | StatusOutputLineData::StagedChanges { .. }
         | StatusOutputLineData::StagedFile { .. }
         | StatusOutputLineData::UnassignedChanges { .. }
@@ -3757,7 +3888,7 @@ enum Message {
     Stack(StackMessage),
     Details(DetailsMessage),
     DetailsLayout(DetailsLayoutMessage),
-    BranchPicker(BranchPickerMessage),
+    FuzzyPicker(FuzzyPickerMessage),
     Help(HelpMessage),
     NewBranch,
     ToggleHelp,
@@ -3874,6 +4005,8 @@ enum MoveMessage {
 enum StackMessage {
     Enter,
     Unapply,
+    MoveStart,
+    MoveConfirm,
 }
 
 #[derive(Debug, Clone)]
@@ -3988,4 +4121,27 @@ fn app_settings_sync() -> anyhow::Result<AppSettingsWithDiskSync> {
         )
     })?;
     AppSettingsWithDiskSync::new_with_customization(config_dir, None)
+}
+
+mod private {
+    pub trait Sealed {}
+    impl Sealed for crate::utils::InputOutputChannel<'_> {}
+}
+
+/// Required to abstract over input/output channels for the TUI.
+///
+/// In production we want to require `InputOutputChannel`. This means the caller must check that
+/// input is actually supported and return an error otherwise. However in tests we don't want to
+/// enforce that.
+///
+/// So this trait exists such that we can make a fake to use in tests that panics on
+/// `prompt_single_line`.
+pub trait TuiInputOutputChannel: WriteWithUtils + private::Sealed {
+    fn prompt_single_line(&mut self, prompt: &str) -> anyhow::Result<Option<String>>;
+}
+
+impl TuiInputOutputChannel for InputOutputChannel<'_> {
+    fn prompt_single_line(&mut self, prompt: &str) -> anyhow::Result<Option<String>> {
+        InputOutputChannel::prompt_single_line(self, prompt)
+    }
 }

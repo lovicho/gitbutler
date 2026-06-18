@@ -191,7 +191,11 @@ fn resolve(
         };
         (guard, CommitSelection::Changes(Box::new(changes)))
     } else if interactive {
-        let (guard, outcome) = tui_with_options(ctx, guard, out, TuiRunOptions::PickChanges)?;
+        let Some(mut inout) = out.prepare_for_terminal_input() else {
+            return Err(bad_input("Terminal doesn't support interactivity").into());
+        };
+        let (guard, outcome) =
+            tui_with_options(ctx, guard, &mut inout, TuiRunOptions::PickChanges)?;
         let cli_ids = match outcome {
             TuiOutcome::CliIds(cli_ids) => cli_ids,
             TuiOutcome::None => {
@@ -404,7 +408,7 @@ fn route_commit_operation(
                     .into());
                 };
 
-                let Some(input) = out.prepare_for_terminal_input() else {
+                let Some(mut input) = out.prepare_for_terminal_input() else {
                     return Err(
                         bad_input("Unclear where to commit. Found more than one stack")
                             .hint("You can specify where to commit with `--branch [<BRANCH>]`")

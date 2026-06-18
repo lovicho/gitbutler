@@ -15,11 +15,14 @@ use crate::{
     command::legacy::status::{
         StatusFlags, StatusOutput, StatusRenderMode, TuiLaunchOptions, TuiOutcome, TuiRunOptions,
         build_status_context, build_status_output,
-        tui::{App, BackstackEntry, EventPolling, Message, ReloadCause, render_loop_once},
+        tui::{
+            App, BackstackEntry, EventPolling, Message, ReloadCause, TuiInputOutputChannel,
+            render_loop_once,
+        },
     },
     theme,
     tui::TerminalGuard,
-    utils::{IntermediateChannel, OutputChannel},
+    utils::{OutputChannel, WriteWithUtils},
 };
 
 pub(super) struct TestTui {
@@ -128,14 +131,19 @@ impl TestTui {
     }
 
     #[track_caller]
-    pub(super) fn input_then_render<E>(&mut self, event: E) -> TestTuiInputThenRenderResult<'_>
-    where
-        E: EventPolling,
-    {
+    pub(super) fn reload(&mut self) -> TestTuiInputThenRenderResult<'_> {
         self.render_with_messages(
-            event,
+            None,
             Vec::from([Message::Reload(None, ReloadCause::Mutation)]),
         )
+    }
+
+    #[track_caller]
+    pub(super) fn input_then_render<E>(&mut self, event: E) -> TestTuiInputThenRenderResult<'_>
+    where
+        E: InputEventPolling,
+    {
+        self.render_with_messages(event, Vec::new())
     }
 
     #[track_caller]
@@ -152,7 +160,7 @@ impl TestTui {
 
         with_var("GIT_AUTHOR_DATE", Some("2000-01-01T00:00:00Z"), || {
             with_var("GIT_COMMITTER_DATE", Some("2000-01-01T00:00:00Z"), || {
-                let mut out = IntermediateChannel::new(&mut self.out);
+                let mut out = TestTuiInputOutputChannel(&mut self.out);
                 render_loop_once(
                     &mut self.app,
                     &mut self.terminal,
@@ -202,7 +210,7 @@ impl Drop for TestTui {
         // cargo discards the test output. This makes it easier to debug test failures because so
         // much of it depends on getting the cursor on the right line.
 
-        let render_result = self.input_then_render(None);
+        let render_result = TestTuiInputThenRenderResult(self);
         let selected_row = render_result.selected_row().map(|row| row as usize);
 
         eprintln!("\nCurrent terminal state:");
@@ -935,6 +943,15 @@ impl EventPolling for Option<Event> {
     }
 }
 
+pub(super) trait InputEventPolling: EventPolling {}
+
+impl<const N: usize, T> InputEventPolling for [T; N] where
+    T: InputEventPolling + EventPolling<Error = Infallible>
+{
+}
+
+impl InputEventPolling for KeyCode {}
+
 impl EventPolling for KeyCode {
     type Error = Infallible;
 
@@ -947,6 +964,8 @@ impl EventPolling for KeyCode {
         })])
     }
 }
+
+impl InputEventPolling for (KeyModifiers, KeyCode) {}
 
 impl EventPolling for (KeyModifiers, KeyCode) {
     type Error = Infallible;
@@ -961,6 +980,8 @@ impl EventPolling for (KeyModifiers, KeyCode) {
     }
 }
 
+impl InputEventPolling for char {}
+
 impl EventPolling for char {
     type Error = Infallible;
 
@@ -968,6 +989,8 @@ impl EventPolling for char {
         KeyCode::Char(self).poll(timeout)
     }
 }
+
+impl InputEventPolling for &str {}
 
 impl EventPolling for &str {
     type Error = Infallible;
@@ -981,5 +1004,31 @@ impl EventPolling for &str {
                 state: KeyEventState::NONE,
             })
         }))
+    }
+}
+
+struct TestTuiInputOutputChannel<'a>(&'a mut OutputChannel);
+
+impl crate::command::legacy::status::tui::private::Sealed for TestTuiInputOutputChannel<'_> {}
+
+impl std::fmt::Write for TestTuiInputOutputChannel<'_> {
+    fn write_str(&mut self, s: &str) -> std::fmt::Result {
+        self.0.write_str(s)
+    }
+}
+
+impl WriteWithUtils for TestTuiInputOutputChannel<'_> {
+    fn truncate_if_unpaged(&self, text: &str, max_width: usize) -> String {
+        self.0.truncate_if_unpaged(text, max_width)
+    }
+
+    fn is_paged(&self) -> bool {
+        self.0.is_paged()
+    }
+}
+
+impl TuiInputOutputChannel for TestTuiInputOutputChannel<'_> {
+    fn prompt_single_line(&mut self, _prompt: &str) -> anyhow::Result<Option<String>> {
+        panic!("cannot get input in tests")
     }
 }

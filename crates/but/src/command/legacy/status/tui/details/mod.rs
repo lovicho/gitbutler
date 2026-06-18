@@ -161,7 +161,7 @@ impl Details {
             | Message::ShowError(_)
             | Message::ShowToast { .. }
             | Message::Confirm(_)
-            | Message::BranchPicker(_)
+            | Message::FuzzyPicker(_)
             | Message::GrowDetails
             | Message::ShrinkDetails
             | Message::PickAndGotoBranch
@@ -243,6 +243,7 @@ impl Details {
                     true
                 }
                 StackMessage::Unapply => true,
+                StackMessage::MoveStart | StackMessage::MoveConfirm => false,
             },
 
             Message::AndThen { .. } => true,

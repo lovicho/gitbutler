@@ -6,6 +6,7 @@ use nonempty::NonEmpty;
 
 use crate::{
     args::OutputFormat,
+    tui::{self, PickerOptions},
     utils::{
         json_pretty_to_stdout,
         pager::{self, Pager},
@@ -142,7 +143,7 @@ impl WriteWithUtils for OutputChannel {
         if self.pager.is_some() || !self.format.allows_truncation() {
             text.to_owned()
         } else {
-            crate::tui::text::truncate_text(text, max_width).into_owned()
+            tui::text::truncate_text(text, max_width).into_owned()
         }
     }
 
@@ -195,7 +196,7 @@ impl OutputChannel {
 
 /// User input
 impl OutputChannel {
-    /// Return `true` if external prompt support like [`Selection`](cli_prompts::prompts::Selection) can be used,
+    /// Return `true` if external prompt support like [`InputOutputChannel::prompt_select`] can be used,
     /// and the output format permits prompts.
     ///
     /// Note that this is implied to be true if [Self::prepare_for_terminal_input()] returns `Some()`.
@@ -306,6 +307,16 @@ impl std::fmt::Write for InputOutputChannel<'_> {
             .stdout
             .write_all(s.as_bytes())
             .map_err(|_| std::fmt::Error)
+    }
+}
+
+impl WriteWithUtils for InputOutputChannel<'_> {
+    fn truncate_if_unpaged(&self, text: &str, max_width: usize) -> String {
+        self.out.truncate_if_unpaged(text, max_width)
+    }
+
+    fn is_paged(&self) -> bool {
+        self.out.is_paged()
     }
 }
 
@@ -499,24 +510,53 @@ impl InputOutputChannel<'_> {
         }
     }
 
-    #[cfg_attr(not(feature = "but-2"), expect(dead_code))]
     pub fn prompt_select<'a, Key, Value>(
-        &self,
-        prompt: &str,
+        &mut self,
+        prompt: impl AsRef<str>,
         items: &'a NonEmpty<(Key, Value)>,
     ) -> anyhow::Result<Option<&'a Value>>
     where
         Key: std::fmt::Display,
     {
-        let Some(selection) = dialoguer::Select::new()
-            .with_prompt(prompt)
-            .default(0)
-            .items(items.iter().map(|(key, _)| key))
-            .interact_on_opt(&dialoguer::console::Term::stdout())?
+        let Some(picks) = tui::run_picker(
+            self,
+            prompt.as_ref(),
+            items,
+            PickerOptions {
+                allow_multiple: false,
+            },
+        )?
         else {
             return Ok(None);
         };
-        Ok(Some(&items[selection].1))
+
+        match &picks[..] {
+            [] => Ok(None),
+            [pick] => Ok(Some(pick)),
+            _ => {
+                anyhow::bail!(
+                    "the picker was configured to not allow multiple picks, yet multiple picks were returned"
+                )
+            }
+        }
+    }
+
+    pub fn prompt_multi_select<'a, Key, Value>(
+        &mut self,
+        prompt: impl AsRef<str>,
+        items: &'a NonEmpty<(Key, Value)>,
+    ) -> anyhow::Result<Option<Vec<&'a Value>>>
+    where
+        Key: std::fmt::Display,
+    {
+        tui::run_picker(
+            self,
+            prompt.as_ref(),
+            items,
+            PickerOptions {
+                allow_multiple: true,
+            },
+        )
     }
 }
 
