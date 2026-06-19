@@ -1,11 +1,9 @@
 import {
 	absorptionPlanQueryOptions,
 	headInfoQueryOptions,
-	listBranchesQueryOptions,
 	listProjectsQueryOptions,
 } from "#ui/api/queries.ts";
 import {
-	useApplyBranch,
 	useBranchCheckoutNew,
 	useBranchCreate,
 	useWorkspaceIntegrateUpstream,
@@ -27,19 +25,11 @@ import {
 	selectProjectOutlineModeState,
 } from "#ui/projects/state.ts";
 import { getButtonClassName } from "#ui/components/Button.tsx";
-import { Kbd } from "#ui/components/Kbd.tsx";
-import { globalHotkeys, workspaceHotkeys, type CommandGroup } from "#ui/hotkeys.ts";
+import { globalHotkeys, workspaceHotkeys } from "#ui/hotkeys.ts";
 import { stackBottomRelativeTo } from "#ui/api/stack.ts";
 import { type AppThunk, useAppDispatch, useAppSelector } from "#ui/store.ts";
-import { BottomUpdate, BranchListing, RefInfo, Segment, Stack } from "@gitbutler/but-sdk";
-import {
-	getHotkeyManager,
-	getSequenceManager,
-	Hotkey,
-	HotkeySequence,
-	useHotkeys,
-	useHotkeyRegistrations,
-} from "@tanstack/react-hotkeys";
+import { BottomUpdate, RefInfo, Segment } from "@gitbutler/but-sdk";
+import { useHotkeys } from "@tanstack/react-hotkeys";
 import {
 	QueryErrorResetBoundary,
 	useIsFetching,
@@ -49,7 +39,7 @@ import {
 	useSuspenseQuery,
 } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
-import { Match, Order } from "effect";
+import { Match } from "effect";
 import { type FC, Component, ReactNode, useDeferredValue } from "react";
 import {
 	branchOperand,
@@ -62,7 +52,6 @@ import {
 	stackOperand,
 	type BranchOperand,
 } from "#ui/operands.ts";
-import { PickerDialog, type PickerDialogGroup } from "#ui/components/PickerDialog.tsx";
 import { Details } from "./Details.tsx";
 import styles from "./WorkspacePage.module.css";
 import { OutlineTree } from "#ui/routes/project/$id/workspace/OutlineTree.tsx";
@@ -75,6 +64,9 @@ import { buildIndexByKey, NavigationIndex } from "#ui/workspace/navigation-index
 import { reverse } from "effect/Array";
 import { getOperations } from "#ui/operations/operation.ts";
 import { ToggleGroupStyles, ToggleStyles } from "#ui/components/ToggleGroup.tsx";
+import { ApplyBranchPicker } from "./ApplyBranchPicker.tsx";
+import { BranchPicker } from "./BranchPicker.tsx";
+import { CommandPalette } from "./CommandPalette.tsx";
 
 const toggleFiles =
 	({
@@ -94,221 +86,6 @@ const toggleFiles =
 
 		dispatch(projectActions.toggleFiles({ projectId }));
 	};
-
-type CommandPaletteItem = {
-	group: CommandGroup;
-	id: string;
-	name: string;
-	hotkey: Hotkey | HotkeySequence;
-	type: "hotkey" | "sequence";
-};
-
-const groupCommandPaletteItems = (
-	items: Array<CommandPaletteItem>,
-): Array<PickerDialogGroup<CommandPaletteItem>> => {
-	const grouped = Map.groupBy(items, (item) => item.group);
-
-	return Array.from(grouped.entries())
-		.toSorted(Order.mapInput(Order.string, ([group]) => group))
-		.map(([group, items]) => ({
-			value: group,
-			items: items.toSorted(Order.mapInput(Order.string, (item) => item.name)),
-		}));
-};
-
-const CommandPalette: FC<{
-	open: boolean;
-	onOpenChange: (open: boolean) => void;
-}> = ({ open, onOpenChange }) => {
-	const { hotkeys, sequences } = useHotkeyRegistrations();
-	const hotkeyItems: Array<CommandPaletteItem> = [
-		...hotkeys.flatMap((hotkey): CommandPaletteItem | [] =>
-			hotkey.options.enabled !== false && hotkey.options.meta?.name !== undefined
-				? {
-						group: hotkey.options.meta.group,
-						id: hotkey.id,
-						name: hotkey.options.meta.name,
-						hotkey: hotkey.hotkey,
-						type: "hotkey",
-					}
-				: [],
-		),
-		...sequences.flatMap((sequence): CommandPaletteItem | [] =>
-			sequence.options.enabled !== false && sequence.options.meta?.name !== undefined
-				? {
-						group: sequence.options.meta.group,
-						id: sequence.id,
-						name: sequence.options.meta.name,
-						hotkey: sequence.sequence,
-						type: "sequence",
-					}
-				: [],
-		),
-	];
-	const items = groupCommandPaletteItems(hotkeyItems);
-
-	const runHotkey = (item: CommandPaletteItem) => {
-		onOpenChange(false);
-		if (item.type === "hotkey") getHotkeyManager().triggerRegistration(item.id);
-		else getSequenceManager().triggerSequence(item.id);
-	};
-
-	return (
-		<PickerDialog
-			ariaLabel="Command palette"
-			closeLabel="Close command palette"
-			emptyLabel="No hotkeys found."
-			getItemKey={(x) => x.id}
-			getItemLabel={(x) => x.name}
-			getItemType={(x) => <Kbd hotkey={x.hotkey} />}
-			items={items}
-			open={open}
-			onOpenChange={onOpenChange}
-			onSelectItem={runHotkey}
-			placeholder="Search hotkeys…"
-		/>
-	);
-};
-
-type BranchPickerOption = {
-	id: string;
-	label: string;
-	branch: BranchOperand;
-};
-
-const segmentToBranchPickerOption = ({
-	segment,
-	stackId,
-}: {
-	segment: Segment;
-	stackId: string;
-}): BranchPickerOption | null => {
-	const refName = segment.refName;
-	if (!refName) return null;
-
-	return {
-		id: JSON.stringify([stackId, refName.fullNameBytes]),
-		label: refName.displayName,
-		branch: { stackId, branchRef: refName.fullNameBytes },
-	};
-};
-
-const stackToBranchPickerOptions = (stack: Stack): Array<BranchPickerOption> => {
-	// oxlint-disable-next-line typescript/no-non-null-assertion -- [ref:stack-id-required]
-	const stackId = stack.id!;
-	return stack.segments.flatMap((segment): Array<BranchPickerOption> => {
-		const option = segmentToBranchPickerOption({ segment, stackId });
-		return option ? [option] : [];
-	});
-};
-
-const BranchPicker: FC<{
-	open: boolean;
-	onOpenChange: (open: boolean) => void;
-	onSelectBranch: (branch: BranchOperand) => void;
-}> = ({ open, onOpenChange, onSelectBranch }) => {
-	const { id: projectId } = useParams({ from: "/project/$id/workspace" });
-	const { data: headInfo } = useQuery(headInfoQueryOptions(projectId));
-	const selectBranch = (option: BranchPickerOption) => {
-		onOpenChange(false);
-		onSelectBranch(option.branch);
-	};
-
-	return (
-		<PickerDialog
-			ariaLabel="Select branch"
-			closeLabel="Close branch picker"
-			emptyLabel="No results found."
-			getItemKey={(x) => x.id}
-			getItemLabel={(x) => x.label}
-			getItemType={() => "Branch"}
-			itemToStringValue={(x) => x.label}
-			items={[
-				{
-					value: "Branches",
-					items: headInfo?.stacks.flatMap(stackToBranchPickerOptions) ?? [],
-				},
-			]}
-			open={open}
-			onOpenChange={onOpenChange}
-			onSelectItem={selectBranch}
-			placeholder="Search for branches…"
-		/>
-	);
-};
-
-type ApplyBranchPickerOption = {
-	branchRef: string;
-	label: string;
-	type: string;
-};
-
-const branchListingToApplyBranchPickerOptions = (
-	branch: BranchListing,
-): Array<ApplyBranchPickerOption> => {
-	if (branch.hasLocal)
-		return [
-			{
-				branchRef: `refs/heads/${branch.name}`,
-				label: branch.name,
-				type: "Local",
-			},
-		];
-
-	return branch.remotes.map((remote) => ({
-		branchRef: `refs/remotes/${remote}/${branch.name}`,
-		label: branch.name,
-		type: remote,
-	}));
-};
-
-const ApplyBranchPicker: FC<{
-	open: boolean;
-	onOpenChange: (open: boolean) => void;
-	projectId: string;
-}> = ({ open, onOpenChange, projectId }) => {
-	const branchesQuery = useQuery(
-		listBranchesQueryOptions({ projectId, filter: { local: null, applied: false } }),
-	);
-	const items = (branchesQuery.data ?? []).flatMap(branchListingToApplyBranchPickerOptions);
-	const applyBranch = useApplyBranch();
-	const statusLabel =
-		items.length === 0
-			? branchesQuery.isPending
-				? "Loading branches…"
-				: branchesQuery.isError
-					? "Unable to load branches."
-					: undefined
-			: undefined;
-
-	const selectBranch = (option: ApplyBranchPickerOption) => {
-		onOpenChange(false);
-		applyBranch.mutate({ projectId, existingBranch: option.branchRef });
-	};
-
-	return (
-		<PickerDialog
-			ariaLabel="Apply branch"
-			closeLabel="Close apply branch picker"
-			emptyLabel="No available branches found."
-			getItemKey={(x) => x.branchRef}
-			getItemLabel={(x) => x.label}
-			getItemType={(x) => x.type}
-			itemToStringValue={(x) => x.label}
-			items={[
-				{
-					value: "Available branches",
-					items: (branchesQuery.data ?? []).flatMap(branchListingToApplyBranchPickerOptions),
-				},
-			]}
-			open={open}
-			onOpenChange={onOpenChange}
-			onSelectItem={selectBranch}
-			placeholder="Search for branches to apply…"
-			statusLabel={statusLabel}
-		/>
-	);
-};
 
 const useWorkspaceHotkeys = (projectId: string) => {
 	const dispatch = useAppDispatch();

@@ -1,4 +1,4 @@
-import { renameBranchInHeadInfo, resolveRelativeTo } from "#ui/api/ref-info.ts";
+import { findCommitStackId, renameBranchInHeadInfo, resolveRelativeTo } from "#ui/api/ref-info.ts";
 import {
 	changesInWorktreeQueryOptions,
 	getReviewQueryOptions,
@@ -11,7 +11,7 @@ import {
 	discardChangesToastOptions,
 	rejectedChangesToastOptions,
 } from "#ui/operations/toastOptions.tsx";
-import { type BranchOperand } from "#ui/operands.ts";
+import { commitOperand, type BranchOperand } from "#ui/operands.ts";
 import { projectActions } from "#ui/projects/state.ts";
 import { type AppDispatch, useAppDispatch } from "#ui/store.ts";
 import { Toast } from "@base-ui/react";
@@ -69,11 +69,19 @@ export const useAbsorb = ({ projectId }: { projectId: string }) => {
 	});
 };
 
-export const useApplyBranch = () => {
+export const useApply = () => {
 	const toastManager = Toast.useToastManager();
 
 	return useMutation({
 		mutationFn: window.lite.apply,
+		onSuccess: async (response) => {
+			if (response.appliedBranches.length === 0)
+				toastManager.add({
+					title: "Branch is already applied or conflicts with the workspace",
+					description: "No branches were applied.",
+					priority: "high",
+				});
+		},
 		onError: (error) => {
 			// oxlint-disable-next-line no-console
 			console.error(error);
@@ -375,6 +383,15 @@ export const useCommitInsertBlank = () => {
 		mutationFn: window.lite.commitInsertBlank,
 		onSuccess: async (response, input, _context, mutation) => {
 			syncCoreCaches(mutation.client, dispatch, input.projectId, response);
+
+			const stackId = findCommitStackId(response.workspace.headInfo, response.newCommit);
+			if (stackId !== null)
+				dispatch(
+					projectActions.selectOutline({
+						projectId: input.projectId,
+						selection: commitOperand({ stackId, commitId: response.newCommit }),
+					}),
+				);
 		},
 		onError: (error) => {
 			// oxlint-disable-next-line no-console
