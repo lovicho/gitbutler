@@ -2067,7 +2067,7 @@ impl App {
                 };
                 CommitMode {
                     source: Arc::new(source),
-                    insert_side: InsertSide::Above,
+                    insert_side: InsertSide::Below,
                     scope_to_stack: None,
                     message_composer: CommitMessageComposer::default(),
                 }
@@ -2081,7 +2081,7 @@ impl App {
                 };
                 CommitMode {
                     source: Arc::new(source),
-                    insert_side: InsertSide::Above,
+                    insert_side: InsertSide::Below,
                     scope_to_stack: cli_id.stack_id(),
                     message_composer: CommitMessageComposer::default(),
                 }
@@ -2104,7 +2104,7 @@ impl App {
                 };
                 CommitMode {
                     scope_to_stack,
-                    insert_side: InsertSide::Above,
+                    insert_side: InsertSide::Below,
                     message_composer: CommitMessageComposer::default(),
                     source: Arc::new(source),
                 }
@@ -2130,7 +2130,7 @@ impl App {
                 };
                 CommitMode {
                     source: Arc::new(source),
-                    insert_side: InsertSide::Above,
+                    insert_side: InsertSide::Below,
                     scope_to_stack,
                     message_composer: CommitMessageComposer::default(),
                 }
@@ -2195,7 +2195,7 @@ impl App {
             .update_and_push_leave_normal_mode(&mut self.backstack, |mode| {
                 *mode = Mode::Commit(CommitMode {
                     source,
-                    insert_side: InsertSide::Above,
+                    insert_side: InsertSide::Below,
                     scope_to_stack: None,
                     message_composer: CommitMessageComposer::default(),
                 });
@@ -2432,6 +2432,27 @@ impl App {
     }
 
     fn handle_commit_to_new_branch(&mut self, messages: &mut Vec<Message>) {
+        let Some(selection) = self.cursor.selected_line(&self.status_lines) else {
+            return;
+        };
+        match &selection.data {
+            StatusOutputLineData::UnassignedFile { .. } | StatusOutputLineData::Branch { .. } => {}
+            StatusOutputLineData::UpdateNotice
+            | StatusOutputLineData::Connector
+            | StatusOutputLineData::BetweenStacks
+            | StatusOutputLineData::StagedChanges { .. }
+            | StatusOutputLineData::StagedFile { .. }
+            | StatusOutputLineData::UnassignedChanges { .. }
+            | StatusOutputLineData::Commit { .. }
+            | StatusOutputLineData::CommitMessage
+            | StatusOutputLineData::EmptyCommitMessage
+            | StatusOutputLineData::File { .. }
+            | StatusOutputLineData::MergeBase
+            | StatusOutputLineData::UpstreamChanges
+            | StatusOutputLineData::Warning
+            | StatusOutputLineData::Hint
+            | StatusOutputLineData::NoAssignmentsUnstaged => return,
+        }
         messages.push(Message::NewBranch.and_then(Message::Commit(CommitMessage::Confirm)));
     }
 
