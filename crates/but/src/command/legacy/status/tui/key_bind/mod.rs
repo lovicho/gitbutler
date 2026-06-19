@@ -41,14 +41,17 @@ pub(super) fn default_key_binds() -> KeyBinds {
                 builder.commit_confirm().register();
                 builder.commit_empty_message().register();
                 builder.commit_reword_inline().register();
+                builder.commit_toggle_insert_side().register();
                 builder.commit_to_new_branch().register();
                 register_non_mode_specific_key_binds(&mut builder, WithFocusDetails::No);
             }
             ModeDiscriminant::Move => {
                 builder.move_confirm().register();
+                builder.move_toggle_insert_side().register();
                 register_non_mode_specific_key_binds(&mut builder, WithFocusDetails::No);
             }
             ModeDiscriminant::Stack => {
+                builder.apply().register();
                 builder.unapply().register();
                 builder.reorder().register();
                 register_non_mode_specific_key_binds(&mut builder, WithFocusDetails::No);
@@ -588,6 +591,15 @@ impl KeyBindsBuilder<'_> {
         .long_description("Move selection somewhere else")
     }
 
+    fn move_toggle_insert_side(&mut self) -> KeyBindsInModesBuilder<'_> {
+        self.key_bind(
+            "above/below",
+            press().code(KeyCode::Char('a')),
+            Message::Move(MoveMessage::ToggleInsertSide),
+        )
+        .long_description("Toggle moving above or below")
+    }
+
     fn branch(&mut self) -> KeyBindsInModesBuilder<'_> {
         self.key_bind(
             "branch",
@@ -776,6 +788,15 @@ impl KeyBindsBuilder<'_> {
         )
     }
 
+    fn commit_toggle_insert_side(&mut self) -> KeyBindsInModesBuilder<'_> {
+        self.key_bind(
+            "above/below",
+            press().code(KeyCode::Char('a')),
+            Message::Commit(CommitMessage::ToggleInsertSide),
+        )
+        .long_description("Toggle committing above or below")
+    }
+
     fn commit_empty_message(&mut self) -> KeyBindsInModesBuilder<'_> {
         self.key_bind(
             "empty message",
@@ -813,6 +834,15 @@ impl KeyBindsBuilder<'_> {
             press().code(KeyCode::Enter),
             Message::Move(MoveMessage::Confirm),
         )
+    }
+
+    fn apply(&mut self) -> KeyBindsInModesBuilder<'_> {
+        self.key_bind(
+            "apply",
+            press().code(KeyCode::Char('a')),
+            Message::Stack(StackMessage::ShowApplyPicker),
+        )
+        .long_description("Apply stack")
     }
 
     fn unapply(&mut self) -> KeyBindsInModesBuilder<'_> {
@@ -926,7 +956,11 @@ fn register_normal_mode_key_binds(builder: &mut KeyBindsBuilder<'_>, without_mar
 
     if without_marks {
         builder.new_commit().register();
-        builder.move_mode().register();
+    }
+
+    builder.move_mode().register();
+
+    if without_marks {
         builder.branch().register();
         builder.stack().register();
     }

@@ -6,7 +6,7 @@ use std::{
     process::Command,
     rc::Rc,
     sync::{Arc, atomic::AtomicBool, mpsc::Receiver},
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime},
 };
 
 use anyhow::Context as _;
@@ -20,6 +20,7 @@ use but_settings::AppSettingsWithDiskSync;
 use but_transaction::DynamicOutcome;
 use but_workspace::commit::squash_commits::MessageCombinationStrategy;
 use crossterm::event::{self, Event, KeyCode, KeyEvent};
+use gitbutler_branch_actions::BranchListingFilter;
 use gitbutler_operating_modes::OperatingMode;
 use gitbutler_oplog::entry::{OperationKind, SnapshotDetails};
 use gix::{
@@ -45,7 +46,9 @@ use crate::{
                 details::{Details, DetailsMessage, RenderNextChunkResult},
                 event_polling::{CrosstermEventPolling, EventPolling, NoopEventPolling},
                 fps::FpsCounter,
-                fuzzy_picker::{FuzzyPicker, FuzzyPickerMessage},
+                fuzzy_picker::{
+                    Col, FuzzyPicker, FuzzyPickerItem, FuzzyPickerMessage, SearchableToken,
+                },
                 help::{Help, HelpMessage},
                 highlight::Highlights,
                 key_bind::{
@@ -67,11 +70,12 @@ use crate::{
         },
     },
     id::UNASSIGNED,
+    resolve_legacy_top_level_apply_branch_name,
     theme::Theme,
     tui::{CrosstermTerminalGuard, HeadlessTerminalGuard, TerminalGuard},
     utils::{
         DebugAsType, InputOutputChannel, WriteWithUtils, binary_path::current_exe_for_but_exec,
-        diff_specs::DiffSpecBuilder,
+        diff_specs::DiffSpecBuilder, time::format_relative_time,
     },
 };
 
@@ -283,11 +287,17 @@ where
     };
     // poll terminal events
     for event in event_polling.poll(event_poll_timeout)? {
-        let picker = match &app.modal {
-            Some(Modal::BranchPicker { picker, .. }) => Some(&**picker),
-            Some(Modal::Confirm { .. }) | Some(Modal::Help { .. }) | None => None,
+        let picker_shown = match &app.modal {
+            Some(Modal::GotoBranchPicker { .. } | Modal::ApplyStackPicker { .. }) => true,
+            Some(Modal::Confirm { .. } | Modal::Help { .. }) | None => false,
         };
-        event_to_messages(event, app.active_key_binds(), &app.mode, picker, messages);
+        event_to_messages(
+            event,
+            app.active_key_binds(),
+            &app.mode,
+            picker_shown,
+            messages,
+        );
     }
 
     // check for any out of band messages
@@ -433,8 +443,12 @@ enum Modal {
         confirm: Confirm,
         key_binds: KeyBinds,
     },
-    BranchPicker {
-        picker: Box<FuzzyPicker<fuzzy_picker::BranchItem>>,
+    GotoBranchPicker {
+        picker: Box<FuzzyPicker<GotoBranchItem>>,
+        key_binds: KeyBinds,
+    },
+    ApplyStackPicker {
+        picker: Box<FuzzyPicker<ApplyBranchItem>>,
         key_binds: KeyBinds,
     },
     Help {
@@ -512,7 +526,8 @@ impl App {
     fn active_key_binds(&self) -> &KeyBinds {
         match &self.modal {
             Some(Modal::Confirm { key_binds, .. })
-            | Some(Modal::BranchPicker { key_binds, .. })
+            | Some(Modal::GotoBranchPicker { key_binds, .. })
+            | Some(Modal::ApplyStackPicker { key_binds, .. })
             | Some(Modal::Help { key_binds, .. }) => key_binds,
             None => {
                 if let Mode::Normal(NormalMode { marks }) = &*self.mode
@@ -722,6 +737,9 @@ impl App {
                 CommitMessage::CommitToNewBranch => {
                     self.handle_commit_to_new_branch(messages);
                 }
+                CommitMessage::ToggleInsertSide => {
+                    self.handle_commit_toggle_insert_side();
+                }
             },
             Message::Reword(reword_message) => match reword_message {
                 RewordMessage::WithEditor => {
@@ -743,6 +761,7 @@ impl App {
             },
             Message::Move(move_message) => match move_message {
                 MoveMessage::Start => self.handle_move_start(),
+                MoveMessage::ToggleInsertSide => self.handle_move_toggle_insert_side(),
                 MoveMessage::Confirm => self.handle_move_confirm(ctx, messages)?,
             },
             Message::NewBranch => {
@@ -762,18 +781,31 @@ impl App {
                 }
                 modal => self.modal = modal,
             },
-            Message::FuzzyPicker(fuzzy_picker_message) => match self.modal.take() {
-                Some(Modal::BranchPicker { picker, key_binds }) => {
-                    self.modal =
-                        picker
-                            .handle_message(fuzzy_picker_message, messages)?
-                            .map(|picker| Modal::BranchPicker {
-                                picker: Box::new(picker),
-                                key_binds,
-                            });
+            Message::FuzzyPicker(fuzzy_picker_message) => {
+                if let Some(modal) = self.modal.take() {
+                    match modal {
+                        Modal::GotoBranchPicker { picker, key_binds } => {
+                            self.modal = picker
+                                .handle_message(fuzzy_picker_message, ctx, messages)?
+                                .map(|picker| Modal::GotoBranchPicker {
+                                    picker: Box::new(picker),
+                                    key_binds,
+                                });
+                        }
+                        Modal::ApplyStackPicker { picker, key_binds } => {
+                            self.modal = picker
+                                .handle_message(fuzzy_picker_message, ctx, messages)?
+                                .map(|picker| Modal::ApplyStackPicker {
+                                    picker: Box::new(picker),
+                                    key_binds,
+                                });
+                        }
+                        Modal::Confirm { .. } | Modal::Help { .. } => {
+                            self.modal = Some(modal);
+                        }
+                    }
                 }
-                modal => self.modal = modal,
-            },
+            }
             Message::Help(help_message) => match self.modal.take() {
                 Some(Modal::Help { help, key_binds }) => {
                     self.modal = help
@@ -849,6 +881,7 @@ impl App {
             }
             Message::Stack(stack_message) => match stack_message {
                 StackMessage::Enter => self.handle_stack_enter(ctx)?,
+                StackMessage::ShowApplyPicker => self.handle_stack_show_apply_picker(ctx)?,
                 StackMessage::Unapply => self.handle_stack_unapply(),
                 StackMessage::MoveStart => self.handle_stack_move_start(),
                 StackMessage::MoveConfirm => self.handle_stack_move_confirm(ctx, messages)?,
@@ -2034,6 +2067,7 @@ impl App {
                 };
                 CommitMode {
                     source: Arc::new(source),
+                    insert_side: InsertSide::Above,
                     scope_to_stack: None,
                     message_composer: CommitMessageComposer::default(),
                 }
@@ -2047,6 +2081,7 @@ impl App {
                 };
                 CommitMode {
                     source: Arc::new(source),
+                    insert_side: InsertSide::Above,
                     scope_to_stack: cli_id.stack_id(),
                     message_composer: CommitMessageComposer::default(),
                 }
@@ -2069,6 +2104,7 @@ impl App {
                 };
                 CommitMode {
                     scope_to_stack,
+                    insert_side: InsertSide::Above,
                     message_composer: CommitMessageComposer::default(),
                     source: Arc::new(source),
                 }
@@ -2094,6 +2130,7 @@ impl App {
                 };
                 CommitMode {
                     source: Arc::new(source),
+                    insert_side: InsertSide::Above,
                     scope_to_stack,
                     message_composer: CommitMessageComposer::default(),
                 }
@@ -2158,6 +2195,7 @@ impl App {
             .update_and_push_leave_normal_mode(&mut self.backstack, |mode| {
                 *mode = Mode::Commit(CommitMode {
                     source,
+                    insert_side: InsertSide::Above,
                     scope_to_stack: None,
                     message_composer: CommitMessageComposer::default(),
                 });
@@ -2176,6 +2214,7 @@ impl App {
     {
         let Mode::Commit(CommitMode {
             source,
+            insert_side,
             scope_to_stack,
             message_composer,
         }) = &*self.mode
@@ -2219,7 +2258,7 @@ impl App {
         };
 
         let Some((insert_commit_relative_to, insert_side)) =
-            operations::where_to_place_commit(ctx, target, InsertSide::Below)?
+            operations::where_to_place_commit(ctx, target, *insert_side)?
         else {
             return Ok(());
         };
@@ -2396,6 +2435,19 @@ impl App {
         messages.push(Message::NewBranch.and_then(Message::Commit(CommitMessage::Confirm)));
     }
 
+    fn handle_commit_toggle_insert_side(&mut self) {
+        let Mode::Commit(commit_mode) = self
+            .mode
+            .get_mut_without_updating_backstack_and_i_promise_not_to_change_state()
+        else {
+            return;
+        };
+        commit_mode.insert_side = match commit_mode.insert_side {
+            InsertSide::Above => InsertSide::Below,
+            InsertSide::Below => InsertSide::Above,
+        };
+    }
+
     fn handle_commit_toggle_message_composer(&mut self, composer: CommitMessageComposer) {
         if let Mode::Commit(mode) = self
             .mode
@@ -2430,32 +2482,49 @@ impl App {
             return;
         };
 
-        let move_mode = match &selection.data {
-            StatusOutputLineData::Branch { cli_id }
-            | StatusOutputLineData::Commit { cli_id, .. } => {
-                let Ok(source) = MoveSource::try_from(Arc::unwrap_or_clone(Arc::clone(cli_id)))
-                else {
-                    return;
-                };
-                MoveMode {
-                    source: Arc::new(source),
-                }
+        let move_mode = if let Some(marks) = self.marks()
+            && !marks.is_empty()
+        {
+            let MarkClasses {
+                marked_commits,
+                marked_uncommitted,
+            } = marks.classify();
+            if !marked_commits || marked_uncommitted {
+                return;
             }
-            StatusOutputLineData::UpdateNotice
-            | StatusOutputLineData::Connector
-            | StatusOutputLineData::BetweenStacks
-            | StatusOutputLineData::StagedChanges { .. }
-            | StatusOutputLineData::StagedFile { .. }
-            | StatusOutputLineData::UnassignedChanges { .. }
-            | StatusOutputLineData::UnassignedFile { .. }
-            | StatusOutputLineData::CommitMessage
-            | StatusOutputLineData::EmptyCommitMessage
-            | StatusOutputLineData::File { .. }
-            | StatusOutputLineData::MergeBase
-            | StatusOutputLineData::UpstreamChanges
-            | StatusOutputLineData::Warning
-            | StatusOutputLineData::Hint
-            | StatusOutputLineData::NoAssignmentsUnstaged => return,
+            MoveMode {
+                source: Arc::new(MoveSource::Marks(marks.clone())),
+                insert_side: InsertSide::Above,
+            }
+        } else {
+            match &selection.data {
+                StatusOutputLineData::Branch { cli_id }
+                | StatusOutputLineData::Commit { cli_id, .. } => {
+                    let Ok(source) = MoveSource::try_from(Arc::unwrap_or_clone(Arc::clone(cli_id)))
+                    else {
+                        return;
+                    };
+                    MoveMode {
+                        source: Arc::new(source),
+                        insert_side: InsertSide::Above,
+                    }
+                }
+                StatusOutputLineData::UpdateNotice
+                | StatusOutputLineData::Connector
+                | StatusOutputLineData::BetweenStacks
+                | StatusOutputLineData::StagedChanges { .. }
+                | StatusOutputLineData::StagedFile { .. }
+                | StatusOutputLineData::UnassignedChanges { .. }
+                | StatusOutputLineData::UnassignedFile { .. }
+                | StatusOutputLineData::CommitMessage
+                | StatusOutputLineData::EmptyCommitMessage
+                | StatusOutputLineData::File { .. }
+                | StatusOutputLineData::MergeBase
+                | StatusOutputLineData::UpstreamChanges
+                | StatusOutputLineData::Warning
+                | StatusOutputLineData::Hint
+                | StatusOutputLineData::NoAssignmentsUnstaged => return,
+            }
         };
 
         self.mode
@@ -2464,16 +2533,32 @@ impl App {
             });
     }
 
+    fn handle_move_toggle_insert_side(&mut self) {
+        let Mode::Move(move_mode) = self
+            .mode
+            .get_mut_without_updating_backstack_and_i_promise_not_to_change_state()
+        else {
+            return;
+        };
+        move_mode.insert_side = match move_mode.insert_side {
+            InsertSide::Above => InsertSide::Below,
+            InsertSide::Below => InsertSide::Above,
+        };
+    }
+
     fn handle_move_confirm(
         &mut self,
         ctx: &mut Context,
         messages: &mut Vec<Message>,
     ) -> anyhow::Result<()> {
-        let Mode::Move(MoveMode { source }) = &*self.mode else {
+        let Mode::Move(MoveMode {
+            source,
+            insert_side,
+        }) = &*self.mode
+        else {
             return Ok(());
         };
 
-        // find target
         let Some(selection) = self.cursor.selected_line(&self.status_lines) else {
             return Ok(());
         };
@@ -2481,13 +2566,9 @@ impl App {
         if selection
             .data
             .cli_id()
-            .is_some_and(|target| **source == **target)
+            .is_some_and(|target| source.contains(target))
         {
             messages.push(Message::EnterNormalModeAfterConfirmingOperation);
-            return Ok(());
-        }
-
-        if cursor::is_forbidden_move_commit_target(selection, &self.status_lines, &self.mode) {
             return Ok(());
         }
 
@@ -2533,16 +2614,18 @@ impl App {
                 ..
             } => {
                 let commit_move_result = match target {
-                    MoveTarget::Branch { name } => {
-                        operations::move_commit_to_branch(ctx, *source_commit_id, name)?
-                    }
+                    MoveTarget::Branch { name } => operations::move_commit_to_branch(
+                        ctx,
+                        Vec::from([*source_commit_id]),
+                        name,
+                    )?,
                     MoveTarget::Commit {
                         commit_id: target_commit_id,
                     } => operations::move_commit_to_commit(
                         ctx,
-                        *source_commit_id,
+                        Vec::from([*source_commit_id]),
                         target_commit_id,
-                        InsertSide::Below,
+                        *insert_side,
                     )?,
                     MoveTarget::MergeBase => return Ok(()),
                 };
@@ -2552,6 +2635,44 @@ impl App {
                     .replaced_commits
                     .get(source_commit_id)
                     .copied()
+                    .map(SelectAfterReload::Commit)
+            }
+            MoveSource::Marks(marks) => {
+                let Some(sources) = marks
+                    .iter()
+                    .map(|mark| match mark {
+                        Markable::Commit { commit_id, .. } => Some(*commit_id),
+                        Markable::Uncommitted(..) => None,
+                    })
+                    .collect::<Option<Vec<_>>>()
+                else {
+                    return Ok(());
+                };
+
+                let commit_move_result = match target {
+                    MoveTarget::Branch { name } => {
+                        operations::move_commit_to_branch(ctx, sources.clone(), name)?
+                    }
+                    MoveTarget::Commit {
+                        commit_id: target_commit_id,
+                    } => operations::move_commit_to_commit(
+                        ctx,
+                        sources.clone(),
+                        target_commit_id,
+                        *insert_side,
+                    )?,
+                    MoveTarget::MergeBase => return Ok(()),
+                };
+
+                sources
+                    .iter()
+                    .find_map(|source| {
+                        commit_move_result
+                            .workspace
+                            .replaced_commits
+                            .get(source)
+                            .copied()
+                    })
                     .map(SelectAfterReload::Commit)
             }
             MoveSource::Branch {
@@ -3075,23 +3196,23 @@ impl App {
                 });
 
             let picker_items = if include_unassigned {
-                let mut mapped_items = NonEmpty::new(fuzzy_picker::BranchItem::Unassigned);
-                mapped_items.extend(branch_names.map(fuzzy_picker::BranchItem::Branch));
+                let mut mapped_items = NonEmpty::new(GotoBranchItem::Unassigned);
+                mapped_items.extend(branch_names.map(GotoBranchItem::Branch));
                 mapped_items
             } else {
-                branch_names.map(fuzzy_picker::BranchItem::Branch)
+                branch_names.map(GotoBranchItem::Branch)
             };
 
-            self.modal = Some(Modal::BranchPicker {
+            self.modal = Some(Modal::GotoBranchPicker {
                 picker: Box::new(FuzzyPicker::new(
                     picker_items,
                     self.theme,
-                    |item, messages| {
+                    |item, _ctx, messages| {
                         match item {
-                            fuzzy_picker::BranchItem::Branch(branch_name) => {
+                            GotoBranchItem::Branch(branch_name) => {
                                 messages.push(Message::SelectBranch(branch_name));
                             }
-                            fuzzy_picker::BranchItem::Unassigned => {
+                            GotoBranchItem::Unassigned => {
                                 messages.push(Message::SelectUnassigned);
                             }
                         }
@@ -3247,7 +3368,14 @@ impl App {
             .iter()
             .filter_map(|stack| stack.ref_name().cloned())
             .collect::<Vec<_>>();
+
         let Some(top_stack_head) = stack_heads.first().cloned() else {
+            self.mode
+                .update_and_push_leave_normal_mode(&mut self.backstack, |mode| {
+                    *mode = Mode::Stack(StackMode {
+                        stack_heads: Default::default(),
+                    });
+                });
             return Ok(());
         };
 
@@ -3274,6 +3402,86 @@ impl App {
                 self.cursor = cursor;
             }
         }
+
+        Ok(())
+    }
+
+    fn handle_stack_show_apply_picker(&mut self, ctx: &mut Context) -> anyhow::Result<()> {
+        let branch_listings = but_api::legacy::virtual_branches::list_branches(
+            ctx,
+            Some(BranchListingFilter {
+                local: None,
+                applied: Some(false),
+            }),
+        )
+        .context("Failed to list branches available to apply")?
+        .into_iter();
+
+        let now = SystemTime::now();
+        let mut branches = branch_listings
+            .map(|listing| ApplyBranchItem {
+                name: listing.name.0.to_string(),
+                has_local: listing.has_local,
+                updated_at: listing.updated_at,
+                updated_at_display: format_relative_time(now, (listing.updated_at / 1000) as i64),
+                last_commiter: listing
+                    .last_commiter
+                    .name
+                    .map(|name| name.to_string())
+                    .unwrap_or_default(),
+            })
+            .collect::<Vec<_>>();
+
+        branches.sort_by(|a, b| {
+            b.has_local
+                .cmp(&a.has_local)
+                .then_with(|| b.updated_at.cmp(&a.updated_at))
+                .then_with(|| a.name.cmp(&b.name))
+        });
+
+        let Some(items) = NonEmpty::from_vec(branches) else {
+            return Ok(());
+        };
+        let picker = FuzzyPicker::new(items, self.theme, |item, ctx, messages| {
+            let reference = {
+                let repo = ctx.repo.get()?;
+                let name = resolve_legacy_top_level_apply_branch_name(&repo, &item.name)
+                    .with_context(|| format!("Failed to resolve branch '{}'", item.name))?;
+                repo.find_reference(&name)
+                    .with_context(|| format!("Failed to find branch '{name}'"))?
+                    .detach()
+            };
+
+            let outcome = but_api::branch::apply(ctx, reference.name.as_ref())
+                .with_context(|| format!("Failed to apply '{}'", reference.name.shorten()))?;
+
+            if !outcome.conflicting_stacks.is_empty() {
+                let conflicting_stack_names = outcome
+                    .conflicting_stacks
+                    .iter()
+                    .map(|stack| stack.ref_name.shorten().to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                anyhow::bail!(
+                    "'{}' conflicts with existing stack in the workspace: {conflicting_stack_names}",
+                    reference.name.shorten(),
+                );
+            }
+
+            messages.extend([
+                Message::EnterNormalModeAfterConfirmingOperation,
+                Message::Reload(
+                    Some(SelectAfterReload::Branch(item.name)),
+                    ReloadCause::Mutation,
+                ),
+            ]);
+
+            Ok(())
+        });
+        self.modal = Some(Modal::ApplyStackPicker {
+            picker: Box::new(picker),
+            key_binds: fuzzy_picker_key_binds(),
+        });
 
         Ok(())
     }
@@ -3489,11 +3697,11 @@ enum UndoOrRedo {
     Redo,
 }
 
-fn event_to_messages<T>(
+fn event_to_messages(
     ev: Event,
     key_binds: &KeyBinds,
     mode: &Mode,
-    picker: Option<&FuzzyPicker<T>>,
+    picker_shown: bool,
     messages: &mut Vec<Message>,
 ) {
     match ev {
@@ -3508,7 +3716,7 @@ fn event_to_messages<T>(
             }
 
             if !handled {
-                if picker.is_some() {
+                if picker_shown {
                     messages.push(Message::FuzzyPicker(FuzzyPickerMessage::Input(ev)));
                 } else {
                     match mode {
@@ -3993,17 +4201,20 @@ enum CommitMessage {
     ToggleMessageComposer(CommitMessageComposer),
     Confirm,
     CommitToNewBranch,
+    ToggleInsertSide,
 }
 
 #[derive(Debug, Clone)]
 enum MoveMessage {
     Start,
+    ToggleInsertSide,
     Confirm,
 }
 
 #[derive(Debug, Clone)]
 enum StackMessage {
     Enter,
+    ShowApplyPicker,
     Unapply,
     MoveStart,
     MoveConfirm,
@@ -4143,5 +4354,73 @@ pub trait TuiInputOutputChannel: WriteWithUtils + private::Sealed {
 impl TuiInputOutputChannel for InputOutputChannel<'_> {
     fn prompt_single_line(&mut self, prompt: &str) -> anyhow::Result<Option<String>> {
         InputOutputChannel::prompt_single_line(self, prompt)
+    }
+}
+
+#[derive(Debug, Clone)]
+enum GotoBranchItem {
+    Branch(FullName),
+    Unassigned,
+}
+
+impl FuzzyPickerItem for GotoBranchItem {
+    fn columns(&self, searchable: SearchableToken) -> impl IntoIterator<Item = Col<'_>> {
+        match self {
+            Self::Branch(full_name) => [Col {
+                text: full_name.shorten().to_str_lossy(),
+                searchable: Some(searchable),
+            }],
+            Self::Unassigned => [Col {
+                text: "unassigned changes".into(),
+                searchable: Some(searchable),
+            }],
+        }
+    }
+
+    fn style(&self, theme: &'static Theme) -> Style {
+        match self {
+            Self::Branch(..) => theme.local_branch,
+            Self::Unassigned => theme.info,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct ApplyBranchItem {
+    name: String,
+    last_commiter: String,
+    has_local: bool,
+    updated_at: u128,
+    updated_at_display: String,
+}
+
+impl FuzzyPickerItem for ApplyBranchItem {
+    fn columns(&self, searchable: SearchableToken) -> impl IntoIterator<Item = Col<'_>> {
+        [
+            Col {
+                text: if self.has_local { "local" } else { "remote" }.into(),
+                searchable: None,
+            },
+            Col {
+                text: self.name.as_str().into(),
+                searchable: Some(searchable),
+            },
+            Col {
+                text: self.updated_at_display.as_str().into(),
+                searchable: None,
+            },
+            Col {
+                text: self.last_commiter.as_str().into(),
+                searchable: None,
+            },
+        ]
+    }
+
+    fn style(&self, theme: &'static Theme) -> Style {
+        if self.has_local {
+            theme.local_branch
+        } else {
+            theme.remote_branch
+        }
     }
 }

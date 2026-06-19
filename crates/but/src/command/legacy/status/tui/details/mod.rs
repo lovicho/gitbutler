@@ -194,7 +194,9 @@ impl Details {
                 CommitMessage::Confirm
                 | CommitMessage::CommitToNewBranch
                 | CommitMessage::CreateEmpty => true,
-                CommitMessage::Start | CommitMessage::ToggleMessageComposer(..) => false,
+                CommitMessage::Start
+                | CommitMessage::ToggleMessageComposer(..)
+                | CommitMessage::ToggleInsertSide => false,
             },
             Message::Rub(rub_message) => match rub_message {
                 RubMessage::Start
@@ -218,7 +220,7 @@ impl Details {
                 FilesMessage::ToggleGlobalFilesList | FilesMessage::ToggleFilesForCommit => true,
             },
             Message::Move(move_message) => match move_message {
-                MoveMessage::Start => false,
+                MoveMessage::Start | MoveMessage::ToggleInsertSide => false,
                 MoveMessage::Confirm => true,
             },
             Message::Details(details_message) => match details_message {
@@ -242,8 +244,10 @@ impl Details {
                     // entering stack mode might move the cursor which will require an update
                     true
                 }
-                StackMessage::Unapply => true,
-                StackMessage::MoveStart | StackMessage::MoveConfirm => false,
+                StackMessage::Unapply
+                | StackMessage::ShowApplyPicker
+                | StackMessage::MoveStart
+                | StackMessage::MoveConfirm => false,
             },
 
             Message::AndThen { .. } => true,
