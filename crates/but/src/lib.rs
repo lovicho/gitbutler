@@ -630,6 +630,15 @@ async fn match_subcommand(
             };
             result.emit_metrics(metrics_ctx)
         }
+        Subcommands::Switch {
+            target,
+            workspace,
+            new,
+        } => {
+            let mut ctx = but_ctx::Context::discover(&args.current_dir)?;
+            command::r#switch::handle(&mut ctx, out, target, workspace, new)
+                .emit_metrics(metrics_ctx)
+        }
         #[cfg(feature = "legacy")]
         Subcommands::Mcp => command::legacy::mcp::start(app_settings)
             .await
@@ -950,7 +959,29 @@ async fn match_subcommand(
             )?;
             out.begin_status_after(status_after);
 
-            let result = match commit_args.cmd {
+            let result = match &commit_args.cmd {
+                Some(crate::args::commit::Subcommands::Batch {
+                    branch,
+                    before,
+                    after,
+                    messages,
+                    changes,
+                    no_hooks,
+                }) => {
+                    command::legacy::commit::validate_batch_parent_args(&commit_args)?;
+
+                    command::legacy::commit::commit_batch(
+                        &mut ctx,
+                        out,
+                        branch.clone(),
+                        before.clone(),
+                        after.clone(),
+                        messages,
+                        changes,
+                        *no_hooks,
+                    )
+                    .emit_metrics(metrics_ctx)
+                }
                 Some(crate::args::commit::Subcommands::Empty {
                     target,
                     before,
@@ -977,6 +1008,11 @@ async fn match_subcommand(
                         return Err(
                             bad_input("--create cannot be used with 'commit empty'.").into()
                         );
+                    }
+                    if commit_args.before.is_some() || commit_args.after.is_some() {
+                        return Err(bad_input(
+                            "--before/--after must be passed after 'empty'. Use `but commit empty --before <target>`."
+                        ).into());
                     }
                     if commit_args.only {
                         return Err(bad_input("--only cannot be used with 'commit empty'.").into());
@@ -1006,9 +1042,9 @@ async fn match_subcommand(
                     command::legacy::commit::insert_blank_commit(
                         &mut ctx,
                         out,
-                        target,
-                        before,
-                        after,
+                        target.clone(),
+                        before.clone(),
+                        after.clone(),
                         message.as_deref(),
                     )
                     .emit_metrics(metrics_ctx)
@@ -1041,7 +1077,9 @@ async fn match_subcommand(
                         &mut ctx,
                         out,
                         commit_message.as_deref(),
-                        commit_args.branch,
+                        commit_args.branch.clone(),
+                        commit_args.before.clone(),
+                        commit_args.after.clone(),
                         &commit_args.changes,
                         commit_args.only,
                         commit_args.all,
@@ -1197,19 +1235,22 @@ async fn match_subcommand(
         }
         #[cfg(feature = "legacy")]
         Subcommands::Setup { init } => {
-            let repo =
-                match but_api::legacy::projects::add_project_best_effort(args.current_dir.clone())?
-                {
-                    gitbutler_project::AddProjectOutcome::Added(project)
-                    | gitbutler_project::AddProjectOutcome::AlreadyExists(project) => {
-                        gix::open(project.git_dir())?
-                    }
-                    _ => command::legacy::setup::find_or_initialize_repo(
-                        &args.current_dir,
-                        out,
-                        init,
-                    )?,
-                };
+            let repo = match but_api::legacy::projects::add_project_best_effort(
+                args.current_dir.clone(),
+            )? {
+                gitbutler_project::AddProjectOutcome::Added(project)
+                | gitbutler_project::AddProjectOutcome::AlreadyExists(project) => {
+                    gix::open(project.git_dir())?
+                }
+                gitbutler_project::AddProjectOutcome::ReftableRefFormatUnsupported => {
+                    return Err(anyhow::anyhow!(
+                            "The repository at {} uses the currently unsupported reftable reference format.",
+                            args.current_dir.display()
+                        )
+                        .into());
+                }
+                _ => command::legacy::setup::find_or_initialize_repo(&args.current_dir, out, init)?,
+            };
             let mut ctx = but_ctx::Context::from_repo(repo)?;
             let mut guard = ctx.exclusive_worktree_access();
             command::legacy::setup::repo(&mut ctx, &args.current_dir, out, guard.write_permission())
