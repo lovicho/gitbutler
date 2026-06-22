@@ -1,6 +1,8 @@
-import { findCommitStackId, renameBranchInHeadInfo, resolveRelativeTo } from "#ui/api/ref-info.ts";
+import { encodeBytes } from "#ui/api/bytes.ts";
+import { findCommitStackId, renameBranchInHeadInfo } from "#ui/api/ref-info.ts";
 import {
 	changesInWorktreeQueryOptions,
+	getReviewMergeStatusQueryOptions,
 	getReviewQueryOptions,
 	headInfoQueryOptions,
 } from "#ui/api/queries.ts";
@@ -35,14 +37,22 @@ export const syncCoreCaches = (
 	projectId: string,
 	response: Exclude<AnyResponse, void>,
 ) => {
-	if (typeof response !== "object" || response === null || !("workspace" in response)) return;
+	if (typeof response !== "object" || response === null) return;
 
-	queryClient.setQueryData(headInfoQueryOptions(projectId).queryKey, response.workspace.headInfo);
+	const workspace =
+		"workspace" in response
+			? response.workspace
+			: "workspaceState" in response
+				? response.workspaceState
+				: null;
+	if (workspace === null) return;
+
+	queryClient.setQueryData(headInfoQueryOptions(projectId).queryKey, workspace.headInfo);
 	dispatch(
 		projectActions.updateRewrittenCommitReferences({
 			projectId,
-			replacedCommits: response.workspace.replacedCommits,
-			headInfo: response.workspace.headInfo,
+			replacedCommits: workspace.replacedCommits,
+			headInfo: workspace.headInfo,
 		}),
 	);
 };
@@ -70,17 +80,45 @@ export const useAbsorb = ({ projectId }: { projectId: string }) => {
 };
 
 export const useApply = () => {
+	const dispatch = useAppDispatch();
 	const toastManager = Toast.useToastManager();
 
 	return useMutation({
 		mutationFn: window.lite.apply,
-		onSuccess: async (response) => {
-			if (response.appliedBranches.length === 0)
-				toastManager.add({
-					title: "Branch is already applied or conflicts with the workspace",
-					description: "No branches were applied.",
+		onSuccess: async (response, input, _context, mutation) => {
+			if (response.conflictingStacks.length > 0) {
+				const toastId = toastManager.add({
+					type: "error",
+					title: "Failed to apply branch",
+					description: `'${input.existingBranch}' conflicts with existing stack in the workspace: ${response.conflictingStacks
+						.map((stack) => stack.shortName)
+						.join(", ")}`,
 					priority: "high",
+					actionProps: {
+						children: "Switch to branch instead",
+						onClick: () => {
+							(async () => {
+								const checkoutResponse = await window.lite.branchCheckout({
+									projectId: input.projectId,
+									branch: encodeBytes(input.existingBranch),
+								});
+								syncCoreCaches(mutation.client, dispatch, input.projectId, checkoutResponse);
+								toastManager.close(toastId);
+							})().catch((error) => {
+								// oxlint-disable-next-line no-console
+								console.error(error);
+
+								toastManager.add({
+									type: "error",
+									title: "Failed to switch branch",
+									description: errorMessageForToast(error),
+									priority: "high",
+								});
+							});
+						},
+					},
 				});
+			}
 		},
 		onError: (error) => {
 			// oxlint-disable-next-line no-console
@@ -144,6 +182,72 @@ export const useUpdateReview = () => {
 	});
 };
 
+export const useMergeReview = () => {
+	const toastManager = Toast.useToastManager();
+
+	return useMutation({
+		mutationFn: window.lite.mergeReview,
+		onSuccess: async (_response, input, _context, mutation) => {
+			await Promise.all([
+				mutation.client.invalidateQueries({
+					queryKey: getReviewQueryOptions({ projectId: input.projectId, reviewId: input.reviewId })
+						.queryKey,
+				}),
+				mutation.client.invalidateQueries({
+					queryKey: getReviewMergeStatusQueryOptions({
+						projectId: input.projectId,
+						reviewId: input.reviewId,
+					}).queryKey,
+				}),
+			]);
+		},
+		onError: (error) => {
+			// oxlint-disable-next-line no-console
+			console.error(error);
+
+			toastManager.add({
+				type: "error",
+				title: "Failed to merge pull request",
+				description: errorMessageForToast(error),
+				priority: "high",
+			});
+		},
+	});
+};
+
+export const useSetReviewDraftiness = () => {
+	const toastManager = Toast.useToastManager();
+
+	return useMutation({
+		mutationFn: window.lite.setReviewDraftiness,
+		onSuccess: async (_response, input, _context, mutation) => {
+			await Promise.all([
+				mutation.client.invalidateQueries({
+					queryKey: getReviewQueryOptions({ projectId: input.projectId, reviewId: input.reviewId })
+						.queryKey,
+				}),
+				mutation.client.invalidateQueries({
+					queryKey: getReviewMergeStatusQueryOptions({
+						projectId: input.projectId,
+						reviewId: input.reviewId,
+					}).queryKey,
+				}),
+			]);
+		},
+		onError: (error) => {
+			// oxlint-disable-next-line no-console
+			console.error(error);
+
+			toastManager.add({
+				type: "error",
+				title: "Failed to update pull request",
+				description: errorMessageForToast(error),
+				priority: "high",
+			});
+		},
+	});
+};
+
 export const useBranchCheckoutNew = () => {
 	const dispatch = useAppDispatch();
 	const toastManager = Toast.useToastManager();
@@ -192,15 +296,7 @@ export const useCommitAmend = ({ projectId }: { projectId: string }) => {
 	const dispatch = useAppDispatch();
 
 	return useMutation({
-		mutationFn: async ({ relativeTo }: { relativeTo: RelativeTo }) => {
-			const headInfo = await queryClient.fetchQuery(headInfoQueryOptions(projectId));
-
-			const commitId = resolveRelativeTo({
-				headInfo,
-				relativeTo,
-			});
-			if (commitId === null) throw new Error("No commit to amend.");
-
+		mutationFn: async ({ commitId }: { commitId: string }) => {
 			const worktreeChanges = await queryClient.fetchQuery(
 				changesInWorktreeQueryOptions(projectId),
 			);
@@ -214,15 +310,22 @@ export const useCommitAmend = ({ projectId }: { projectId: string }) => {
 			});
 		},
 		onSuccess: async (response, input, _ctx, mutation) => {
-			syncCoreCaches(mutation.client, dispatch, projectId, response);
-
-			if (input.relativeTo.type === "commit" && response.newCommit !== null)
-				dispatch(
-					projectActions.setCommitTarget({
-						projectId,
-						commitTarget: { type: "commit", subject: response.newCommit },
-					}),
-				);
+			syncCoreCaches(
+				mutation.client,
+				dispatch,
+				projectId,
+				// Workaround for https://linear.app/gitbutler/issue/GB-1570/amending-commit-has-wrong-replaced-commits
+				{
+					...response,
+					workspace: {
+						...response.workspace,
+						replacedCommits: {
+							...response.workspace.replacedCommits,
+							...(response.newCommit !== null ? { [input.commitId]: response.newCommit } : {}),
+						},
+					},
+				},
+			);
 
 			if (response.rejectedChanges.length > 0)
 				toastManager.add(

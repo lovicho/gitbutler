@@ -126,7 +126,6 @@ import {
 	outlineHotkeys,
 	selectionOperationHotkeys,
 	toElectronAccelerator,
-	workspaceHotkeys,
 	type CommandGroup,
 } from "#ui/hotkeys.ts";
 import { segmentBottomRelativeTo, stackBottomRelativeTo } from "#ui/api/stack.ts";
@@ -215,6 +214,7 @@ const useOutlineTreeHotkeys = ({
 	const commitMoveMutation = useCommitMove();
 	const commitDiscardMutation = useCommitDiscard();
 	const commitInsertBlankMutation = useCommitInsertBlank();
+	const commitAmendMutation = useCommitAmend({ projectId });
 	const pushStackMutation = usePushStack();
 	const workspaceIntegrateUpstreamMutation = useWorkspaceIntegrateUpstream();
 	const branchCreateMutation = useBranchCreate();
@@ -228,16 +228,9 @@ const useOutlineTreeHotkeys = ({
 	};
 
 	const amendCommit = () => {
-		dispatch(
-			projectActions.enterTransferMode({
-				projectId,
-				mode: keyboardTransferOperationMode({
-					source: changesSectionOperand,
-					operationType: "into",
-				}),
-			}),
-		);
-		focusSelectionScope("outline");
+		if (selection?._tag !== "Commit") return;
+
+		commitAmendMutation.mutate({ commitId: selection.commitId });
 	};
 
 	const setCommitTarget = (relativeTo: RelativeTo) => {
@@ -559,7 +552,7 @@ const useOutlineTreeHotkeys = ({
 			callback: amendCommit,
 			options: {
 				conflictBehavior: "allow",
-				enabled: defaultOutlineHotkeysEnabled && isSelectedCommit,
+				enabled: defaultOutlineHotkeysEnabled && isSelectedCommit && !commitAmendMutation.isPending,
 				target: ref,
 				meta: outlineHotkeys.amendCommit.meta,
 			},
@@ -720,7 +713,6 @@ export const OutlineTree: FC<
 > = ({ navigationIndex, absorptionTargetKeys, ref: refProp, ...props }) => {
 	const { id: projectId } = useParams({ from: "/project/$id/workspace" });
 
-	const dispatch = useAppDispatch();
 	const selection = useOutlineSelection({ projectId, navigationIndex });
 	const outlineMode = useAppSelector((state) => selectProjectOutlineModeState(state, projectId));
 	const hasCheckedCommits = useAppSelector((state) =>
@@ -745,36 +737,6 @@ export const OutlineTree: FC<
 	const dryRunWorkspace = dryRunOperationQuery.data?.workspace ?? null;
 
 	const { data: headInfo } = useQuery(headInfoQueryOptions(projectId));
-	const branchCreateMutation = useBranchCreate();
-
-	const createIndependentBranch = () => {
-		branchCreateMutation.mutate(
-			{
-				projectId,
-				newRef: null,
-				placement: { type: "independent" },
-			},
-			{
-				onSuccess: (response) => {
-					const newBranch = findBranchOperandByRef({
-						headInfo: response.workspace.headInfo,
-						branchRef: response.newRef.fullNameBytes,
-					});
-					if (!newBranch) return;
-
-					dispatch(
-						projectActions.selectOutline({
-							projectId,
-							selection: branchOperand(newBranch),
-						}),
-					);
-					focusSelectionScope("outline");
-				},
-			},
-		);
-	};
-	const canCreateIndependentBranch =
-		outlineMode._tag === "Default" && !branchCreateMutation.isPending;
 
 	const ref = useRef<HTMLDivElement>(null);
 
@@ -821,32 +783,6 @@ export const OutlineTree: FC<
 
 						<div className={classes(styles.stacksScroller, uiStyles.scrollerWithSeparator)}>
 							<div className={styles.stacks}>
-								<Tooltip.Root>
-									<Tooltip.Trigger
-										className={classes("text-13", "text-semibold", styles.addNewBranchButton)}
-										onClick={createIndependentBranch}
-										render={<Button focusableWhenDisabled disabled={!canCreateIndependentBranch} />}
-									>
-										{branchCreateMutation.isPending ? (
-											<Icon name="spinner" />
-										) : (
-											<Icon name="plus" />
-										)}
-										<span>Add new branch</span>
-									</Tooltip.Trigger>
-									<Tooltip.Portal>
-										<Tooltip.Positioner sideOffset={4}>
-											<Tooltip.Popup
-												render={
-													<TooltipPopup kbd={workspaceHotkeys.createIndependentBranch.hotkey} />
-												}
-											>
-												{workspaceHotkeys.createIndependentBranch.meta.name}
-											</Tooltip.Popup>
-										</Tooltip.Positioner>
-									</Tooltip.Portal>
-								</Tooltip.Root>
-
 								{reverse(headInfo?.stacks ?? []).map((stack) => (
 									<StackC
 										key={stack.id}
@@ -1144,6 +1080,7 @@ const CommitRow: FC<
 	const commitDiscardMutation = useCommitDiscard();
 	const commitUncommitMutation = useCommitUncommit();
 	const commitRewordMutation = useCommitReword();
+	const commitAmendMutation = useCommitAmend({ projectId });
 	const branchCreateMutation = useBranchCreate();
 
 	const insertBlankCommit = (side: "above" | "below") => {
@@ -1266,20 +1203,11 @@ const CommitRow: FC<
 		});
 	};
 
-	const amendCommit = () => {
-		dispatch(
-			projectActions.enterTransferMode({
-				projectId,
-				mode: keyboardTransferOperationMode({
-					source: changesSectionOperand,
-					operationType: "into",
-				}),
-			}),
-		);
-		focusSelectionScope("outline");
-	};
-
 	const relativeTo: RelativeTo = { type: "commit", subject: commit.id };
+
+	const amendCommit = () => {
+		commitAmendMutation.mutate({ commitId: commit.id });
+	};
 
 	const setCommitTarget = () => {
 		dispatch(projectActions.setCommitTarget({ projectId, commitTarget: relativeTo }));
@@ -1303,6 +1231,7 @@ const CommitRow: FC<
 		nativeMenuItem({
 			label: "Amend Commit",
 			accelerator: toElectronAccelerator(outlineHotkeys.amendCommit.hotkey),
+			enabled: isDefaultMode && !commitAmendMutation.isPending,
 			onSelect: amendCommit,
 		}),
 		nativeMenuItem({
@@ -1753,10 +1682,17 @@ const Changes: FC<{
 			},
 		);
 	};
-	const amendCommit = () => {
-		if (!commitTarget) return;
 
-		commitAmendMutation.mutate({ relativeTo: commitTarget.relativeTo });
+	const amendCommit = () => {
+		if (!commitTarget || !headInfo) return;
+
+		const commitId = resolveRelativeTo({
+			headInfo,
+			relativeTo: commitTarget.relativeTo,
+		});
+		if (commitId === null) throw new Error("No commit to amend.");
+
+		commitAmendMutation.mutate({ commitId });
 	};
 	const submit: SubmitEventHandler = (event) => {
 		event.preventDefault();
@@ -1864,7 +1800,10 @@ const Changes: FC<{
 								aria-label={changesHotkeys.selectCommitTarget.meta.name}
 								render={<Button focusableWhenDisabled render={<Tooltip.Trigger />} />}
 							>
-								<Combobox.Value placeholder={changesHotkeys.selectCommitTarget.meta.name} />
+								<Icon name="bullseye" size={14} />
+								<span className={styles.commitTargetComboboxTriggerLabel}>
+									<Combobox.Value placeholder={changesHotkeys.selectCommitTarget.meta.name} />
+								</span>
 							</Combobox.Trigger>
 							<Tooltip.Portal>
 								<Tooltip.Positioner sideOffset={4}>

@@ -261,6 +261,11 @@ pub enum Subcommands {
     #[clap(hide = true)]
     Commit2(commit2::Platform),
 
+    #[cfg(all(feature = "legacy", feature = "but-2"))]
+    #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
+    #[clap(hide = true)]
+    Squash2(squash2::Platform),
+
     /// Stages a file or hunk to a specific branch.
     ///
     /// Without arguments, opens an interactive TUI for selecting files and hunks to stage.
@@ -710,7 +715,7 @@ pub enum Subcommands {
     /// Commit moves:
     /// - By default, commits are moved to be before (below) the target.
     /// - Use `--after` to move the commit after (above) the target instead.
-    ///
+    /// - Use comma-separated commit IDs to move multiple commits together.
     /// - When moving to a branch, the commit is placed at the top of that branch's stack.
     ///
     /// Branch moves:
@@ -725,16 +730,34 @@ pub enum Subcommands {
     /// but move abc123 def456
     /// ```
     ///
+    /// Move multiple commits before another commit:
+    ///
+    /// ```text
+    /// but move abc123,789abc def456
+    /// ```
+    ///
     /// Move a commit after another commit:
     ///
     /// ```text
     /// but move abc123 def456 --after
     /// ```
     ///
+    /// Move multiple commits after another commit:
+    ///
+    /// ```text
+    /// but move abc123,789abc def456 --after
+    /// ```
+    ///
     /// Move a commit to a different branch (places at top):
     ///
     /// ```text
     /// but move abc123 my-feature-branch
+    /// ```
+    ///
+    /// Move multiple commits to a different branch (places at top):
+    ///
+    /// ```text
+    /// but move abc123,789abc my-feature-branch
     /// ```
     ///
     /// Stack one branch on top of another:
@@ -750,7 +773,7 @@ pub enum Subcommands {
     /// ```
     #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
     Move {
-        /// Commit/branch identifier to move
+        /// Commit/branch identifier to move. Use comma-separated commit IDs for multi-commit moves.
         source: String,
         /// Target commit/branch identifier, or `zz` to unstack a branch
         target: String,
@@ -1332,6 +1355,8 @@ pub mod commit;
 pub mod commit2;
 pub mod config;
 pub mod skill;
+#[cfg(feature = "legacy")]
+pub mod squash2;
 pub mod update;
 
 pub mod actions {
