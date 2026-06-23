@@ -5,13 +5,13 @@ fn no_message_nothing_to_commit() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
     env.setup_metadata(&["A"]);
 
-    env.but("commit2 --no-message").assert().success();
+    env.but("_commit2 --no-message").assert().success();
 
     env.but("status")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes] (no changes)
+╭┄zz [uncommitted changes] (no changes)
 ┊
 ┊╭┄g0 [A]
 ┊●   1049574 (no commit message) (no changes)
@@ -32,7 +32,7 @@ fn no_args_single_head_no_message_human_output() {
 
     env.file("file.txt", "Some text");
 
-    env.but("commit2 --no-message")
+    env.but("_commit2 --no-message")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
@@ -44,7 +44,7 @@ Created commit 7bbfdca on branch 'A'
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes] (no changes)
+╭┄zz [uncommitted changes] (no changes)
 ┊
 ┊╭┄g0 [A]
 ┊●   7bbfdca (no commit message)
@@ -65,7 +65,7 @@ fn no_args_single_head_no_message_shell_output() {
 
     env.file("file.txt", "Some text");
 
-    env.but("commit2 --no-message --format shell")
+    env.but("_commit2 --no-message --format shell")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
@@ -81,7 +81,7 @@ fn no_args_single_head_no_message_json_output() {
 
     env.file("file.txt", "Some text");
 
-    env.but("commit2 --no-message --format json")
+    env.but("_commit2 --no-message --format json")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
@@ -104,7 +104,7 @@ fn no_args_single_head_message_from_editor() {
 
     env.file("file.txt", "Some text");
 
-    env.but("commit2")
+    env.but("_commit2")
         .env("GIT_EDITOR", editor_command)
         .assert()
         .success();
@@ -113,7 +113,7 @@ fn no_args_single_head_message_from_editor() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes] (no changes)
+╭┄zz [uncommitted changes] (no changes)
 ┊
 ┊╭┄g0 [A]
 ┊●   d4e7c2a commit from editor
@@ -134,13 +134,13 @@ fn single_head_with_message() {
 
     env.file("file.txt", "Some text");
 
-    env.but("commit2 -m 'add file.txt'").assert().success();
+    env.but("_commit2 -m 'add file.txt'").assert().success();
 
     env.but("status")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes] (no changes)
+╭┄zz [uncommitted changes] (no changes)
 ┊
 ┊╭┄g0 [A]
 ┊●   a41148c add file.txt
@@ -161,7 +161,7 @@ fn can_repeat_message() {
 
     env.file("file.txt", "Some text");
 
-    env.but("commit2 -m 'add file.txt' -m 'with more' -m 'text lines'")
+    env.but("_commit2 -m 'add file.txt' -m 'with more' -m 'text lines'")
         .assert()
         .success();
 
@@ -169,7 +169,7 @@ fn can_repeat_message() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes] (no changes)
+╭┄zz [uncommitted changes] (no changes)
 ┊
 ┊╭┄g0 [A]
 ┊● b141567 author 2000-01-01 00:00:00 +0000
@@ -217,7 +217,7 @@ fn editor_user_writes_no_message() {
 
     env.file("file.txt", "Some text");
 
-    env.but("commit2")
+    env.but("_commit2")
         .env("GIT_EDITOR", editor_command)
         .assert()
         .success();
@@ -226,7 +226,7 @@ fn editor_user_writes_no_message() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes] (no changes)
+╭┄zz [uncommitted changes] (no changes)
 ┊
 ┊╭┄g0 [A]
 ┊●   3b915b5 (no commit message)
@@ -251,7 +251,7 @@ fn editor_fails() {
 
     env.file("file.txt", "Some text");
 
-    env.but("commit2")
+    env.but("_commit2")
         .env("GIT_EDITOR", editor_command)
         .assert()
         .failure()
@@ -269,13 +269,13 @@ fn create_commit_on_new_branch() {
 
     env.file("file.txt", "Some text");
 
-    env.but("commit2 --no-message").assert().success();
+    env.but("_commit2 --no-message").assert().success();
 
     env.but("status")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes] (no changes)
+╭┄zz [uncommitted changes] (no changes)
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   d4910f8 (no commit message)
@@ -295,13 +295,15 @@ fn create_commit_on_user_provided_branch() {
 
     env.file("first", "Some text");
 
-    env.but("commit2 -m 'add first' -b file").assert().success();
+    env.but("_commit2 -m 'add first' -b file")
+        .assert()
+        .success();
 
     env.but("status")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes] (no changes)
+╭┄zz [uncommitted changes] (no changes)
 ┊
 ┊╭┄fi [file]
 ┊●   5a6fc56 add first
@@ -315,7 +317,7 @@ Hint: run `but help` for all commands
 
     env.file("second", "change file");
 
-    env.but("commit2 -m 'add second' -b file")
+    env.but("_commit2 -m 'add second' -b file")
         .assert()
         .success();
 
@@ -323,7 +325,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes] (no changes)
+╭┄zz [uncommitted changes] (no changes)
 ┊
 ┊╭┄fi [file]
 ┊●   49fc2f0 add second
@@ -338,7 +340,7 @@ Hint: run `but help` for all commands
 
     env.file("third", "change file");
 
-    env.but("commit2 -m 'add third' -b other")
+    env.but("_commit2 -m 'add third' -b other")
         .assert()
         .success();
 
@@ -346,7 +348,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes] (no changes)
+╭┄zz [uncommitted changes] (no changes)
 ┊
 ┊╭┄fi [file]
 ┊●   49fc2f0 add second
@@ -365,7 +367,7 @@ Hint: run `but help` for all commands
 
     env.file("fourth", "change file");
 
-    env.but("commit2 -m 'add fourth' -b other")
+    env.but("_commit2 -m 'add fourth' -b other")
         .assert()
         .success();
 
@@ -373,7 +375,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes] (no changes)
+╭┄zz [uncommitted changes] (no changes)
 ┊
 ┊╭┄fi [file]
 ┊●   49fc2f0 add second
@@ -399,13 +401,13 @@ fn create_commit_on_new_branch_with_canned_name() {
 
     env.file("file.txt", "Some text");
 
-    env.but("commit2 -m 'add file.txt' -b").assert().success();
+    env.but("_commit2 -m 'add file.txt' -b").assert().success();
 
     env.but("status")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes] (no changes)
+╭┄zz [uncommitted changes] (no changes)
 ┊
 ┊╭┄g0 [A]
 ┊●   9477ae7 add A
@@ -431,7 +433,7 @@ fn create_commit_on_branch_that_is_not_applied_fails() {
 
     env.file("first", "Some text");
 
-    env.but("commit2 -m 'add first' -b existing")
+    env.but("_commit2 -m 'add first' -b existing")
         .assert()
         .failure()
         .stderr_eq(snapbox::str![[r#"
@@ -449,11 +451,11 @@ fn bails_on_rejected_specs() {
 
     env.file("first", "Some text");
 
-    env.but("commit2 -m 'add first' -b foo").assert().success();
+    env.but("_commit2 -m 'add first' -b foo").assert().success();
 
     env.file("first", "changes");
 
-    env.but("commit2 -m 'add first' -b bar")
+    env.but("_commit2 -m 'add first' -b bar")
         .assert()
         .failure()
         .stderr_eq(snapbox::str![[r#"
@@ -469,7 +471,7 @@ fn newly_created_branches_are_included_in_json_output() {
 
     env.file("first", "Some text");
 
-    env.but("commit2 -m 'add first' -b foo --format json")
+    env.but("_commit2 -m 'add first' -b foo --format json")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
@@ -491,7 +493,7 @@ fn empty_flag_to_force_empty_commit_when_changes_exist() {
         "Some changes that will not be included in commit",
     );
 
-    env.but("commit2 -m 'empty commit despite changes in worktree' --empty")
+    env.but("_commit2 -m 'empty commit despite changes in worktree' --empty")
         .assert()
         .success();
 
@@ -499,7 +501,7 @@ fn empty_flag_to_force_empty_commit_when_changes_exist() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes]
+╭┄zz [uncommitted changes]
 ┊   vq A changes
 ┊
 ┊╭┄br [a-branch-1]
@@ -522,7 +524,7 @@ fn commit_empty_above_commit() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes] (no changes)
+╭┄zz [uncommitted changes] (no changes)
 ┊
 ┊╭┄g0 [A]
 ┊●   9ac4652 add second
@@ -535,7 +537,7 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    env.but("commit2 --no-message --above fe")
+    env.but("_commit2 --no-message --above fe")
         .assert()
         .success();
 
@@ -543,7 +545,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes] (no changes)
+╭┄zz [uncommitted changes] (no changes)
 ┊
 ┊╭┄g0 [A]
 ┊●   955bee4 add second
@@ -567,7 +569,7 @@ fn commit_empty_below_commit() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes] (no changes)
+╭┄zz [uncommitted changes] (no changes)
 ┊
 ┊╭┄g0 [A]
 ┊●   9ac4652 add second
@@ -580,7 +582,7 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    env.but("commit2 --no-message --below fe")
+    env.but("_commit2 --no-message --below fe")
         .assert()
         .success();
 
@@ -588,7 +590,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes] (no changes)
+╭┄zz [uncommitted changes] (no changes)
 ┊
 ┊╭┄g0 [A]
 ┊●   eee1eaf add second
@@ -614,7 +616,7 @@ fn commit_above_commit() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes]
+╭┄zz [uncommitted changes]
 ┊   uv A file.txt
 ┊
 ┊╭┄g0 [A]
@@ -628,7 +630,7 @@ Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage 
 
 "#]]);
 
-    env.but("commit2 -m 'add file.txt' --above fe")
+    env.but("_commit2 -m 'add file.txt' --above fe")
         .assert()
         .success();
 
@@ -636,7 +638,7 @@ Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage 
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes] (no changes)
+╭┄zz [uncommitted changes] (no changes)
 ┊
 ┊╭┄g0 [A]
 ┊●   e38b8f7 add second
@@ -662,7 +664,7 @@ fn commit_above_branch() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes]
+╭┄zz [uncommitted changes]
 ┊   uv A file.txt
 ┊
 ┊╭┄g0 [A]
@@ -675,7 +677,7 @@ Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage 
 
 "#]]);
 
-    env.but("commit2 -m 'add file.txt' --above g0")
+    env.but("_commit2 -m 'add file.txt' --above g0")
         .assert()
         .success();
 
@@ -683,7 +685,7 @@ Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage 
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes] (no changes)
+╭┄zz [uncommitted changes] (no changes)
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   092d7a9 add file.txt
@@ -710,7 +712,7 @@ fn commit_below_commit() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes]
+╭┄zz [uncommitted changes]
 ┊   uv A file.txt
 ┊
 ┊╭┄g0 [A]
@@ -724,7 +726,7 @@ Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage 
 
 "#]]);
 
-    env.but("commit2 -m 'add file.txt' --below fe")
+    env.but("_commit2 -m 'add file.txt' --below fe")
         .assert()
         .success();
 
@@ -732,7 +734,7 @@ Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage 
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes] (no changes)
+╭┄zz [uncommitted changes] (no changes)
 ┊
 ┊╭┄g0 [A]
 ┊●   d7e6d8f add second
@@ -758,7 +760,7 @@ fn commit_below_branch() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes]
+╭┄zz [uncommitted changes]
 ┊   uv A file.txt
 ┊
 ┊╭┄g0 [A]
@@ -771,7 +773,7 @@ Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage 
 
 "#]]);
 
-    env.but("commit2 -m 'add file.txt' --below g0")
+    env.but("_commit2 -m 'add file.txt' --below g0")
         .assert()
         .success();
 
@@ -779,7 +781,7 @@ Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage 
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes] (no changes)
+╭┄zz [uncommitted changes] (no changes)
 ┊
 ┊╭┄g0 [A]
 ┊●   8a3fbb3 add A
@@ -806,7 +808,7 @@ fn commit_below_branch_with_multiple_commits_treats_branch_as_bucket() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes]
+╭┄zz [uncommitted changes]
 ┊   uv A file.txt
 ┊
 ┊╭┄g0 [A]
@@ -820,7 +822,7 @@ Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage 
 
 "#]]);
 
-    env.but("commit2 -m 'add file.txt' --below g0")
+    env.but("_commit2 -m 'add file.txt' --below g0")
         .assert()
         .success();
 
@@ -828,7 +830,7 @@ Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage 
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes] (no changes)
+╭┄zz [uncommitted changes] (no changes)
 ┊
 ┊╭┄g0 [A]
 ┊●   d7e6d8f add second
@@ -854,7 +856,7 @@ fn commit_above_refuses_on_conflicts() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes] (no changes)
+╭┄zz [uncommitted changes] (no changes)
 ┊
 ┊╭┄g0 [A]
 ┊●   9ac4652 add second
@@ -869,7 +871,7 @@ Hint: run `but help` for all commands
 
     env.file("second", "Conflicting with commit 9ac4652");
 
-    env.but("commit2 -m 'add second' --above fe")
+    env.but("_commit2 -m 'add second' --above fe")
         .assert()
         .failure()
         .stderr_eq(snapbox::str![[r#"
@@ -887,7 +889,7 @@ fn commit_below_refuses_on_conflicts() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes] (no changes)
+╭┄zz [uncommitted changes] (no changes)
 ┊
 ┊╭┄g0 [A]
 ┊●   9ac4652 add second
@@ -902,7 +904,7 @@ Hint: run `but help` for all commands
 
     env.file("second", "Conflicting with commit 9ac4652");
 
-    env.but("commit2 -m 'add second' --below 9a")
+    env.but("_commit2 -m 'add second' --below 9a")
         .assert()
         .failure()
         .stderr_eq(snapbox::str![[r#"
@@ -916,13 +918,13 @@ fn refuses_above_and_below() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
     env.setup_metadata(&["A"]);
 
-    env.but("commit2 --above dontcare --below dontcare")
+    env.but("_commit2 --above dontcare --below dontcare")
         .assert()
         .failure()
         .stderr_eq(snapbox::str![[r#"
 error: the argument '--above <BRANCH_OR_COMMIT>' cannot be used with '--below <BRANCH_OR_COMMIT>'
 
-Usage: but commit2 --above <BRANCH_OR_COMMIT> [CHANGES]...
+Usage: but _commit2 --above <BRANCH_OR_COMMIT> [CHANGES]...
 
 For more information, try '--help'.
 
@@ -934,13 +936,13 @@ fn refuses_above_and_branch() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
     env.setup_metadata(&["A"]);
 
-    env.but("commit2 --above dontcare -b")
+    env.but("_commit2 --above dontcare -b")
         .assert()
         .failure()
         .stderr_eq(snapbox::str![[r#"
 error: the argument '--above <BRANCH_OR_COMMIT>' cannot be used with '--branch [<BRANCH>]'
 
-Usage: but commit2 --above <BRANCH_OR_COMMIT> [CHANGES]...
+Usage: but _commit2 --above <BRANCH_OR_COMMIT> [CHANGES]...
 
 For more information, try '--help'.
 
@@ -952,13 +954,13 @@ fn refuses_below_and_branch() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
     env.setup_metadata(&["A"]);
 
-    env.but("commit2 --below dontcare -b")
+    env.but("_commit2 --below dontcare -b")
         .assert()
         .failure()
         .stderr_eq(snapbox::str![[r#"
 error: the argument '--below <BRANCH_OR_COMMIT>' cannot be used with '--branch [<BRANCH>]'
 
-Usage: but commit2 --below <BRANCH_OR_COMMIT> [CHANGES]...
+Usage: but _commit2 --below <BRANCH_OR_COMMIT> [CHANGES]...
 
 For more information, try '--help'.
 
@@ -972,7 +974,7 @@ fn above_branch_not_in_workspace_returns_bad_input() {
 
     env.but("unapply B").assert().success();
 
-    env.but("commit2 --above B")
+    env.but("_commit2 --above B")
         .assert()
         .failure()
         .stderr_eq(snapbox::str![[r#"
@@ -992,7 +994,7 @@ fn above_commit_not_in_workspace_returns_bad_input() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes] (no changes)
+╭┄zz [uncommitted changes] (no changes)
 ┊
 ┊╭┄g0 [A]
 ┊●   9477ae7 add A
@@ -1010,7 +1012,7 @@ Hint: run `but help` for all commands
 
     env.but("unapply B").assert().success();
 
-    env.but("commit2 --above d3")
+    env.but("_commit2 --above d3")
         .assert()
         .failure()
         .stderr_eq(snapbox::str![[r#"
@@ -1026,11 +1028,11 @@ fn above_non_branch_non_commit_target_returns_bad_input() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
     env.setup_metadata(&[]);
 
-    env.but("commit2 --above zz")
+    env.but("_commit2 --above zz")
         .assert()
         .failure()
         .stderr_eq(snapbox::str![[r#"
-Error: Expected a commit or a branch, got unassigned changes
+Error: Expected a commit or a branch, got uncommitted changes
 
 Hint: Run `but status` to show applicable targets
 
@@ -1049,7 +1051,7 @@ fn committing_specific_cli_ids() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes]
+╭┄zz [uncommitted changes]
 ┊     kl A one
 ┊   twop A two
 ┊
@@ -1063,13 +1065,13 @@ Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage 
 
 "#]]);
 
-    env.but("commit2 --no-message kl").assert().success();
+    env.but("_commit2 --no-message kl").assert().success();
 
     env.but("status -f")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes]
+╭┄zz [uncommitted changes]
 ┊   twop A two
 ┊
 ┊╭┄g0 [A]
@@ -1095,7 +1097,7 @@ fn hunks_within_file_are_not_order_dependent() {
 
     env.file("file", original_data);
 
-    env.but("commit2 --no-message").assert().success();
+    env.but("_commit2 --no-message").assert().success();
 
     env.file("file", format!("first hunk\n{original_data}\nlast hunk"));
 
@@ -1120,13 +1122,13 @@ j0 file│
 
 "#]]);
 
-    env.but("commit2 --no-message i0 j0").assert().success();
+    env.but("_commit2 --no-message i0 j0").assert().success();
 
     env.but("status -f")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes] (no changes)
+╭┄zz [uncommitted changes] (no changes)
 ┊
 ┊╭┄g0 [A]
 ┊●   f0a3edc (no commit message)
@@ -1145,13 +1147,13 @@ Hint: run `but help` for all commands
 
     env.but("undo").assert().success();
 
-    env.but("commit2 --no-message j0 i0").assert().success();
+    env.but("_commit2 --no-message j0 i0").assert().success();
 
     env.but("status -f")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes] (no changes)
+╭┄zz [uncommitted changes] (no changes)
 ┊
 ┊╭┄g0 [A]
 ┊●   f0a3edc (no commit message)
@@ -1178,7 +1180,7 @@ fn overlapping_changes_to_modified_file_are_deduplicated() {
 
     env.file("file", original_data);
 
-    env.but("commit2 --no-message").assert().success();
+    env.but("_commit2 --no-message").assert().success();
 
     env.file("file", format!("first hunk\n{original_data}\nlast hunk"));
 
@@ -1203,13 +1205,13 @@ j0 file│
 
 "#]]);
 
-    env.but("commit2 --no-message i0 j0 i0").assert().success();
+    env.but("_commit2 --no-message i0 j0 i0").assert().success();
 
     env.but("status -f")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes] (no changes)
+╭┄zz [uncommitted changes] (no changes)
 ┊
 ┊╭┄g0 [A]
 ┊●   f0a3edc (no commit message)
@@ -1228,13 +1230,13 @@ Hint: run `but help` for all commands
 
     env.but("undo").assert().success();
 
-    env.but("commit2 --no-message file j0").assert().success();
+    env.but("_commit2 --no-message file j0").assert().success();
 
     env.but("status -f")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes] (no changes)
+╭┄zz [uncommitted changes] (no changes)
 ┊
 ┊╭┄g0 [A]
 ┊●   f0a3edc (no commit message)
@@ -1257,7 +1259,7 @@ fn committing_something_that_isnt_a_cli_id() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
     env.setup_metadata(&["A"]);
 
-    env.but("commit2 --no-message A")
+    env.but("_commit2 --no-message A")
         .assert()
         .failure()
         .stderr_eq(snapbox::str![[r#"
@@ -1279,7 +1281,7 @@ fn can_commit_with_path_prefix() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes]
+╭┄zz [uncommitted changes]
 ┊   om A path/other/to/third.txt
 ┊   ms A path/to/first.txt
 ┊   rr A path/to/second.txt
@@ -1294,13 +1296,13 @@ Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage 
 
 "#]]);
 
-    env.but("commit2 path/to/ --no-message").assert().success();
+    env.but("_commit2 path/to/ --no-message").assert().success();
 
     env.but("status -f")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes]
+╭┄zz [uncommitted changes]
 ┊   om A path/other/to/third.txt
 ┊
 ┊╭┄g0 [A]
@@ -1327,7 +1329,7 @@ fn path_prefix_with_mix_of_modifications() {
     env.file("dir/to_delete.txt", "second");
     env.file("dir/to_empty.txt", "third");
 
-    env.but("commit2 --no-message").assert().success();
+    env.but("_commit2 --no-message").assert().success();
 
     std::fs::remove_file(env.projects_root().join("dir/to_delete.txt")).unwrap();
     env.file("dir/to_empty.txt", "");
@@ -1340,7 +1342,7 @@ fn path_prefix_with_mix_of_modifications() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes]
+╭┄zz [uncommitted changes]
 ┊   lm D dir/to_delete.txt
 ┊   no M dir/to_empty.txt
 ┊   xv M dir/to_modify.txt
@@ -1360,13 +1362,13 @@ Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage 
 
 "#]]);
 
-    env.but("commit2 dir/ --no-message").assert().success();
+    env.but("_commit2 dir/ --no-message").assert().success();
 
     env.but("status -f")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes] (no changes)
+╭┄zz [uncommitted changes] (no changes)
 ┊
 ┊╭┄g0 [A]
 ┊●   d1a6de8 (no commit message)
@@ -1413,7 +1415,7 @@ fn requires_specifying_stack_when_there_are_multiple() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
     env.setup_metadata(&["A", "B"]);
 
-    env.but("commit2 --empty --no-message")
+    env.but("_commit2 --empty --no-message")
         .assert()
         .failure()
         .stderr_eq(snapbox::str![[r#"
@@ -1432,7 +1434,7 @@ fn committing_above_an_empty_branch() {
     env.file("one", "one content");
 
     env.but("branch new top").assert().success();
-    env.but("commit2 one -m 'add one' --above top")
+    env.but("_commit2 one -m 'add one' --above top")
         .assert()
         .success();
 
@@ -1440,7 +1442,7 @@ fn committing_above_an_empty_branch() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes] (no changes)
+╭┄zz [uncommitted changes] (no changes)
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   75b9f19 add one
@@ -1464,7 +1466,7 @@ fn committing_below_empty_branch_with_empty_branch_below() {
 
     env.but("branch new middle").assert().success();
     env.but("branch new --anchor middle top").assert().success();
-    env.but("commit2 one -m 'add one' --below top")
+    env.but("_commit2 one -m 'add one' --below top")
         .assert()
         .success();
 
@@ -1472,7 +1474,7 @@ fn committing_below_empty_branch_with_empty_branch_below() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes] (no changes)
+╭┄zz [uncommitted changes] (no changes)
 ┊
 ┊╭┄to [top] (no commits)
 ┊│
@@ -1497,14 +1499,14 @@ fn committing_below_non_top_empty_branch() {
     env.file("one", "one content");
     env.file("two", "two content");
 
-    env.but("commit2 one -m 'add one' -b bottom")
+    env.but("_commit2 one -m 'add one' -b bottom")
         .assert()
         .success();
     env.but("branch new --anchor bottom middle")
         .assert()
         .success();
     env.but("branch new --anchor middle top").assert().success();
-    env.but("commit2 two -m 'add two' --below middle")
+    env.but("_commit2 two -m 'add two' --below middle")
         .assert()
         .success();
 
@@ -1512,7 +1514,7 @@ fn committing_below_non_top_empty_branch() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes] (no changes)
+╭┄zz [uncommitted changes] (no changes)
 ┊
 ┊╭┄op [top] (no commits)
 ┊│
@@ -1546,7 +1548,7 @@ fn committing_below_an_empty_branch() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes]
+╭┄zz [uncommitted changes]
 ┊     kl A one
 ┊   twop A two
 ┊
@@ -1559,7 +1561,7 @@ Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage 
 
 "#]]);
 
-    env.but("commit2 one -m 'add one' --below top")
+    env.but("_commit2 one -m 'add one' --below top")
         .assert()
         .success();
 
@@ -1567,7 +1569,7 @@ Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage 
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes]
+╭┄zz [uncommitted changes]
 ┊   twop A two
 ┊
 ┊╭┄to [top] (no commits)
@@ -1584,7 +1586,7 @@ Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage 
 
     env.but("reword a-branch-1 -m bottom").assert().success();
 
-    env.but("commit2 two -m 'add two' --below top")
+    env.but("_commit2 two -m 'add two' --below top")
         .assert()
         .success();
 
@@ -1592,7 +1594,7 @@ Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage 
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [unassigned changes] (no changes)
+╭┄zz [uncommitted changes] (no changes)
 ┊
 ┊╭┄op [top] (no commits)
 ┊│
@@ -1615,7 +1617,7 @@ fn gives_good_error_when_your_terminal_doesnt_support_input() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
     env.setup_metadata(&[]);
 
-    env.but("commit2 --interactive")
+    env.but("_commit2 --interactive")
         .assert()
         .failure()
         .stderr_eq(snapbox::str![[r#"

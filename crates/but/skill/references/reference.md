@@ -31,7 +31,7 @@ but status --upstream   # Show upstream relationship
 Shows:
 
 - Applied/unapplied branches in workspace
-- Unassigned and assigned changes
+- Uncommitted and assigned changes
 - Commits on each stack
 - CLI IDs to use in other commands
 
@@ -97,7 +97,7 @@ Activate a branch in the workspace.
 but apply feature-branch  # Activate branch in workspace
 ```
 
-Applied branches are merged into `gitbutler/workspace` and visible in working directory.
+Default human output reports whether the branch was applied, was already active, or conflicted. Conflicts are reported as non-zero CLI errors.
 
 ### `but unapply <id>`
 
@@ -225,13 +225,13 @@ Universal editing primitive that does different operations based on types.
 but rub <file> <commit>      # Amend file into commit
 but rub <commit> <commit>    # Squash commits together
 but rub <commit> <branch>    # Move commit to branch
-but rub <commit> zz          # Undo commit to unassigned
-but rub zz <commit>          # Amend all unassigned changes into commit
+but rub <commit> zz          # Undo commit to uncommitted
+but rub zz <commit>          # Amend all uncommitted changes into commit
 but rub <file-in-commit> zz  # Uncommit specific file from its commit
 but rub <file-in-commit> <commit>  # Move file from one commit to another
 ```
 
-The core "rub two things together" operation. `zz` is a special target meaning "unassigned" (no branch).
+The core "rub two things together" operation. `zz` is a special target meaning "uncommitted" (no branch).
 
 ### `but squash <commits>`
 
@@ -288,13 +288,13 @@ Comma-separated multi-source moves are valid for commit sources only, not branch
 
 ### `but uncommit <source>`
 
-Uncommit changes back to unassigned changes.
+Uncommit changes back to uncommitted changes.
 
 ```bash
 but uncommit <commit-id>      # Uncommit entire commit
 but uncommit <file-id>        # Uncommit specific file from its commit
 but uncommit <commit-id> --diff  # Also show resulting dirty diff with hunk IDs
-but uncommit <commit-id> -d   # Discard committed changes instead of moving to unassigned
+but uncommit <commit-id> -d   # Discard committed changes instead of moving to uncommitted
 but uncommit <file-id> --discard  # Discard committed file changes completely
 ```
 
@@ -418,9 +418,9 @@ Use `--no-hooks` to bypass pre-push hooks when needed.
 
 Selectors for `auto-merge`, `set-draft`, and `set-ready` can be branch names, branch IDs, stack IDs, or numeric review IDs, comma-separated.
 
-In non-interactive environments, use `--message (-m)`, `--file (-F)`, or `--default (-t)` to avoid editor prompts. The `-t` flag uses the commit message as title/description for single-commit branches; for multi-commit branches it falls back to the branch name as the title.
+Agents must use `--message (-m)`, `--file (-F)`, or `--default (-t)` to avoid editor prompts. The `-t` flag uses the commit message as title/description for single-commit branches; for multi-commit branches it falls back to the branch name as the title.
 
-**Note:** For stacked branches, the custom message (`-m` or `-F`) only applies to the selected branch. Dependent branches in the stack will use default messages (commit title/description).
+**Stacked branches:** Use `but pr` for stacked PRs. It creates reviews against the right bases and updates GitButler stack footers in PR descriptions. Creating stacked PRs with `gh pr create` or another forge tool loses that stack-aware behavior. To publish a whole stack, run `but pr new <top-branch-id> -t`; custom messages (`-m` or `-F`) only apply to the selected branch, while dependent branches use default messages (commit title/description).
 
 Requires forge integration to be configured via `but config forge auth`.
 
