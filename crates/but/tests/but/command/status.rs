@@ -529,7 +529,7 @@ fn status_upstream_and_merge_base_messages_truncate_when_unpaged() {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted changes] (no changes)
+╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A] [✓ upstream merges cleanly]
 ┊●   601614c add A
@@ -562,6 +562,127 @@ fn status_upstream_merge_status_integrated() {
         ]);
 }
 
+#[test]
+fn status_marks_merged_upstream_without_upstream_flag() {
+    let env =
+        Sandbox::init_scenario_with_target_and_default_settings("upstream-integrated-with-updates");
+    env.setup_metadata_at_target(&["A", "B"], "refs/heads/base");
+
+    env.but("status")
+        .env("NO_BG_TASKS", "1")
+        .assert()
+        .success()
+        .stderr_eq(snapbox::str![])
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted] (no changes)
+┊
+┊╭┄g0 [A] (merged upstream)
+┊●   756ee31 A-change
+├╯
+┊
+┊╭┄h0 [B]
+┊●   536958e B-change
+├╯
+┊
+┊● 9354ac4 (upstream) ⏫ 2 commits
+├╯ efc9211 (common base) 2000-01-02 base
+
+Hint: branches marked `(merged upstream)` have landed; run `but pull` to remove them, or start new work on another branch
+
+"#]]);
+}
+
+#[test]
+fn status_marks_empty_remote_branch_merged_upstream() {
+    let env =
+        Sandbox::init_scenario_with_target_and_default_settings("upstream-merged-empty-branch");
+
+    env.but("apply origin/document-but-pr-skill")
+        .env("NO_BG_TASKS", "1")
+        .assert()
+        .success()
+        .stderr_eq(snapbox::str![])
+        .stdout_eq(snapbox::str![[r#"
+Applied remote branch 'origin/document-but-pr-skill' to workspace
+
+"#]]);
+
+    env.but("status")
+        .env("NO_BG_TASKS", "1")
+        .assert()
+        .success()
+        .stderr_eq(snapbox::str![])
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted] (no changes)
+┊
+┊╭┄do [document-but-pr-skill] (merged upstream) (no commits)
+├╯
+┊
+┊● 55165db (upstream) ⏫ 1 commit
+├╯ 55165db (common base) 2000-01-02 merge document-but-pr-skill
+
+Hint: branches marked `(merged upstream)` have landed; run `but pull` to remove them, or start new work on another branch
+
+"#]]);
+
+    assert_pull_removes_merged_upstream_branch(&env);
+}
+
+#[test]
+fn status_marks_empty_remote_branch_merged_upstream_when_tip_matches_target() {
+    let env =
+        Sandbox::init_scenario_with_target_and_default_settings("upstream-merged-empty-branch-ff");
+    env.set_target_sha("refs/heads/base");
+
+    env.but("apply origin/document-but-pr-skill")
+        .env("NO_BG_TASKS", "1")
+        .assert()
+        .success()
+        .stderr_eq(snapbox::str![])
+        .stdout_eq(snapbox::str![[r#"
+Applied remote branch 'origin/document-but-pr-skill' to workspace
+
+"#]]);
+
+    let output = env
+        .but("status")
+        .env("NO_BG_TASKS", "1")
+        .assert()
+        .success()
+        .stderr_eq(snapbox::str![])
+        .get_output()
+        .stdout
+        .clone();
+    let output = String::from_utf8_lossy(&output);
+    assert!(
+        output.contains("[document-but-pr-skill] (merged upstream) (no commits)"),
+        "the fast-forward merged branch should be labelled as merged upstream:\n{output}"
+    );
+
+    assert_pull_removes_merged_upstream_branch(&env);
+}
+
+fn assert_pull_removes_merged_upstream_branch(env: &Sandbox) {
+    env.invoke_git("remote set-url origin .");
+    env.but("pull").env("NO_BG_TASKS", "1").assert().success();
+
+    let status_after = env
+        .but("status --format json")
+        .allow_json()
+        .env("NO_BG_TASKS", "1")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let status_after: serde_json::Value = serde_json::from_slice(&status_after).unwrap();
+    assert_eq!(
+        status_after["stacks"].as_array().unwrap().len(),
+        0,
+        "the merged upstream branch should be removed by `but pull`"
+    );
+}
+
 /// Like `status_upstream_merge_status_integrated`, but the fixture adds two
 /// extra branches (`extra-untracked`, `extra-untracked-2`) that point at `base`
 /// and are NOT registered in workspace metadata.
@@ -589,9 +710,9 @@ fn status_upstream_prunes_untracked_integrated_branch() {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted changes] (no changes)
+╭┄zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A] [⬆ integrated upstream]
+┊╭┄g0 [A] (merged upstream)
 ┊●   756ee31 A-change
 ├╯
 ┊
@@ -605,7 +726,7 @@ fn status_upstream_prunes_untracked_integrated_branch() {
 ┊┊
 ├╯ efc9211 (common base) 2000-01-02 base
 
-Hint: run `but help` for all commands
+Hint: branches marked `(merged upstream)` have landed; run `but pull` to remove them, or start new work on another branch
 
 "#]]);
 }
@@ -631,9 +752,9 @@ fn status_upstream_prunes_metadata_tracked_integrated_branches() {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted changes] (no changes)
+╭┄zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A] [⬆ integrated upstream]
+┊╭┄g0 [A] (merged upstream)
 ┊●   756ee31 A-change
 ├╯
 ┊
@@ -650,7 +771,7 @@ fn status_upstream_prunes_metadata_tracked_integrated_branches() {
 ┊┊
 ├╯ efc9211 (common base) 2000-01-02 base
 
-Hint: run `but help` for all commands
+Hint: branches marked `(merged upstream)` have landed; run `but pull` to remove them, or start new work on another branch
 
 "#]]);
 }
@@ -681,7 +802,7 @@ fn status_upstream_prunes_with_different_bases() {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted changes] (no changes)
+╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A] [✓ upstream merges cleanly]
 ┊●   756ee31 A-change
@@ -690,7 +811,7 @@ fn status_upstream_prunes_with_different_bases() {
 ┊╭┄h0 [B] [✓ upstream merges cleanly]
 ┊●   594a02c B-change
 ┊│
-┊├┄ma [main] [⬆ integrated upstream]
+┊├┄ma [main] (merged upstream)
 ┊●   ba5149e M2
 ┊●   6daac93 M1
 ├╯
@@ -701,7 +822,7 @@ fn status_upstream_prunes_with_different_bases() {
 ┊┊
 ├╯ efc9211 (common base) 2000-01-02 base
 
-Hint: run `but help` for all commands
+Hint: branches marked `(merged upstream)` have landed; run `but pull` to remove them, or start new work on another branch
 
 "#]]);
 }

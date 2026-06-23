@@ -210,9 +210,7 @@ fn rejects_non_branch_cli_id() -> anyhow::Result<()> {
         .assert()
         .failure()
         .stdout_eq(str![])
-        .stderr_eq(format!(
-            "Error: Invalid branch. '{commit_cli_id}' is a commit\n"
-        ));
+        .stderr_eq(format!("Error: Could not find branch: '{commit_cli_id}'\n"));
 
     Ok(())
 }
@@ -237,7 +235,7 @@ fn assert_workspace_status(env: &crate::utils::Sandbox) {
         .success()
         .stderr_eq(str![])
         .stdout_eq(str![[r#"
-╭┄zz [uncommitted changes] (no changes)
+╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
 ┊●   9477ae7 add A
