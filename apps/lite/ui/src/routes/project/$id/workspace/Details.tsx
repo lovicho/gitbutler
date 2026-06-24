@@ -14,7 +14,7 @@ import { decodeBytes } from "#ui/api/bytes.ts";
 import { commitBody, commitTitle, shortCommitId } from "#ui/commit.ts";
 import {
 	branchFileParent,
-	changesFileParent,
+	uncommittedChangesFileParent,
 	commitFileParent,
 	FileOperand,
 	fileOperand,
@@ -548,10 +548,10 @@ const Title: FC<{
 					)}
 				</SuspenseQuery>
 			),
-			ChangesSection: () => (
+			UncommittedChanges: () => (
 				<div className={styles.title}>
 					<Icon name="file-diff" />
-					<h3 className={classes("text-15", "text-semibold")}>Changes</h3>
+					<h3 className={classes("text-15", "text-semibold")}>Uncommitted changes</h3>
 				</div>
 			),
 			File: () => null,
@@ -658,35 +658,37 @@ const DiffStyleToggle: FC<{
 	</Tooltip.Root>
 );
 
-const FullscreenToggle: FC<{
+const FullWindowToggle: FC<{
 	className?: string;
-	fullscreen: boolean;
-	onFullscreenChange: (fullscreen: boolean) => void;
-}> = ({ className, fullscreen, onFullscreenChange }) => {
-	const label = fullscreen ? "Exit fullscreen details" : "Fullscreen details";
+	fullWindow: boolean;
+	onFullWindowChange: (fullWindow: boolean) => void;
+}> = ({ className, fullWindow, onFullWindowChange }) => {
+	const label = fullWindow ? "Exit full window details" : "Full window details";
 
 	return (
 		<Tooltip.Root>
 			<Tooltip.Trigger
 				aria-label={label}
-				aria-pressed={fullscreen}
+				aria-pressed={fullWindow}
 				className={className}
-				onClick={() => onFullscreenChange(!fullscreen)}
+				onClick={() => onFullWindowChange(!fullWindow)}
 			>
-				<Icon name={fullscreen ? "fullscreen-exit" : "fullscreen-enter"} />
+				<Icon name={fullWindow ? "fullscreen-exit" : "fullscreen-enter"} />
 			</Tooltip.Trigger>
 			<Tooltip.Portal>
 				<Tooltip.Positioner sideOffset={4}>
 					<Tooltip.Popup
-						render={<TooltipPopup kbd={workspaceHotkeys.toggleDetailsFullscreen.hotkey} />}
+						render={<TooltipPopup kbd={workspaceHotkeys.toggleDetailsFullWindow.hotkey} />}
 					>
-						{workspaceHotkeys.toggleDetailsFullscreen.meta.name}
+						{workspaceHotkeys.toggleDetailsFullWindow.meta.name}
 					</Tooltip.Popup>
 				</Tooltip.Positioner>
 			</Tooltip.Portal>
 		</Tooltip.Root>
 	);
 };
+
+const isMac = window.lite.platform === "darwin";
 
 const CommitDetailsContent: FC<{
 	bodyCollapsed: boolean;
@@ -759,7 +761,7 @@ const Diff: FC<{
 	const changesetKey = Match.value(outlineSelection).pipe(
 		Match.tags({
 			Branch: ({ branchRef }) => decodeBytes(branchRef),
-			ChangesSection: () => "changes",
+			UncommittedChanges: () => "uncommittedChanges",
 			Commit: ({ commitId }) => commitId,
 		}),
 		Match.orElseAbsurd,
@@ -767,7 +769,7 @@ const Diff: FC<{
 	const fileParent = Match.value(outlineSelection).pipe(
 		Match.tags({
 			Branch: ({ branchRef, stackId }) => branchFileParent({ branchRef, stackId }),
-			ChangesSection: () => changesFileParent,
+			UncommittedChanges: () => uncommittedChangesFileParent,
 			Commit: ({ commitId, stackId }) => commitFileParent({ commitId, stackId }),
 		}),
 		Match.orElseAbsurd,
@@ -1009,19 +1011,19 @@ const PullRequestPrimaryAction: FC<{
 			onClick={primaryAction}
 			type="button"
 		>
-			{review.draft ? "Mark as Ready" : "Merge"}
 			{isPending && <Icon name="spinner" />}
+			{review.draft ? "Mark as Ready" : "Merge"}
 		</button>
 	);
 };
 
 export const Details: FC<
 	{
-		detailsFullscreen: boolean;
-		onDetailsFullscreenChange: (fullscreen: boolean) => void;
+		detailsFullWindow: boolean;
+		onDetailsFullWindowChange: (fullWindow: boolean) => void;
 		outlineSelection: Operand | null;
 	} & ComponentProps<"div">
-> = ({ detailsFullscreen, onDetailsFullscreenChange, outlineSelection, ...restProps }) => {
+> = ({ detailsFullWindow, onDetailsFullWindowChange, outlineSelection, ...restProps }) => {
 	const { id: projectId } = useParams({ from: "/project/$id/workspace" });
 	const dispatch = useAppDispatch();
 	const filesVisible = useAppSelector((state) => selectProjectFilesVisible(state, projectId));
@@ -1039,6 +1041,7 @@ export const Details: FC<
 		<div {...restProps} className={classes(restProps.className, styles.container)}>
 			<div className={styles.headerWrap}>
 				<div className={styles.titleRow}>
+					<div className={classes(detailsFullWindow && isMac && styles.titleRowMacSpacer)} />
 					<Title
 						bodyCollapsed={commitBodyCollapsed}
 						bodyId={commitBodyId}
@@ -1046,10 +1049,10 @@ export const Details: FC<
 						projectId={projectId}
 						selection={outlineSelection}
 					/>
-					<FullscreenToggle
+					<FullWindowToggle
 						className={classes(styles.titleRowActions, getButtonClassName({ iconOnly: true }))}
-						fullscreen={detailsFullscreen}
-						onFullscreenChange={onDetailsFullscreenChange}
+						fullWindow={detailsFullWindow}
+						onFullWindowChange={onDetailsFullWindowChange}
 					/>
 				</div>
 
@@ -1141,7 +1144,7 @@ export const Details: FC<
 								}
 							</SuspenseQuery>
 						)),
-						Match.tag("ChangesSection", () => (
+						Match.tag("UncommittedChanges", () => (
 							<SuspenseQuery {...changesInWorktreeQueryOptions(projectId)}>
 								{({ data: worktreeChanges }) =>
 									renderDiff({

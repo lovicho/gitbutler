@@ -35,7 +35,7 @@ import {
 } from "#ui/native-menu.ts";
 import {
 	branchOperand,
-	changesSectionOperand,
+	uncommittedChangesOperand,
 	commitOperand,
 	operandEquals,
 	operandIdentityKey,
@@ -86,12 +86,7 @@ import {
 	InsertSide,
 	BottomUpdate,
 } from "@gitbutler/but-sdk";
-import {
-	formatForDisplay,
-	useHotkey,
-	UseHotkeyDefinition,
-	useHotkeys,
-} from "@tanstack/react-hotkeys";
+import { useHotkey, UseHotkeyDefinition, useHotkeys } from "@tanstack/react-hotkeys";
 import { useQueries, useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
 import { Match } from "effect";
@@ -128,6 +123,7 @@ import { Icon } from "#ui/components/Icon.tsx";
 import { Kbd } from "#ui/components/Kbd.tsx";
 import {
 	changesHotkeys,
+	formatForDisplaySorted,
 	outlineHotkeys,
 	selectionOperationHotkeys,
 	toElectronAccelerator,
@@ -144,7 +140,7 @@ const DryRunWorkspaceContext = createContext<WorkspaceState | null>(null);
 const AbsorptionTargetKeysContext = createContext<ReadonlySet<string> | null>(null);
 
 const isCommitDiscardBoundary = (operand: Operand): boolean =>
-	operand._tag === "Branch" || operand._tag === "ChangesSection";
+	operand._tag === "Branch" || operand._tag === "UncommittedChanges";
 
 const selectAfterDiscardedCommit = ({
 	navigationIndex,
@@ -455,13 +451,13 @@ const useOutlineTreeHotkeys = ({
 	const defaultOutlineHotkeysEnabled = isDefaultMode;
 	const isSelectedCommit = selection?._tag === "Commit";
 	const isSelectedBranch = selection?._tag === "Branch";
-	const isSelectedChanges = selection?._tag === "ChangesSection";
+	const isSelectedChanges = selection?._tag === "UncommittedChanges";
 	const canPushSelectedBranch =
 		!!selectedPushContext &&
 		!pushStackMutation.isPending &&
-		partialStackPushDisabledReason(
+		!partialStackPushDisabled(
 			partialStackStateFromSegments(selectedPushContext.partialStackSegments),
-		) === null;
+		);
 
 	useNavigationIndexHotkeys({
 		ref,
@@ -474,7 +470,7 @@ const useOutlineTreeHotkeys = ({
 		getKey: operandIdentityKey,
 		operationSourceForItem: (operand) => operand,
 		selectSectionPredicate: (operand) =>
-			operand._tag === "Branch" || operand._tag === "ChangesSection",
+			operand._tag === "Branch" || operand._tag === "UncommittedChanges",
 	});
 
 	useHotkeys([
@@ -489,7 +485,7 @@ const useOutlineTreeHotkeys = ({
 		{
 			hotkey: outlineHotkeys.selectChanges.hotkey,
 			callback: () => {
-				dispatch(projectActions.selectOutline({ projectId, selection: changesSectionOperand }));
+				dispatch(projectActions.selectOutline({ projectId, selection: uncommittedChangesOperand }));
 				focusSelectionScope("outline");
 			},
 			options: { conflictBehavior: "allow", meta: outlineHotkeys.selectChanges.meta },
@@ -497,7 +493,7 @@ const useOutlineTreeHotkeys = ({
 		{
 			hotkey: outlineHotkeys.composeCommitMessage.hotkey,
 			callback: () => {
-				dispatch(projectActions.selectOutline({ projectId, selection: changesSectionOperand }));
+				dispatch(projectActions.selectOutline({ projectId, selection: uncommittedChangesOperand }));
 				focusCommitMessageInput();
 			},
 			options: {
@@ -537,7 +533,7 @@ const useOutlineTreeHotkeys = ({
 				}),
 			),
 			Match.tag(
-				"ChangesSection",
+				"UncommittedChanges",
 				(): UseHotkeyDefinition => ({
 					hotkey: outlineHotkeys.composeCommitMessageFromChanges.hotkey,
 					callback: focusCommitMessageInput,
@@ -698,7 +694,7 @@ const useOutlineTreeHotkeys = ({
 		{
 			hotkey: outlineHotkeys.absorb.hotkey,
 			callback: () => {
-				enterAbsorbMode(changesSectionOperand, { type: "all" });
+				enterAbsorbMode(uncommittedChangesOperand, { type: "all" });
 			},
 			options: {
 				conflictBehavior: "allow",
@@ -996,11 +992,11 @@ const InlineEditor: FC<{
 			</WorkspaceItemRowLabelContainer>
 			<div className={styles.inlineEditorHelp}>
 				<button type="submit" className={getWorkspaceItemRowButtonClassName({})}>
-					<kbd>{formatForDisplay("Enter")}</kbd>
+					<kbd>{formatForDisplaySorted("Enter")}</kbd>
 					<span className={styles.inlineEditorShortcutLabel}> to Save</span>
 				</button>
 				<button type="button" className={getWorkspaceItemRowButtonClassName({})} onClick={onExit}>
-					<kbd>{formatForDisplay("Escape")}</kbd>
+					<kbd>{formatForDisplaySorted("Escape")}</kbd>
 					<span className={styles.inlineEditorShortcutLabel}> to Cancel</span>
 				</button>
 			</div>
@@ -1165,6 +1161,7 @@ const CommitRow: FC<
 				}),
 			}),
 		);
+		focusSelectionScope("outline");
 	};
 
 	const startEditing = () => {
@@ -1375,7 +1372,7 @@ const CommitRow: FC<
 				/>
 			) : (
 				<WorkspaceItemRowLabelContainer>
-					<WorkspaceItemRowLabel singleLine>
+					<WorkspaceItemRowLabel>
 						{title === undefined ? (
 							<span className={workspaceItemRowStyles.fadedText}>(no message)</span>
 						) : (
@@ -1441,7 +1438,7 @@ const ChangesSectionRow: FC<{
 	lineStats: LineStats | null;
 	projectId: string;
 }> = ({ changes, lineStats, projectId }) => {
-	const operand = changesSectionOperand;
+	const operand = uncommittedChangesOperand;
 	const isDefaultMode = useAppSelector(
 		(state) => selectProjectOutlineModeState(state, projectId)._tag === "Default",
 	);
@@ -1456,8 +1453,21 @@ const ChangesSectionRow: FC<{
 		enterAbsorbMode(operand, { type: "all" });
 	};
 
+	const cutChanges = () => {
+		dispatch(
+			projectActions.enterTransferMode({
+				projectId,
+				mode: keyboardTransferOperationMode({
+					source: operand,
+					operationType: "into",
+				}),
+			}),
+		);
+		focusSelectionScope("outline");
+	};
+
 	const composeCommitMessage = () => {
-		dispatch(projectActions.selectOutline({ projectId, selection: changesSectionOperand }));
+		dispatch(projectActions.selectOutline({ projectId, selection: uncommittedChangesOperand }));
 		focusCommitMessageInput();
 	};
 
@@ -1474,6 +1484,12 @@ const ChangesSectionRow: FC<{
 			accelerator: toElectronAccelerator(outlineHotkeys.composeCommitMessageFromChanges.hotkey),
 			onSelect: composeCommitMessage,
 			enabled: isDefaultMode,
+		}),
+		nativeMenuItem({
+			label: "Cut Changes",
+			enabled: changes.length > 0,
+			onSelect: cutChanges,
+			accelerator: toElectronAccelerator(selectionOperationHotkeys.cut.hotkey),
 		}),
 		nativeMenuSeparator,
 		nativeMenuItem({
@@ -1672,7 +1688,7 @@ const Changes: FC<{
 	});
 	const lineStats = getLineStats(treeChangeDiffs.map((result) => result.data));
 
-	const operand = changesSectionOperand;
+	const operand = uncommittedChangesOperand;
 	const commitTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
 	const isDefaultMode = useAppSelector(
@@ -1786,9 +1802,10 @@ const Changes: FC<{
 		},
 	]);
 
-	const focusCommitMessageHotkeyLabel = formatForDisplay(
-		outlineHotkeys.composeCommitMessage.hotkey,
-	);
+	useHotkey("Escape", () => focusSelectionScope("outline"), {
+		target: commitTextareaRef,
+		conflictBehavior: "allow",
+	});
 
 	return (
 		<TreeItem
@@ -1813,14 +1830,11 @@ const Changes: FC<{
 					aria-label="Compose commit message"
 					disabled={!isDefaultMode}
 					readOnly={isCommitOrAmendPending}
-					placeholder={`Compose commit message ${focusCommitMessageHotkeyLabel}`}
+					placeholder={`Compose commit message ${formatForDisplaySorted(
+						outlineHotkeys.composeCommitMessage.hotkey,
+					)}`}
 					className={classes("text-13", "text-body", styles.commitTextarea)}
 					onFocus={selectChanges}
-					onKeyDown={(event) => {
-						if (event.key !== "Escape") return;
-						event.preventDefault();
-						focusSelectionScope("outline");
-					}}
 				/>
 
 				<div className={styles.commitControlsFooter}>
@@ -1934,12 +1948,8 @@ const addSegmentToPartialStackState = (
 	branchCount: segment.refName ? state.branchCount + 1 : state.branchCount,
 });
 
-const partialStackPushDisabledReason = (partialStackState: PartialStackState): string | null =>
-	partialStackState.hasConflicts
-		? "Resolve conflicts before pushing"
-		: !partialStackState.requiresPush
-			? "Nothing to push"
-			: null;
+const partialStackPushDisabled = (partialStackState: PartialStackState): boolean =>
+	!partialStackState.requiresPush || partialStackState.hasConflicts;
 
 const partialStackStateFromSegments = (segments: Array<Segment>): PartialStackState =>
 	segments.reduce(addSegmentToPartialStackState, emptyPartialStackState);
@@ -2100,6 +2110,19 @@ const BranchRow: FC<
 		focusCommitMessageInput();
 	};
 
+	const cutBranch = () => {
+		dispatch(
+			projectActions.enterTransferMode({
+				projectId,
+				mode: keyboardTransferOperationMode({
+					source: operand,
+					operationType: "into",
+				}),
+			}),
+		);
+		focusSelectionScope("outline");
+	};
+
 	const insertBlankCommit = (side: "above" | "below") => {
 		commitInsertBlankMutation.mutate({
 			projectId,
@@ -2159,17 +2182,9 @@ const BranchRow: FC<
 		});
 	};
 
-	const pushStackDisabledReason = pushStackMutation.isPending
-		? "Pushing"
-		: partialStackPushDisabledReason(partialStackState);
-	const canPushStack = pushStackDisabledReason === null;
-	const pushButtonLabel = pushesMultipleBranches
-		? partialStackState.pushWithForce
-			? "Force push this and all branches below"
-			: "Push this and all branches below"
-		: partialStackState.pushWithForce
-			? "Force push branch"
-			: "Push branch";
+	const pushStackDisabled =
+		pushStackMutation.isPending || partialStackPushDisabled(partialStackState);
+
 	const pushMenuLabel = pushesMultipleBranches
 		? partialStackState.pushWithForce
 			? "Force Push With Branches Below"
@@ -2181,7 +2196,7 @@ const BranchRow: FC<
 	const menuItems: Array<NativeMenuItem> = [
 		nativeMenuItem({
 			label: pushMenuLabel,
-			enabled: canPushStack,
+			enabled: !pushStackDisabled,
 			accelerator: toElectronAccelerator(outlineHotkeys.pushStack.hotkey),
 			onSelect: pushStack,
 		}),
@@ -2191,6 +2206,11 @@ const BranchRow: FC<
 			enabled: !isRenamePending,
 			accelerator: toElectronAccelerator(outlineHotkeys.renameBranch.hotkey),
 			onSelect: startEditing,
+		}),
+		nativeMenuItem({
+			label: "Cut Branch",
+			onSelect: cutBranch,
+			accelerator: toElectronAccelerator(selectionOperationHotkeys.cut.hotkey),
 		}),
 		nativeMenuItem({
 			label: "Copy Branch Name",
@@ -2278,7 +2298,7 @@ const BranchRow: FC<
 					</WorkspaceItemRowLabelContainer>
 
 					<div className={classes("text-13", styles.branchLabelMeta)}>
-						<span className={workspaceItemRowStyles.fadedText}>
+						<span className={classes(workspaceItemRowStyles.fadedText, styles.branchLabelMetaItem)}>
 							{Match.value(pushStatus).pipe(
 								Match.when("nothingToPush", () => "Nothing to push"),
 								Match.when("unpushedCommits", () => "Some unpushed"),
@@ -2298,32 +2318,55 @@ const BranchRow: FC<
 							</span>
 						)}
 
-						<Tooltip.Root>
-							<Tooltip.Trigger
-								aria-label={pushButtonLabel}
-								onClick={pushStack}
-								className={getWorkspaceItemRowButtonClassName({ variant: "outline" })}
-								// We pass `disabled` here because we want to disable the button, not
-								// the tooltip. Other props should be passed above.
-								render={<Button focusableWhenDisabled disabled={!canPushStack} />}
-							>
-								{pushStackMutation.isPending ? (
-									<Icon name="spinner" />
-								) : pushesMultipleBranches ? (
-									<Icon name="arrow-double-line-up" />
-								) : (
-									<Icon name="arrow-line-up" />
-								)}
-								Push
-							</Tooltip.Trigger>
-							<Tooltip.Portal>
-								<Tooltip.Positioner sideOffset={4}>
-									<Tooltip.Popup render={<TooltipPopup kbd={outlineHotkeys.pushStack.hotkey} />}>
-										{pushStackDisabledReason ?? pushButtonLabel}
-									</Tooltip.Popup>
-								</Tooltip.Positioner>
-							</Tooltip.Portal>
-						</Tooltip.Root>
+						{partialStackState.requiresPush &&
+							(() => {
+								const pushStackDisabledReason = pushStackMutation.isPending
+									? "pushing"
+									: partialStackState.hasConflicts
+										? "disabled due to conflicts"
+										: null;
+
+								const pushButtonLabel = `${
+									pushesMultipleBranches
+										? partialStackState.pushWithForce
+											? "Force push this and all branches below"
+											: "Push this and all branches below"
+										: partialStackState.pushWithForce
+											? "Force push branch"
+											: "Push branch"
+								}${pushStackDisabledReason !== null ? ` (${pushStackDisabledReason})` : ""}`;
+
+								return (
+									<Tooltip.Root>
+										<Tooltip.Trigger
+											aria-label={pushButtonLabel}
+											onClick={pushStack}
+											className={getWorkspaceItemRowButtonClassName({ variant: "outline" })}
+											// We pass `disabled` here because we want to disable the button, not
+											// the tooltip. Other props should be passed above.
+											render={<Button focusableWhenDisabled disabled={pushStackDisabled} />}
+										>
+											Push
+											{pushStackMutation.isPending ? (
+												<Icon name="spinner" />
+											) : pushesMultipleBranches ? (
+												<Icon size={12} name="arrow-double-up" />
+											) : (
+												<Icon size={12} name="arrow-up" />
+											)}
+										</Tooltip.Trigger>
+										<Tooltip.Portal>
+											<Tooltip.Positioner sideOffset={4}>
+												<Tooltip.Popup
+													render={<TooltipPopup kbd={outlineHotkeys.pushStack.hotkey} />}
+												>
+													{pushButtonLabel}
+												</Tooltip.Popup>
+											</Tooltip.Positioner>
+										</Tooltip.Portal>
+									</Tooltip.Root>
+								);
+							})()}
 					</div>
 				</div>
 			)}
