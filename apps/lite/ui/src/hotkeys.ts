@@ -164,11 +164,11 @@ export const outlineHotkeys = {
 		meta: { group: "Outline", name: "Compose commit message" },
 	},
 	deleteCommit: {
-		hotkey: "Mod+Backspace",
+		hotkey: globalThis.window.lite.platform === "darwin" ? "Mod+Backspace" : "Delete",
 		meta: { group: "Commit", name: "Delete commit" },
 	},
 	composeCommitMessageFromChanges: {
-		hotkey: "Enter",
+		hotkey: "R",
 		meta: { group: "Changes", name: "Compose commit message" },
 	},
 	moveCommitDown: {
@@ -188,11 +188,11 @@ export const outlineHotkeys = {
 		meta: { group: "Stack", name: "Update stack (rebases)" },
 	},
 	renameBranch: {
-		hotkey: "Enter",
+		hotkey: "R",
 		meta: { group: "Branch", name: "Rename branch" },
 	},
 	rewordCommit: {
-		hotkey: "Enter",
+		hotkey: "R",
 		meta: { group: "Commit", name: "Reword commit" },
 	},
 	selectBranch: {
