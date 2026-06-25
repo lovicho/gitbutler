@@ -531,21 +531,6 @@ Hint: run `but help` for all commands
 }
 
 #[test]
-fn cannot_squash_into_branches() {
-    let env = one_branch_three_commits();
-
-    env.but("_squash2 a-branch-1 --target a-branch-1")
-        .assert()
-        .failure()
-        .stderr_eq(snapbox::str![[r#"
-Error: Could not find commit: 'a-branch-1'
-
-Hint: --target must always target a commit on an applied branch
-
-"#]]);
-}
-
-#[test]
 fn cannot_squash_nothing() {
     let env = one_branch_three_commits();
 
@@ -770,9 +755,9 @@ Hint: run `but help` for all commands
         .assert()
         .failure()
         .stderr_eq(snapbox::str![[r#"
-Error: Could not find commit: 'd15f721'
+Error: Could not find target: 'd15f721'
 
-Hint: --target must always target a commit on an applied branch
+Hint: --target must be an applied commit, branch, or zz. Run `but status` for applicable targets.
 
 "#]]);
 }
@@ -1013,16 +998,16 @@ fn amend_uncommitted_hunks_into_commits() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-───────╮
-h0 file│
-───────╯
+─────────╮
+qs:9 file│
+─────────╯
      1│+topline
    1 2│ line
    2 3│ line
    3 4│ line
-───────╮
-i0 file│
-───────╯
+─────────╮
+qs:d file│
+─────────╯
     7  8│ line
     8  9│ line
     9 10│ line
@@ -1031,7 +1016,7 @@ i0 file│
 
 "#]]);
 
-    env.but("_squash2 h0 -t bcf07e2 -u")
+    env.but("_squash2 qs:9 -t bcf07e2 -u")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
@@ -1043,9 +1028,9 @@ Amended bcf07e2 to create cb08f3a
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-───────╮
-h0 file│
-───────╯
+─────────╮
+qs:d file│
+─────────╯
     8  8│ line
     9  9│ line
    10 10│ line
@@ -1197,6 +1182,308 @@ Hint: run `but help` for all commands
         .failure()
         .stderr_eq(snapbox::str![[r#"
 Error: Failed to apply changes to destination commit - merge conflict
+
+"#]]);
+}
+
+#[test]
+fn squash_into_branch_tip() {
+    let env = one_branch_three_commits();
+
+    env.file("file", "file content");
+
+    env.but("_squash2 file -t a-branch-1 -u")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+Amended f55169f to create 13baa98
+
+"#]]);
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted] (no changes)
+┊
+┊╭┄br [a-branch-1]
+┊●   13baa98 add three
+┊│     13:qs A file
+┊│     13:or A three
+┊●   f63361f add two
+┊│     f6:tw A two
+┊●   ea345ba add one
+┊│     ea:kl A one
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}
+
+#[test]
+fn squash_into_empty_branch() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.file("file", "file content");
+
+    env.but("branch new bottom").assert().success();
+    env.but("_squash2 file -t bottom -u")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: --target cannot be an empty branch
+
+"#]]);
+
+    // middle and bottom are stil empty even if they're stacked
+    env.but("branch new middle -a bottom").assert().success();
+    env.but("_squash2 file -t middle -u")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: --target cannot be an empty branch
+
+"#]]);
+    env.but("_squash2 file -t bottom -u")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: --target cannot be an empty branch
+
+"#]]);
+
+    env.but("_commit2 --empty -b bottom --no-message")
+        .assert()
+        .success();
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted]
+┊   qs A file
+┊
+┊╭┄mi [middle] (no commits)
+┊│
+┊├┄bo [bottom]
+┊●   7adb8e6 (no commit message) (no changes)
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage them to a branch
+
+"#]]);
+    // middle should be considered empty even though there are commits on its parent
+    env.but("_squash2 file -t middle -u")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: --target cannot be an empty branch
+
+"#]]);
+}
+
+#[test]
+fn cannot_squash_into_targets_that_dont_exist() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.file("file", "file content");
+
+    env.but("_squash2 file -t does-not-exist -u")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: Could not find target: 'does-not-exist'
+
+Hint: --target must be an applied commit, branch, or zz. Run `but status` for applicable targets.
+
+"#]]);
+}
+
+#[test]
+fn squash_into_zz_to_uncommit_commit() {
+    let env = one_branch_three_commits();
+
+    env.but("_squash2 f55169f -t zz")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+Uncommitted f55169f
+
+"#]]);
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted]
+┊   or A three
+┊
+┊╭┄br [a-branch-1]
+┊●   f63361f add two
+┊│     f6:tw A two
+┊●   ea345ba add one
+┊│     ea:kl A one
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage them to a branch
+
+"#]]);
+
+    env.but("undo").assert().success();
+
+    env.but("_squash2 f55169f -t zz --format json")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#""#]]);
+}
+
+#[test]
+fn squash_into_zz_to_uncommit_file() {
+    let env = one_branch_three_commits();
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted] (no changes)
+┊
+┊╭┄br [a-branch-1]
+┊●   f55169f add three
+┊│     f5:or A three
+┊●   f63361f add two
+┊│     f6:tw A two
+┊●   ea345ba add one
+┊│     ea:kl A one
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    env.but("_squash2 f5:or -t zz")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+Uncommitted from f55169f
+
+"#]]);
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted]
+┊   or A three
+┊
+┊╭┄br [a-branch-1]
+┊●   aba928c add three (no changes)
+┊●   f63361f add two
+┊│     f6:tw A two
+┊●   ea345ba add one
+┊│     ea:kl A one
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage them to a branch
+
+"#]]);
+}
+
+#[test]
+fn cannot_uncommit_files_in_ways_that_cause_conflicts() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.file("file", "file content");
+    env.but("_commit2 -m 'add file'").assert().success();
+
+    env.file("file", "changed");
+    env.but("_commit2 -m 'change file'").assert().success();
+
+    env.remove_file("file");
+    env.but("_commit2 -m 'remove file'").assert().success();
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted] (no changes)
+┊
+┊╭┄br [a-branch-1]
+┊●   beafa55 remove file
+┊│     be:qs D file
+┊●   623d399 change file
+┊│     62:qs M file
+┊●   5c348d7 add file
+┊│     5c:qs A file
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    env.but("_squash2 5c348d7 -t zz")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: Cannot uncommit commits that would result in merge conflicts
+
+"#]]);
+
+    env.but("_squash2 5c:qs -t zz")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: Cannot uncommit hunks that would result in merge conflicts
+
+"#]]);
+}
+
+#[test]
+fn cannot_use_source_message_with_uncommitted_changes() {
+    let env = one_branch_three_commits();
+
+    env.file("file", "file content");
+
+    env.but("_squash2 file -t a-branch-1 --use-source-message")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: --use-source-message cannot be used when squashing uncommitted changes
+
+"#]]);
+
+    env.but("_squash2 zz -t a-branch-1 --use-source-message")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: --use-source-message cannot be used when squashing uncommitted changes
+
+"#]]);
+}
+
+#[test]
+fn cannot_use_source_message_when_moving_committed_files() {
+    let env = one_branch_three_commits();
+
+    env.but("_squash2 f5:or -t f63361f --use-source-message")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: --use-source-message cannot be used when moving committed changes
 
 "#]]);
 }
