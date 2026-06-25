@@ -177,7 +177,6 @@ export const FilesTree: FC<
 										<OperationSourceC
 											projectId={projectId}
 											source={fileOperand({ parent: fileParent, path: item.path })}
-											onDragStart={() => onFileSelection(item.path)}
 											render={
 												<FileRow
 													item={item}
@@ -308,7 +307,7 @@ const FileRow: FC<
 					</Tooltip.Root>
 				</div>
 				<WorkspaceItemRowLabelContainer>
-					<WorkspaceItemRowLabel>
+					<WorkspaceItemRowLabel singleLine>
 						{relativePath}
 						{item._tag === "Conflict" && " ⚠️"}
 					</WorkspaceItemRowLabel>
