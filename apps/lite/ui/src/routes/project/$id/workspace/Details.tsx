@@ -26,6 +26,7 @@ import {
 } from "#ui/operands.ts";
 import {
 	projectActions,
+	selectProjectDetailsFullWindow,
 	selectProjectDiffBackgrounds,
 	selectProjectDiffOverflow,
 	selectProjectFilesVisible,
@@ -596,13 +597,18 @@ const Title: FC<{
 										aria-controls={bodyId}
 										aria-expanded={!bodyCollapsed}
 										aria-label={bodyCollapsed ? "Expand commit body" : "Collapse commit body"}
-										className={getButtonClassName({
-											variant: "ghost",
-											iconOnly: true,
-										})}
+										aria-pressed={!bodyCollapsed}
+										className={classes(
+											getButtonClassName({
+												variant: bodyCollapsed ? "outline" : "gray",
+												iconOnly: true,
+												size: "small",
+											}),
+											styles.compactButton,
+										)}
 										onClick={() => onBodyCollapsedChange(!bodyCollapsed)}
 									>
-										<Icon name={bodyCollapsed ? "uncollapse" : "collapse"} />
+										<Icon name="kebab" />
 									</Tooltip.Trigger>
 									<Tooltip.Portal>
 										<Tooltip.Positioner sideOffset={4}>
@@ -623,7 +629,7 @@ const Title: FC<{
 
 const FilesToggle: FC<
 	Omit<ComponentProps<typeof Toggle>, "aria-label" | "pressed" | "onPressedChange">
-> = ({ children, ...toggleProps }) => {
+> = (toggleProps) => {
 	const { id: projectId } = useParams({ from: "/project/$id/workspace" });
 	const dispatch = useAppDispatch();
 	const filesVisible = useAppSelector((state) => selectProjectFilesVisible(state, projectId));
@@ -639,9 +645,7 @@ const FilesToggle: FC<
 						onPressedChange={() => dispatch(projectActions.toggleFiles({ projectId }))}
 					/>
 				}
-			>
-				{children}
-			</Tooltip.Trigger>
+			/>
 			<Tooltip.Portal>
 				<Tooltip.Positioner sideOffset={4}>
 					<Tooltip.Popup render={<TooltipPopup kbd={workspaceHotkeys.toggleFiles.hotkey} />}>
@@ -655,7 +659,7 @@ const FilesToggle: FC<
 
 const DiffOverflowToggle: FC<
 	Omit<ComponentProps<typeof Toggle>, "aria-label" | "pressed" | "onPressedChange">
-> = ({ children, ...toggleProps }) => {
+> = (toggleProps) => {
 	const { id: projectId } = useParams({ from: "/project/$id/workspace" });
 	const dispatch = useAppDispatch();
 	const diffOverflow = useAppSelector((state) => selectProjectDiffOverflow(state, projectId));
@@ -678,9 +682,7 @@ const DiffOverflowToggle: FC<
 						}
 					/>
 				}
-			>
-				{children}
-			</Tooltip.Trigger>
+			/>
 			<Tooltip.Portal>
 				<Tooltip.Positioner sideOffset={4}>
 					<Tooltip.Popup render={<TooltipPopup />}>Toggle line wrapping</Tooltip.Popup>
@@ -692,7 +694,7 @@ const DiffOverflowToggle: FC<
 
 const DiffBackgroundsToggle: FC<
 	Omit<ComponentProps<typeof Toggle>, "aria-label" | "pressed" | "onPressedChange">
-> = ({ children, ...toggleProps }) => {
+> = (toggleProps) => {
 	const { id: projectId } = useParams({ from: "/project/$id/workspace" });
 	const dispatch = useAppDispatch();
 	const diffBackgrounds = useAppSelector((state) => selectProjectDiffBackgrounds(state, projectId));
@@ -710,9 +712,7 @@ const DiffBackgroundsToggle: FC<
 						}
 					/>
 				}
-			>
-				{children}
-			</Tooltip.Trigger>
+			/>
 			<Tooltip.Portal>
 				<Tooltip.Positioner sideOffset={4}>
 					<Tooltip.Popup render={<TooltipPopup />}>Toggle diff backgrounds</Tooltip.Popup>
@@ -724,7 +724,7 @@ const DiffBackgroundsToggle: FC<
 
 const DiffStyleToggleGroup: FC<
 	Omit<ToggleGroup.Props<DiffStyle>, "aria-label" | "value" | "onValueChange">
-> = ({ children, ...toggleGroupProps }) => {
+> = (toggleGroupProps) => {
 	const { id: projectId } = useParams({ from: "/project/$id/workspace" });
 	const dispatch = useAppDispatch();
 	const preferredDiffStyle = useAppSelector((state) =>
@@ -746,9 +746,7 @@ const DiffStyleToggleGroup: FC<
 						}}
 					/>
 				}
-			>
-				{children}
-			</Tooltip.Trigger>
+			/>
 			<Tooltip.Portal>
 				<Tooltip.Positioner sideOffset={4}>
 					<Tooltip.Popup render={<TooltipPopup kbd={diffHotkeys.toggleDiffStyle.hotkey} />}>
@@ -760,23 +758,27 @@ const DiffStyleToggleGroup: FC<
 	);
 };
 
-const FullWindowToggle: FC<{
-	className?: string;
-	fullWindow: boolean;
-	onFullWindowChange: (fullWindow: boolean) => void;
-}> = ({ className, fullWindow, onFullWindowChange }) => {
-	const label = fullWindow ? "Exit full window details" : "Full window details";
+const FullWindowToggle: FC<
+	Omit<ComponentProps<typeof Toggle>, "aria-label" | "pressed" | "onPressedChange">
+> = (toggleProps) => {
+	const { id: projectId } = useParams({ from: "/project/$id/workspace" });
+	const dispatch = useAppDispatch();
+	const fullWindow = useAppSelector((state) => selectProjectDetailsFullWindow(state, projectId));
 
 	return (
 		<Tooltip.Root>
 			<Tooltip.Trigger
-				aria-label={label}
-				aria-pressed={fullWindow}
-				className={className}
-				onClick={() => onFullWindowChange(!fullWindow)}
-			>
-				<Icon name={fullWindow ? "fullscreen-exit" : "fullscreen-enter"} />
-			</Tooltip.Trigger>
+				render={
+					<Toggle
+						{...toggleProps}
+						aria-label={workspaceHotkeys.toggleDetailsFullWindow.meta.name}
+						pressed={fullWindow}
+						onPressedChange={(fullWindow) =>
+							dispatch(projectActions.setDetailsFullWindow({ projectId, fullWindow }))
+						}
+					/>
+				}
+			/>
 			<Tooltip.Portal>
 				<Tooltip.Positioner sideOffset={4}>
 					<Tooltip.Popup
@@ -1188,13 +1190,14 @@ const PullRequestPrimaryAction: FC<{
 
 export const Details: FC<
 	{
-		detailsFullWindow: boolean;
-		onDetailsFullWindowChange: (fullWindow: boolean) => void;
 		outlineSelection: Operand | null;
 	} & ComponentProps<"div">
-> = ({ detailsFullWindow, onDetailsFullWindowChange, outlineSelection, ...restProps }) => {
+> = ({ outlineSelection, ...restProps }) => {
 	const { id: projectId } = useParams({ from: "/project/$id/workspace" });
 	const dispatch = useAppDispatch();
+	const detailsFullWindow = useAppSelector((state) =>
+		selectProjectDetailsFullWindow(state, projectId),
+	);
 	const filesVisible = useAppSelector((state) => selectProjectFilesVisible(state, projectId));
 	const [commitBodyCollapsed, setCommitBodyCollapsed] = useState(true);
 	const [branchTab, setBranchTab] = useState<BranchTab>("diff");
@@ -1219,10 +1222,14 @@ export const Details: FC<
 						selection={outlineSelection}
 					/>
 					<FullWindowToggle
-						className={classes(styles.titleRowActions, getButtonClassName({ iconOnly: true }))}
-						fullWindow={detailsFullWindow}
-						onFullWindowChange={onDetailsFullWindowChange}
-					/>
+						className={classes(
+							styles.titleRowActions,
+							getButtonClassName({ iconOnly: true }),
+							styles.toggle,
+						)}
+					>
+						<Icon name={detailsFullWindow ? "fullscreen-exit" : "fullscreen-enter"} />
+					</FullWindowToggle>
 				</div>
 
 				{outlineSelection._tag === "Branch" && (

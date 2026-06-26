@@ -414,12 +414,7 @@ const WorkspacePage: FC = () => {
 				<Panel id={"details-panel" satisfies PanelId} className={styles.panel}>
 					<Details
 						key={deferredOutlineSelection ? operandIdentityKey(deferredOutlineSelection) : null}
-						style={{ opacity: deferredOutlineSelection !== outlineSelection ? 0.5 : 1 }}
 						outlineSelection={deferredOutlineSelection}
-						detailsFullWindow={detailsFullWindow}
-						onDetailsFullWindowChange={(fullWindow) =>
-							dispatch(projectActions.setDetailsFullWindow({ projectId, fullWindow }))
-						}
 					/>
 				</Panel>
 			</Group>
