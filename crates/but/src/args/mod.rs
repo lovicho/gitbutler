@@ -250,7 +250,7 @@ pub enum Subcommands {
     ///
     /// Use `but commit empty --before <target>` or `but commit empty --after <target>`
     /// to insert a blank commit. This is useful for creating a placeholder
-    /// commit that you can amend changes into later using `but mark`, `but rub` or `but absorb`.
+    /// commit that you can amend changes into later using `but rub` or `but absorb`.
     ///
     #[cfg(feature = "legacy")]
     #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
@@ -437,35 +437,6 @@ pub enum Subcommands {
         /// Name of the branch to apply
         branch_name: String,
     },
-
-    /// Mark a commit or branch for auto-stage or auto-commit.
-    ///
-    /// Creates or removes a rule for auto-staging or auto-committing changes
-    /// to the specified target entity.
-    ///
-    /// If you mark a branch, new unstaged changes that GitButler sees when
-    /// you run any command will be automatically staged to that branch.
-    ///
-    /// If you mark a commit, new uncommitted changes will automatically be
-    /// amended into the marked commit.
-    ///
-    #[cfg(feature = "legacy")]
-    #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
-    Mark {
-        /// The target entity that will be marked
-        target: String,
-        /// Deletes a mark
-        #[clap(long, short = 'd')]
-        delete: bool,
-    },
-
-    /// Removes any marks from the workspace.
-    ///
-    /// This will unmark anything that has been marked by the `but mark` command.
-    ///
-    #[cfg(feature = "legacy")]
-    #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
-    Unmark,
 
     /// Push changes in a branch to remote.
     ///
@@ -1300,8 +1271,20 @@ pub enum Subcommands {
         props: String,
     },
 
-    /// UTILITY: Generate shell completion scripts for the specified or inferred shell.
-    #[clap(hide = true)]
+    /// Generate `but` shell completions.
+    ///
+    /// ## Examples
+    ///
+    /// ```bash
+    /// # bash, put in .bashrc or .bash_profile depending on system setup
+    /// eval "$(but completions bash)"
+    ///
+    /// # zsh, put in .zshrc
+    /// eval "$(but completions zsh)"
+    ///
+    /// # fish, put in config.fish
+    /// but completions fish | source
+    /// ```
     #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
     Completions {
         /// The shell to generate completions for, or the one extracted from the `SHELL` environment variable.
