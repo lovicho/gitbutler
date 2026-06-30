@@ -31,12 +31,12 @@ jobs:
     env:
       CARGO_TERM_COLOR: always
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
         if: ${{ github.event_name != 'workflow_dispatch' }}
         name: Checkout
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         name: Checkout (specific commit from manual dispatch)
         if: ${{ github.event_name == 'workflow_dispatch' }}
         with:
@@ -137,11 +137,11 @@ jobs:
       VITE_BUTLER_HOST: "localhost"
       VITE_BUILD_TARGET: "web"
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
         if: ${{ github.event_name != 'workflow_dispatch' }}
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         if: ${{ github.event_name == 'workflow_dispatch' }}
         with:
           persist-credentials: false
@@ -158,9 +158,9 @@ jobs:
       - name: Setup node environment
         uses: ./.github/actions/init-env-node
       - id: get_playwright_version
-        uses: eviden-actions/get-playwright-version@6941a3405e3558992ec8e42d3c07a648431abd7b # v1
+        uses: eviden-actions/get-playwright-version@ab1672f30689371f9179a844399c7ef97c7d6914 # v1
       - name: Cache playwright binaries
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
         id: playwright-cache
         with:
           path: |

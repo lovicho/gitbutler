@@ -10,7 +10,7 @@ import {
 	useCommitMove,
 	useCommitReword,
 	useCommitUncommit,
-	usePushStack,
+	useWorkspaceBranchAndAncestorsPush,
 	useWorkspaceIntegrateUpstream,
 	useRemoveBranch,
 	useTearOffBranch,
@@ -128,7 +128,6 @@ import {
 	outlineHotkeys,
 	selectionOperationHotkeys,
 	toElectronAccelerator,
-	type CommandGroup,
 } from "#ui/hotkeys.ts";
 import { segmentBottomRelativeTo, stackBottomRelativeTo } from "#ui/api/stack.ts";
 import { assert } from "#ui/assert.ts";
@@ -230,7 +229,7 @@ const useOutlineTreeHotkeys = ({
 	const commitDiscardMutation = useCommitDiscard();
 	const commitInsertBlankMutation = useCommitInsertBlank();
 	const commitAmendMutation = useCommitAmend({ projectId });
-	const pushStackMutation = usePushStack();
+	const workspaceBranchAndAncestorsPushMutation = useWorkspaceBranchAndAncestorsPush();
 	const workspaceIntegrateUpstreamMutation = useWorkspaceIntegrateUpstream();
 	const branchCreateMutation = useBranchCreate();
 
@@ -434,7 +433,7 @@ const useOutlineTreeHotkeys = ({
 			selectedPushContext.partialStackSegments,
 		);
 
-		pushStackMutation.mutate({
+		workspaceBranchAndAncestorsPushMutation.mutate({
 			projectId,
 			branch: decodeBytes(selectedPushContext.refName.fullNameBytes),
 			withForce: partialStackState.pushWithForce,
@@ -471,7 +470,7 @@ const useOutlineTreeHotkeys = ({
 	const isSelectedChanges = selection?._tag === "UncommittedChanges";
 	const canPushSelectedBranch =
 		!!selectedPushContext &&
-		!pushStackMutation.isPending &&
+		!workspaceBranchAndAncestorsPushMutation.isPending &&
 		!partialStackPushDisabled(
 			partialStackStateFromSegments(selectedPushContext.partialStackSegments),
 		);
@@ -480,7 +479,7 @@ const useOutlineTreeHotkeys = ({
 		ref,
 		navigationIndex,
 		projectId,
-		group: "Outline",
+		group: "Workspace",
 		selectionScope: "outline",
 		select: (newItem) => dispatch(projectActions.selectOutline({ projectId, selection: newItem })),
 		selection,
@@ -505,7 +504,7 @@ const useOutlineTreeHotkeys = ({
 				dispatch(projectActions.selectOutline({ projectId, selection: uncommittedChangesOperand }));
 				focusSelectionScope("outline");
 			},
-			options: { conflictBehavior: "allow", meta: outlineHotkeys.selectChanges.meta },
+			options: { conflictBehavior: "allow" },
 		},
 		{
 			hotkey: outlineHotkeys.composeCommitMessage.hotkey,
@@ -515,7 +514,6 @@ const useOutlineTreeHotkeys = ({
 			},
 			options: {
 				conflictBehavior: "allow",
-				meta: outlineHotkeys.composeCommitMessage.meta,
 			},
 		},
 		...Match.value(selection).pipe(
@@ -564,7 +562,6 @@ const useOutlineTreeHotkeys = ({
 							conflictBehavior: "allow",
 							enabled: defaultOutlineHotkeysEnabled,
 							target: ref,
-							meta: outlineHotkeys.composeCommitMessageFromChanges.meta,
 						},
 					},
 				],
@@ -643,13 +640,13 @@ const useOutlineTreeHotkeys = ({
 			},
 		},
 		{
-			hotkey: outlineHotkeys.pushStack.hotkey,
+			hotkey: outlineHotkeys.workspaceBranchAndAncestorsPush.hotkey,
 			callback: pushSelectedBranch,
 			options: {
 				conflictBehavior: "allow",
 				enabled: defaultOutlineHotkeysEnabled && canPushSelectedBranch,
 				target: ref,
-				meta: outlineHotkeys.pushStack.meta,
+				meta: outlineHotkeys.workspaceBranchAndAncestorsPush.meta,
 			},
 		},
 		{
@@ -719,7 +716,6 @@ const useOutlineTreeHotkeys = ({
 									conflictBehavior: "allow",
 									enabled: defaultOutlineHotkeysEnabled,
 									target: ref,
-									meta: outlineHotkeys.composeCommitHere.meta,
 								},
 							} satisfies UseHotkeyDefinition,
 							{
@@ -984,13 +980,12 @@ const OperandC: FC<
 const InlineEditor: FC<{
 	value: string;
 	label: string;
-	hotkeyGroup: CommandGroup;
 	onMount?: (el: HTMLTextAreaElement | HTMLInputElement) => void;
 	onSubmit: (value: string) => void;
 	onExit: () => void;
 	multiline: boolean;
 	heading?: boolean;
-}> = ({ value, label, hotkeyGroup, onMount, onSubmit, onExit, multiline, heading }) => {
+}> = ({ value, label, onMount, onSubmit, onExit, multiline, heading }) => {
 	const name = useId();
 	const formRef = useRef<HTMLFormElement | null>(null);
 	const textFieldRef = useRef<HTMLTextAreaElement | HTMLInputElement>(null);
@@ -1002,14 +997,12 @@ const InlineEditor: FC<{
 	useHotkey("Enter", () => formRef.current?.requestSubmit(), {
 		conflictBehavior: "allow",
 		ignoreInputs: false,
-		meta: { group: hotkeyGroup, name: "Save" },
 		target: textFieldRef,
 	});
 
 	useHotkey("Escape", onExit, {
 		conflictBehavior: "allow",
 		ignoreInputs: false,
-		meta: { group: hotkeyGroup, name: "Cancel" },
 		target: textFieldRef,
 	});
 
@@ -1424,7 +1417,6 @@ const CommitRow: FC<
 					multiline
 					value={optimisticMessage.trim()}
 					label="Commit message"
-					hotkeyGroup="Reword commit"
 					onMount={(el) => {
 						const firstNewline = el.value.indexOf("\n");
 						const cursorPosition = firstNewline !== -1 ? firstNewline : el.value.length;
@@ -1845,7 +1837,6 @@ const Changes: FC<{
 			options: {
 				conflictBehavior: "allow",
 				enabled: isDefaultMode && !isCommitOrAmendPending,
-				meta: changesHotkeys.selectCommitTarget.meta,
 			},
 		},
 		{
@@ -1854,7 +1845,6 @@ const Changes: FC<{
 			options: {
 				conflictBehavior: "allow",
 				enabled: canCommit,
-				ignoreInputs: false,
 				meta: changesHotkeys.commit.meta,
 			},
 		},
@@ -1864,7 +1854,6 @@ const Changes: FC<{
 			options: {
 				conflictBehavior: "allow",
 				enabled: canAmend,
-				ignoreInputs: false,
 				meta: changesHotkeys.amendCommit.meta,
 			},
 		},
@@ -1924,14 +1913,14 @@ const Changes: FC<{
 						<Tooltip.Root>
 							<Combobox.Trigger
 								className={classes("text-13 text-semibold", styles.commitTargetComboboxTrigger)}
-								aria-label={changesHotkeys.selectCommitTarget.meta.name}
+								aria-label="Select commit target"
 								// We pass `disabled` here because we want to disable the button, not
 								// the tooltip. Other props should be passed above.
 								render={<Button focusableWhenDisabled render={<Tooltip.Trigger />} />}
 							>
 								<Icon name="bullseye" size={14} />
 								<span className={styles.commitTargetComboboxTriggerLabel}>
-									<Combobox.Value placeholder={changesHotkeys.selectCommitTarget.meta.name} />
+									<Combobox.Value placeholder="Select commit target" />
 								</span>
 							</Combobox.Trigger>
 							<Tooltip.Portal>
@@ -1939,7 +1928,7 @@ const Changes: FC<{
 									<Tooltip.Popup
 										render={<TooltipPopup kbd={changesHotkeys.selectCommitTarget.hotkey} />}
 									>
-										{changesHotkeys.selectCommitTarget.meta.name}
+										Select commit target
 									</Tooltip.Popup>
 								</Tooltip.Positioner>
 							</Tooltip.Portal>
@@ -2137,7 +2126,7 @@ const BranchRow: FC<
 
 	const toastManager = Toast.useToastManager();
 
-	const pushStackMutation = usePushStack();
+	const workspaceBranchAndAncestorsPushMutation = useWorkspaceBranchAndAncestorsPush();
 	const commitInsertBlankMutation = useCommitInsertBlank();
 	const tearOffBranchMutation = useTearOffBranch();
 	const removeBranchMutation = useRemoveBranch();
@@ -2248,8 +2237,8 @@ const BranchRow: FC<
 		});
 	};
 
-	const pushStack = () => {
-		pushStackMutation.mutate({
+	const workspaceBranchAndAncestorsPush = () => {
+		workspaceBranchAndAncestorsPushMutation.mutate({
 			projectId,
 			branch: decodeBytes(refName.fullNameBytes),
 			withForce: partialStackState.pushWithForce,
@@ -2265,8 +2254,9 @@ const BranchRow: FC<
 		await window.lite.openInWebBrowser(mforgeUrl);
 	};
 
-	const pushStackDisabled =
-		pushStackMutation.isPending || partialStackPushDisabled(partialStackState);
+	const workspaceBranchAndAncestorsPushDisabled =
+		workspaceBranchAndAncestorsPushMutation.isPending ||
+		partialStackPushDisabled(partialStackState);
 
 	const pushMenuLabel = pushesMultipleBranches
 		? partialStackState.pushWithForce
@@ -2279,9 +2269,9 @@ const BranchRow: FC<
 	const menuItems: Array<NativeMenuItem> = [
 		nativeMenuItem({
 			label: pushMenuLabel,
-			enabled: !pushStackDisabled,
-			accelerator: toElectronAccelerator(outlineHotkeys.pushStack.hotkey),
-			onSelect: pushStack,
+			enabled: !workspaceBranchAndAncestorsPushDisabled,
+			accelerator: toElectronAccelerator(outlineHotkeys.workspaceBranchAndAncestorsPush.hotkey),
+			onSelect: workspaceBranchAndAncestorsPush,
 		}),
 		nativeMenuSeparator,
 		nativeMenuItem({
@@ -2373,7 +2363,6 @@ const BranchRow: FC<
 					heading
 					value={optimisticBranchDisplayName}
 					label="Branch name"
-					hotkeyGroup="Rename branch"
 					onMount={(el) => {
 						el.select();
 					}}
@@ -2409,11 +2398,12 @@ const BranchRow: FC<
 
 						{partialStackState.requiresPush &&
 							(() => {
-								const pushStackDisabledReason = pushStackMutation.isPending
-									? "pushing"
-									: partialStackState.hasConflicts
-										? "disabled due to conflicts"
-										: null;
+								const workspaceBranchAndAncestorsPushDisabledReason =
+									workspaceBranchAndAncestorsPushMutation.isPending
+										? "pushing"
+										: partialStackState.hasConflicts
+											? "disabled due to conflicts"
+											: null;
 
 								const pushButtonLabel = `${
 									pushesMultipleBranches
@@ -2423,20 +2413,25 @@ const BranchRow: FC<
 										: partialStackState.pushWithForce
 											? "Force push branch"
 											: "Push branch"
-								}${pushStackDisabledReason !== null ? ` (${pushStackDisabledReason})` : ""}`;
+								}${workspaceBranchAndAncestorsPushDisabledReason !== null ? ` (${workspaceBranchAndAncestorsPushDisabledReason})` : ""}`;
 
 								return (
 									<Tooltip.Root>
 										<Tooltip.Trigger
 											aria-label={pushButtonLabel}
-											onClick={pushStack}
+											onClick={workspaceBranchAndAncestorsPush}
 											className={getWorkspaceItemRowButtonClassName({ variant: "outline" })}
 											// We pass `disabled` here because we want to disable the button, not
 											// the tooltip. Other props should be passed above.
-											render={<Button focusableWhenDisabled disabled={pushStackDisabled} />}
+											render={
+												<Button
+													focusableWhenDisabled
+													disabled={workspaceBranchAndAncestorsPushDisabled}
+												/>
+											}
 										>
 											Push
-											{pushStackMutation.isPending ? (
+											{workspaceBranchAndAncestorsPushMutation.isPending ? (
 												<Icon name="spinner" />
 											) : pushesMultipleBranches ? (
 												<Icon size={12} name="arrow-double-up" />
@@ -2447,7 +2442,11 @@ const BranchRow: FC<
 										<Tooltip.Portal>
 											<Tooltip.Positioner sideOffset={4}>
 												<Tooltip.Popup
-													render={<TooltipPopup kbd={outlineHotkeys.pushStack.hotkey} />}
+													render={
+														<TooltipPopup
+															kbd={outlineHotkeys.workspaceBranchAndAncestorsPush.hotkey}
+														/>
+													}
 												>
 													{pushButtonLabel}
 												</Tooltip.Popup>

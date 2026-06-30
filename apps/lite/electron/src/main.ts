@@ -34,7 +34,7 @@ import {
 	type ListReviewsForBranchParams,
 	type OpenInEditorParams,
 	type PublishReviewParams,
-	type PushStackParams,
+	type WorkspaceBranchAndAncestorsPushParams,
 	type RemoveBranchParams,
 	type TearOffBranchParams,
 	type TreeChangeDiffParams,
@@ -602,7 +602,7 @@ const registerIpcHandlers = (): void => {
 		(_e, { projectId, sha }: PeelRestoreSnapshotParams) => peelRestoreSnapshot(projectId, sha),
 	);
 	senderValidatingHandle(
-		liteIpcChannels.pushStack,
+		liteIpcChannels.workspaceBranchAndAncestorsPush,
 		(
 			_e,
 			{
@@ -612,7 +612,7 @@ const registerIpcHandlers = (): void => {
 				skipForcePushProtection,
 				runHooks,
 				pushOpts,
-			}: PushStackParams,
+			}: WorkspaceBranchAndAncestorsPushParams,
 		) =>
 			workspaceBranchAndAncestorsPush(
 				projectId,
@@ -717,6 +717,8 @@ const createMainWindow = async (): Promise<void> => {
 	const mainWindow = new BrowserWindow({
 		width: 1024,
 		height: 768,
+		minWidth: 545,
+		minHeight: 400,
 		icon,
 		titleBarStyle: process.platform === "darwin" ? "hidden" : "default",
 		trafficLightPosition: process.platform === "darwin" ? { x: 16, y: 23 } : undefined,
