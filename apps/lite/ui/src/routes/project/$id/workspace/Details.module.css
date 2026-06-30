@@ -17,16 +17,6 @@
 	column-gap: 12px;
 }
 
-.titleRowMacSpacer {
-	flex-shrink: 0;
-	align-self: stretch;
-	width: 60px;
-}
-
-.titleRowActions {
-	margin-inline-start: auto;
-}
-
 .commitBodyToggle {
 	width: 24px;
 	height: 14px;
@@ -61,14 +51,6 @@
 	display: flex;
 	margin-inline-start: auto;
 	gap: 6px;
-}
-
-.toggle {
-	&[data-pressed] {
-		--button-border: 1px solid var(--border-2);
-		--button-bg: var(--bg-2);
-		--button-icon-opacity: 0.9;
-	}
 }
 
 .panels {
@@ -122,6 +104,7 @@
 	user-select: text;
 
 	diffs-container {
+		--diffs-bg: var(--bg-1);
 		--diffs-selection-number-fg: var(--text-1);
 	}
 
@@ -184,28 +167,6 @@
 	row-gap: 12px;
 	flex-direction: column;
 	max-width: 700px;
-}
-
-.prFormField {
-	display: flex;
-	row-gap: 4px;
-	flex-direction: column;
-}
-
-.prTitleInput,
-.prDescriptionInput {
-	padding-inline: 8px;
-	padding-block: 6px;
-	border: 1px solid var(--border-2);
-	border-radius: var(--radius-l);
-	background-color: var(--bg-1);
-}
-
-.prDescriptionInput {
-	field-sizing: content;
-	min-height: 16lh;
-	max-height: 20lh;
-	resize: none;
 }
 
 .prFormActions {

@@ -42,6 +42,12 @@ import { ToggleGroupStyles, ToggleStyles } from "#ui/components/ToggleGroup.tsx"
 import { OperationSourceC } from "#ui/routes/project/$id/workspace/OperationSourceC.tsx";
 import { useAppDispatch, useAppSelector } from "#ui/store.ts";
 import { classes } from "#ui/components/classes.ts";
+import {
+	FieldControlStyles,
+	FieldLabelStyles,
+	FieldRootStyles,
+	FieldTextareaStyles,
+} from "#ui/components/Field.tsx";
 import { Field, Toggle, ToggleGroup, Toolbar, Tooltip } from "@base-ui/react";
 import type {
 	CommitDetails,
@@ -82,6 +88,7 @@ import {
 	useNavigationIndexHotkeys,
 } from "#ui/selection-scopes.ts";
 import { FilesTree } from "#ui/routes/project/$id/workspace/FilesTree.tsx";
+import { TopLeftControls } from "#ui/routes/project/$id/workspace/TopLeftControls.tsx";
 import { changeFileTreeItem, conflictFileTreeItem, type FileTreeItem } from "./file-tree.ts";
 import {
 	getDependencyCommitIds,
@@ -758,42 +765,6 @@ const DiffStyleToggleGroup: FC<
 	);
 };
 
-const FullWindowToggle: FC<
-	Omit<ComponentProps<typeof Toggle>, "aria-label" | "pressed" | "onPressedChange">
-> = (toggleProps) => {
-	const { id: projectId } = useParams({ from: "/project/$id/workspace" });
-	const dispatch = useAppDispatch();
-	const fullWindow = useAppSelector((state) => selectProjectDetailsFullWindow(state, projectId));
-
-	return (
-		<Tooltip.Root>
-			<Tooltip.Trigger
-				render={
-					<Toggle
-						{...toggleProps}
-						aria-label={workspaceHotkeys.toggleDetailsFullWindow.meta.name}
-						pressed={fullWindow}
-						onPressedChange={(fullWindow) =>
-							dispatch(projectActions.setDetailsFullWindow({ projectId, fullWindow }))
-						}
-					/>
-				}
-			/>
-			<Tooltip.Portal>
-				<Tooltip.Positioner sideOffset={4}>
-					<Tooltip.Popup
-						render={<TooltipPopup kbd={workspaceHotkeys.toggleDetailsFullWindow.hotkey} />}
-					>
-						{workspaceHotkeys.toggleDetailsFullWindow.meta.name}
-					</Tooltip.Popup>
-				</Tooltip.Positioner>
-			</Tooltip.Portal>
-		</Tooltip.Root>
-	);
-};
-
-const isMac = window.lite.platform === "darwin";
-
 const CommitDetailsContent: FC<{
 	bodyCollapsed: boolean;
 	bodyId: string;
@@ -959,32 +930,25 @@ const Diff: FC<{
 	return (
 		<div className={styles.diffTab}>
 			<div className={styles.actions}>
-				<FilesToggle className={classes(getButtonClassName({}), styles.toggle)}>Files</FilesToggle>
+				<FilesToggle className={getButtonClassName({})}>Toggle files</FilesToggle>
+
 				<Toolbar.Root aria-label="Diff controls" className={styles.diffControls}>
-					<Toolbar.Button
-						render={
-							<DiffOverflowToggle
-								className={classes(
-									getButtonClassName({ iconOnly: true, variant: "outline" }),
-									styles.toggle,
-								)}
-							>
-								<Icon name="text-wrap" />
-							</DiffOverflowToggle>
-						}
-					/>
-					<Toolbar.Button
-						render={
-							<DiffBackgroundsToggle
-								className={classes(
-									getButtonClassName({ iconOnly: true, variant: "outline" }),
-									styles.toggle,
-								)}
-							>
-								<Icon name="text-block" />
-							</DiffBackgroundsToggle>
-						}
-					/>
+					<ToggleGroup multiple render={<ToggleGroupStyles />}>
+						<Toolbar.Button
+							render={
+								<DiffOverflowToggle render={<ToggleStyles iconOnly />}>
+									<Icon name="text-wrap" />
+								</DiffOverflowToggle>
+							}
+						/>
+						<Toolbar.Button
+							render={
+								<DiffBackgroundsToggle render={<ToggleStyles iconOnly />}>
+									<Icon name="text-block" />
+								</DiffBackgroundsToggle>
+							}
+						/>
+					</ToggleGroup>
 					{canUseSplitDiff && (
 						<DiffStyleToggleGroup render={<ToggleGroupStyles />}>
 							<Toolbar.Button
@@ -1104,10 +1068,11 @@ const PullRequestForm: FC<{
 
 	return (
 		<form ref={formRef} className={styles.prForm} onSubmit={submit}>
-			<Field.Root className={styles.prFormField}>
-				<Field.Label className="text-14">Title</Field.Label>
+			<Field.Root render={<FieldRootStyles />}>
+				<Field.Label render={<FieldLabelStyles />}>Title</Field.Label>
 				<Field.Control
-					className={classes("text-15 text-semibold", styles.prTitleInput)}
+					render={<FieldControlStyles />}
+					className="text-15 text-semibold"
 					onChange={(event) => setDraftTitle(event.currentTarget.value)}
 					placeholder="Title"
 					required
@@ -1115,11 +1080,11 @@ const PullRequestForm: FC<{
 				/>
 			</Field.Root>
 
-			<Field.Root className={styles.prFormField}>
-				<Field.Label className="text-14">Description</Field.Label>
+			<Field.Root render={<FieldRootStyles />}>
+				<Field.Label render={<FieldLabelStyles />}>Description</Field.Label>
 				<Field.Control
-					render={<textarea />}
-					className={classes("text-14 text-body text-monospace", styles.prDescriptionInput)}
+					render={<FieldTextareaStyles />}
+					className="text-14 text-body text-monospace"
 					onChange={(event) => setDraftBody(event.currentTarget.value)}
 					placeholder="Description"
 					value={draftBody ?? body ?? ""}
@@ -1213,7 +1178,8 @@ export const Details: FC<
 		<div {...restProps} className={classes(restProps.className, styles.container)}>
 			<div className={styles.headerWrap}>
 				<div className={styles.titleRow}>
-					{detailsFullWindow && isMac && <div className={styles.titleRowMacSpacer} />}
+					{detailsFullWindow && <TopLeftControls />}
+
 					<Title
 						bodyCollapsed={commitBodyCollapsed}
 						bodyId={commitBodyId}
@@ -1221,15 +1187,6 @@ export const Details: FC<
 						projectId={projectId}
 						selection={outlineSelection}
 					/>
-					<FullWindowToggle
-						className={classes(
-							styles.titleRowActions,
-							getButtonClassName({ iconOnly: true }),
-							styles.toggle,
-						)}
-					>
-						<Icon name={detailsFullWindow ? "fullscreen-exit" : "fullscreen-enter"} />
-					</FullWindowToggle>
 				</div>
 
 				{outlineSelection._tag === "Branch" && (
