@@ -281,8 +281,8 @@ const FileRow: FC<
 	);
 
 	const lastSepIdx = relativePath.lastIndexOf("/");
-	const mpathInit = lastSepIdx !== -1 ? relativePath.slice(0, lastSepIdx + 1) : null;
-	const pathLast = lastSepIdx !== -1 ? relativePath.slice(lastSepIdx + 1) : relativePath;
+	const directoryPath = lastSepIdx !== -1 ? relativePath.slice(0, lastSepIdx) : null;
+	const fileName = lastSepIdx !== -1 ? relativePath.slice(lastSepIdx + 1) : relativePath;
 
 	return (
 		<Tooltip.Root disableHoverablePopup>
@@ -326,10 +326,14 @@ const FileRow: FC<
 				</div>
 
 				<WorkspaceItemRowLabelContainer>
+					{item._tag === "Conflict" && "⚠️"}
 					<WorkspaceItemRowLabel singleLine className={styles.filePath}>
-						{mpathInit}
-						<span className={styles.pathLast}>{pathLast}</span>
-						{item._tag === "Conflict" && " ⚠️"}
+						{fileName}
+						{directoryPath !== null && (
+							<span className={classes(styles.pathInit, workspaceItemRowStyles.fadedText)}>
+								{directoryPath}
+							</span>
+						)}
 					</WorkspaceItemRowLabel>
 				</WorkspaceItemRowLabelContainer>
 
@@ -344,25 +348,31 @@ const FileRow: FC<
 						>
 							<Icon name="kebab" />
 						</Toolbar.Button>
-
-						{item._tag === "Change" &&
-							fileParent._tag === "UncommittedChanges" &&
-							item.dependencyCommitIds && (
-								<Toolbar.Button
-									render={
-										<DependencyIndicator
-											projectId={projectId}
-											commitIds={item.dependencyCommitIds}
-											branchNameByCommitId={branchNameByCommitId}
-											className={getWorkspaceItemRowButtonClassName({ iconOnly: true })}
-										/>
-									}
-								>
-									<Icon name="link" />
-								</Toolbar.Button>
-							)}
 					</Toolbar.Root>
 				)}
+
+				{outlineMode._tag === "Default" &&
+					item._tag === "Change" &&
+					fileParent._tag === "UncommittedChanges" &&
+					item.dependencyCommitIds && (
+						<Toolbar.Root
+							aria-label="File actions"
+							render={<WorkspaceItemRowToolbar forceVisible />}
+						>
+							<Toolbar.Button
+								render={
+									<DependencyIndicator
+										projectId={projectId}
+										commitIds={item.dependencyCommitIds}
+										branchNameByCommitId={branchNameByCommitId}
+										className={getWorkspaceItemRowButtonClassName({ iconOnly: true })}
+									/>
+								}
+							>
+								<Icon name="link" />
+							</Toolbar.Button>
+						</Toolbar.Root>
+					)}
 
 				{item._tag === "Change" && (
 					<Tooltip.Root disableHoverablePopup>

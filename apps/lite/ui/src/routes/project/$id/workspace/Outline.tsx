@@ -6,9 +6,13 @@ import { getButtonClassName } from "#ui/components/Button.tsx";
 import { classes } from "#ui/components/classes.ts";
 import { Icon } from "#ui/components/Icon.tsx";
 import { TooltipPopup } from "#ui/components/Tooltip.tsx";
-import { workspaceHotkeys } from "#ui/hotkeys.ts";
+import { globalHotkeys, workspaceHotkeys } from "#ui/hotkeys.ts";
 import { branchOperand, type BranchOperand, type Operand } from "#ui/operands.ts";
-import { projectActions, selectProjectOutlineModeState } from "#ui/projects/state.ts";
+import {
+	projectActions,
+	selectProjectCommitTarget,
+	selectProjectOutlineModeState,
+} from "#ui/projects/state.ts";
 import { focusSelectionScope, type SelectionScope } from "#ui/selection-scopes.ts";
 import { useAppDispatch, useAppSelector } from "#ui/store.ts";
 import type { NavigationIndex } from "#ui/workspace/navigation-index.ts";
@@ -19,7 +23,11 @@ import { useHotkeys } from "@tanstack/react-hotkeys";
 import { Match } from "effect";
 import { type ComponentProps, type FC } from "react";
 import { ToggleGroupStyles, ToggleStyles } from "#ui/components/ToggleGroup.tsx";
-import { OutlineTree } from "#ui/routes/project/$id/workspace/OutlineTree.tsx";
+import {
+	buildCommitTargetComboboxItems,
+	selectCommitTargetComboboxItem,
+} from "#ui/routes/project/$id/workspace/OutlineTree/commitTargetComboboxItems.ts";
+import { OutlineTree } from "#ui/routes/project/$id/workspace/OutlineTree/OutlineTree.tsx";
 import styles from "./Outline.module.css";
 import { TopLeftControls } from "#ui/routes/project/$id/workspace/TopLeftControls.tsx";
 
@@ -91,6 +99,17 @@ export const Outline: FC<
 	};
 
 	const { data: headInfo } = useQuery(headInfoQueryOptions(projectId));
+	const headInfoIndex = headInfo ? getHeadInfoIndex(headInfo) : undefined;
+	const commitTargetState = useAppSelector((state) => selectProjectCommitTarget(state, projectId));
+	const targetComboboxItems = buildCommitTargetComboboxItems({
+		headInfo,
+		headInfoIndex,
+		commitTargetState,
+	});
+	const commitTarget = selectCommitTargetComboboxItem({
+		items: targetComboboxItems,
+		commitTargetState,
+	});
 	const rebaseUpdates =
 		headInfo?.stacks.flatMap((stack): Array<BottomUpdate> => {
 			const relativeTo = stackBottomRelativeTo(stack);
@@ -151,14 +170,23 @@ export const Outline: FC<
 				<TopLeftControls />
 
 				<div className={styles.workspaceControlsLeft}>
-					<button
-						type="button"
-						className={classes("text-15", "text-bold", styles.workspaceName)}
-						onClick={openProjectPicker}
-					>
-						<span className={styles.workspaceNameLabel}>{project.title}</span>
-						<Icon name="chevron-down" className={styles.workspaceNameChevron} />
-					</button>
+					<Tooltip.Root>
+						<Tooltip.Trigger
+							aria-label={globalHotkeys.selectProject.meta.name}
+							className={classes("text-15", "text-bold", styles.workspaceName)}
+							onClick={openProjectPicker}
+						>
+							<span className={styles.workspaceNameLabel}>{project.title}</span>
+							<Icon name="chevron-down" className={styles.workspaceNameChevron} />
+						</Tooltip.Trigger>
+						<Tooltip.Portal>
+							<Tooltip.Positioner sideOffset={4}>
+								<Tooltip.Popup render={<TooltipPopup kbd={globalHotkeys.selectProject.hotkey} />}>
+									{globalHotkeys.selectProject.meta.name}
+								</Tooltip.Popup>
+							</Tooltip.Positioner>
+						</Tooltip.Portal>
+					</Tooltip.Root>
 					<ActivitySpinner />
 				</div>
 
@@ -252,6 +280,10 @@ export const Outline: FC<
 				tabIndex={0}
 				navigationIndex={navigationIndex}
 				absorptionTargetKeys={absorptionTargetKeys}
+				projectId={projectId}
+				headInfo={headInfo}
+				commitTarget={commitTarget}
+				targetComboboxItems={targetComboboxItems}
 				// Focus on page load.
 				ref={(el) => {
 					// Don't steal focus if this component is mounted later on.

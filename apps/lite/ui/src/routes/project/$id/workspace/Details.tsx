@@ -330,9 +330,12 @@ const DiffContents: FC<{
 	viewerRef,
 	didScrollToViaFileRef,
 }) => {
+	const [collapsedItems, setCollapsedItems] = useState<Set<string>>(new Set());
 	const dispatch = useAppDispatch();
 
 	const diffSelection = useDiffSelection(projectId, navigationIndex);
+	const diffSelectionFile =
+		diffSelection !== null ? fileByHunkKey.get(hunkOperandIdentityKey(diffSelection)) : null;
 	const selectedRange = diffSelection
 		? (hunkByKey.get(hunkOperandIdentityKey(diffSelection))?.selectedLines ?? null)
 		: null;
@@ -367,6 +370,35 @@ const DiffContents: FC<{
 		getKey: hunkOperandIdentityKey,
 		operationSourceForItem: hunkOperand,
 	});
+
+	useHotkeys([
+		{
+			hotkey: "Mod+Alt+[",
+			callback: () => !!diffSelectionFile && handleSetCollapsed(diffSelectionFile.item.id)(true),
+			options: {
+				enabled: !!diffSelectionFile && !collapsedItems.has(diffSelectionFile.item.id),
+				conflictBehavior: "allow",
+				target: selectionScopeRef,
+				meta: {
+					group: "Diff",
+					name: "Fold",
+				},
+			},
+		},
+		{
+			hotkey: "Mod+Alt+]",
+			callback: () => !!diffSelectionFile && handleSetCollapsed(diffSelectionFile.item.id)(false),
+			options: {
+				enabled: !!diffSelectionFile && collapsedItems.has(diffSelectionFile.item.id),
+				conflictBehavior: "allow",
+				target: selectionScopeRef,
+				meta: {
+					group: "Diff",
+					name: "Unfold",
+				},
+			},
+		},
+	]);
 
 	const selectFileAtViewportTop = (scrollTop: number, viewer: CodeViewClass<undefined>): void => {
 		if (didScrollToViaFileRef.current) {
@@ -419,6 +451,24 @@ const DiffContents: FC<{
 		);
 	};
 
+	const handleSetCollapsed = (itemId: string) => (collapsed: boolean) => {
+		const s = new Set(collapsedItems);
+
+		if (collapsed) s.add(itemId);
+		else s.delete(itemId);
+
+		setCollapsedItems(s);
+	};
+
+	// We must change the version for updates to the collapsed property to be respected. The versions
+	// should be as stable as possible, collapsed or not, for performance.
+	const enhanceCollapsed = (item: CodeViewDiffItem): CodeViewDiffItem => ({
+		...item,
+		collapsed: true,
+		// oxlint-disable-next-line typescript/no-non-null-assertion -- We always use versions.
+		version: Hash.combine(item.version!)(1),
+	});
+
 	return items.length === 0 ? (
 		<p className="text-13">No changes.</p>
 	) : (
@@ -439,12 +489,18 @@ const DiffContents: FC<{
 						operand={file.operand}
 						change={file.change}
 						hasDiff={item.fileDiff.hunks.length !== 0}
+						collapsed={item.collapsed ?? false}
+						setCollapsed={handleSetCollapsed(item.id)}
 					/>
 				);
 			}}
 			onScroll={selectFileAtViewportTop}
 			className={styles.diffContents}
-			items={items}
+			items={
+				collapsedItems.size === 0
+					? items
+					: items.map((item) => (collapsedItems.has(item.id) ? enhanceCollapsed(item) : item))
+			}
 			selectedLines={selectedRange}
 			onSelectedLinesChange={handleLinesSelected}
 			options={{
@@ -499,6 +555,8 @@ type DiffFileHeaderProps = {
 	operand: FileOperand;
 	change: TreeChange;
 	hasDiff: boolean;
+	collapsed: boolean;
+	setCollapsed: (collapsed: boolean) => void;
 };
 
 const DiffFileHeader: FC<DiffFileHeaderProps> = (p) => {
@@ -510,8 +568,8 @@ const DiffFileHeader: FC<DiffFileHeaderProps> = (p) => {
 	});
 
 	const lastSepIdx = p.change.path.lastIndexOf("/");
-	const mpathInit = lastSepIdx !== -1 ? p.change.path.slice(0, lastSepIdx + 1) : null;
-	const pathLast = lastSepIdx !== -1 ? p.change.path.slice(lastSepIdx + 1) : p.change.path;
+	const directoryPath = lastSepIdx !== -1 ? p.change.path.slice(0, lastSepIdx) : null;
+	const fileName = lastSepIdx !== -1 ? p.change.path.slice(lastSepIdx + 1) : p.change.path;
 
 	const changeType = Match.value(p.item.fileDiff.type).pipe(
 		Match.when("new", () => "Added"),
@@ -520,6 +578,7 @@ const DiffFileHeader: FC<DiffFileHeaderProps> = (p) => {
 		Match.when("deleted", () => "Deleted"),
 		Match.exhaustive,
 	);
+	const collapseLabel = p.collapsed ? "Expand file diff" : "Collapse file diff";
 
 	return (
 		<OperationSourceC projectId={p.projectId} source={fileOperand(p.operand)}>
@@ -527,11 +586,26 @@ const DiffFileHeader: FC<DiffFileHeaderProps> = (p) => {
 				onContextMenu={(event) => {
 					void showNativeContextMenu(event, menuItems);
 				}}
-				className={classes(styles.fileHeader, !p.hasDiff && styles.lone)}
+				className={classes(styles.fileHeader, (p.collapsed || !p.hasDiff) && styles.lone)}
 			>
+				<Tooltip.Root>
+					<Tooltip.Trigger
+						aria-label={collapseLabel}
+						aria-expanded={!p.collapsed}
+						className={getButtonClassName({ size: "small", variant: "ghost", iconOnly: true })}
+						onClick={() => p.setCollapsed(!p.collapsed)}
+					>
+						<Icon name={p.collapsed ? "chevron-right" : "chevron-down"} />
+					</Tooltip.Trigger>
+					<Tooltip.Portal>
+						<Tooltip.Positioner sideOffset={4}>
+							<Tooltip.Popup render={<TooltipPopup />}>{collapseLabel}</Tooltip.Popup>
+						</Tooltip.Positioner>
+					</Tooltip.Portal>
+				</Tooltip.Root>
 				<h4 className={classes("text-13", styles.filePath)}>
-					{mpathInit}
-					<span className={styles.pathLast}>{pathLast}</span>
+					{fileName}
+					{directoryPath !== null && <span className={styles.pathInit}>{directoryPath}</span>}
 				</h4>
 				<span>{changeType}</span>
 				<span>
