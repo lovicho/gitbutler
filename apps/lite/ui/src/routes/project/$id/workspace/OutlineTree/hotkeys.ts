@@ -46,7 +46,7 @@ import { UseHotkeyDefinition, useHotkeys } from "@tanstack/react-hotkeys";
 import { useQuery } from "@tanstack/react-query";
 import { Match } from "effect";
 import { type RefObject } from "react";
-import { commitMessageInputId } from "./CommitForm.tsx";
+import { commitMessageInputId } from "../CommitForm.tsx";
 import { partialStackPushDisabled, partialStackStateFromSegments } from "./partialStackState.ts";
 import { selectAfterDiscardedCommit } from "./selectAfterDiscardedCommit.ts";
 
@@ -386,7 +386,6 @@ export const useOutlineTreeHotkeys = ({
 		navigationIndex,
 		projectId,
 		group: "Workspace",
-		selectionScope: "outline",
 		select: (newItem) => dispatch(projectActions.selectOutline({ projectId, selection: newItem })),
 		selection,
 		getKey: operandIdentityKey,

@@ -1,5 +1,6 @@
 import {
 	absorptionPlanQueryOptions,
+	changesInWorktreeQueryOptions,
 	headInfoQueryOptions,
 	listProjectsQueryOptions,
 } from "#ui/api/queries.ts";
@@ -38,11 +39,13 @@ import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panel
 import {
 	branchOperand,
 	commitOperand,
+	fileOperand,
 	operandContains,
 	operandEquals,
 	operandIdentityKey,
 	type BranchOperand,
 	type Operand,
+	uncommittedChangesFileParent,
 	uncommittedChangesOperand,
 } from "#ui/operands.ts";
 import { Details } from "./Details.tsx";
@@ -55,6 +58,7 @@ import { Outline } from "./Outline.tsx";
 import { getOperations } from "#ui/operations/operation.ts";
 import { buildIndexByKey, type NavigationIndex } from "#ui/workspace/navigation-index.ts";
 import { reverse } from "effect/Array";
+import { OperationControls } from "#ui/routes/project/$id/workspace/OperationControls.tsx";
 
 // This must be unique as to not collide with other IDs, and stable because it's
 // stored in local storage.
@@ -153,7 +157,13 @@ const useWorkspaceHotkeys = (projectId: string) => {
 	]);
 };
 
-const outlineNavigationItems = (headInfo: RefInfo | undefined): Array<Operand> => {
+const outlineNavigationItems = ({
+	headInfo,
+	uncommittedFilePaths,
+}: {
+	headInfo: RefInfo | undefined;
+	uncommittedFilePaths: Array<string>;
+}): Array<Operand> => {
 	const segmentItems = (stackId: string, segment: Segment): Array<Operand> => [
 		...(segment.refName
 			? [branchOperand({ stackId, branchRef: segment.refName.fullNameBytes })]
@@ -163,6 +173,9 @@ const outlineNavigationItems = (headInfo: RefInfo | undefined): Array<Operand> =
 
 	return [
 		uncommittedChangesOperand,
+		...uncommittedFilePaths.map((path) =>
+			fileOperand({ parent: uncommittedChangesFileParent, path }),
+		),
 
 		...reverse(headInfo?.stacks ?? []).flatMap((stack) => {
 			// oxlint-disable-next-line typescript/no-non-null-assertion -- [ref:stack-id-required]
@@ -185,10 +198,14 @@ const useOutlineNavigationIndex = ({
 	absorptionTargetKeys: ReadonlySet<string>;
 }): NavigationIndex<Operand> => {
 	const { data: headInfo } = useQuery(headInfoQueryOptions(projectId));
+	const { data: worktreeChanges } = useQuery(changesInWorktreeQueryOptions(projectId));
 
 	const outlineMode = useAppSelector((state) => selectProjectOutlineModeState(state, projectId));
 
-	const items = outlineNavigationItems(headInfo);
+	const items = outlineNavigationItems({
+		headInfo,
+		uncommittedFilePaths: worktreeChanges?.changes.map((change) => change.path) ?? [],
+	});
 	const filteredItems = Match.value(outlineMode).pipe(
 		Match.tagsExhaustive({
 			Default: () => items,
@@ -412,6 +429,8 @@ const WorkspacePage: FC = () => {
 					/>
 				</Panel>
 			</Group>
+
+			<OperationControls outlineNavigationIndex={outlineNavigationIndex} />
 
 			{Match.value(dialog).pipe(
 				Match.tagsExhaustive({

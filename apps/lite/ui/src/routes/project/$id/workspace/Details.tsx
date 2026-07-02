@@ -15,6 +15,7 @@ import { commitBody, commitTitle, shortCommitId } from "#ui/commit.ts";
 import {
 	branchFileParent,
 	uncommittedChangesFileParent,
+	uncommittedChangesOperand,
 	commitFileParent,
 	FileOperand,
 	fileOperand,
@@ -89,7 +90,7 @@ import {
 } from "#ui/selection-scopes.ts";
 import { FilesTree } from "#ui/routes/project/$id/workspace/FilesTree.tsx";
 import { TopLeftControls } from "#ui/routes/project/$id/workspace/TopLeftControls.tsx";
-import { changeFileTreeItem, conflictFileTreeItem, type FileTreeItem } from "./file-tree.ts";
+import { changeFileRowItem, conflictFileRowItem, type FileRowItem } from "./file-row.ts";
 import {
 	getDependencyCommitIds,
 	getHunkDependencyDiffsByPath,
@@ -117,11 +118,11 @@ const codeViewItemIdPath = ({ changesetKey, id }: { changesetKey: string; id: st
 const hunkOperandIdentityKey = (operand: HunkOperand): string =>
 	operandIdentityKey(hunkOperand(operand));
 
-const getCommitFileTreeItems = ({
+const getCommitFileRowItems = ({
 	commitDetails,
 }: {
 	commitDetails: CommitDetails;
-}): Array<FileTreeItem> => {
+}): Array<FileRowItem> => {
 	const conflictedPaths = commitDetails.conflictEntries
 		? globalThis.Array.from(
 				new Set([
@@ -135,14 +136,14 @@ const getCommitFileTreeItems = ({
 
 	return [
 		...conflictedPaths.map((path) =>
-			conflictFileTreeItem({
+			conflictFileRowItem({
 				path,
 			}),
 		),
 		...commitDetails.changes
 			.filter((change) => !conflictedPathSet.has(change.path))
 			.map((change) =>
-				changeFileTreeItem({
+				changeFileRowItem({
 					change,
 					path: change.path,
 				}),
@@ -150,7 +151,7 @@ const getCommitFileTreeItems = ({
 	];
 };
 
-const getChangesFileTreeItems = (worktreeChanges: WorktreeChanges): Array<FileTreeItem> => {
+const getChangesFileRowItems = (worktreeChanges: WorktreeChanges): Array<FileRowItem> => {
 	const hunkDependencyDiffsByPath = getHunkDependencyDiffsByPath(
 		worktreeChanges.dependencies?.diffs ?? [],
 	);
@@ -161,7 +162,7 @@ const getChangesFileTreeItems = (worktreeChanges: WorktreeChanges): Array<FileTr
 			? getDependencyCommitIds({ hunkDependencyDiffs })
 			: undefined;
 
-		return changeFileTreeItem({
+		return changeFileRowItem({
 			change,
 			dependencyCommitIds,
 			path: change.path,
@@ -169,9 +170,9 @@ const getChangesFileTreeItems = (worktreeChanges: WorktreeChanges): Array<FileTr
 	});
 };
 
-const getBranchFileTreeItems = ({ branchDiff }: { branchDiff: TreeChanges }): Array<FileTreeItem> =>
+const getBranchFileRowItems = ({ branchDiff }: { branchDiff: TreeChanges }): Array<FileRowItem> =>
 	branchDiff.changes.map((change) =>
-		changeFileTreeItem({
+		changeFileRowItem({
 			change,
 			path: change.path,
 		}),
@@ -358,7 +359,6 @@ const DiffContents: FC<{
 		navigationIndex,
 		projectId,
 		group: "Diff",
-		selectionScope: "diff",
 		select: selectDiff,
 		selection: diffSelection,
 		selectSectionPredicate: (hunk) => {
@@ -658,6 +658,12 @@ const Title: FC<{
 					<h3 className={classes("text-15", "text-semibold")}>Uncommitted changes</h3>
 				</div>
 			),
+			File: ({ path }) => (
+				<div className={styles.title}>
+					<Icon name="file" />
+					<h3 className={classes("text-15", "text-semibold")}>{path}</h3>
+				</div>
+			),
 			Commit: ({ commitId }) => (
 				<SuspenseQuery {...commitDetailsWithLineStatsQueryOptions({ projectId, commitId })}>
 					{({ data: commitDetails }) => (
@@ -883,7 +889,7 @@ const CommitDetailsContent: FC<{
 const Diff: FC<{
 	changes: Array<TreeChange>;
 	filesVisible: boolean;
-	filesItems: Array<FileTreeItem>;
+	filesItems: Array<FileRowItem>;
 	onFileSelection: (selection: string) => void;
 	outlineSelection: Operand;
 	projectId: string;
@@ -1052,8 +1058,7 @@ const Diff: FC<{
 							groupResizeBehavior="preserve-pixel-size"
 						>
 							<FilesTree
-								id={"files" satisfies SelectionScope}
-								data-selection-scope
+								data-selection-scope={"files" satisfies SelectionScope}
 								tabIndex={0}
 								className={classes(styles.diffFiles, uiStyles.scrollerWithSeparator)}
 								onFileSelection={selectFileAndNavigateDiff}
@@ -1069,8 +1074,7 @@ const Diff: FC<{
 
 				<Panel id={"diff-panel" satisfies PanelId} minSize={300} className={styles.panel}>
 					<div
-						id={"diff" satisfies SelectionScope}
-						data-selection-scope
+						data-selection-scope={"diff" satisfies SelectionScope}
 						// oxlint-disable-next-line jsx_a11y/no-noninteractive-tabindex -- Revisit this when we add hunk/line selection.
 						tabIndex={0}
 						className={styles.diffContentsContainer}
@@ -1314,16 +1318,18 @@ export const Details: FC<
 					const renderDiff = ({
 						changes,
 						filesItems,
+						outlineSelection: diffOutlineSelection = outlineSelection,
 					}: {
 						changes: Array<TreeChange>;
-						filesItems: Array<FileTreeItem>;
+						filesItems: Array<FileRowItem>;
+						outlineSelection?: Operand;
 					}) => (
 						<Diff
 							changes={changes}
 							filesVisible={filesVisible}
 							filesItems={filesItems}
 							onFileSelection={selectFile}
-							outlineSelection={outlineSelection}
+							outlineSelection={diffOutlineSelection}
 							projectId={projectId}
 						/>
 					);
@@ -1338,7 +1344,7 @@ export const Details: FC<
 								{({ data: commitDetails }) =>
 									renderDiff({
 										changes: commitDetails.changes,
-										filesItems: getCommitFileTreeItems({ commitDetails }),
+										filesItems: getCommitFileRowItems({ commitDetails }),
 									})
 								}
 							</SuspenseQuery>
@@ -1348,11 +1354,35 @@ export const Details: FC<
 								{({ data: worktreeChanges }) =>
 									renderDiff({
 										changes: worktreeChanges.changes,
-										filesItems: getChangesFileTreeItems(worktreeChanges),
+										filesItems: getChangesFileRowItems(worktreeChanges),
 									})
 								}
 							</SuspenseQuery>
 						)),
+						Match.tag("File", (file) => {
+							if (file.parent._tag !== "UncommittedChanges") return null;
+
+							return (
+								<SuspenseQuery {...changesInWorktreeQueryOptions(projectId)}>
+									{({ data: worktreeChanges }) => {
+										const filesItems = getChangesFileRowItems(worktreeChanges).filter(
+											(item) => item.path === file.path,
+										);
+										const changes = filesItems.flatMap((item) =>
+											item._tag === "Change" ? [item.change] : [],
+										);
+
+										if (changes.length === 0) return null;
+
+										return renderDiff({
+											changes,
+											filesItems,
+											outlineSelection: uncommittedChangesOperand,
+										});
+									}}
+								</SuspenseQuery>
+							);
+						}),
 						Match.tag("Branch", ({ branchRef }) =>
 							branchTab === "pr" ? (
 								<SuspenseQuery
@@ -1394,7 +1424,7 @@ export const Details: FC<
 									{({ data: branchDiff }) =>
 										renderDiff({
 											changes: branchDiff.changes,
-											filesItems: getBranchFileTreeItems({ branchDiff }),
+											filesItems: getBranchFileRowItems({ branchDiff }),
 										})
 									}
 								</SuspenseQuery>
