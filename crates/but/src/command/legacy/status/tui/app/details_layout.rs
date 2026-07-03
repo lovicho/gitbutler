@@ -1,11 +1,8 @@
-use ratatui::prelude::Rect;
-
 use crate::command::legacy::status::tui::{
     DETAILS_MAX_SIZE_PERCENTAGE, DETAILS_MIN_SIZE_PERCENTAGE, DetailsLayoutMessage, Message,
     app::{App, normal_mode::NormalMode},
     details::DetailsMessage,
     mode::{DetailsMode, DetailsReturnMode, Mode},
-    render::details_viewport,
 };
 
 impl App {
@@ -145,14 +142,11 @@ impl App {
         self.is_details_visible = !self.is_details_visible;
 
         if self.is_details_visible {
-            self.details.mark_dirty();
-
             if matches!(&*self.mode, Mode::Normal(..)) {
                 self.backstack.push_open_details_view(false);
             }
         } else {
             self.backstack.remove_open_details_view();
-            self.details.reset_scroll();
             if matches!(&*self.mode, Mode::Details(..)) {
                 messages.push(Message::UnfocusDetails);
             }
@@ -173,7 +167,7 @@ impl App {
         }
     }
 
-    pub fn update_status_width_percentage(&mut self, new: u16, terminal_area: Rect) {
+    pub fn update_status_width_percentage(&mut self, new: u16) {
         if !self.is_details_visible {
             return;
         }
@@ -182,8 +176,5 @@ impl App {
             100 - DETAILS_MAX_SIZE_PERCENTAGE,
             100 - DETAILS_MIN_SIZE_PERCENTAGE,
         );
-
-        let details_viewport = details_viewport(self, terminal_area);
-        self.details.ensure_selection_visible(details_viewport);
     }
 }

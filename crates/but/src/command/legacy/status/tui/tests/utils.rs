@@ -436,24 +436,41 @@ fn write_svg_snapshot_comparison_html(
 <title>Status TUI SVG snapshot mismatch</title>
 <style>
 body {{ font-family: sans-serif; background: #111; color: #eee; }}
-.grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }}
 .panel {{ background: #222; padding: 12px; overflow: auto; border: 1px solid #444; }}
+.controls {{ display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }}
+.controls input {{ width: min(420px, 60vw); }}
+.controls span {{ min-width: 8ch; }}
+.controls span:last-child {{ text-align: right; }}
+.overlay {{ position: relative; display: inline-block; background: black; line-height: 0; }}
+.overlay svg {{ display: block; background: black; }}
+.overlay svg + svg {{ position: absolute; inset: 0; opacity: 0.5; pointer-events: none; }}
 h2 {{ margin-top: 0; }}
 svg {{ background: black; }}
 </style>
 </head>
 <body>
 <h1>Status TUI SVG snapshot mismatch</h1>
-<div class="grid">
-  <section class="panel">
-    <h2>Expected snapshot</h2>
+<section class="panel">
+  <h2>Overlay comparison</h2>
+  <div class="controls">
+    <span>Expected</span>
+    <input id="actual-opacity" aria-label="Blend between expected and actual render" type="range" min="0" max="100" value="50">
+    <span>Actual</span>
+  </div>
+  <div class="overlay">
     {expected_svg}
-  </section>
-  <section class="panel">
-    <h2>Actual render</h2>
     {actual_svg}
-  </section>
-</div>
+  </div>
+</section>
+<script>
+const actualSvg = document.querySelector('.overlay svg + svg');
+const opacityInput = document.querySelector('#actual-opacity');
+function updateActualOpacity() {{
+  actualSvg.style.opacity = opacityInput.value / 100;
+}}
+opacityInput.addEventListener('input', updateActualOpacity);
+updateActualOpacity();
+</script>
 </body>
 </html>
 "#

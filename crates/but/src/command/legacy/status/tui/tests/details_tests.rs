@@ -1,6 +1,6 @@
 use but_testsupport::Sandbox;
 use crossterm::event::{KeyCode, KeyModifiers};
-use snapbox::{file, str};
+use snapbox::file;
 use temp_env::with_var;
 
 use crate::command::legacy::status::tui::tests::utils::{
@@ -408,6 +408,7 @@ fn details_cursor_stays_visible_after_resizing() {
     tui.input_then_render('l');
     tui.input_then_render("----------");
     tui.input_then_render('j');
+    tui.input_then_render('j');
 
     tui.input_then_render("++++++++++")
         .assert_rendered_term_svg_eq(file![
@@ -493,101 +494,6 @@ fn toggle_full_screen_details_view() {
         .assert_rendered_term_svg_eq(file![
             "snapshots/toggle_full_screen_details_view_for_commit_014_escape_closes_from_details_mode.svg"
         ]);
-}
-
-#[test]
-fn full_screen_details_scrolls_selected_hunk_to_include_final_line() {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    env.setup_metadata(&["A"]);
-
-    let first_file_contents = (1..=4)
-        .map(|line| format!("first-{line:02}\n"))
-        .collect::<String>();
-    let second_file_contents = (1..=4)
-        .map(|line| format!("second-{line:02}\n"))
-        .collect::<String>();
-    env.file("first-added.txt", first_file_contents);
-    env.file("second-added.txt", second_file_contents);
-
-    let mut tui = test_tui_with_options(
-        env,
-        TestTuiOptions {
-            width: 100,
-            height: 12,
-            ..Default::default()
-        },
-    );
-
-    tui.input_then_render((KeyModifiers::SHIFT, 'D'));
-    tui.render_with_messages(None, Vec::new());
-
-    let output = tui
-        .render_with_messages((KeyModifiers::SHIFT, 'J'), Vec::new())
-        .rendered_output();
-    assert!(
-        output.contains("second-04"),
-        "selected second hunk should include its final line, got:\n{output}"
-    );
-}
-
-#[test]
-fn rubbing_from_full_screen_details() {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    env.setup_metadata(&["A"]);
-
-    env.file("file.txt", "content");
-
-    let mut tui = test_tui(env);
-
-    tui.input_then_render((KeyModifiers::SHIFT, 'D'))
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/rubbing_from_full_screen_details_details_open.svg"
-        ]);
-
-    // avoid `input_then_render` here: its synthetic reload resets the details
-    // selection that the idle frame below lets us establish.
-    tui.render_with_messages(None, Vec::new());
-    tui.render_with_messages('r', Vec::new())
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/rubbing_from_full_screen_details_rubbing.svg"
-        ]);
-
-    tui.input_then_render('j').assert_current_line_eq(str![
-        "┊●   << amend >> 9477ae7 add A                    │───────────────╯"
-    ]);
-
-    // The details view should close. The split shouldn't show either
-    tui.input_then_render(KeyCode::Enter)
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/rubbing_from_full_screen_details_final.svg"
-        ]);
-}
-
-#[test]
-fn rubbing_from_split_details() {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    env.setup_metadata(&["A"]);
-
-    env.file("file.txt", "content");
-
-    let mut tui = test_tui(env);
-
-    tui.input_then_render('l')
-        .assert_rendered_term_svg_eq(file!["snapshots/rubbing_from_split_details_open.svg"]);
-
-    // avoid `input_then_render` here: its synthetic reload resets the details
-    // selection that the idle frame below lets us establish.
-    tui.render_with_messages(None, Vec::new());
-    tui.render_with_messages('r', Vec::new())
-        .assert_rendered_term_svg_eq(file!["snapshots/rubbing_from_split_details_rubbing.svg"]);
-
-    tui.input_then_render('j').assert_current_line_eq(str![
-        "┊●   << amend >> 9477ae7 add A                    │───────────────╯"
-    ]);
-
-    // the details view should remain open
-    tui.input_then_render(KeyCode::Enter)
-        .assert_rendered_term_svg_eq(file!["snapshots/rubbing_from_split_details_final.svg"]);
 }
 
 #[test]

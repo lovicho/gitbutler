@@ -7,13 +7,12 @@ use crate::command::legacy::status::tui::{
     CommandMessage, ConfirmMessage, DetailsLayoutMessage, FuzzyPickerMessage, JumpMessage, Message,
     RubMessage, StackMessage,
     app::{CommitMessageComposer, RewordMessage},
+    details::DetailsMessage,
     help::HelpMessage,
     mode::ModeDiscriminant,
 };
 
-use super::{
-    CommandModeKind, CommitMessage, DetailsMessage, FilesMessage, MoveMessage, ReloadCause,
-};
+use super::{CommandModeKind, CommitMessage, FilesMessage, MoveMessage, ReloadCause};
 
 #[cfg(test)]
 mod tests;
@@ -70,7 +69,6 @@ pub fn default_key_binds() -> KeyBinds {
                 builder.details_jump_up().register();
                 builder.details_jump_down().register();
 
-                builder.details_rub().register();
                 builder.details_copy().register();
                 builder.details_top().register();
                 builder.details_bottom().register();
@@ -1004,14 +1002,6 @@ impl KeyBindsBuilder<'_> {
             "jump down",
             press().control().code(KeyCode::Char('d')),
             Message::Details(DetailsMessage::ScrollDown(Self::JUMP_DISTANCE)),
-        )
-    }
-
-    fn details_rub(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "rub",
-            press().code(KeyCode::Char('r')),
-            Message::Details(DetailsMessage::StartRub),
         )
     }
 

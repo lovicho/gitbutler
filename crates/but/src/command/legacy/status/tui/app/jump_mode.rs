@@ -176,8 +176,6 @@ impl App {
         {
             self.cursor = new_cursor;
 
-            self.details.mark_dirty();
-
             let return_mode = mode.return_mode.clone();
             let return_backstack = mode.return_backstack.clone();
 
@@ -212,7 +210,6 @@ impl App {
 
         if let Some(new_cursor) = new_cursor {
             self.cursor = new_cursor;
-            self.details.mark_dirty();
 
             let return_mode = mode.return_mode.clone();
             let return_backstack = mode.return_backstack.clone();
@@ -234,7 +231,6 @@ impl App {
                 .move_down(&self.status_lines, &self.mode, self.flags.show_files)
         {
             self.cursor = new_cursor;
-            self.details.mark_dirty();
         }
     }
 
@@ -248,7 +244,6 @@ impl App {
                 .move_up(&self.status_lines, &self.mode, self.flags.show_files)
         {
             self.cursor = new_cursor;
-            self.details.mark_dirty();
         }
     }
 }

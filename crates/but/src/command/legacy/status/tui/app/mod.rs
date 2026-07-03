@@ -1,6 +1,5 @@
 use std::{
     borrow::Cow,
-    rc::Rc,
     sync::{Arc, mpsc::Receiver},
     time::Instant,
 };
@@ -18,7 +17,7 @@ use crate::{
     CliId,
     command::legacy::status::{
         FilesStatusFlag, StatusFlags, StatusOutputLine, TuiLaunchOptions, TuiOutcome,
-        TuiRunOptions, output::StatusOutputLineData,
+        TuiRunOptions, output::StatusOutputLineData, tui::details::Details,
     },
     theme::Theme,
     tui::TerminalGuard,
@@ -33,7 +32,6 @@ use super::{
     copy_selection_picker::CopySelectionItem,
     cursor,
     cursor::{Cursor, is_selectable_in_mode},
-    details::Details,
     file_browser::FileBrowser,
     fps::FpsCounter,
     fuzzy_picker::{Col, FuzzyPicker, FuzzyPickerItem, SearchableToken},
@@ -46,7 +44,7 @@ use super::{
     marking::MarkClasses,
     mode::Mode,
     operations,
-    render::{details_viewport, ensure_cursor_visible, status_viewport_height},
+    render::{ensure_cursor_visible, status_viewport_height},
     toast::{ToastKind, Toasts},
 };
 
@@ -101,7 +99,7 @@ pub struct App {
     pub is_details_visible: bool,
     pub launch_options: TuiLaunchOptions,
     pub delayed_messages: Vec<Message>,
-    pub incoming_out_of_band_messages: Vec<Rc<Receiver<Message>>>,
+    pub incoming_out_of_band_messages: Vec<Receiver<Message>>,
     pub fps: FpsCounter,
     pub to_be_discarded: Vec<Arc<CliId>>,
     pub status_width_percentage: u16,
@@ -129,10 +127,11 @@ impl App {
 
         let theme = crate::theme::get();
 
-        let (mut details, is_details_visible) = (Details::new(theme), launch_options.show_diff);
-        if is_details_visible {
-            details.mark_dirty();
-        }
+        let (details_tx, details_rx) = std::sync::mpsc::channel::<Message>();
+        let incoming_out_of_band_messages = Vec::from([details_rx]);
+
+        let details = Details::new(theme, details_tx);
+        let is_details_visible = launch_options.show_diff;
 
         let app_key_binds = AppKeyBinds {
             key_binds: default_key_binds(),
@@ -160,7 +159,7 @@ impl App {
             app_key_binds,
             highlight: Default::default(),
             delayed_messages: Default::default(),
-            incoming_out_of_band_messages: Default::default(),
+            incoming_out_of_band_messages,
             to_be_discarded: Default::default(),
             modal: Default::default(),
             backstack: Default::default(),
@@ -229,13 +228,6 @@ impl App {
         self.should_render = true;
         let terminal_area: Rect = terminal_guard.terminal_mut().size()?.into();
         let visible_height = status_viewport_height(self, terminal_area);
-
-        if self
-            .details
-            .needs_update_after_message(self.is_details_visible, &msg)
-        {
-            self.details.mark_dirty();
-        }
 
         match msg {
             Message::Quit => {
@@ -438,12 +430,10 @@ impl App {
                 modal => self.modal = modal,
             },
             Message::Details(details_message) => {
-                let details_viewport = details_viewport(self, terminal_area);
-                self.details
-                    .try_handle_message(details_message, details_viewport, messages)?;
+                self.details.try_handle_message(details_message, messages)?;
             }
             Message::RegisterOutOfBandMessage(rx) => {
-                self.incoming_out_of_band_messages.push(rx);
+                self.incoming_out_of_band_messages.push(rx.0);
             }
             Message::WithOneFrameDelay(msg) => {
                 self.delayed_messages.push(*msg);
@@ -471,14 +461,12 @@ impl App {
                 self.update_status_width_percentage(
                     self.status_width_percentage
                         .saturating_sub(DETAILS_SIZE_ADJUSTMENT_PERCENTAGE),
-                    terminal_area,
                 );
             }
             Message::ShrinkDetails => {
                 self.update_status_width_percentage(
                     self.status_width_percentage
                         .saturating_add(DETAILS_SIZE_ADJUSTMENT_PERCENTAGE),
-                    terminal_area,
                 );
             }
             Message::PickAndGotoBranch => {
@@ -1116,6 +1104,17 @@ pub enum Modal {
         help: Help,
         key_binds: KeyBinds,
     },
+}
+
+impl Modal {
+    pub fn is_picker(&self) -> bool {
+        match self {
+            Modal::CopySelectionPicker { .. }
+            | Modal::GotoBranchPicker { .. }
+            | Modal::ApplyStackPicker { .. } => true,
+            Modal::Confirm { .. } | Modal::Help { .. } => false,
+        }
+    }
 }
 
 /// Formats an error for display in the terminal UI without including backtraces.
