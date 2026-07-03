@@ -12,5 +12,12 @@
 .activeSource {
 	border-radius: 8px;
 	outline: 2px dashed var(--border-1);
-	outline-offset: 1px;
+}
+
+.activeSourceInside {
+	outline-offset: -4px;
+}
+
+.activeSourceOutside {
+	outline-offset: 2px;
 }

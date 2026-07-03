@@ -29,6 +29,9 @@ pub(crate) mod binary_path;
 pub(crate) mod diff_specs;
 pub(crate) mod targeting;
 
+pub mod diff_rendering;
+pub mod string_interning;
+
 pub trait ResultErrorExt {
     fn show_root_cause_error_then_exit_without_destructors(self, out: OutputChannel) -> !;
 }

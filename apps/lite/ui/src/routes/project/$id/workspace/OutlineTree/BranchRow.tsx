@@ -7,7 +7,7 @@ import {
 	useUpdateBranchName,
 	useWorkspaceBranchAndAncestorsPush,
 } from "#ui/api/mutations.ts";
-import { forgeInfoOptions } from "#ui/api/queries.ts";
+import { forgeInfoOptions, listCIChecksQueryOptions } from "#ui/api/queries.ts";
 import { getHeadInfoIndex } from "#ui/api/ref-info.ts";
 import { decodeBytes } from "#ui/api/bytes.ts";
 import { Button, Toast, Tooltip } from "@base-ui/react";
@@ -15,7 +15,7 @@ import { Toolbar } from "@base-ui/react/toolbar";
 import { BranchReference, InsertSide, PushStatus, RelativeTo } from "@gitbutler/but-sdk";
 import { useQuery } from "@tanstack/react-query";
 import { Match } from "effect";
-import { ComponentProps, FC, useOptimistic, useTransition } from "react";
+import { type ComponentProps, type FC, type MouseEvent, useOptimistic, useTransition } from "react";
 import { classes } from "#ui/components/classes.ts";
 import { GraphSegment, type GraphSegmentStatus } from "#ui/components/GraphSegment.tsx";
 import { Icon } from "#ui/components/Icon.tsx";
@@ -29,13 +29,12 @@ import {
 	showNativeMenuFromTrigger,
 	type NativeMenuItem,
 } from "#ui/native-menu.ts";
-import { keyboardTransferOperationMode } from "#ui/outline/mode.ts";
 import { branchOperand, operandEquals, type BranchOperand } from "#ui/operands.ts";
 import { projectActions, selectProjectOutlineModeState } from "#ui/projects/state.ts";
 import { focusSelectionScope } from "#ui/selection-scopes.ts";
 import { useAppDispatch, useAppSelector } from "#ui/store.ts";
 import { prForgeUrl } from "#ui/pr.ts";
-import { RowLabel, RowLabelContainer, RowToolbar } from "../Row.tsx";
+import { RowBubble, RowLabel, RowLabelContainer, RowLabelFooter, RowToolbar } from "../Row.tsx";
 import { getRowButtonClassName } from "../Row-utils.ts";
 import { InlineEditor } from "./InlineEditor.tsx";
 import { commitMessageInputId } from "../CommitForm.tsx";
@@ -43,9 +42,51 @@ import { insertBlankCommitMenuItem } from "./insertBlankCommitMenuItem.ts";
 import { ItemRow } from "./ItemRow.tsx";
 import { type PartialStackState, partialStackPushDisabled } from "./partialStackState.ts";
 import styles from "./BranchRow.module.css";
+import { ciChecksSummaryUrl, type AggregateCIStatus } from "#ui/ci.ts";
 
 const focusCommitMessageInput = () => {
 	document.getElementById(commitMessageInputId)?.focus();
+};
+
+const CIBubble: FC<{ status: AggregateCIStatus }> = (p) => {
+	switch (p.status) {
+		case "success":
+			return (
+				<RowBubble aria-label="CI checks succeeded" variant="safe">
+					<Icon name="tick" size={12} />
+				</RowBubble>
+			);
+		case "failure":
+			return (
+				<RowBubble aria-label="CI checks failed" variant="danger">
+					<Icon name="cross" size={12} />
+				</RowBubble>
+			);
+		case "in_progress":
+			return (
+				<RowBubble aria-label="CI checks in progress" variant="lightGray">
+					<Icon name="spinner" size={12} />
+				</RowBubble>
+			);
+		case "cancelled":
+			return (
+				<RowBubble aria-label="CI checks cancelled" variant="warn">
+					<Icon name="warning" size={12} />
+				</RowBubble>
+			);
+		case "action_required":
+			return (
+				<RowBubble aria-label="CI checks action required" variant="warn">
+					<Icon name="warning" size={12} />
+				</RowBubble>
+			);
+		case "unknown":
+			return (
+				<RowBubble aria-label="CI checks status unknown" variant="warn">
+					<Icon name="warning" size={12} />
+				</RowBubble>
+			);
+	}
 };
 
 export const BranchRow: FC<
@@ -80,6 +121,17 @@ export const BranchRow: FC<
 }) => {
 	const { data: forgeInfo } = useQuery(forgeInfoOptions(projectId));
 	const mforgeUrl = pullRequest !== null ? forgeInfo && prForgeUrl(pullRequest, forgeInfo) : null;
+
+	const { data: ciChecks } = useQuery({
+		...listCIChecksQueryOptions({
+			projectId,
+			reference: refName.displayName,
+			polling: "passive",
+		}),
+		enabled: pullRequest !== null && forgeInfo?.capabilities.checks,
+	});
+	const ciURL =
+		pullRequest !== null ? forgeInfo && ciChecksSummaryUrl(pullRequest, forgeInfo) : null;
 
 	const dispatch = useAppDispatch();
 	const branchOperandV: BranchOperand = {
@@ -171,12 +223,9 @@ export const BranchRow: FC<
 
 	const cutBranch = () => {
 		dispatch(
-			projectActions.enterTransferMode({
+			projectActions.enterKeyboardTransferMode({
 				projectId,
-				mode: keyboardTransferOperationMode({
-					source: operand,
-					operationType: "into",
-				}),
+				source: operand,
 			}),
 		);
 		focusSelectionScope("outline");
@@ -244,10 +293,16 @@ export const BranchRow: FC<
 		});
 	};
 
-	const openPRInBrowser = async (): Promise<void> => {
-		if (mforgeUrl == null) return;
+	const openPRInBrowser = async (evt?: MouseEvent<HTMLAnchorElement>): Promise<void> => {
+		evt?.preventDefault();
 
-		await window.lite.openInWebBrowser(mforgeUrl);
+		if (mforgeUrl != null) await window.lite.openInWebBrowser(mforgeUrl);
+	};
+
+	const openCIChecksInBrowser = async (evt?: MouseEvent<HTMLAnchorElement>): Promise<void> => {
+		evt?.preventDefault();
+
+		if (ciURL != null) await window.lite.openInWebBrowser(ciURL);
 	};
 
 	const workspaceBranchAndAncestorsPushDisabled =
@@ -368,7 +423,7 @@ export const BranchRow: FC<
 						<RowLabel heading>{optimisticBranchDisplayName}</RowLabel>
 					</RowLabelContainer>
 
-					<div className={classes("text-13", styles.labelMeta)}>
+					<RowLabelFooter className={classes("text-13", styles.labelMeta)}>
 						<span className={classes(rowStyles.fadedText, styles.labelMetaItem)}>
 							{Match.value(pushStatus).pipe(
 								Match.when("nothingToPush", () => "Nothing to push"),
@@ -380,12 +435,25 @@ export const BranchRow: FC<
 							)}
 						</span>
 
-						{pullRequest !== null && (
-							<span className={classes(rowStyles.fadedText, styles.labelMetaItem)}>
+						{mforgeUrl != null && (
+							<a
+								href={mforgeUrl}
+								onClick={(evt) => void openPRInBrowser(evt)}
+								className={classes(rowStyles.fadedText, styles.labelMetaItem)}
+							>
 								<Icon name="pr" />
 								PR
-							</span>
+							</a>
 						)}
+
+						{ciChecks?.aggregate &&
+							(ciURL != null ? (
+								<a href={ciURL} onClick={(evt) => void openCIChecksInBrowser(evt)}>
+									<CIBubble status={ciChecks.aggregate.status} />
+								</a>
+							) : (
+								<CIBubble status={ciChecks.aggregate.status} />
+							))}
 
 						{partialStackState.requiresPush &&
 							(() => {
@@ -446,7 +514,7 @@ export const BranchRow: FC<
 									</Tooltip.Root>
 								);
 							})()}
-					</div>
+					</RowLabelFooter>
 				</div>
 			)}
 

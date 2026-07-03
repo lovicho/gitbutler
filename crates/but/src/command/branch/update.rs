@@ -10,6 +10,7 @@ use but_api::branch::{
 use but_api::json as api_json;
 use but_core::DryRun;
 use gix::refs::{Category, FullName, FullNameRef};
+#[cfg(not(feature = "graph-workspace"))]
 use std::collections::HashSet;
 
 use crate::{
@@ -327,6 +328,76 @@ fn format_divergence_base(connector: &str, commit: &IntegrationDivergenceCommit)
     )
 }
 
+/// Render the preview from the graph-workspace projection: the branch's
+/// reference segment provides its rows.
+#[cfg(feature = "graph-workspace")]
+fn format_preview(branch_ref: &FullNameRef, result: &IntegrateBranchResult) -> String {
+    use but_workspace::ui::{CommitState, workspace::DetailedGraphRowData};
+
+    let t = theme::get();
+    let target_branch = branch_ref.as_bstr().to_string();
+    let mut lines = Vec::new();
+    lines.push("Preview".to_string());
+    lines.push(String::new());
+
+    let matching_segment = result
+        .workspace
+        .graph_workspace
+        .stacks
+        .iter()
+        .find_map(|stack| {
+            stack.reference_segments.iter().find_map(|segment| {
+                let row = stack.rows.get(segment.reference_idx)?;
+                let DetailedGraphRowData::Reference(reference) = &row.data else {
+                    return None;
+                };
+                (reference.ref_name.full_name == target_branch).then_some((
+                    stack,
+                    segment,
+                    reference.ref_name.display_name.clone(),
+                ))
+            })
+        });
+
+    let Some((stack, segment, display_name)) = matching_segment else {
+        lines.push("(branch not present in preview workspace)".into());
+        lines.push(String::new());
+        return lines.join("\n");
+    };
+
+    lines.push(format!("* {}", t.local_branch.paint(display_name)));
+    for &row_idx in &segment.row_idxs {
+        let Some(row) = stack.rows.get(row_idx) else {
+            continue;
+        };
+        let DetailedGraphRowData::Commit(commit) = &row.data else {
+            continue;
+        };
+        let style = match commit.state {
+            CommitState::Integrated => CommitRenderStyle::Integrated,
+            CommitState::LocalOnly | CommitState::LocalAndRemote(_) => CommitRenderStyle::LocalOnly,
+        };
+        let subject = commit
+            .message
+            .lines()
+            .next()
+            .map(|line| line.to_str_lossy().into_owned())
+            .unwrap_or_default();
+        lines.push(format_commit_row(
+            "",
+            style,
+            change_id_prefix(Some(commit.change_id.as_bytes())),
+            commit.id.to_hex_with_len(7).to_string(),
+            None,
+            Some(subject.as_str()),
+            commit.has_conflicts,
+        ));
+    }
+    lines.push(String::new());
+    lines.join("\n")
+}
+
+#[cfg(not(feature = "graph-workspace"))]
 fn format_preview(branch_ref: &FullNameRef, result: &IntegrateBranchResult) -> String {
     let t = theme::get();
     let target_branch = branch_ref.as_bstr().to_owned();
@@ -444,6 +515,7 @@ fn format_preview(branch_ref: &FullNameRef, result: &IntegrateBranchResult) -> S
     lines.join("\n")
 }
 
+#[cfg(not(feature = "graph-workspace"))]
 struct PreviewCommitRow {
     style: CommitRenderStyle,
     change_id_prefix: String,

@@ -107,6 +107,9 @@ devtools = ["tauri/devtools"]
 opener = ["dep:opener"]
 ## Enables the revamped commands in but.
 but-2 = ["but?/but-2"]
+## Switch mutation responses to the graph-based workspace projection.
+## Forwarded to `but-api`; never enable by default. See `but-api`'s feature docs.
+graph-workspace = ["but-api/graph-workspace", "but?/graph-workspace"]
 
 #! ## Development
 ## This feature is used for production builds where `devPath` points to the filesystem

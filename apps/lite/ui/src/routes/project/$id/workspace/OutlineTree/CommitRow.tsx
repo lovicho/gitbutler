@@ -9,7 +9,6 @@ import {
 } from "#ui/api/mutations.ts";
 import { forgeInfoOptions } from "#ui/api/queries.ts";
 import { getHeadInfoIndex } from "#ui/api/ref-info.ts";
-import { Checkbox } from "#ui/components/Checkbox.tsx";
 import { classes } from "#ui/components/classes.ts";
 import { GraphSegment } from "#ui/components/GraphSegment.tsx";
 import { Icon } from "#ui/components/Icon.tsx";
@@ -25,7 +24,6 @@ import {
 	showNativeMenuFromTrigger,
 	type NativeMenuItem,
 } from "#ui/native-menu.ts";
-import { keyboardTransferOperationMode } from "#ui/outline/mode.ts";
 import { branchOperand, commitOperand, operandEquals, type CommitOperand } from "#ui/operands.ts";
 import {
 	projectActions,
@@ -41,7 +39,7 @@ import { Toast, Tooltip } from "@base-ui/react";
 import { Toolbar } from "@base-ui/react/toolbar";
 import { useQuery } from "@tanstack/react-query";
 import { ComponentProps, FC, use, useOptimistic, useTransition } from "react";
-import { RowLabel, RowLabelContainer, RowToolbar } from "../Row.tsx";
+import { RowCheckbox, RowLabel, RowLabelContainer, RowToolbar } from "../Row.tsx";
 import { getRowButtonClassName } from "../Row-utils.ts";
 import { NavigationIndexContext } from "../OutlineNavigationIndexContext.ts";
 import { commitMessageInputId } from "../CommitForm.tsx";
@@ -184,12 +182,9 @@ export const CommitRow: FC<
 
 	const cutCommit = () => {
 		dispatch(
-			projectActions.enterTransferMode({
+			projectActions.enterKeyboardTransferMode({
 				projectId,
-				mode: keyboardTransferOperationMode({
-					source: operand,
-					operationType: "into",
-				}),
+				source: operand,
 			}),
 		);
 		focusSelectionScope("outline");
@@ -366,7 +361,7 @@ export const CommitRow: FC<
 			className={classes(restProps.className, styles.row)}
 			isCommitTarget={isCommitTarget}
 		>
-			<div className={styles.graphSegmentWithCheckbox}>
+			<div className={styles.iconWithCheckbox}>
 				<GraphSegment
 					glyph="commit"
 					status={commitIsDiverged(commit) ? "Diverged" : commit.state.type}
@@ -376,7 +371,7 @@ export const CommitRow: FC<
 					// sibling row.
 					disableHoverablePopup
 				>
-					<Checkbox
+					<RowCheckbox
 						disabled={!isDefaultMode}
 						aria-label={`Check commit ${title ?? "(no message)"}`}
 						checked={isChecked}

@@ -1,7 +1,6 @@
 .target {
-	display: flex;
+	display: grid;
 	position: relative;
-	flex-direction: column;
 }
 
 .activeTarget {
@@ -9,7 +8,14 @@
 	z-index: 1;
 	border-radius: 8px;
 	outline: 2px dashed var(--fill-gray-bg);
-	outline-offset: 1px;
+}
+
+.activeTargetInside {
+	outline-offset: -4px;
+}
+
+.activeTargetOutside {
+	outline-offset: 2px;
 }
 
 .insertionTarget {

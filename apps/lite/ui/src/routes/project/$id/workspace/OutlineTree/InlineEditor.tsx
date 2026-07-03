@@ -1,5 +1,5 @@
 import { getRowButtonClassName } from "../Row-utils.ts";
-import { RowLabel, RowLabelContainer } from "../Row.tsx";
+import { RowLabel, RowLabelContainer, RowLabelFooter } from "../Row.tsx";
 import { formatForDisplaySorted } from "#ui/hotkeys.ts";
 import { useMergedRefs } from "@base-ui/utils/useMergedRefs";
 import { useHotkey } from "@tanstack/react-hotkeys";
@@ -57,7 +57,7 @@ export const InlineEditor: FC<{
 					}
 				/>
 			</RowLabelContainer>
-			<div className={styles.help}>
+			<RowLabelFooter className={styles.help}>
 				<button type="submit" className={getRowButtonClassName({})}>
 					<kbd>{formatForDisplaySorted("Enter")}</kbd>
 					<span className={styles.shortcutLabel}> to Save</span>
@@ -66,7 +66,7 @@ export const InlineEditor: FC<{
 					<kbd>{formatForDisplaySorted("Escape")}</kbd>
 					<span className={styles.shortcutLabel}> to Cancel</span>
 				</button>
-			</div>
+			</RowLabelFooter>
 		</form>
 	);
 };

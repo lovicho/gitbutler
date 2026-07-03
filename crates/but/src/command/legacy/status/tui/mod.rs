@@ -337,11 +337,6 @@ where
 
     if app.details.update(ctx, selection, app.is_details_visible)? {
         app.should_render = true;
-
-        if app.launch_options.quit_after_rendering_full_diff && app.details.is_finished_rendering()
-        {
-            app.outcome = Some(TuiOutcome::None);
-        }
     }
 
     if let Some(file_browser) = &mut app.file_browser

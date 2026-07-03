@@ -1,7 +1,6 @@
 import { useDiscardWorktreeChanges } from "#ui/api/mutations.ts";
 import { Icon } from "#ui/components/Icon.tsx";
 import { createDiffSpec } from "#ui/operations/diff-specs.ts";
-import { keyboardTransferOperationMode } from "#ui/outline/mode.ts";
 import { outlineHotkeys, selectionOperationHotkeys, toElectronAccelerator } from "#ui/hotkeys.ts";
 import {
 	nativeMenuItem,
@@ -69,12 +68,9 @@ export const UncommittedChangesRow: FC<{
 
 	const cutChanges = () => {
 		dispatch(
-			projectActions.enterTransferMode({
+			projectActions.enterKeyboardTransferMode({
 				projectId,
-				mode: keyboardTransferOperationMode({
-					source: operand,
-					operationType: "into",
-				}),
+				source: operand,
 			}),
 		);
 		focusSelectionScope("outline");

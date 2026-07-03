@@ -1,6 +1,5 @@
 import { selectionOperationHotkeys, type CommandGroup } from "#ui/hotkeys.ts";
 import { type OperationType } from "#ui/operations/operation.ts";
-import { keyboardTransferOperationMode } from "#ui/outline/mode.ts";
 import { hunkOperand, HunkOperand, operandIdentityKey, type Operand } from "#ui/operands.ts";
 import {
 	projectActions,
@@ -317,12 +316,10 @@ export const useNavigationIndexHotkeys = <T>({
 		const source = operationSourceForItem(selection);
 
 		dispatch(
-			projectActions.enterTransferMode({
+			projectActions.enterKeyboardTransferMode({
 				projectId,
-				mode: keyboardTransferOperationMode({
-					source,
-					operationType,
-				}),
+				source,
+				operationType,
 			}),
 		);
 		focusSelectionScope("outline");

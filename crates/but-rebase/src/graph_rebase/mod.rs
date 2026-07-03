@@ -304,6 +304,15 @@ impl<'ws, 'meta, M: RefMetadata> SuccessfulRebase<'ws, 'meta, M> {
         &self.repo
     }
 
+    /// Returns the preview repository together with mutable access to the
+    /// ref-metadata the editor was created with.
+    ///
+    /// Use this to build post-rebase projections that need both, like a
+    /// workspace preview computed from [`Self::overlayed_graph`].
+    pub fn repo_and_meta_mut(&mut self) -> (&gix::Repository, &mut M) {
+        (&self.repo, self.meta)
+    }
+
     /// Returns a preview of what the but-graph will look like after
     /// materialization.
     ///

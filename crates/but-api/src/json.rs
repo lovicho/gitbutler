@@ -146,7 +146,12 @@ pub struct WorkspaceState {
     )]
     pub replaced_commits: std::collections::BTreeMap<HexHash, HexHash>,
     /// The post-operation workspace view presented to the frontend.
+    #[cfg(not(feature = "graph-workspace"))]
     pub head_info: but_workspace::ui::RefInfo,
+    /// The post-operation workspace view presented to the frontend, as the
+    /// rendered graph projection.
+    #[cfg(feature = "graph-workspace")]
+    pub graph_workspace: but_workspace::ui::workspace::DetailedGraphWorkspace,
 }
 
 #[cfg(feature = "export-schema")]
@@ -155,18 +160,17 @@ but_schemars::register_sdk_type!(WorkspaceState);
 impl TryFrom<crate::WorkspaceState> for WorkspaceState {
     type Error = anyhow::Error;
 
-    fn try_from(
-        crate::WorkspaceState {
-            replaced_commits,
-            head_info,
-        }: crate::WorkspaceState,
-    ) -> Result<Self, Self::Error> {
+    fn try_from(value: crate::WorkspaceState) -> Result<Self, Self::Error> {
         Ok(Self {
-            replaced_commits: replaced_commits
+            replaced_commits: value
+                .replaced_commits
                 .into_iter()
                 .map(|(old, new)| (HexHash::from(old), HexHash::from(new)))
                 .collect(),
-            head_info: head_info.try_into()?,
+            #[cfg(not(feature = "graph-workspace"))]
+            head_info: value.head_info.try_into()?,
+            #[cfg(feature = "graph-workspace")]
+            graph_workspace: value.graph_workspace,
         })
     }
 }

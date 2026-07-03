@@ -25,6 +25,7 @@ pub fn workspace_graph(ctx: &but_ctx::Context) -> anyhow::Result<String> {
     Ok(but_testsupport::graph_workspace(&ws).to_string())
 }
 
+#[cfg(not(feature = "graph-workspace"))]
 pub fn fresh_head_info(ctx: &but_ctx::Context) -> anyhow::Result<but_workspace::RefInfo> {
     let project_meta = ctx.project_meta()?;
     let meta = ctx.meta()?;
@@ -40,4 +41,14 @@ pub fn fresh_head_info(ctx: &but_ctx::Context) -> anyhow::Result<but_workspace::
         },
     )
     .map(but_workspace::RefInfo::pruned_to_entrypoint)
+}
+
+#[cfg(feature = "graph-workspace")]
+pub fn fresh_graph_workspace(
+    ctx: &but_ctx::Context,
+) -> anyhow::Result<but_workspace::ui::workspace::DetailedGraphWorkspace> {
+    let mut meta = ctx.meta()?;
+    let (_guard, repo, ws, _db) = ctx.workspace_and_db()?;
+    let mut ws = ws.clone();
+    but_workspace::workspace::detailed_graph_workspace(&mut ws, &mut meta, &repo).map(Into::into)
 }

@@ -1,5 +1,5 @@
 import { Operand, operandEquals } from "#ui/operands.ts";
-import { getOperationSource, pointerTransferOperationMode } from "#ui/outline/mode.ts";
+import { getOperationSource, pointerTransferMode } from "#ui/outline/mode.ts";
 import styles from "./OperationSourceC.module.css";
 import { operandLabel } from "./operandLabel.ts";
 import { headInfoQueryOptions } from "#ui/api/queries.ts";
@@ -15,17 +15,21 @@ import { useQuery } from "@tanstack/react-query";
 import { FC, type ReactNode, useEffect, useEffectEvent, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import type { DragData } from "./DragData.ts";
+import { Match } from "effect";
 
 const DragPreview: FC<{ children: ReactNode }> = ({ children }) => (
 	<div className={classes(styles.dragPreview, "text-13")}>{children}</div>
 );
 
+type OperationSourceOutline = "inside" | "outside";
+
 export const OperationSourceC: FC<
 	{
 		projectId: string;
 		source: Operand;
+		outline: OperationSourceOutline;
 	} & Omit<useRender.ComponentProps<"div">, "onDragStart">
-> = ({ projectId, source, render, ...props }) => {
+> = ({ projectId, source, outline, render, ...props }) => {
 	const { data: headInfoIndex } = useQuery({
 		...headInfoQueryOptions(projectId),
 		select: getHeadInfoIndex,
@@ -58,8 +62,9 @@ export const OperationSourceC: FC<
 		dispatch(
 			projectActions.enterTransferMode({
 				projectId,
-				mode: pointerTransferOperationMode({
+				mode: pointerTransferMode({
 					source,
+					target: null,
 					operationType: null,
 				}),
 			}),
@@ -93,7 +98,17 @@ export const OperationSourceC: FC<
 		render,
 		ref: dragRef,
 		props: mergeProps<"div">(props, {
-			className: classes(isActiveSource && styles.activeSource),
+			className: classes(
+				isActiveSource &&
+					classes(
+						styles.activeSource,
+						Match.value(outline).pipe(
+							Match.when("inside", () => styles.activeSourceInside),
+							Match.when("outside", () => styles.activeSourceOutside),
+							Match.exhaustive,
+						),
+					),
+			),
 		}),
 	});
 };

@@ -27,6 +27,11 @@ default = ["legacy", "napi-auto"]
 legacy = ["but-api/legacy"]
 ## Enable auto-generated napi functions from the `#[but_api]` macro.
 napi-auto = ["but-api/napi"]
+## Switch mutation responses to the graph-based workspace projection.
+## Forwarded to `but-api`; never enable by default. See `but-api`'s feature docs.
+## The SDK builds one `.node` binary per flavor: this feature is enabled for the
+## `@gitbutler/but-sdk/graph` entry point's binary and off for the default one.
+graph-workspace = ["but-api/graph-workspace"]
 
 [dependencies]
 anyhow.workspace = true

@@ -12,7 +12,6 @@ import {
 } from "#ui/hotkeys.ts";
 import { type NativeMenuItem, nativeMenuItem, nativeMenuItemsFromGroups } from "#ui/native-menu.ts";
 import { fileOperand, type FileOperand } from "#ui/operands.ts";
-import { keyboardTransferOperationMode } from "#ui/outline/mode.ts";
 import { createDiffSpec } from "#ui/operations/diff-specs.ts";
 import { projectActions } from "#ui/projects/state.ts";
 import { useAppDispatch } from "#ui/store.ts";
@@ -46,12 +45,9 @@ export const useFileMenuItems = ({
 	const openInEditor = useOpenInEditor();
 	const cutFile = () => {
 		dispatch(
-			projectActions.enterTransferMode({
+			projectActions.enterKeyboardTransferMode({
 				projectId,
-				mode: keyboardTransferOperationMode({
-					source: fileOperand(operand),
-					operationType: "into",
-				}),
+				source: fileOperand(operand),
 			}),
 		);
 		focusSelectionScope("outline");

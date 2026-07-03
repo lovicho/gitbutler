@@ -1,6 +1,6 @@
 use anyhow::Context as _;
 use bstr::BString;
-use but_api::{WorkspaceState, json::HexHash};
+use but_api::json::HexHash;
 use but_core::{DiffSpec, DryRun, RefMetadata, sync::RepoExclusive};
 use but_ctx::Context;
 use but_graph::Workspace;
@@ -956,7 +956,7 @@ fn run(
                 )?;
 
                 anyhow::ensure!(
-                    !is_workspace_conflicted(&workspace),
+                    !workspace.is_conflicted(),
                     "Cannot uncommit commits that would result in merge conflicts"
                 );
             }
@@ -989,7 +989,7 @@ fn run(
                     )?;
 
                 anyhow::ensure!(
-                    !is_workspace_conflicted(&workspace),
+                    !workspace.is_conflicted(),
                     "Cannot uncommit hunks that would result in merge conflicts"
                 );
             }
@@ -1204,14 +1204,4 @@ where
         }
     }
     NonEmpty::from_vec(out).expect("deduping a NonEmpty will never make it empty")
-}
-
-fn is_workspace_conflicted(workspace: &WorkspaceState) -> bool {
-    workspace
-        .head_info
-        .stacks
-        .iter()
-        .flat_map(|stack| &stack.segments)
-        .flat_map(|segment| &segment.commits)
-        .any(|commit| commit.has_conflicts)
 }

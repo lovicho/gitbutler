@@ -896,7 +896,7 @@ fn amend_uncommitted_files_into_commit() {
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
 
-Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage them to a branch
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
 
 "#]]);
 
@@ -923,7 +923,7 @@ Amended 7adb8e6 to create d2f176a
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
 
-Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage them to a branch
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
 
 "#]]);
 }
@@ -947,7 +947,7 @@ fn amend_all_uncommitted_changes_into_commit() {
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
 
-Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage them to a branch
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
 
 "#]]);
 
@@ -1274,7 +1274,7 @@ Error: --target cannot be an empty branch
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
 
-Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage them to a branch
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
 
 "#]]);
     // middle should be considered empty even though there are commits on its parent
@@ -1333,7 +1333,7 @@ Uncommitted f55169f
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
 
-Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage them to a branch
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
 
 "#]]);
 
@@ -1395,7 +1395,7 @@ Uncommitted from f55169f
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
 
-Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage them to a branch
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
 
 "#]]);
 }

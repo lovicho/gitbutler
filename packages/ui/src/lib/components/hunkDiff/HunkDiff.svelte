@@ -317,104 +317,104 @@
 	/* Color blind-friendly overrides for medium (default) contrast */
 	.colorblind-friendly {
 		/* deletion (orange) */
-		--clr-diff-deletion-line-bg: #fae8cc;
-		--clr-diff-deletion-line-highlight: #f5d199;
-		--clr-diff-deletion-count-bg: #f5deb3;
-		--clr-diff-deletion-count-text: #bf590d;
-		--clr-diff-deletion-count-border: #f2bf7f;
+		--diff-deletion-line-bg: #fae8cc;
+		--diff-deletion-line-highlight: #f5d199;
+		--diff-deletion-count-bg: #f5deb3;
+		--diff-deletion-count-text: #bf590d;
+		--diff-deletion-count-border: #f2bf7f;
 		/* addition (blue) */
-		--clr-diff-addition-line-bg: #cce8fa;
-		--clr-diff-addition-line-highlight: #99d1f5;
-		--clr-diff-addition-count-bg: #b3def5;
-		--clr-diff-addition-count-text: #0d59bf;
-		--clr-diff-addition-count-border: #79b8eb;
+		--diff-addition-line-bg: #cce8fa;
+		--diff-addition-line-highlight: #99d1f5;
+		--diff-addition-count-bg: #b3def5;
+		--diff-addition-count-text: #0d59bf;
+		--diff-addition-count-border: #79b8eb;
 	}
 
 	/* Dark theme color-blind friendly overrides for medium (default) contrast */
 	:global(.dark) .colorblind-friendly {
 		/* deletion (orange) - darker variants for dark theme */
-		--clr-diff-deletion-line-bg: #4d2e14;
-		--clr-diff-deletion-line-highlight: #73401a;
-		--clr-diff-deletion-count-bg: #66401f;
-		--clr-diff-deletion-count-text: #ffbf66;
-		--clr-diff-deletion-count-border: #a67333;
+		--diff-deletion-line-bg: #4d2e14;
+		--diff-deletion-line-highlight: #73401a;
+		--diff-deletion-count-bg: #66401f;
+		--diff-deletion-count-text: #ffbf66;
+		--diff-deletion-count-border: #a67333;
 		/* addition (blue) - darker variants for dark theme */
-		--clr-diff-addition-line-bg: #142e4d;
-		--clr-diff-addition-line-highlight: #1a4d73;
-		--clr-diff-addition-count-bg: #1f4066;
-		--clr-diff-addition-count-text: #99d9ff;
-		--clr-diff-addition-count-border: #2f6dab;
+		--diff-addition-line-bg: #142e4d;
+		--diff-addition-line-highlight: #1a4d73;
+		--diff-addition-count-bg: #1f4066;
+		--diff-addition-count-text: #99d9ff;
+		--diff-addition-count-border: #2f6dab;
 	}
 
 	/* STRONG CONTRAST */
 	.contrast-strong {
 		/* deletion */
-		--clr-diff-deletion-line-bg: #ffd4d8;
-		--clr-diff-deletion-line-highlight: #ff9eaa;
-		--clr-diff-deletion-count-bg: #ffb8c2;
-		--clr-diff-deletion-count-text: #9b2030;
-		--clr-diff-deletion-count-border: #e88a96;
+		--diff-deletion-line-bg: #ffd4d8;
+		--diff-deletion-line-highlight: #ff9eaa;
+		--diff-deletion-count-bg: #ffb8c2;
+		--diff-deletion-count-text: #9b2030;
+		--diff-deletion-count-border: #e88a96;
 		/* addition */
-		--clr-diff-addition-line-bg: #a5f5d4;
-		--clr-diff-addition-line-highlight: #5de0aa;
-		--clr-diff-addition-count-bg: #7aeebe;
-		--clr-diff-addition-count-text: #1a6b47;
-		--clr-diff-addition-count-border: #4dd49a;
+		--diff-addition-line-bg: #a5f5d4;
+		--diff-addition-line-highlight: #5de0aa;
+		--diff-addition-count-bg: #7aeebe;
+		--diff-addition-count-text: #1a6b47;
+		--diff-addition-count-border: #4dd49a;
 		/* locked */
-		--clr-diff-locked-count-bg: #fae6ad;
-		--clr-diff-locked-count-text: #bd7d12;
-		--clr-diff-locked-count-border: #e6bf78;
+		--diff-locked-count-bg: #fae6ad;
+		--diff-locked-count-text: #bd7d12;
+		--diff-locked-count-border: #e6bf78;
 	}
 
 	/* Dark theme overrides for contrast-strong */
 	:global(.dark) .contrast-strong {
 		/* deletion */
-		--clr-diff-deletion-line-bg: #6e1a28;
-		--clr-diff-deletion-line-highlight: #b82e48;
-		--clr-diff-deletion-count-bg: #8f2238;
-		--clr-diff-deletion-count-text: #ffa0b4;
-		--clr-diff-deletion-count-border: #c45068;
+		--diff-deletion-line-bg: #6e1a28;
+		--diff-deletion-line-highlight: #b82e48;
+		--diff-deletion-count-bg: #8f2238;
+		--diff-deletion-count-text: #ffa0b4;
+		--diff-deletion-count-border: #c45068;
 		/* addition */
-		--clr-diff-addition-line-bg: #125747;
-		--clr-diff-addition-line-highlight: #1c9d78;
-		--clr-diff-addition-count-bg: #187a5f;
-		--clr-diff-addition-count-text: #7aeebe;
-		--clr-diff-addition-count-border: #3db888;
+		--diff-addition-line-bg: #125747;
+		--diff-addition-line-highlight: #1c9d78;
+		--diff-addition-count-bg: #187a5f;
+		--diff-addition-count-text: #7aeebe;
+		--diff-addition-count-border: #3db888;
 		/* locked */
-		--clr-diff-locked-count-bg: #785217;
-		--clr-diff-locked-count-text: #ebba66;
-		--clr-diff-locked-count-border: #9b7338;
+		--diff-locked-count-bg: #785217;
+		--diff-locked-count-text: #ebba66;
+		--diff-locked-count-border: #9b7338;
 	}
 
 	/* Color blind-friendly overrides for strong contrast */
 	.contrast-strong.colorblind-friendly {
 		/* deletion (orange) */
-		--clr-diff-deletion-line-bg: #f0d4a0;
-		--clr-diff-deletion-line-highlight: #e6b060;
-		--clr-diff-deletion-count-bg: #eac080;
-		--clr-diff-deletion-count-text: #a04000;
-		--clr-diff-deletion-count-border: #d9a050;
+		--diff-deletion-line-bg: #f0d4a0;
+		--diff-deletion-line-highlight: #e6b060;
+		--diff-deletion-count-bg: #eac080;
+		--diff-deletion-count-text: #a04000;
+		--diff-deletion-count-border: #d9a050;
 		/* addition (blue) */
-		--clr-diff-addition-line-bg: #a0d4f0;
-		--clr-diff-addition-line-highlight: #60b0e6;
-		--clr-diff-addition-count-bg: #84c4ee;
-		--clr-diff-addition-count-text: #0040a0;
-		--clr-diff-addition-count-border: #4e97ca;
+		--diff-addition-line-bg: #a0d4f0;
+		--diff-addition-line-highlight: #60b0e6;
+		--diff-addition-count-bg: #84c4ee;
+		--diff-addition-count-text: #0040a0;
+		--diff-addition-count-border: #4e97ca;
 	}
 
 	/* Dark theme color-blind friendly overrides for strong contrast */
 	:global(.dark) .contrast-strong.colorblind-friendly {
 		/* deletion (orange) - darker variants for dark theme */
-		--clr-diff-deletion-line-bg: #664020;
-		--clr-diff-deletion-line-highlight: #996030;
-		--clr-diff-deletion-count-bg: #805530;
-		--clr-diff-deletion-count-text: #ffc060;
-		--clr-diff-deletion-count-border: #c08840;
+		--diff-deletion-line-bg: #664020;
+		--diff-deletion-line-highlight: #996030;
+		--diff-deletion-count-bg: #805530;
+		--diff-deletion-count-text: #ffc060;
+		--diff-deletion-count-border: #c08840;
 		/* addition (blue) - darker variants for dark theme */
-		--clr-diff-addition-line-bg: #204066;
-		--clr-diff-addition-line-highlight: #306099;
-		--clr-diff-addition-count-bg: #305580;
-		--clr-diff-addition-count-text: #80d0ff;
-		--clr-diff-addition-count-border: #4088c0;
+		--diff-addition-line-bg: #204066;
+		--diff-addition-line-highlight: #306099;
+		--diff-addition-count-bg: #305580;
+		--diff-addition-count-text: #80d0ff;
+		--diff-addition-count-border: #4088c0;
 	}
 </style>

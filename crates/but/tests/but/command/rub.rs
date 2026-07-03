@@ -2264,7 +2264,7 @@ Hint: run `but help` for all commands
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
 
-Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage them to a branch
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
 
 "#]]);
 
@@ -2335,7 +2335,7 @@ Hint: run `but help` for all commands
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
 
-Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage them to a branch
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
 
 "#]]);
 

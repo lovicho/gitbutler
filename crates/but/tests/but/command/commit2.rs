@@ -510,7 +510,7 @@ fn empty_flag_to_force_empty_commit_when_changes_exist() {
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
 
-Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage them to a branch
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
 
 "#]]);
 }
@@ -626,7 +626,7 @@ fn commit_above_commit() {
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
 
-Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage them to a branch
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
 
 "#]]);
 
@@ -673,7 +673,7 @@ fn commit_above_branch() {
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
 
-Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage them to a branch
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
 
 "#]]);
 
@@ -722,7 +722,7 @@ fn commit_below_commit() {
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
 
-Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage them to a branch
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
 
 "#]]);
 
@@ -769,7 +769,7 @@ fn commit_below_branch() {
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
 
-Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage them to a branch
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
 
 "#]]);
 
@@ -818,7 +818,7 @@ fn commit_below_branch_with_multiple_commits_treats_branch_as_bucket() {
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
 
-Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage them to a branch
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
 
 "#]]);
 
@@ -1061,7 +1061,7 @@ fn committing_specific_cli_ids() {
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
 
-Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage them to a branch
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
 
 "#]]);
 
@@ -1083,7 +1083,7 @@ Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage 
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
 
-Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage them to a branch
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
 
 "#]]);
 }
@@ -1302,7 +1302,7 @@ fn can_commit_with_path_prefix() {
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
 
-Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage them to a branch
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
 
 "#]]);
 
@@ -1325,7 +1325,7 @@ Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage 
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
 
-Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage them to a branch
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
 
 "#]]);
 }
@@ -1368,7 +1368,7 @@ fn path_prefix_with_mix_of_modifications() {
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
 
-Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage them to a branch
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
 
 "#]]);
 
@@ -1567,7 +1567,7 @@ fn committing_below_an_empty_branch() {
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
 
-Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage them to a branch
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
 
 "#]]);
 
@@ -1590,7 +1590,7 @@ Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage 
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
 
-Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage them to a branch
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
 
 "#]]);
 

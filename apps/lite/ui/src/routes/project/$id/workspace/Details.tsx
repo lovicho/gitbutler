@@ -56,7 +56,6 @@ import type {
 	TreeChange,
 	TreeChanges,
 	UnifiedPatch,
-	WorktreeChanges,
 } from "@gitbutler/but-sdk";
 import {
 	type CodeViewDiffItem,
@@ -90,10 +89,13 @@ import {
 } from "#ui/selection-scopes.ts";
 import { FilesTree } from "#ui/routes/project/$id/workspace/FilesTree.tsx";
 import { TopLeftControls } from "#ui/routes/project/$id/workspace/TopLeftControls.tsx";
-import { changeFileRowItem, conflictFileRowItem, type FileRowItem } from "./file-row.ts";
 import {
-	getDependencyCommitIds,
-	getHunkDependencyDiffsByPath,
+	changeFileRowItem,
+	conflictFileRowItem,
+	getChangesFileRowItems,
+	type FileRowItem,
+} from "./file-row.ts";
+import {
 	contiguousSelectionByLine,
 	contiguousSelectionsFromHunk,
 	synthesizeFilePatch,
@@ -149,25 +151,6 @@ const getCommitFileRowItems = ({
 				}),
 			),
 	];
-};
-
-const getChangesFileRowItems = (worktreeChanges: WorktreeChanges): Array<FileRowItem> => {
-	const hunkDependencyDiffsByPath = getHunkDependencyDiffsByPath(
-		worktreeChanges.dependencies?.diffs ?? [],
-	);
-
-	return worktreeChanges.changes.map((change) => {
-		const hunkDependencyDiffs = hunkDependencyDiffsByPath.get(change.path);
-		const dependencyCommitIds = hunkDependencyDiffs
-			? getDependencyCommitIds({ hunkDependencyDiffs })
-			: undefined;
-
-		return changeFileRowItem({
-			change,
-			dependencyCommitIds,
-			path: change.path,
-		});
-	});
 };
 
 const getBranchFileRowItems = ({ branchDiff }: { branchDiff: TreeChanges }): Array<FileRowItem> =>
@@ -576,7 +559,7 @@ const DiffFileHeader: FC<DiffFileHeaderProps> = (p) => {
 	const collapseLabel = collapseHotkey.meta.name;
 
 	return (
-		<OperationSourceC projectId={p.projectId} source={fileOperand(p.operand)}>
+		<OperationSourceC projectId={p.projectId} source={fileOperand(p.operand)} outline="inside">
 			<header
 				onContextMenu={(event) => {
 					void showNativeContextMenu(event, menuItems);
@@ -1059,7 +1042,6 @@ const Diff: FC<{
 						>
 							<FilesTree
 								data-selection-scope={"files" satisfies SelectionScope}
-								tabIndex={0}
 								className={classes(styles.diffFiles, uiStyles.scrollerWithSeparator)}
 								onFileSelection={selectFileAndNavigateDiff}
 								projectId={projectId}

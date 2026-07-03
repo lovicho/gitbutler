@@ -10,7 +10,6 @@ use std::{
 };
 
 use anyhow::Context as _;
-use bstr::{BString, ByteSlice as _};
 use but_ctx::{Context, OnDemand};
 use gix::ObjectId;
 use itertools::{Itertools as _, Position};
@@ -18,23 +17,23 @@ use ratatui::{
     Frame,
     layout::Rect,
     style::{Color, Stylize as _},
-    text::{Line, Span},
+    text::Line,
 };
-use syntect::{easy::HighlightLines, highlighting, parsing::SyntaxSet};
+use syntect::{highlighting, parsing::SyntaxSet};
 
 use crate::{
     CliId,
     command::legacy::status::tui::{
         Message, count_allocations,
-        details::strings::{SharedStrings, Strings},
         highlight::{self, Highlights},
     },
     theme::Theme,
-    utils::DebugAsType,
+    utils::{
+        DebugAsType,
+        diff_rendering::{self, CodeLineKind, DetailsLine, DiffLineWriter, IdGen, SectionId},
+        string_interning::Strings,
+    },
 };
-
-mod rendering;
-mod strings;
 
 const CHANNEL_SIZE: usize = 1024;
 
@@ -106,13 +105,6 @@ impl Details {
             cache: Default::default(),
             out_of_band_messages_tx,
             highlights: Default::default(),
-        }
-    }
-
-    pub fn is_finished_rendering(&self) -> bool {
-        match &self.line_reader {
-            ChannelLineReader::NotStarted | ChannelLineReader::Started { .. } => false,
-            ChannelLineReader::Finished | ChannelLineReader::Failed => true,
         }
     }
 
@@ -193,7 +185,7 @@ impl Details {
                     Some(CacheKey::Commit(commit)),
                     selection_did_change,
                     move |ctx, theme, id_gen, line_writer| {
-                        rendering::render_commit(commit, ctx, theme, id_gen, line_writer)
+                        diff_rendering::render_commit(commit, ctx, theme, id_gen, line_writer)
                     },
                 )
             }
@@ -204,7 +196,7 @@ impl Details {
                     None,
                     selection_did_change,
                     move |ctx, theme, id_gen, line_writer| {
-                        rendering::render_branch(name, ctx, theme, id_gen, line_writer)
+                        diff_rendering::render_branch(name, ctx, theme, id_gen, line_writer)
                     },
                 )
             }
@@ -213,7 +205,7 @@ impl Details {
                 None,
                 selection_did_change,
                 move |ctx, theme, id_gen, line_writer| {
-                    rendering::render_uncommitted(ctx, theme, id_gen, line_writer)
+                    diff_rendering::render_uncommitted(ctx, theme, id_gen, line_writer)
                 },
             ),
             CliId::UncommittedHunkOrFile(uncommitted) => {
@@ -223,7 +215,7 @@ impl Details {
                     None,
                     selection_did_change,
                     move |ctx, theme, id_gen, line_writer| {
-                        rendering::render_uncommitted_hunk(
+                        diff_rendering::render_uncommitted_hunk(
                             uncommitted,
                             ctx,
                             theme,
@@ -246,7 +238,7 @@ impl Details {
                     None,
                     selection_did_change,
                     move |ctx, theme, id_gen, line_writer| {
-                        rendering::render_committed_file(
+                        diff_rendering::render_committed_file(
                             commit,
                             path,
                             id,
@@ -293,7 +285,7 @@ impl Details {
                 &mut Context,
                 &'static Theme,
                 &mut IdGen<'_>,
-                &mut dyn LineWriter,
+                &mut dyn DiffLineWriter,
             ) -> anyhow::Result<()>
             + Clone
             + Send
@@ -326,7 +318,7 @@ impl Details {
                 &mut Context,
                 &'static Theme,
                 &mut IdGen<'_>,
-                &mut dyn LineWriter,
+                &mut dyn DiffLineWriter,
             ) -> anyhow::Result<()>
             + Send
             + 'static,
@@ -828,71 +820,12 @@ impl Details {
     }
 }
 
-trait LineWriter {
-    fn push(&mut self, line: DetailsLine) -> anyhow::Result<()>;
-
-    fn push_selectable_text(&mut self, id: SectionId, line: Line<'static>) -> anyhow::Result<()> {
-        self.push(DetailsLine::Text {
-            id: Some(id),
-            line,
-            skip_when_copying_hunk: false,
-        })
-    }
-
-    fn push_hunk_header(&mut self, id: SectionId, line: Line<'static>) -> anyhow::Result<()> {
-        self.push(DetailsLine::Text {
-            id: Some(id),
-            line,
-            skip_when_copying_hunk: true,
-        })
-    }
-
-    #[expect(dead_code)]
-    fn push_non_selectable_text(&mut self, line: Line<'static>) -> anyhow::Result<()> {
-        self.push(DetailsLine::Text {
-            id: None,
-            line,
-            skip_when_copying_hunk: false,
-        })
-    }
-
-    fn push_empty_line(&mut self, id: SectionId) -> anyhow::Result<()> {
-        self.push_selectable_text(id, " ".into())
-    }
-
-    fn push_section_separator(&mut self) -> anyhow::Result<()> {
-        self.push(DetailsLine::SectionSeparator)
-    }
-
-    fn push_text_to_wrap(&mut self, id: SectionId, text: String) -> anyhow::Result<()> {
-        self.push(DetailsLine::TextToWrap { id, text })
-    }
-
-    fn push_code(
-        &mut self,
-        id: SectionId,
-        line_numbers: CodeLineNumbers,
-        line_start_end: (usize, usize),
-        diff: Arc<BString>,
-        path: Arc<BString>,
-    ) -> anyhow::Result<()> {
-        self.push(DetailsLine::Code(DetailsCodeLine {
-            id,
-            highlighted_line: RefCell::new(None),
-            line_numbers,
-            line_start_end,
-            diff,
-            path,
-        }))
-    }
-}
-
 struct ChannelLineWriter {
     tx: std::sync::mpsc::SyncSender<RenderThreadMessage>,
 }
 
-impl LineWriter for ChannelLineWriter {
-    fn push(&mut self, line: DetailsLine) -> anyhow::Result<()> {
+impl DiffLineWriter for ChannelLineWriter {
+    fn write(&mut self, line: DetailsLine) -> anyhow::Result<()> {
         let result = self.tx.send(RenderThreadMessage::Line(line));
         if result.is_ok() {
             Ok(())
@@ -916,45 +849,6 @@ impl Display for SendErrorCode {
 }
 
 impl std::error::Error for SendErrorCode {}
-
-#[derive(Debug)]
-struct IdGen<'a> {
-    pub strings: Strings,
-    scope: &'static str,
-    _marker: std::marker::PhantomData<&'a mut ()>,
-}
-
-impl IdGen<'_> {
-    fn new(strings: Strings) -> Self {
-        IdGen {
-            strings,
-            scope: "details",
-            _marker: std::marker::PhantomData,
-        }
-    }
-
-    fn new_id(&mut self, id: impl Display) -> SectionId {
-        SectionId(self.strings.get(format!("{}/{}", self.scope, id)))
-    }
-
-    fn scoped(&mut self, scope: impl Display) -> IdGen<'_> {
-        let scope = self.strings.get(format!("{}/{}", self.scope, scope));
-        IdGen {
-            strings: self.strings.clone(),
-            scope,
-            _marker: std::marker::PhantomData,
-        }
-    }
-}
-
-/// Each line in the details view is considered to be part of a "section". A section is the group
-/// of lines that can be selected together such as a hunk.
-///
-/// `SectionId` is used to track which lines belong to the same section. `Details` tracks the
-/// currently selected `SectionId` and when it renders a line with a matching it it'll highlight
-/// it.
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct SectionId(&'static str);
 
 #[derive(Debug)]
 struct Section {
@@ -995,215 +889,6 @@ fn extend_section_list(sections: &mut Vec<Section>, line_index: usize, line: &De
         first_line: line_index,
         last_line: line_index,
     });
-}
-
-#[derive(Debug, Copy, Clone)]
-struct CodeLineNumbers {
-    old_width: u32,
-    new_width: u32,
-    kind: CodeLineKind,
-}
-
-#[derive(Debug, Copy, Clone)]
-enum CodeLineKind {
-    Addition { new_line: u32 },
-    Deletion { old_line: u32 },
-    Context { old_line: u32, new_line: u32 },
-}
-
-impl CodeLineKind {
-    fn bg(self, theme: &'static Theme) -> Option<Color> {
-        match self {
-            CodeLineKind::Addition { .. } => theme.addition_rich.bg,
-            CodeLineKind::Deletion { .. } => theme.deletion_rich.bg,
-            CodeLineKind::Context { .. } => None,
-        }
-    }
-}
-
-impl CodeLineNumbers {
-    fn addition(old_width: u32, new_width: u32, new_line: u32) -> Self {
-        Self {
-            old_width,
-            new_width,
-            kind: CodeLineKind::Addition { new_line },
-        }
-    }
-
-    fn deletion(old_width: u32, new_width: u32, old_line: u32) -> Self {
-        Self {
-            old_width,
-            new_width,
-            kind: CodeLineKind::Deletion { old_line },
-        }
-    }
-
-    fn context(old_width: u32, new_width: u32, old_line: u32, new_line: u32) -> Self {
-        Self {
-            old_width,
-            new_width,
-            kind: CodeLineKind::Context { old_line, new_line },
-        }
-    }
-
-    fn spans(
-        self,
-        strings: &mut strings::SharedStrings,
-        theme: &'static Theme,
-    ) -> [Span<'static>; 6] {
-        match self.kind {
-            CodeLineKind::Addition { new_line } => [
-                Span::raw(strings.get_spaces(self.old_width as _)),
-                Span::styled(" ┊ ", theme.border),
-                Span::raw(strings.get_spaces((self.new_width - num_digits(new_line)) as _)),
-                Span::raw(strings.get_u32(new_line)).style(theme.addition),
-                Span::styled(" │ ", theme.border),
-                Span::raw("+").style(theme.addition_rich),
-            ],
-            CodeLineKind::Deletion { old_line } => [
-                Span::raw(strings.get_spaces((self.old_width - num_digits(old_line)) as _)),
-                Span::raw(strings.get_u32(old_line)).style(theme.deletion),
-                Span::styled(" ┊ ", theme.border),
-                Span::raw(strings.get_spaces(self.new_width as _)),
-                Span::styled(" │ ", theme.border),
-                Span::raw("-").style(theme.deletion_rich),
-            ],
-            CodeLineKind::Context { old_line, new_line } => [
-                Span::raw(strings.get_spaces((self.old_width - num_digits(old_line)) as _)),
-                Span::styled(strings.get_u32(old_line), theme.hint),
-                Span::styled(" ┊ ", theme.border),
-                Span::raw(strings.get_spaces((self.new_width - num_digits(new_line)) as _)),
-                Span::styled(strings.get_u32(new_line), theme.hint),
-                Span::styled(" │  ", theme.border),
-            ],
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-#[allow(clippy::large_enum_variant)]
-enum DetailsLine {
-    Text {
-        /// None if this line cannot be selected
-        id: Option<SectionId>,
-        line: Line<'static>,
-        skip_when_copying_hunk: bool,
-    },
-    TextToWrap {
-        id: SectionId,
-        text: String,
-    },
-    Code(DetailsCodeLine),
-    SectionSeparator,
-}
-
-#[derive(Debug, Clone)]
-struct DetailsCodeLine {
-    id: SectionId,
-    line_numbers: CodeLineNumbers,
-    // indexes into `diff` where the line starts and ends, including any line terminators
-    line_start_end: (usize, usize),
-    // the whole diff this line is part of
-    //
-    // we share the diff and store indexes to get the line to avoid allocating each line
-    diff: Arc<BString>,
-    path: Arc<BString>,
-    // HACK: only when drawing this line to the screen do we syntax highlight it and cache the
-    // result directly here. We dont have a mutable reference in `Details::render` so have to
-    // cheat with a `RefCell`.
-    highlighted_line: RefCell<Option<Line<'static>>>,
-}
-
-impl DetailsCodeLine {
-    fn ensure_highlighted(
-        &self,
-        syntax_set: &SyntaxSet,
-        syntax_theme: &highlighting::Theme,
-        theme: &'static Theme,
-        strings: &mut SharedStrings,
-    ) {
-        let Self {
-            highlighted_line,
-            line_numbers,
-            path,
-            line_start_end: _,
-            diff: _,
-            id: _,
-        } = self;
-
-        if highlighted_line.borrow().is_some() {
-            return;
-        }
-
-        let syntax = {
-            let path = path.to_path_lossy();
-            path.extension()
-                .and_then(|ext| syntax_set.find_syntax_by_extension(ext.to_str()?))
-                .or_else(|| {
-                    path.file_name().and_then(|file_name| {
-                        syntax_set.find_syntax_by_extension(file_name.to_str()?)
-                    })
-                })
-                .unwrap_or_else(|| syntax_set.find_syntax_plain_text())
-        };
-
-        // TODO: creating a new `HighlightLines` per line isn't ideal. Instead we should have reuse
-        // two `HighlightLines` per hunk. One for added+context lines and one for deleted lines.
-        // That should highlight correctly across lines and reuse internal buffers better.
-        //
-        // Remember to advance both `HighlightLines` on context lines.
-        let mut highlight_lines = HighlightLines::new(syntax, syntax_theme);
-
-        self.with_line_from_diff(|line| {
-            let bg = line_numbers.kind.bg(theme);
-            let line_numbers = line_numbers.spans(strings, theme);
-            *highlighted_line.borrow_mut() =
-                Some(Line::from_iter(line_numbers.into_iter().chain(
-                    syntax_highlight(line, bg, &mut highlight_lines, syntax_set),
-                )));
-        });
-    }
-
-    fn with_line_from_diff<F, T>(&self, f: F) -> T
-    where
-        F: FnOnce(&str) -> T,
-    {
-        let (start, end) = self.line_start_end;
-        let line = self.diff[start..end].to_str_lossy();
-        let line = line.strip_suffix('\n').unwrap_or(&line);
-        let line = line.strip_suffix('\r').unwrap_or(line);
-        f(line)
-    }
-}
-
-fn syntax_highlight(
-    code: &str,
-    bg: Option<Color>,
-    highlight_lines: &mut HighlightLines<'_>,
-    syntax_set: &SyntaxSet,
-) -> Vec<Span<'static>> {
-    let Ok(ranges) = highlight_lines.highlight_line(code, syntax_set) else {
-        return Vec::from([Span::raw(code.to_owned())]);
-    };
-
-    ranges
-        .iter()
-        .map(|(style, text)| {
-            let color = Color::Rgb(style.foreground.r, style.foreground.g, style.foreground.b);
-            Span::raw(text.to_string()).fg(color)
-        })
-        .map(move |span| {
-            if let Some(background) = bg {
-                span.bg(background)
-            } else {
-                span
-            }
-        })
-        .collect::<Vec<_>>()
-}
-
-fn num_digits(n: u32) -> u32 {
-    if n == 0 { 1 } else { n.ilog10() + 1 }
 }
 
 /// Counter for tracking how many threads we're currently running.

@@ -5,7 +5,7 @@ import {
 	type Operand,
 } from "#ui/operands.ts";
 import { type OperationType } from "#ui/operations/operation.ts";
-import { type TransferOperationMode } from "#ui/outline/mode.ts";
+import { type TransferMode } from "#ui/outline/mode.ts";
 import * as workspace from "#ui/projects/workspace/state.ts";
 import type { RootState } from "#ui/store.ts";
 import { type AbsorptionTarget, type RefInfo, type RelativeTo } from "@gitbutler/but-sdk";
@@ -119,11 +119,19 @@ const projectSlice = createSlice({
 		},
 		enterTransferMode: (
 			state,
-			action: PayloadAction<{ projectId: string; mode: TransferOperationMode }>,
+			action: PayloadAction<{ projectId: string; mode: TransferMode }>,
 		) => {
 			const { projectId, mode } = action.payload;
 			const projectState = ensureProjectState(state, projectId);
 			workspace.enterTransferMode(projectState.workspace, mode);
+		},
+		enterKeyboardTransferMode: (
+			state,
+			action: PayloadAction<{ projectId: string; source: Operand; operationType?: OperationType }>,
+		) => {
+			const { projectId, source, operationType } = action.payload;
+			const projectState = ensureProjectState(state, projectId);
+			workspace.enterKeyboardTransferMode(projectState.workspace, source, operationType);
 		},
 		enterAbsorbMode: (
 			state,

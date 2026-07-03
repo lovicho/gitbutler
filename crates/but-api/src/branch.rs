@@ -794,7 +794,7 @@ pub fn branch_create_with_perm(
         snapshot.commit(ctx, perm).ok();
     }
 
-    let workspace = WorkspaceState::from_workspace(&new_ws, &repo, BTreeMap::new())?;
+    let workspace = WorkspaceState::from_workspace(&new_ws, &mut meta, &repo, BTreeMap::new())?;
     *ws = new_ws.into_owned();
     Ok(BranchCreateResult { workspace, new_ref })
 }
@@ -956,8 +956,9 @@ fn checkout_ref_with_perm(
     }
 
     ctx.reload_repo_and_invalidate_workspace(perm)?;
+    let mut meta = ctx.meta()?;
     let (repo, ws, _) = ctx.workspace_mut_and_db_with_perm(perm)?;
-    let workspace = WorkspaceState::from_workspace(&ws, &repo, BTreeMap::new())?;
+    let workspace = WorkspaceState::from_workspace(&ws, &mut meta, &repo, BTreeMap::new())?;
     Ok(BranchCheckoutResult { workspace })
 }
 
@@ -1208,6 +1209,7 @@ fn branch_workspace_from_rebase<M: but_core::RefMetadata>(
 
     WorkspaceState::from_workspace(
         materialized.workspace,
+        materialized.meta,
         repo,
         materialized.history.commit_mappings(),
     )
@@ -1340,14 +1342,40 @@ mod tests {
         let repo = ctx.repo.get()?;
         let head_name = repo.head_name()?.expect("HEAD is symbolic after checkout");
         assert_eq!(head_name.as_bstr(), "refs/heads/feature");
-        let workspace_ref = result
-            .workspace
-            .head_info
-            .workspace_ref_info
-            .expect("checked out branch is the workspace ref");
-        assert_eq!(workspace_ref.ref_name.as_bstr(), "refs/heads/feature");
+        assert_workspace_ref(&result.workspace, "refs/heads/feature");
 
         Ok(())
+    }
+
+    /// Assert the mutation response's workspace projection contains `expected`
+    /// as its checked-out ref, in whichever projection flavor this build uses.
+    #[cfg(not(feature = "graph-workspace"))]
+    fn assert_workspace_ref(workspace: &crate::WorkspaceState, expected: &str) {
+        let workspace_ref = workspace
+            .head_info
+            .workspace_ref_info
+            .as_ref()
+            .expect("checked out branch is the workspace ref");
+        assert_eq!(workspace_ref.ref_name.as_bstr(), expected);
+    }
+
+    /// Assert the mutation response's workspace projection contains `expected`
+    /// as its checked-out ref, in whichever projection flavor this build uses.
+    #[cfg(feature = "graph-workspace")]
+    fn assert_workspace_ref(workspace: &crate::WorkspaceState, expected: &str) {
+        use but_workspace::ui::workspace::DetailedGraphRowData;
+        assert!(
+            workspace.graph_workspace.stacks.iter().any(|stack| {
+                stack.rows.iter().any(|row| {
+                    matches!(
+                        &row.data,
+                        DetailedGraphRowData::Reference(reference)
+                            if reference.ref_name.full_name == expected
+                    )
+                })
+            }),
+            "checked out branch '{expected}' appears in the graph workspace"
+        );
     }
 
     #[test]
@@ -1380,12 +1408,7 @@ mod tests {
         assert_eq!(head_name.as_bstr(), "refs/heads/new-branch");
         let mut created = repo.find_reference("refs/heads/new-branch")?;
         assert_eq!(created.peel_to_id()?.detach(), target_commit_id);
-        let workspace_ref = result
-            .workspace
-            .head_info
-            .workspace_ref_info
-            .expect("checked out branch is the workspace ref");
-        assert_eq!(workspace_ref.ref_name.as_bstr(), "refs/heads/new-branch");
+        assert_workspace_ref(&result.workspace, "refs/heads/new-branch");
 
         Ok(())
     }

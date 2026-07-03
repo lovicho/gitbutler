@@ -403,6 +403,9 @@ const WorkspacePage: FC = () => {
 				className={styles.page}
 				defaultLayout={workspaceLayout.defaultLayout}
 				onLayoutChanged={workspaceLayout.onLayoutChanged}
+				data-selection-focus-styles={
+					!(outlineMode._tag === "Transfer" && outlineMode.value._tag === "Pointer")
+				}
 			>
 				<Activity mode={detailsFullWindow ? "hidden" : "visible"}>
 					<Panel

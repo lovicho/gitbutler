@@ -3,15 +3,18 @@
 	"version": "0.0.1",
 	"description": "GitButler JS but SDK",
 	"type": "module",
-	"main": "./src/generated/index.js",
-	"types": "./src/generated/index.d.ts",
+	"main": "./src/generated/linear/index.js",
+	"types": "./src/generated/linear/index.d.ts",
 	"scripts": {
 		"artifacts": "napi artifacts",
-		"build:types": "cargo run -p but-ts -- --output ./src/generated/index.d.ts",
-		"build:napi": "napi build --platform --esm --manifest-path ../../crates/but-napi/Cargo.toml --js index.js --dts index.d.ts --output-dir ./src/generated/.",
-		"build:napi:release": "napi build --platform --release --esm --manifest-path ../../crates/but-napi/Cargo.toml --js index.js --dts index.d.ts --output-dir ./src/generated/.",
-		"build": "pnpm build:napi && pnpm build:types",
-		"build:release": "pnpm build:napi:release && pnpm build:types",
+		"build:types": "cargo run -p but-ts -- --output ./src/generated/linear/index.d.ts",
+		"build:types:graph": "cargo run -p but-ts --features graph-workspace -- --output ./src/generated/graph/index.d.ts",
+		"build:napi": "napi build --platform --esm --manifest-path ../../crates/but-napi/Cargo.toml --js index.js --dts index.d.ts --output-dir ./src/generated/linear",
+		"build:napi:graph": "napi build --platform --esm --features graph-workspace --manifest-path ../../crates/but-napi/Cargo.toml --js index.js --dts index.d.ts --output-dir ./src/generated/graph",
+		"build:napi:release": "napi build --platform --release --esm --manifest-path ../../crates/but-napi/Cargo.toml --js index.js --dts index.d.ts --output-dir ./src/generated/linear",
+		"build:napi:graph:release": "napi build --platform --release --esm --features graph-workspace --manifest-path ../../crates/but-napi/Cargo.toml --js index.js --dts index.d.ts --output-dir ./src/generated/graph",
+		"build": "pnpm build:napi && pnpm build:types && pnpm build:napi:graph && pnpm build:types:graph",
+		"build:release": "pnpm build:napi:release && pnpm build:types && pnpm build:napi:graph:release && pnpm build:types:graph",
 		"build:debug": "napi build --platform --esm --manifest-path ../../crates/but-napi/Cargo.toml --js index.js --dts index.d.ts --output-dir . --verbose",
 		"check": "tsc -p tsconfig.generated.json --noEmit",
 		"prepublishOnly": "napi prepublish -t npm",
@@ -51,23 +54,54 @@
 	},
 	"files": [
 		"./src/generated/browser.js",
-		"./src/generated/index.js",
-		"./src/generated/index.d.ts",
-		"./src/generated/*.node"
+		"./src/generated/linear/index.js",
+		"./src/generated/linear/index.d.ts",
+		"./src/generated/linear/*.node",
+		"./src/generated/graph/index.js",
+		"./src/generated/graph/index.d.ts",
+		"./src/generated/graph/*.node"
 	],
 	"exports": {
 		".": {
 			"browser": {
-				"types": "./src/generated/index.d.ts",
+				"types": "./src/generated/linear/index.d.ts",
 				"default": "./src/generated/browser.js"
 			},
 			"import": {
-				"types": "./src/generated/index.d.ts",
-				"default": "./src/generated/index.js"
+				"types": "./src/generated/linear/index.d.ts",
+				"default": "./src/generated/linear/index.js"
 			},
 			"require": {
-				"types": "./src/generated/index.d.ts",
-				"default": "./src/generated/index.js"
+				"types": "./src/generated/linear/index.d.ts",
+				"default": "./src/generated/linear/index.js"
+			}
+		},
+		"./linear": {
+			"browser": {
+				"types": "./src/generated/linear/index.d.ts",
+				"default": "./src/generated/browser.js"
+			},
+			"import": {
+				"types": "./src/generated/linear/index.d.ts",
+				"default": "./src/generated/linear/index.js"
+			},
+			"require": {
+				"types": "./src/generated/linear/index.d.ts",
+				"default": "./src/generated/linear/index.js"
+			}
+		},
+		"./graph": {
+			"browser": {
+				"types": "./src/generated/graph/index.d.ts",
+				"default": "./src/generated/browser.js"
+			},
+			"import": {
+				"types": "./src/generated/graph/index.d.ts",
+				"default": "./src/generated/graph/index.js"
+			},
+			"require": {
+				"types": "./src/generated/graph/index.d.ts",
+				"default": "./src/generated/graph/index.js"
 			}
 		}
 	}

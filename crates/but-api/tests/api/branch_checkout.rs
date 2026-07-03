@@ -1,3 +1,4 @@
+#[cfg(not(feature = "graph-workspace"))]
 use snapbox::IntoData;
 
 #[test]
@@ -50,16 +51,28 @@ fn checkout_returns_head_info_matching_fresh_head_info() -> anyhow::Result<()> {
 "]]
     );
 
-    let returned_head_info = format!("{:#?}", result.workspace.head_info);
-    let fresh_head_info = format!("{:#?}", crate::support::fresh_head_info(&ctx)?);
-    assert_eq!(
-        returned_head_info, fresh_head_info,
-        "checkout API should return the same head info a fresh post-checkout read sees"
-    );
+    #[cfg(feature = "graph-workspace")]
+    {
+        let returned = format!("{:#?}", result.workspace.graph_workspace);
+        let fresh = format!("{:#?}", crate::support::fresh_graph_workspace(&ctx)?);
+        assert_eq!(
+            returned, fresh,
+            "checkout API should return the same graph workspace a fresh post-checkout read sees"
+        );
+    }
 
-    snapbox::assert_data_eq!(
-        returned_head_info,
-        snapbox::str![[r#"
+    #[cfg(not(feature = "graph-workspace"))]
+    {
+        let returned_head_info = format!("{:#?}", result.workspace.head_info);
+        let fresh_head_info = format!("{:#?}", crate::support::fresh_head_info(&ctx)?);
+        assert_eq!(
+            returned_head_info, fresh_head_info,
+            "checkout API should return the same head info a fresh post-checkout read sees"
+        );
+
+        snapbox::assert_data_eq!(
+            returned_head_info,
+            snapbox::str![[r#"
 RefInfo {
     workspace_ref_info: Some(
         RefInfo {
@@ -129,8 +142,9 @@ RefInfo {
     is_entrypoint: true,
 }
 "#]]
-        .raw()
-    );
+            .raw()
+        );
+    }
 
     Ok(())
 }
@@ -177,16 +191,28 @@ fn checkout_new_returns_head_info_matching_fresh_head_info() -> anyhow::Result<(
 "]]
     );
 
-    let returned_head_info = format!("{:#?}", result.workspace.head_info);
-    let fresh_head_info = format!("{:#?}", crate::support::fresh_head_info(&ctx)?);
-    assert_eq!(
-        returned_head_info, fresh_head_info,
-        "checkout-new API should return the same head info a fresh post-checkout read sees"
-    );
+    #[cfg(feature = "graph-workspace")]
+    {
+        let returned = format!("{:#?}", result.workspace.graph_workspace);
+        let fresh = format!("{:#?}", crate::support::fresh_graph_workspace(&ctx)?);
+        assert_eq!(
+            returned, fresh,
+            "checkout-new API should return the same graph workspace a fresh post-checkout read sees"
+        );
+    }
 
-    snapbox::assert_data_eq!(
-        returned_head_info,
-        snapbox::str![[r#"
+    #[cfg(not(feature = "graph-workspace"))]
+    {
+        let returned_head_info = format!("{:#?}", result.workspace.head_info);
+        let fresh_head_info = format!("{:#?}", crate::support::fresh_head_info(&ctx)?);
+        assert_eq!(
+            returned_head_info, fresh_head_info,
+            "checkout-new API should return the same head info a fresh post-checkout read sees"
+        );
+
+        snapbox::assert_data_eq!(
+            returned_head_info,
+            snapbox::str![[r#"
 RefInfo {
     workspace_ref_info: Some(
         RefInfo {
@@ -252,8 +278,9 @@ RefInfo {
     is_entrypoint: true,
 }
 "#]]
-        .raw()
-    );
+            .raw()
+        );
+    }
 
     Ok(())
 }

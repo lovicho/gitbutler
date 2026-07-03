@@ -25,6 +25,7 @@
 	import { projectAiGenEnabled } from "$lib/config/config";
 	import { FORGE_INFO_SERVICE } from "$lib/forge/forgeInfo.svelte";
 	import { PR_SERVICE } from "$lib/forge/prService.svelte";
+	import { MODE_SERVICE } from "$lib/mode/modeService";
 	import { STACK_SERVICE } from "$lib/stacks/stackService.svelte";
 	import { inject } from "@gitbutler/core/context";
 	import {
@@ -64,6 +65,13 @@
 	const promptService = inject(PROMPT_SERVICE);
 	const urlService = inject(URL_SERVICE);
 	const clipboardService = inject(CLIPBOARD_SERVICE);
+	const modeService = inject(MODE_SERVICE);
+
+	// The app layout keeps rendering stack UI in Edit and single-branch
+	// OutsideWorkspace modes (see routes/[projectId]/+layout.svelte), but the
+	// backend refuses stack/branch mutations there.
+	const mode = $derived(modeService.mode(projectId));
+	const isOpenWorkspace = $derived(mode.response?.type === "OpenWorkspace");
 
 	const forgeInfoQuery = $derived(forgeInfoService.get(projectId));
 	const forgeInfo = $derived(forgeInfoQuery.response);
@@ -201,7 +209,7 @@
 				disabled={!branchName}
 			/>
 		</ContextMenuSection>
-		{#if stackId}
+		{#if stackId && isOpenWorkspace}
 			<ContextMenuSection>
 				<ContextMenuItemSubmenu
 					label="Create branch"
@@ -362,7 +370,8 @@
 					label="Unapply Stack"
 					icon="eject"
 					testId={TestId.BranchHeaderContextMenu_UnapplyBranch}
-					disabled={isReadOnly}
+					disabled={isReadOnly || !isOpenWorkspace}
+					caption={!isOpenWorkspace ? "Only available in workspace mode" : undefined}
 					onclick={async () => {
 						try {
 							await stackService.unapply({ projectId, stackId });

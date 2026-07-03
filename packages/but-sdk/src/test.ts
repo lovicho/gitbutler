@@ -1,5 +1,5 @@
 /* eslint-disable no-console */
-import { headInfo, listProjectsStateless } from "./generated/index.js";
+import { headInfo, listProjectsStateless } from "./generated/linear/index.js";
 
 async function main() {
 	const projects = await listProjectsStateless();

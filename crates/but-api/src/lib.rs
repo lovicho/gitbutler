@@ -11,6 +11,7 @@
 
 use std::collections::BTreeMap;
 
+#[cfg(not(feature = "graph-workspace"))]
 use but_workspace::RefInfo;
 
 #[cfg(feature = "legacy")]
@@ -68,5 +69,12 @@ pub struct WorkspaceState {
     pub replaced_commits: BTreeMap<gix::ObjectId, gix::ObjectId>,
     /// The workspace presented for the frontend. See [`RefInfo`] for more
     /// detail.
+    #[cfg(not(feature = "graph-workspace"))]
     pub head_info: RefInfo,
+    /// The workspace presented for the frontend, as the rendered graph
+    /// projection. See
+    /// [`DetailedGraphWorkspace`](but_workspace::ui::workspace::DetailedGraphWorkspace)
+    /// for more detail.
+    #[cfg(feature = "graph-workspace")]
+    pub graph_workspace: but_workspace::ui::workspace::DetailedGraphWorkspace,
 }

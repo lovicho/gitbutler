@@ -51,7 +51,7 @@ pnpm --filter @gitbutler/but-sdk build
 1. Make sure the Rust type derives `schemars::JsonSchema`.
 2. Register it in `crates/but-api/src/schema.rs` with `TypeSchemaEntry`.
 3. Re-run `pnpm --filter @gitbutler/but-sdk build:types`.
-4. Confirm it appears in `packages/but-sdk/src/generated/index.d.ts`.
+4. Confirm it appears in `packages/but-sdk/src/generated/linear/index.d.ts (and graph/index.d.ts for the graph flavor)`.
 
 ## Validation
 

@@ -51,6 +51,14 @@ export-schema = [
     "gitbutler-oplog/export-schema",
     "but-gerrit/export-schema",
 ]
+## Switch mutation responses ([`WorkspaceState`]) from the legacy `RefInfo`
+## projection to the graph-based `DetailedGraphWorkspace` projection.
+##
+## This changes the shape of a public type, so it must stay coherent across one
+## build: never enable it in any crate's default features. Leaf crates
+## (`gitbutler-tauri`, `but-napi`, `but`) forward it so artifact builds can opt
+## in on the command line.
+graph-workspace = []
 ## Make legacy functionality available.
 legacy = [
     "but-ctx/legacy",

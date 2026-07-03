@@ -1,4 +1,5 @@
 import { classes } from "#ui/components/classes.ts";
+import { Checkbox } from "#ui/components/Checkbox.tsx";
 import { useMergedRefs } from "@base-ui/utils/useMergedRefs";
 import { ComponentProps, FC, MouseEvent, useLayoutEffect, useRef } from "react";
 import styles from "./Row.module.css";
@@ -68,8 +69,24 @@ export const Row: FC<
 	);
 };
 
+export const RowCheckbox: FC<ComponentProps<typeof Checkbox>> = (props) => (
+	<Checkbox
+		{...props}
+		className={(state) =>
+			classes(
+				styles.rowCheckbox,
+				typeof props.className === "function" ? props.className(state) : props.className,
+			)
+		}
+	/>
+);
+
 export const RowLabelContainer: FC<ComponentProps<"div">> = (props) => (
 	<div {...props} className={classes(props.className, styles.labelContainer)} />
+);
+
+export const RowLabelFooter: FC<ComponentProps<"div">> = (props) => (
+	<div {...props} className={classes(props.className, styles.labelFooter)} />
 );
 
 export const RowLabel: FC<
@@ -87,7 +104,7 @@ export const RowLabel: FC<
 		}),
 	});
 
-type RowBubbleVariant = "fillGray" | "safe" | "danger";
+type RowBubbleVariant = "fillGray" | "lightGray" | "safe" | "warn" | "danger";
 
 export const RowBubble: FC<
 	{
@@ -103,7 +120,9 @@ export const RowBubble: FC<
 			styles.bubble,
 			Match.value(variant).pipe(
 				Match.when("fillGray", () => styles.bubbleFillGray),
+				Match.when("lightGray", () => styles.bubbleLightGray),
 				Match.when("safe", () => styles.bubbleClrSafe),
+				Match.when("warn", () => styles.bubbleClrWarn),
 				Match.when("danger", () => styles.bubbleClrDanger),
 				Match.exhaustive,
 			),

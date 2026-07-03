@@ -19,45 +19,45 @@ export type AbsorbMode = {
 };
 
 /** @public */
-export type TransferMode = {
-	value: TransferOperationMode;
+export type KeyboardTransferMode = {
+	source: Operand;
+	operationType: OperationType;
 	restoreSelection: SelectionState;
 };
 
 /** @public */
-export type KeyboardTransferOperationMode = {
+export type PointerTransferMode = {
 	source: Operand;
-	operationType: OperationType;
-};
-
-/** @public */
-export type PointerTransferOperationMode = {
-	source: Operand;
+	target: Operand | null;
 	operationType: OperationType | null;
 };
 
 /** @public */
-export type TransferOperationMode =
-	| ({ _tag: "Keyboard" } & KeyboardTransferOperationMode)
-	| ({ _tag: "Pointer" } & PointerTransferOperationMode);
+export type TransferMode =
+	| ({ _tag: "Keyboard" } & KeyboardTransferMode)
+	| ({ _tag: "Pointer" } & PointerTransferMode);
 
 /** @public */
-export const keyboardTransferOperationMode = ({
+export const keyboardTransferMode = ({
 	source,
 	operationType,
-}: KeyboardTransferOperationMode): TransferOperationMode => ({
+	restoreSelection,
+}: KeyboardTransferMode): TransferMode => ({
 	_tag: "Keyboard",
 	source,
 	operationType,
+	restoreSelection,
 });
 
 /** @public */
-export const pointerTransferOperationMode = ({
+export const pointerTransferMode = ({
 	source,
+	target,
 	operationType,
-}: PointerTransferOperationMode): TransferOperationMode => ({
+}: PointerTransferMode): TransferMode => ({
 	_tag: "Pointer",
 	source,
+	target,
 	operationType,
 });
 
@@ -74,10 +74,9 @@ export const absorbOutlineMode = ({
 });
 
 /** @public */
-export const transferOutlineMode = ({ value, restoreSelection }: TransferMode): OutlineMode => ({
+export const transferOutlineMode = (mode: TransferMode): OutlineMode => ({
 	_tag: "Transfer",
-	restoreSelection,
-	value,
+	value: mode,
 });
 
 /** @public */
@@ -89,7 +88,7 @@ export type OutlineMode =
 	| ({ _tag: "RewordCommit" } & RewordCommitOutlineMode)
 	| ({ _tag: "RenameBranch" } & RenameBranchOutlineMode)
 	| ({ _tag: "Absorb" } & AbsorbMode)
-	| ({ _tag: "Transfer" } & TransferMode);
+	| { _tag: "Transfer"; value: TransferMode };
 
 /** @public */
 export const defaultOutlineMode: OutlineMode = {

@@ -385,7 +385,7 @@ const intoOperation = ({
 	const squash = squashOperation({ source, target });
 	if (squash) return squash;
 
-	return Match.value({ source, target }).pipe(
+	return Match.value({ source, sourceFileParent: operandFileParent(source), target }).pipe(
 		Match.when(
 			{
 				source: { _tag: "Commit" },
@@ -398,6 +398,21 @@ const intoOperation = ({
 					side: "below",
 				}),
 				label: "Move here",
+			}),
+		),
+		Match.when(
+			{
+				sourceFileParent: { _tag: "UncommittedChanges" },
+				target: { _tag: "Branch" },
+			},
+			({ source, target }): OperationWithLabel => ({
+				operation: commitCreateOperation({
+					relativeTo: { type: "referenceBytes", subject: target.branchRef },
+					side: "below",
+					source,
+					message: "",
+				}),
+				label: "Commit here",
 			}),
 		),
 		Match.orElse(() => null),

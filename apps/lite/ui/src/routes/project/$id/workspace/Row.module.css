@@ -1,6 +1,10 @@
 .container {
 	--single-line-row-height: 28px;
 	--single-line-row-label-line-height: 16px;
+	--single-line-row-label-padding-block: calc(
+		(var(--single-line-row-height) - var(--single-line-row-label-line-height)) / 2
+	);
+	--button-height: 20px;
 
 	display: flex;
 	column-gap: 8px;
@@ -24,7 +28,7 @@
 	background-color: color-mix(var(--fill-gray-bg) var(--opacity-bg-selected-blur), transparent);
 
 	&:has(:is(textarea, input):focus),
-	[data-selection-scope]:focus & {
+	[data-selection-focus-styles="true"] [data-selection-scope]:focus & {
 		background-color: var(--fill-gray-bg);
 		color: var(--fill-gray-fg);
 	}
@@ -44,12 +48,17 @@
 	&.toolbarForceVisible {
 		display: flex;
 		column-gap: 8px;
-		padding-block: 4px;
+		padding-block: calc((var(--single-line-row-height) - var(--button-height)) / 2);
 	}
 
 	button:has([data-icon]) {
 		margin-inline: -4px;
 	}
+}
+
+.rowCheckbox {
+	--checkbox-height: 14px;
+	margin-block-start: calc((var(--single-line-row-height) - var(--checkbox-height)) / 2);
 }
 
 .labelContainer {
@@ -58,9 +67,11 @@
 	flex-grow: 1;
 	min-width: 0;
 	margin-right: 2px;
-	padding-block: calc(
-		(var(--single-line-row-height) - var(--single-line-row-label-line-height)) / 2
-	);
+	padding-block: var(--single-line-row-label-padding-block);
+}
+
+.labelFooter {
+	padding-block-end: var(--single-line-row-label-padding-block);
 }
 
 .label {
@@ -76,13 +87,13 @@
 .fadedText {
 	color: var(--text-2);
 
-	[data-selection-scope]:focus .containerSelected & {
+	[data-selection-focus-styles="true"] [data-selection-scope]:focus .containerSelected & {
 		color: var(--text-2-invert);
 	}
 }
 
 .buttonGhost {
-	[data-selection-scope]:focus .containerSelected &,
+	[data-selection-focus-styles="true"] [data-selection-scope]:focus .containerSelected &,
 	.containerSelected:has(:is(textarea, input):focus) & {
 		/* Duplicated styles for ghost-inverted button variant. This is necessary to
 		make the variant responsive to selection/focus changes purely with CSS. */
@@ -96,7 +107,7 @@
 }
 
 .buttonOutline {
-	[data-selection-scope]:focus .containerSelected &,
+	[data-selection-focus-styles="true"] [data-selection-scope]:focus .containerSelected &,
 	.containerSelected:has(:is(textarea, input):focus) & {
 		/* Duplicated styles for outline-inverted button variant. This is necessary to
 		make the variant responsive to selection/focus changes purely with CSS. */
@@ -110,7 +121,7 @@
 }
 
 .bubble {
-	display: inline-flex;
+	display: flex;
 	align-items: center;
 	justify-content: center;
 	min-width: 20px;
@@ -120,7 +131,7 @@
 }
 
 .bubbleGroup {
-	display: inline-flex;
+	display: flex;
 
 	& > :not(:first-child) {
 		border-start-start-radius: 0;
@@ -137,9 +148,19 @@
 	background-color: var(--fill-gray-bg);
 	color: var(--fill-gray-fg);
 
-	[data-selection-scope]:focus .containerSelected & {
+	[data-selection-focus-styles="true"] [data-selection-scope]:focus .containerSelected & {
 		background-color: var(--fill-gray-fg);
 		color: var(--fill-gray-bg);
+	}
+}
+
+.bubbleLightGray {
+	background-color: light-dark(hsl(0 0% 83.9% / 0.45), hsl(0 0% 0% / 0.5));
+	color: var(--text-1);
+
+	[data-selection-focus-styles="true"] [data-selection-scope]:focus .containerSelected & {
+		background-color: light-dark(hsl(0 0% 0% / 0.5), hsl(0 0% 83.9% / 0.45));
+		color: var(--text-1-invert);
 	}
 }
 
@@ -148,9 +169,19 @@
 	background-color: color-mix(in srgb, var(--background-color) 25%, var(--bg-1));
 	color: light-dark(var(--text-safe), var(--clr-safe-60));
 
-	[data-selection-scope]:focus .containerSelected & {
+	[data-selection-focus-styles="true"] [data-selection-scope]:focus .containerSelected & {
 		background-color: color-mix(in srgb, var(--background-color) 37%, transparent);
 		color: light-dark(var(--clr-safe-70), var(--clr-safe-30));
+	}
+}
+
+.bubbleClrWarn {
+	background-color: color-mix(in srgb, var(--clr-warn-50) 18%, transparent);
+	color: var(--clr-warn-40);
+
+	[data-selection-focus-styles="true"] [data-selection-scope]:focus .containerSelected & {
+		background-color: color-mix(in srgb, var(--clr-warn-50) 22%, transparent);
+		color: var(--clr-warn-60);
 	}
 }
 
@@ -159,7 +190,7 @@
 	background-color: color-mix(in srgb, var(--background-color) 22%, var(--bg-1));
 	color: light-dark(var(--text-danger), var(--clr-danger-60));
 
-	[data-selection-scope]:focus .containerSelected & {
+	[data-selection-focus-styles="true"] [data-selection-scope]:focus .containerSelected & {
 		background-color: color-mix(in srgb, var(--background-color) 40%, transparent);
 		color: light-dark(var(--clr-danger-70), var(--clr-danger-30));
 	}

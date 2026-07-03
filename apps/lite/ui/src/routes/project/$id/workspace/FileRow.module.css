@@ -2,7 +2,7 @@
 	margin-inline-start: 6px;
 }
 
-.fileStatusBadge {
+.statusBadge {
 	align-self: center;
 	width: 12px;
 	font-weight: 700;
@@ -27,22 +27,23 @@
 	}
 }
 
-.fileIconWithCheckbox {
+.iconWithCheckbox {
 	display: grid;
-	align-self: center;
-	justify-items: center;
 
 	& > * {
 		grid-area: 1 / 1;
 	}
 }
 
-.fileCheckbox {
-	margin-block-start: 1px;
+.icon {
+	align-self: center;
+}
+
+.checkbox {
 	opacity: 0;
 
 	&[data-checked],
-	.fileRow:hover &,
+	.row:hover &,
 	&:focus {
 		opacity: 1;
 	}

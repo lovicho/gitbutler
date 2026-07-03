@@ -1,4 +1,6 @@
-use crate::utils::Sandbox;
+use std::fs;
+
+use crate::utils::{CommandExt as _, Sandbox};
 
 #[test]
 fn path_prefix() {
@@ -23,4 +25,686 @@ uo:d prefix/b│
      1│+we also want this
 
 "#]]);
+}
+
+#[test]
+fn json_no_target_empty_worktree() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.but("diff --format json")
+        .allow_json()
+        .assert()
+        .success()
+        .stderr_eq(snapbox::str![])
+        .stdout_eq(snapbox::str![[r#"
+{
+  "changes": []
+}
+
+"#]]);
+}
+
+#[test]
+fn json_no_target_all_worktree_changes() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.file("alpha.txt", "alpha\n");
+    env.file("beta.txt", "beta\n");
+
+    env.but("diff --format json")
+        .allow_json()
+        .assert()
+        .success()
+        .stderr_eq(snapbox::str![])
+        .stdout_eq(snapbox::str![[r#"
+{
+  "changes": [
+    {
+      "id": "xz:b",
+      "path": "alpha.txt",
+      "status": "modified",
+      "diff": {
+        "type": "patch",
+        "hunks": [
+          {
+            "oldStart": 1,
+            "oldLines": 0,
+            "newStart": 1,
+            "newLines": 1,
+            "diff": "@@ -1,0 +1,1 @@/n+alpha/n"
+          }
+        ]
+      }
+    },
+    {
+      "id": "vq:5",
+      "path": "beta.txt",
+      "status": "modified",
+      "diff": {
+        "type": "patch",
+        "hunks": [
+          {
+            "oldStart": 1,
+            "oldLines": 0,
+            "newStart": 1,
+            "newLines": 1,
+            "diff": "@@ -1,0 +1,1 @@/n+beta/n"
+          }
+        ]
+      }
+    }
+  ]
+}
+
+"#]]);
+}
+
+#[test]
+fn json_target_uncommitted_hunk_or_file() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.file("target.txt", "target\n");
+    env.file("other.txt", "other\n");
+
+    env.but("diff --format json")
+        .allow_json()
+        .assert()
+        .success()
+        .stderr_eq(snapbox::str![])
+        .stdout_eq(snapbox::str![[r#"
+{
+  "changes": [
+    {
+      "id": "xw:4",
+      "path": "other.txt",
+      "status": "modified",
+      "diff": {
+        "type": "patch",
+        "hunks": [
+          {
+            "oldStart": 1,
+            "oldLines": 0,
+            "newStart": 1,
+            "newLines": 1,
+            "diff": "@@ -1,0 +1,1 @@/n+other/n"
+          }
+        ]
+      }
+    },
+    {
+      "id": "pk:b",
+      "path": "target.txt",
+      "status": "modified",
+      "diff": {
+        "type": "patch",
+        "hunks": [
+          {
+            "oldStart": 1,
+            "oldLines": 0,
+            "newStart": 1,
+            "newLines": 1,
+            "diff": "@@ -1,0 +1,1 @@/n+target/n"
+          }
+        ]
+      }
+    }
+  ]
+}
+
+"#]]);
+
+    let target_id = "pk:b";
+
+    env.but(format!("diff --format json {target_id}"))
+        .allow_json()
+        .assert()
+        .success()
+        .stderr_eq(snapbox::str![])
+        .stdout_eq(snapbox::str![[r#"
+{
+  "changes": [
+    {
+      "id": "pk:b",
+      "path": "target.txt",
+      "status": "modified",
+      "diff": {
+        "type": "patch",
+        "hunks": [
+          {
+            "oldStart": 1,
+            "oldLines": 0,
+            "newStart": 1,
+            "newLines": 1,
+            "diff": "@@ -1,0 +1,1 @@/n+target/n"
+          }
+        ]
+      }
+    }
+  ]
+}
+
+"#]]);
+}
+
+#[test]
+fn json_target_uncommitted_whole_file_with_multiple_hunks() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+    env.setup_metadata(&["A", "B"]);
+
+    env.file(
+        "multi-hunk.txt",
+        "line 01\nline 02\nline 03\nline 04\nline 05\nline 06\nline 07\nline 08\nline 09\nline 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19\nline 20\n",
+    );
+    env.but("commit A -m multi-hunk-base").assert().success();
+
+    env.file(
+        "multi-hunk.txt",
+        "changed 01\nline 02\nline 03\nline 04\nline 05\nline 06\nline 07\nline 08\nline 09\nline 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19\nchanged 20\n",
+    );
+
+    env.but("diff --format json multi-hunk.txt")
+        .allow_json()
+        .assert()
+        .success()
+        .stderr_eq(snapbox::str![])
+        .stdout_eq(snapbox::str![[r#"
+{
+  "changes": [
+    {
+      "id": "ut:a",
+      "path": "multi-hunk.txt",
+      "status": "modified",
+      "diff": {
+        "type": "patch",
+        "hunks": [
+          {
+            "oldStart": 1,
+            "oldLines": 4,
+            "newStart": 1,
+            "newLines": 4,
+            "diff": "@@ -1,4 +1,4 @@/n-line 01/n+changed 01/n line 02/n line 03/n line 04/n"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ut:6",
+      "path": "multi-hunk.txt",
+      "status": "modified",
+      "diff": {
+        "type": "patch",
+        "hunks": [
+          {
+            "oldStart": 17,
+            "oldLines": 4,
+            "newStart": 17,
+            "newLines": 4,
+            "diff": "@@ -17,4 +17,4 @@/n line 17/n line 18/n line 19/n-line 20/n+changed 20/n"
+          }
+        ]
+      }
+    }
+  ]
+}
+
+"#]]);
+}
+
+#[test]
+fn json_target_path_prefix() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+
+    env.setup_metadata(&["A", "B"]);
+    env.file("prefixx", "don't show this\n");
+    env.file("prefix/a", "we want this\n");
+    env.file("prefix/b", "we also want this\n");
+
+    env.but("diff --format json prefix/")
+        .allow_json()
+        .assert()
+        .success()
+        .stderr_eq(snapbox::str![])
+        .stdout_eq(snapbox::str![[r#"
+{
+  "changes": [
+    {
+      "id": "yz:c",
+      "path": "prefix/a",
+      "status": "modified",
+      "diff": {
+        "type": "patch",
+        "hunks": [
+          {
+            "oldStart": 1,
+            "oldLines": 0,
+            "newStart": 1,
+            "newLines": 1,
+            "diff": "@@ -1,0 +1,1 @@/n+we want this/n"
+          }
+        ]
+      }
+    },
+    {
+      "id": "uo:d",
+      "path": "prefix/b",
+      "status": "modified",
+      "diff": {
+        "type": "patch",
+        "hunks": [
+          {
+            "oldStart": 1,
+            "oldLines": 0,
+            "newStart": 1,
+            "newLines": 1,
+            "diff": "@@ -1,0 +1,1 @@/n+we also want this/n"
+          }
+        ]
+      }
+    }
+  ]
+}
+
+"#]]);
+}
+
+#[test]
+fn json_target_committed_file() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+    env.setup_metadata(&["A", "B"]);
+
+    env.file("committed-target.txt", "target\n");
+    env.file("committed-other.txt", "other\n");
+    env.but("commit A -m committed-file-target")
+        .assert()
+        .success();
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stderr_eq(snapbox::str![])
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted] (no changes)
+┊
+┊╭┄g0 [A]
+┊●   3f40d29 committed-file-target
+┊│     3f:kr A committed-other.txt
+┊│     3f:wm A committed-target.txt
+┊●   9477ae7 add A
+┊│     94:tm A A
+├╯
+┊
+┊╭┄h0 [B]
+┊●   d3e2ba3 add B
+┊│     d3:pl A B
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    let committed_file_id = "3f:wm";
+
+    env.but(format!("diff --format json {committed_file_id}"))
+        .allow_json()
+        .assert()
+        .success()
+        .stderr_eq(snapbox::str![])
+        .stdout_eq(snapbox::str![[r#"
+{
+  "changes": [
+    {
+      "path": "committed-target.txt",
+      "status": "added",
+      "diff": {
+        "type": "patch",
+        "hunks": [
+          {
+            "oldStart": 1,
+            "oldLines": 0,
+            "newStart": 1,
+            "newLines": 1,
+            "diff": "@@ -1,0 +1,1 @@/n+target/n"
+          }
+        ]
+      }
+    }
+  ]
+}
+
+"#]]);
+}
+
+#[test]
+fn json_target_branch() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+    env.setup_metadata(&["A", "B"]);
+
+    env.but("diff --format json A")
+        .allow_json()
+        .assert()
+        .success()
+        .stderr_eq(snapbox::str![])
+        .stdout_eq(snapbox::str![[r#"
+{
+  "changes": [
+    {
+      "path": "A",
+      "status": "added",
+      "diff": {
+        "type": "patch",
+        "hunks": [
+          {
+            "oldStart": 1,
+            "oldLines": 0,
+            "newStart": 1,
+            "newLines": 1,
+            "diff": "@@ -1,0 +1,1 @@/n+A/n"
+          }
+        ]
+      }
+    }
+  ]
+}
+
+"#]]);
+}
+
+#[test]
+fn json_target_commit() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+    env.setup_metadata(&["A", "B"]);
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stderr_eq(snapbox::str![])
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted] (no changes)
+┊
+┊╭┄g0 [A]
+┊●   9477ae7 add A
+┊│     94:tm A A
+├╯
+┊
+┊╭┄h0 [B]
+┊●   d3e2ba3 add B
+┊│     d3:pl A B
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    let commit_id = "94";
+
+    env.but(format!("diff --format json {commit_id}"))
+        .allow_json()
+        .assert()
+        .success()
+        .stderr_eq(snapbox::str![])
+        .stdout_eq(snapbox::str![[r#"
+{
+  "changes": [
+    {
+      "path": "A",
+      "status": "added",
+      "diff": {
+        "type": "patch",
+        "hunks": [
+          {
+            "oldStart": 1,
+            "oldLines": 0,
+            "newStart": 1,
+            "newLines": 1,
+            "diff": "@@ -1,0 +1,1 @@/n+A/n"
+          }
+        ]
+      }
+    }
+  ]
+}
+
+"#]]);
+}
+
+#[test]
+fn json_target_uncommitted_area() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+    env.setup_metadata(&["A", "B"]);
+
+    env.file("unassigned.txt", "unassigned\n");
+    env.file("assigned.txt", "assigned\n");
+    env.but("stage assigned.txt A").assert().success();
+
+    env.but("diff --format json zz")
+        .allow_json()
+        .assert()
+        .success()
+        .stderr_eq(snapbox::str![])
+        .stdout_eq(snapbox::str![[r#"
+{
+  "changes": [
+    {
+      "id": "nz:4",
+      "path": "unassigned.txt",
+      "status": "modified",
+      "diff": {
+        "type": "patch",
+        "hunks": [
+          {
+            "oldStart": 1,
+            "oldLines": 0,
+            "newStart": 1,
+            "newLines": 1,
+            "diff": "@@ -1,0 +1,1 @@/n+unassigned/n"
+          }
+        ]
+      }
+    }
+  ]
+}
+
+"#]]);
+}
+
+#[test]
+fn json_target_stack() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+    env.setup_metadata(&["A", "B"]);
+
+    env.file("unassigned.txt", "unassigned\n");
+    env.file("assigned.txt", "assigned\n");
+    env.but("stage assigned.txt A").assert().success();
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stderr_eq(snapbox::str![])
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted]
+┊   nz A unassigned.txt
+┊
+┊  ╭┄k0 [staged to A]
+┊  │ su A assigned.txt
+┊  │
+┊╭┄g0 [A]
+┊●   9477ae7 add A
+┊│     94:tm A A
+├╯
+┊
+┊╭┄h0 [B]
+┊●   d3e2ba3 add B
+┊│     d3:pl A B
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
+
+"#]]);
+
+    let stack_id = "k0";
+
+    env.but(format!("diff --format json {stack_id}"))
+        .allow_json()
+        .assert()
+        .success()
+        .stderr_eq(snapbox::str![])
+        .stdout_eq(snapbox::str![[r#"
+{
+  "changes": [
+    {
+      "id": "su:8",
+      "path": "assigned.txt",
+      "status": "modified",
+      "diff": {
+        "type": "patch",
+        "hunks": [
+          {
+            "oldStart": 1,
+            "oldLines": 0,
+            "newStart": 1,
+            "newLines": 1,
+            "diff": "@@ -1,0 +1,1 @@/n+assigned/n"
+          }
+        ]
+      }
+    }
+  ]
+}
+
+"#]]);
+}
+
+#[test]
+fn json_commit_target_tree_change_statuses() -> anyhow::Result<()> {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+    env.setup_metadata(&["A", "B"]);
+
+    env.file("modified.txt", "before\n");
+    env.file("deleted.txt", "delete me\n");
+    env.file("renamed-before.txt", "rename me\n");
+    env.but("commit A -m status-base").assert().success();
+
+    env.file("added.txt", "added\n");
+    env.file("modified.txt", "after\n");
+    fs::remove_file(env.projects_root().join("deleted.txt"))?;
+    fs::rename(
+        env.projects_root().join("renamed-before.txt"),
+        env.projects_root().join("renamed-after.txt"),
+    )?;
+    env.but("commit A -m status-target").assert().success();
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stderr_eq(snapbox::str![])
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted] (no changes)
+┊
+┊╭┄g0 [A]
+┊●   dafe86a status-target
+┊│     da:nx A added.txt
+┊│     da:nm D deleted.txt
+┊│     da:un M modified.txt
+┊│     da:or R renamed-after.txt
+┊●   db7d00b status-base
+┊│     db:nm A deleted.txt
+┊│     db:un A modified.txt
+┊│     db:zy A renamed-before.txt
+┊●   9477ae7 add A
+┊│     94:tm A A
+├╯
+┊
+┊╭┄h0 [B]
+┊●   d3e2ba3 add B
+┊│     d3:pl A B
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    let commit_id = "da";
+
+    env.but(format!("diff --format json {commit_id}"))
+        .allow_json()
+        .assert()
+        .success()
+        .stderr_eq(snapbox::str![])
+        .stdout_eq(snapbox::str![[r#"
+{
+  "changes": [
+    {
+      "path": "added.txt",
+      "status": "added",
+      "diff": {
+        "type": "patch",
+        "hunks": [
+          {
+            "oldStart": 1,
+            "oldLines": 0,
+            "newStart": 1,
+            "newLines": 1,
+            "diff": "@@ -1,0 +1,1 @@/n+added/n"
+          }
+        ]
+      }
+    },
+    {
+      "path": "deleted.txt",
+      "status": "deleted",
+      "diff": {
+        "type": "patch",
+        "hunks": [
+          {
+            "oldStart": 1,
+            "oldLines": 1,
+            "newStart": 1,
+            "newLines": 0,
+            "diff": "@@ -1,1 +1,0 @@/n-delete me/n"
+          }
+        ]
+      }
+    },
+    {
+      "path": "modified.txt",
+      "status": "modified",
+      "diff": {
+        "type": "patch",
+        "hunks": [
+          {
+            "oldStart": 1,
+            "oldLines": 1,
+            "newStart": 1,
+            "newLines": 1,
+            "diff": "@@ -1,1 +1,1 @@/n-before/n+after/n"
+          }
+        ]
+      }
+    },
+    {
+      "path": "renamed-after.txt",
+      "status": "renamed",
+      "oldPath": "renamed-before.txt",
+      "diff": {
+        "type": "patch",
+        "hunks": []
+      }
+    }
+  ]
+}
+
+"#]]);
+
+    Ok(())
 }

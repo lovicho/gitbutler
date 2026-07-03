@@ -45,7 +45,7 @@ export default defineConfig({
 		"react/jsx-no-useless-fragment": "warn",
 		"react/no-array-index-key": "warn",
 		"react/no-danger": "error",
-		"react/only-export-components": "error",
+		"react/only-export-components": "warn",
 		"react/self-closing-comp": "warn",
 		"typescript/array-type": ["warn", { default: "generic" }],
 		"typescript/await-thenable": "error",

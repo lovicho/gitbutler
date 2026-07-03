@@ -1,4 +1,4 @@
-<svg width="827px" height="470px" xmlns="http://www.w3.org/2000/svg">
+<svg width="995px" height="470px" xmlns="http://www.w3.org/2000/svg">
   <style>
     .fg { fill: #AAAAAA }
     .bg { fill: #000000 }
@@ -67,7 +67,7 @@
 </tspan>
     <tspan x="10px" y="424px">
 </tspan>
-    <tspan x="10px" y="442px"><tspan class="dimmed">Hint: run `but diff` to see uncommitted changes and `but stage &lt;file&gt;` to stage them to a branch</tspan>
+    <tspan x="10px" y="442px"><tspan class="dimmed">Hint: run `but diff` to see uncommitted changes and `but commit &lt;branch&gt; -m "message" --changes &lt;id&gt;` to commit them</tspan>
 </tspan>
     <tspan x="10px" y="460px">
 </tspan>

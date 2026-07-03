@@ -21,7 +21,6 @@
 .help {
 	display: flex;
 	margin-left: -6px;
-	padding-block-end: 6px;
 
 	& > button {
 		text-transform: lowercase;

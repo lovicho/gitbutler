@@ -31,7 +31,7 @@ import { useParams } from "@tanstack/react-router";
 import { Match } from "effect";
 import { FC, type ReactNode } from "react";
 import styles from "./OperationControls.module.css";
-import { AbsorbMode, KeyboardTransferOperationMode } from "#ui/outline/mode.ts";
+import { AbsorbMode, KeyboardTransferMode } from "#ui/outline/mode.ts";
 import { NavigationIndex } from "#ui/workspace/navigation-index.ts";
 
 const Container: FC<{ children: ReactNode }> = ({ children }) => (
@@ -289,7 +289,7 @@ const TransferTypeToggleGroup: FC<{
 const TransferKeyboardOperationControls: FC<{
 	headInfoIndex: HeadInfoIndex;
 	projectId: string;
-	mode: KeyboardTransferOperationMode;
+	mode: KeyboardTransferMode;
 	target: Operand;
 }> = ({ headInfoIndex, projectId, mode, target }) => {
 	const dispatch = useAppDispatch();

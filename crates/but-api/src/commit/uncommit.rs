@@ -138,31 +138,31 @@ pub fn commit_uncommit_only_with_perm(
 
     let editor = Editor::create(&mut ws, &mut meta, &repo)?;
 
-    let rebase = but_workspace::commit::discard_commits(editor, subject_commit_ids.iter().copied())
-        .with_context(|| {
-            format!(
-                "failed to uncommit commits: {}",
-                subject_commit_ids
-                    .iter()
-                    .map(|id| id.to_hex().to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )
-        })?;
+    let mut rebase =
+        but_workspace::commit::discard_commits(editor, subject_commit_ids.iter().copied())
+            .with_context(|| {
+                format!(
+                    "failed to uncommit commits: {}",
+                    subject_commit_ids
+                        .iter()
+                        .map(|id| id.to_hex().to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            })?;
 
-    let (workspace, replaced_commits, repo) = if dry_run.into() {
+    let (workspace, replaced_commits, repo, meta) = if dry_run.into() {
         let graph = rebase.overlayed_graph()?;
-        (
-            &mut graph.into_workspace()?,
-            rebase.history.commit_mappings(),
-            rebase.repo(),
-        )
+        let replaced_commits = rebase.history.commit_mappings();
+        let (repo, meta) = rebase.repo_and_meta_mut();
+        (&mut graph.into_workspace()?, replaced_commits, repo, meta)
     } else {
         let materialized = rebase.materialize_without_checkout()?;
         (
             materialized.workspace,
             materialized.history.commit_mappings(),
             &*repo,
+            materialized.meta,
         )
     };
 
@@ -207,7 +207,7 @@ pub fn commit_uncommit_only_with_perm(
 
     Ok(UncommitResult {
         uncommitted_ids: subject_commit_ids,
-        workspace: WorkspaceState::from_workspace(workspace, repo, replaced_commits)?,
+        workspace: WorkspaceState::from_workspace(workspace, meta, repo, replaced_commits)?,
     })
 }
 
@@ -277,22 +277,21 @@ pub fn commit_uncommit_changes_only_with_perm(
     };
 
     let editor = Editor::create(&mut ws, &mut meta, &repo)?;
-    let outcome =
+    let mut outcome =
         but_workspace::commit::uncommit_changes(editor, commit_id, changes, context_lines)?;
 
-    let (workspace, replaced_commits, repo) = if dry_run.into() {
+    let (workspace, replaced_commits, repo, meta) = if dry_run.into() {
         let graph = outcome.rebase.overlayed_graph()?;
-        (
-            &mut graph.into_workspace()?,
-            outcome.rebase.history.commit_mappings(),
-            outcome.rebase.repo(),
-        )
+        let replaced_commits = outcome.rebase.history.commit_mappings();
+        let (repo, meta) = outcome.rebase.repo_and_meta_mut();
+        (&mut graph.into_workspace()?, replaced_commits, repo, meta)
     } else {
         let materialized = outcome.rebase.materialize_without_checkout()?;
         (
             materialized.workspace,
             materialized.history.commit_mappings(),
             &*repo,
+            materialized.meta,
         )
     };
 
@@ -334,7 +333,7 @@ pub fn commit_uncommit_changes_only_with_perm(
     }
 
     Ok(MoveChangesResult {
-        workspace: WorkspaceState::from_workspace(workspace, repo, replaced_commits)?,
+        workspace: WorkspaceState::from_workspace(workspace, meta, repo, replaced_commits)?,
     })
 }
 

@@ -167,6 +167,7 @@ export const FilesTree: FC<
 										<OperationSourceC
 											projectId={projectId}
 											source={fileOperand({ parent: fileParent, path: item.path })}
+											outline="outside"
 											render={
 												<FileRow
 													item={item}

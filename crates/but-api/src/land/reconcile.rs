@@ -83,8 +83,9 @@ fn current_state(
     perm: &but_core::sync::RepoShared,
 ) -> anyhow::Result<WorkspaceState> {
     ctx.invalidate_workspace_cache()?;
+    let mut meta = ctx.meta()?;
     let (repo, ws, _db) = ctx.workspace_and_db_with_perm(perm)?;
-    WorkspaceState::from_workspace(&ws, &repo, BTreeMap::new())
+    WorkspaceState::from_workspace(&ws, &mut meta, &repo, BTreeMap::new())
 }
 
 /// Build one `Rebase` update per applied stack, selecting its bottom-most commit (or the bottom

@@ -7,7 +7,6 @@
 .labelMeta {
 	display: flex;
 	align-items: center;
-	padding-block-end: 6px;
 	gap: 8px;
 }
 

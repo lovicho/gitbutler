@@ -39,6 +39,9 @@ legacy = [
     "dep:gitbutler-git",
     "dep:gitbutler-watcher",
 ]
+## Switch mutation responses to the graph-based workspace projection.
+## Forwarded to `but-api`; never enable by default. See `but-api`'s feature docs.
+graph-workspace = ["but-api/graph-workspace"]
 # Feature that enables profiling related features of the TUI.
 tui-profiling = ["dep:allocation-counter"]
 # Enables new experimental CLI commands that'll eventually replace old commands

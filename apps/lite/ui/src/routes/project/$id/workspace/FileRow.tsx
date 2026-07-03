@@ -1,3 +1,4 @@
+import { FileIcon } from "#ui/components/FileIcon.tsx";
 import rowStyles from "./Row.module.css";
 import { showNativeContextMenu, showNativeMenuFromTrigger } from "#ui/native-menu.ts";
 import { FileParent } from "#ui/operands.ts";
@@ -7,14 +8,13 @@ import {
 } from "#ui/projects/state.ts";
 import { useAppSelector } from "#ui/store.ts";
 import { Icon } from "#ui/components/Icon.tsx";
-import { Checkbox } from "#ui/components/Checkbox.tsx";
 import { classes } from "#ui/components/classes.ts";
 import { Tooltip } from "@base-ui/react";
 import { Toolbar } from "@base-ui/react/toolbar";
 import { Match } from "effect";
 import { ComponentProps, FC } from "react";
 import styles from "./FileRow.module.css";
-import { Row, RowLabel, RowLabelContainer, RowToolbar } from "./Row.tsx";
+import { Row, RowCheckbox, RowLabel, RowLabelContainer, RowToolbar } from "./Row.tsx";
 import { getRowButtonClassName } from "./Row-utils.ts";
 import { DependencyIndicator } from "#ui/routes/project/$id/workspace/DependencyIndicator.tsx";
 import { TooltipPopup } from "#ui/components/Tooltip.tsx";
@@ -57,24 +57,24 @@ export const FileRow: FC<
 				render={
 					<Row
 						{...restProps}
-						className={classes(restProps.className, styles.fileRow)}
+						className={classes(restProps.className, styles.row)}
 						onContextMenu={(event) => {
 							void showNativeContextMenu(event, menuItems);
 						}}
 					/>
 				}
 			>
-				<div className={styles.fileIconWithCheckbox}>
-					<Icon name="file" />
+				<div className={styles.iconWithCheckbox}>
+					<FileIcon fileName={fileName} className={styles.icon} />
 					<Tooltip.Root
 						// This gets in the way when the user tries to move their hover to a
 						// sibling row.
 						disableHoverablePopup
 					>
-						<Checkbox
+						<RowCheckbox
 							disabled={hasCheckedCommits || outlineMode._tag !== "Default"}
 							aria-label={`Check file ${relativePath}`}
-							className={styles.fileCheckbox}
+							className={styles.checkbox}
 							nativeButton
 							render={<Tooltip.Trigger />}
 						/>
@@ -133,7 +133,7 @@ export const FileRow: FC<
 				{item._tag === "Change" && (
 					<Tooltip.Root disableHoverablePopup>
 						<Tooltip.Trigger
-							className={styles.fileStatusBadge}
+							className={styles.statusBadge}
 							aria-label={item.change.status.type}
 							data-status-type={item.change.status.type}
 							// By default it's a button, but we don't want this to be

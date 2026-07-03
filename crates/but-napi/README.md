@@ -38,7 +38,7 @@ This will generate the native addon, JS loader, and type declarations (both gene
 
 1. In `crates/but-api`, add `#[but_api(napi)]` to the API function.
 2. Build bindings with `pnpm --filter @gitbutler/but-sdk build:napi`.
-3. Confirm the new `*Napi` function appears in `packages/but-sdk/src/generated/index.d.ts`.
+3. Confirm the new `*Napi` function appears in `packages/but-sdk/src/generated/linear/index.d.ts (and graph/index.d.ts for the graph flavor)`.
 
 ## Notes on configuration
 

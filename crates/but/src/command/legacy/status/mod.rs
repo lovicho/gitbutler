@@ -121,7 +121,6 @@ pub struct TuiLaunchOptions {
     pub skip_status_after: bool,
     pub show_diff: bool,
     pub select_commit: Option<gix::ObjectId>,
-    pub quit_after_rendering_full_diff: bool,
 }
 
 #[derive(Debug, Default, Copy, Clone)]
@@ -648,7 +647,7 @@ fn print_hint(
     } else if !status_ctx.has_branches {
         "Hint: run `but branch new` to create a new branch to work on"
     } else if has_uncommitted_files {
-        "Hint: run `but diff` to see uncommitted changes and `but stage <file>` to stage them to a branch"
+        "Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m \"message\" --changes <id>` to commit them"
     } else {
         "Hint: run `but help` for all commands"
     };

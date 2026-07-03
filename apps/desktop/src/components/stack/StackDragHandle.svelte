@@ -1,5 +1,6 @@
 <script lang="ts">
 	import CollapseStackButton from "$components/branch/CollapseStackButton.svelte";
+	import { MODE_SERVICE } from "$lib/mode/modeService";
 	import { STACK_SERVICE } from "$lib/stacks/stackService.svelte";
 	import { inject } from "@gitbutler/core/context";
 	import { ContextMenuItem, ContextMenuSection, Icon, KebabButton } from "@gitbutler/ui";
@@ -17,10 +18,18 @@
 	let { stackId, projectId, disabled = false, onFold }: Props = $props();
 
 	const stackService = inject(STACK_SERVICE);
+	const modeService = inject(MODE_SERVICE);
 
 	// Get all stacks to determine if we can move left/right
 	const stacksQuery = $derived(stackService.stacks(projectId));
 	const stacks = $derived(stacksQuery.response ?? []);
+
+	// The `AppLayout` also renders in `Edit` and single-branch `OutsideWorkspace`
+	// modes (see routes/[projectId]/+layout.svelte). Backend stack ops require
+	// `OpenWorkspace` though, so the menu item would fail with a toast if the
+	// user clicked it in those transitional states.
+	const mode = $derived(modeService.mode(projectId));
+	const isOpenWorkspace = $derived(mode.response?.type === "OpenWorkspace");
 
 	const currentStackIndex = $derived(
 		stackId ? stacks.findIndex((stack: Stack) => stack.id === stackId) : -1,
@@ -95,30 +104,34 @@
 
 	<KebabButton minimal>
 		{#snippet contextMenu({ close })}
-			<ContextMenuSection>
-				<ContextMenuItem
-					label="Move to leftmost"
-					icon="leftmost-lane"
-					disabled={!canMoveLeft}
-					onclick={() => {
-						moveStackLeft();
-						close();
-					}}
-				/>
-				<ContextMenuItem
-					label="Move to rightmost"
-					icon="rightmost-lane"
-					disabled={!canMoveRight}
-					onclick={() => {
-						moveStackRight();
-						close();
-					}}
-				/>
-			</ContextMenuSection>
+			{#if isOpenWorkspace}
+				<ContextMenuSection>
+					<ContextMenuItem
+						label="Move to leftmost"
+						icon="leftmost-lane"
+						disabled={!canMoveLeft}
+						onclick={() => {
+							moveStackLeft();
+							close();
+						}}
+					/>
+					<ContextMenuItem
+						label="Move to rightmost"
+						icon="rightmost-lane"
+						disabled={!canMoveRight}
+						onclick={() => {
+							moveStackRight();
+							close();
+						}}
+					/>
+				</ContextMenuSection>
+			{/if}
 			<ContextMenuSection>
 				<ContextMenuItem
 					label="Unapply stack"
 					icon="eject"
+					disabled={!isOpenWorkspace}
+					caption={!isOpenWorkspace ? "Only available in workspace mode" : undefined}
 					onclick={() => {
 						unapplyStack();
 						close();
