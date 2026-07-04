@@ -84,6 +84,7 @@ import { useHotkey, useHotkeys } from "@tanstack/react-hotkeys";
 import {
 	type SelectionScope,
 	useDiffSelection,
+	useFilesSelection,
 	useNavigationIndexHotkeys,
 } from "#ui/selection-scopes.ts";
 import { FilesTree } from "#ui/routes/project/$id/workspace/FilesTree.tsx";
@@ -891,7 +892,11 @@ const Diff: FC<{
 
 	const dispatch = useAppDispatch();
 	const files = filesItems.map((item) => item.path);
-	const filesIndexByKey = buildIndexByKey(files, identity);
+	const filesNavigationIndex: NavigationIndex<string> = {
+		items: files,
+		indexByKey: buildIndexByKey(files, identity),
+	};
+	const filesSelection = useFilesSelection(projectId, filesNavigationIndex);
 
 	const changesetKey = Match.value(outlineSelection).pipe(
 		Match.tags({
@@ -1045,7 +1050,8 @@ const Diff: FC<{
 								onFileSelection={selectFileAndNavigateDiff}
 								projectId={projectId}
 								items={filesItems}
-								navigationIndex={{ items: files, indexByKey: filesIndexByKey }}
+								selection={filesSelection}
+								navigationIndex={filesNavigationIndex}
 								fileParent={fileParent}
 							/>
 						</Panel>

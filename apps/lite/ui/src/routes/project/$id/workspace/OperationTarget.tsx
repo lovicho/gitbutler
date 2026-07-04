@@ -17,27 +17,8 @@ import {
 } from "@atlaskit/pragmatic-drag-and-drop-hitbox/list-item";
 import { mergeProps, Tooltip, useRender } from "@base-ui/react";
 import { Match, pipe } from "effect";
-import { FC, ReactNode, useEffect, useEffectEvent, useRef } from "react";
+import { FC, useEffect, useEffectEvent, useRef } from "react";
 import { TooltipPopup } from "#ui/components/Tooltip.tsx";
-
-const OperationTooltip: FC<
-	{
-		tooltip?: ReactNode | null;
-	} & useRender.ComponentProps<"div">
-> = ({ tooltip, render, ...props }) => {
-	const trigger = useRender({ render, props });
-
-	return (
-		<Tooltip.Root open={tooltip != null} disableHoverablePopup>
-			<Tooltip.Trigger render={trigger} />
-			<Tooltip.Portal>
-				<Tooltip.Positioner sideOffset={8} side="right">
-					<Tooltip.Popup render={<TooltipPopup />}>{tooltip}</Tooltip.Popup>
-				</Tooltip.Positioner>
-			</Tooltip.Portal>
-		</Tooltip.Root>
-	);
-};
 
 type DropTargetParams = Parameters<typeof dropTargetForElements>[0];
 type GetDataArgs = Parameters<NonNullable<DropTargetParams["getData"]>>[0];
@@ -212,51 +193,50 @@ export const OperationTarget: FC<
 
 	const outlineMode = useAppSelector((state) => selectProjectOutlineModeState(state, projectId));
 
-	const tooltip = Match.value(outlineMode).pipe(
-		Match.when({ _tag: "Absorb" }, () => <>Absorb target</>),
-		Match.when({ _tag: "Transfer", value: { _tag: "Pointer" } }, ({ value: mode }) =>
-			mode.target && mode.operationType !== null
-				? getOperation({
-						source: mode.source,
-						target: mode.target,
-						operationType: mode.operationType,
-					})?.label
-				: null,
-		),
-		Match.when(
-			{ _tag: "Transfer", value: { _tag: "Keyboard" } },
-			({ value: mode }) =>
-				getOperation({
-					source: mode.source,
-					target,
-					operationType: mode.operationType,
-				})?.label,
-		),
-		Match.orElse(() => null),
-	);
+	const tooltip =
+		activeTargetOperationType !== null
+			? Match.value(outlineMode).pipe(
+					Match.when({ _tag: "Absorb" }, () => <>Absorb target</>),
+					Match.when({ _tag: "Transfer", value: { _tag: "Pointer" } }, ({ value: mode }) =>
+						mode.target && mode.operationType !== null
+							? getOperation({
+									source: mode.source,
+									target: mode.target,
+									operationType: mode.operationType,
+								})?.label
+							: undefined,
+					),
+					Match.when(
+						{ _tag: "Transfer", value: { _tag: "Keyboard" } },
+						({ value: mode }) =>
+							getOperation({
+								source: mode.source,
+								target,
+								operationType: mode.operationType,
+							})?.label,
+					),
+					Match.orElse(() => undefined),
+				)
+			: undefined;
 
 	return (
-		<div className={styles.target}>
-			<OperationTooltip
-				tooltip={activeTargetOperationType === "into" ? tooltip : null}
+		<Tooltip.Root open={tooltip !== undefined} disableHoverablePopup>
+			<Tooltip.Trigger
 				render={targetEl}
+				className={pipe(
+					activeTargetOperationType,
+					Match.value,
+					Match.when("above", () => classes(styles.insertionTarget, styles.insertionTargetAbove)),
+					Match.when("below", () => classes(styles.insertionTarget, styles.insertionTargetBelow)),
+					Match.whenOr("into", null, () => undefined),
+					Match.exhaustive,
+				)}
 			/>
-
-			{(activeTargetOperationType === "above" || activeTargetOperationType === "below") && (
-				<OperationTooltip
-					tooltip={tooltip}
-					className={classes(
-						styles.insertionTarget,
-						pipe(
-							activeTargetOperationType,
-							Match.value,
-							Match.when("above", () => styles.insertionTargetAbove),
-							Match.when("below", () => styles.insertionTargetBelow),
-							Match.exhaustive,
-						),
-					)}
-				/>
-			)}
-		</div>
+			<Tooltip.Portal>
+				<Tooltip.Positioner sideOffset={8} side="right">
+					<Tooltip.Popup render={<TooltipPopup />}>{tooltip}</Tooltip.Popup>
+				</Tooltip.Positioner>
+			</Tooltip.Portal>
+		</Tooltip.Root>
 	);
 };

@@ -1,11 +1,4 @@
-.target {
-	display: grid;
-	position: relative;
-}
-
 .activeTarget {
-	/* Ensure outset outline appears above siblings. */
-	z-index: 1;
 	border-radius: 8px;
 	outline: 2px dashed var(--fill-gray-bg);
 }
@@ -21,21 +14,28 @@
 .insertionTarget {
 	--indicator-height: 3px;
 
-	/* Ensure outset outline appears above siblings. */
-	z-index: 1;
-	position: absolute;
-	height: var(--indicator-height);
-	inset-inline: 0;
-	background-color: var(--clr-pop-70);
-	pointer-events: none;
+	position: relative;
+
+	&:before {
+		position: absolute;
+		height: var(--indicator-height);
+		inset-inline: 0;
+		background-color: var(--clr-pop-70);
+		content: "";
+		pointer-events: none;
+	}
 }
 
 .insertionTargetAbove {
-	top: 0;
-	transform: translateY(calc(var(--indicator-height) / -2));
+	&:before {
+		top: 0;
+		transform: translateY(calc(var(--indicator-height) / -2));
+	}
 }
 
 .insertionTargetBelow {
-	bottom: 0;
-	transform: translateY(calc(var(--indicator-height) / 2));
+	&:before {
+		bottom: 0;
+		transform: translateY(calc(var(--indicator-height) / 2));
+	}
 }

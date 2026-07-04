@@ -31,9 +31,10 @@
 }
 
 .panel {
-	/* Stretch single child element to fill this element. */
+	/* Stretch/shrink single child element to fit this element. */
 	display: grid;
 	grid-template-rows: minmax(0, 1fr);
+	grid-template-columns: minmax(0, 1fr);
 }
 
 .resizeHandle {
