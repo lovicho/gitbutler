@@ -146,6 +146,7 @@ impl App {
                 self.backstack.push_open_details_view(false);
             }
         } else {
+            self.details.on_hidden();
             self.backstack.remove_open_details_view();
             if matches!(&*self.mode, Mode::Details(..)) {
                 messages.push(Message::UnfocusDetails);

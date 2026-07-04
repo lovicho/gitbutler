@@ -165,6 +165,7 @@ pub(crate) fn show_oplog(
                     | OperationKind::MoveCommitFile
                     | OperationKind::FileChanges
                     | OperationKind::EnterEditMode
+                    | OperationKind::ResolveConflictsAi
                     | OperationKind::SyncWorkspace
                     | OperationKind::CreateDependentBranch
                     | OperationKind::RemoveDependentBranch
@@ -186,9 +187,9 @@ pub(crate) fn show_oplog(
 
             let operation_colored = match operation_type {
                 OperationKind::CreateCommit => t.success.paint(operation_type.kind_str()),
-                OperationKind::UpdateCommitMessage | OperationKind::AmendCommit => {
-                    t.attention.paint(operation_type.kind_str())
-                }
+                OperationKind::UpdateCommitMessage
+                | OperationKind::AmendCommit
+                | OperationKind::ResolveConflictsAi => t.attention.paint(operation_type.kind_str()),
                 OperationKind::UndoCommit
                 | OperationKind::RestoreFromSnapshot
                 | OperationKind::RestoreFromSnapshotViaUndo

@@ -972,6 +972,7 @@ dependencies = [
  "but-graph",
  "but-hunk-assignment",
  "but-hunk-dependency",
+ "but-llm",
  "but-oplog",
  "but-path",
  "but-rebase",

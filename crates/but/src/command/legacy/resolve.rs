@@ -27,7 +27,14 @@ pub(crate) fn handle(
     out: &mut OutputChannel,
     cmd: Option<Subcommands>,
     commit_id: Option<String>,
+    ai: bool,
 ) -> Result<()> {
+    if ai {
+        if cmd.is_some() {
+            bail!("--ai cannot be combined with a resolve subcommand");
+        }
+        return resolve_with_ai(ctx, out, commit_id.as_deref());
+    }
     match cmd {
         Some(Subcommands::Status) => show_status(ctx, out),
         Some(Subcommands::Finish) => finish_resolution(ctx, out),
@@ -51,10 +58,8 @@ pub(crate) fn handle(
     }
 }
 
-fn enter_resolution(ctx: &mut Context, out: &mut OutputChannel, commit_id_str: &str) -> Result<()> {
-    let t = theme::get();
-    use gix::{prelude::ObjectIdExt as _, revision::walk::Sorting};
-
+/// Resolve a user-provided commit identifier (CLI ID or partial SHA) to an object id.
+fn parse_commit_id(ctx: &mut Context, commit_id_str: &str) -> Result<gix::ObjectId> {
     // Create an IdMap to resolve commit IDs (supports both CLI IDs and partial SHAs)
     let id_map = IdMap::legacy_new_from_context(ctx, None)?;
 
@@ -74,10 +79,17 @@ fn enter_resolution(ctx: &mut Context, out: &mut OutputChannel, commit_id_str: &
     }
 
     // Extract the commit OID from the matched CliId
-    let commit_gix_oid = match &matches[0] {
-        CliId::Commit { commit_id, .. } => *commit_id,
+    match &matches[0] {
+        CliId::Commit { commit_id, .. } => Ok(*commit_id),
         _ => bail!("'{commit_id_str}' does not refer to a commit"),
-    };
+    }
+}
+
+fn enter_resolution(ctx: &mut Context, out: &mut OutputChannel, commit_id_str: &str) -> Result<()> {
+    let t = theme::get();
+    use gix::{prelude::ObjectIdExt as _, revision::walk::Sorting};
+
+    let commit_gix_oid = parse_commit_id(ctx, commit_id_str)?;
 
     // Get the commit and check if it's conflicted
     let repo = ctx.repo.get()?;
@@ -393,6 +405,182 @@ fn cancel_resolution(ctx: &mut Context, out: &mut OutputChannel, force: bool) ->
     }
 
     Ok(())
+}
+
+/// Resolve conflicts with the configured AI model: one commit when
+/// `commit_id_str` is given, otherwise every conflicted commit in the
+/// workspace, oldest first.
+fn resolve_with_ai(
+    ctx: &mut Context,
+    out: &mut OutputChannel,
+    commit_id_str: Option<&str>,
+) -> Result<()> {
+    let t = theme::get();
+    let mode = operating_mode(ctx)?.operating_mode;
+    if matches!(mode, OperatingMode::Edit(_)) {
+        bail!(
+            "You are in conflict resolution mode. Finish with `but resolve finish` or cancel with `but resolve cancel` before using --ai."
+        );
+    }
+
+    let mut results = Vec::new();
+    if let Some(commit_id_str) = commit_id_str {
+        let commit_oid = parse_commit_id(ctx, commit_id_str)?;
+        results.push(resolve_one_with_ai(ctx, out, commit_oid)?);
+    } else {
+        // Resolving a commit rebases its descendants, which changes their ids
+        // and can change (or clear) their conflicts — so re-discover the
+        // oldest conflicted commit after every resolution.
+        loop {
+            let Some(commit_oid) = oldest_conflicted_commit(ctx)? else {
+                break;
+            };
+            results.push(resolve_one_with_ai(ctx, out, commit_oid)?);
+        }
+    }
+
+    // A single JSON document for the whole invocation, regardless of how many
+    // commits were resolved.
+    if let Some(json_out) = out.for_json() {
+        let results = results
+            .iter()
+            .map(|result| {
+                serde_json::json!({
+                    "commit_id": result.commit_id.to_string(),
+                    "new_commit_id": result.new_commit.to_string(),
+                    "summary": result.summary,
+                    "files": result
+                        .files
+                        .iter()
+                        .map(|file| {
+                            serde_json::json!({
+                                "path": file.path,
+                                "reasoning": file.reasoning,
+                            })
+                        })
+                        .collect::<Vec<_>>(),
+                })
+            })
+            .collect::<Vec<_>>();
+        json_out.write_value(serde_json::json!({ "resolved": results }))?;
+    }
+
+    if results.is_empty() {
+        if let Some(human_out) = out.for_human() {
+            writeln!(
+                human_out,
+                "{}",
+                t.success.paint("No conflicted commits found.")
+            )?;
+        }
+        return Ok(());
+    }
+
+    if let Some(human_out) = out.for_human() {
+        // The rebase of descendants can leave (or newly introduce) conflicted
+        // commits; in single-commit mode nothing else surfaces that. Commits
+        // are listed once per branch that contains them, so count unique ids.
+        let remaining = find_conflicted_commits(ctx)?
+            .values()
+            .flatten()
+            .map(|commit| commit.commit_oid)
+            .collect::<HashSet<_>>()
+            .len();
+        if remaining > 0 {
+            writeln!(
+                human_out,
+                "{}",
+                t.attention.paint(format!(
+                    "{remaining} commit{} still conflicted — run `but resolve --ai` or `but status` to see them.",
+                    if remaining == 1 { " is" } else { "s are" }
+                ))
+            )?;
+        }
+        writeln!(
+            human_out,
+            "{}",
+            t.hint
+                .paint("If you disagree with a resolution, run `but undo` to revert it.")
+        )?;
+    }
+    Ok(())
+}
+
+/// The first conflicted commit in the oldest-first ordering of
+/// [`find_conflicted_commits()`], if any.
+fn oldest_conflicted_commit(ctx: &mut Context) -> Result<Option<gix::ObjectId>> {
+    Ok(find_conflicted_commits(ctx)?
+        .into_values()
+        .flatten()
+        .next()
+        .map(|commit| commit.commit_oid))
+}
+
+fn resolve_one_with_ai(
+    ctx: &mut Context,
+    out: &mut OutputChannel,
+    commit_oid: gix::ObjectId,
+) -> Result<but_api::resolve::AiResolutionResult> {
+    let t = theme::get();
+    {
+        let repo = ctx.repo.get()?;
+        let short_id = shorten_object_id(&repo, commit_oid);
+        drop(repo);
+        let mut progress = out.progress_channel();
+        writeln!(
+            progress,
+            "{} {}{}",
+            t.important.paint("Resolving conflicts in commit"),
+            t.commit_id.paint(short_id),
+            t.important.paint(" with AI…")
+        )?;
+    }
+
+    let result =
+        but_api::resolve::resolve_commit_conflicts_ai(ctx, commit_oid, but_core::DryRun::No)?;
+
+    if let Some(human_out) = out.for_human() {
+        let repo = ctx.repo.get()?;
+        writeln!(
+            human_out,
+            "{} {} {} {}",
+            t.success.paint("✓ Resolved"),
+            t.commit_id
+                .paint(shorten_object_id(&repo, result.commit_id)),
+            t.success.paint("→"),
+            t.commit_id
+                .paint(shorten_object_id(&repo, result.new_commit)),
+        )?;
+        if let Some(summary) = &result.summary {
+            writeln!(human_out)?;
+            writeln!(human_out, "{}", sanitize_model_text(summary))?;
+        }
+        writeln!(human_out)?;
+        for file in &result.files {
+            writeln!(
+                human_out,
+                "  {} {}",
+                t.sym().success,
+                t.success.paint(&file.path)
+            )?;
+            writeln!(
+                human_out,
+                "    {}",
+                t.hint.paint(sanitize_model_text(&file.reasoning))
+            )?;
+        }
+        writeln!(human_out)?;
+    }
+
+    Ok(result)
+}
+
+/// Strip control characters (including ANSI escape sequences) from
+/// model-authored text before printing it to the terminal.
+fn sanitize_model_text(text: &str) -> String {
+    text.chars()
+        .filter(|c| !c.is_control() || matches!(c, '\n' | '\t'))
+        .collect()
 }
 
 /// Structure to hold information about a conflicted commit

@@ -656,6 +656,20 @@ export type AbsorptionTarget = {
   type: "all";
 };
 
+/** JSON transport type for the outcome of an AI conflict resolution. */
+export type AiResolutionResult = {
+  /** The conflicted commit that was resolved. */
+  commitId: string;
+  /** The rewritten, no-longer-conflicted commit. */
+  newCommit: string;
+  /** A short model-authored markdown summary of the conflict and resolution. */
+  summary: string | null;
+  /** The per-file resolutions that were applied. */
+  files: Array<ResolvedFile>;
+  /** Workspace state after the resolution. */
+  workspace: WorkspaceState;
+};
+
 export type ApiProject = {
   name: string;
   description: string | null;
@@ -2079,7 +2093,7 @@ export type OperatingMode = {
   subject: EditModeMetadata;
 };
 
-export type OperationKind = "CreateCommit" | "CreateBranch" | "StashIntoBranch" | "SetBaseBranch" | "MergeUpstream" | "UpdateWorkspaceBase" | "MoveHunk" | "UpdateBranchName" | "UpdateBranchNotes" | "ReorderBranches" | "UpdateBranchRemoteName" | "GenericBranchUpdate" | "DeleteBranch" | "ApplyBranch" | "DiscardLines" | "DiscardHunk" | "DiscardFile" | "DiscardChanges" | "Discard" | "AmendCommit" | "Absorb" | "AutoCommit" | "UndoCommit" | "DiscardCommit" | "UnapplyBranch" | "CherryPick" | "SquashCommit" | "UpdateCommitMessage" | "MoveCommit" | "MoveBranch" | "TearOffBranch" | "ReorderCommit" | "InsertBlankCommit" | "MoveCommitFile" | "FileChanges" | "EnterEditMode" | "SyncWorkspace" | "CreateDependentBranch" | "RemoveDependentBranch" | "UpdateDependentBranchName" | "UpdateDependentBranchDescription" | "UpdateDependentBranchPrNumber" | "AutoHandleChangesBefore" | "AutoHandleChangesAfter" | "SplitBranch" | "CleanWorkspace" | "OnDemandSnapshot" | "Unknown" | "RestoreFromSnapshotViaUndo" | "RestoreFromSnapshotViaRedo" | "RestoreFromSnapshot";
+export type OperationKind = "CreateCommit" | "CreateBranch" | "StashIntoBranch" | "SetBaseBranch" | "MergeUpstream" | "UpdateWorkspaceBase" | "MoveHunk" | "UpdateBranchName" | "UpdateBranchNotes" | "ReorderBranches" | "UpdateBranchRemoteName" | "GenericBranchUpdate" | "DeleteBranch" | "ApplyBranch" | "DiscardLines" | "DiscardHunk" | "DiscardFile" | "DiscardChanges" | "Discard" | "AmendCommit" | "Absorb" | "AutoCommit" | "UndoCommit" | "DiscardCommit" | "UnapplyBranch" | "CherryPick" | "SquashCommit" | "UpdateCommitMessage" | "MoveCommit" | "MoveBranch" | "TearOffBranch" | "ReorderCommit" | "InsertBlankCommit" | "MoveCommitFile" | "FileChanges" | "EnterEditMode" | "ResolveConflictsAi" | "SyncWorkspace" | "CreateDependentBranch" | "RemoveDependentBranch" | "UpdateDependentBranchName" | "UpdateDependentBranchDescription" | "UpdateDependentBranchPrNumber" | "AutoHandleChangesBefore" | "AutoHandleChangesAfter" | "SplitBranch" | "CleanWorkspace" | "OnDemandSnapshot" | "Unknown" | "RestoreFromSnapshotViaUndo" | "RestoreFromSnapshotViaRedo" | "RestoreFromSnapshot";
 
 /** What kind of apply operation completed. */
 export type OutcomeStatus = "alreadyApplied" | "applied" | "conflictAborted";
@@ -2300,6 +2314,16 @@ export type ResolutionApproach = {
   type: "unapply";
 } | {
   type: "delete";
+};
+
+/** How one conflicted file was resolved, for display to the user. */
+export type ResolvedFile = {
+  /** The repo-relative path of the file. */
+  path: string;
+  /** The content that replaced each conflict block, in file order. */
+  hunks: Array<string>;
+  /** The model's explanation of its decision for this file. */
+  reasoning: string;
 };
 
 /** The kind of restore to perform. */

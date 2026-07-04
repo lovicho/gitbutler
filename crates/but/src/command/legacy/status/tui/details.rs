@@ -3,7 +3,6 @@ use std::{
     fmt::Display,
     sync::{
         Arc,
-        atomic::AtomicUsize,
         mpsc::{Sender, TryRecvError},
     },
     time::{Duration, Instant},
@@ -25,6 +24,7 @@ use crate::{
     CliId,
     command::legacy::status::tui::{
         Message, count_allocations,
+        details::worker::Worker,
         highlight::{self, Highlights},
     },
     theme::Theme,
@@ -34,6 +34,8 @@ use crate::{
         string_interning::Strings,
     },
 };
+
+mod worker;
 
 const CHANNEL_SIZE: usize = 1024;
 
@@ -66,6 +68,7 @@ pub struct Details {
     cache: Cache,
     out_of_band_messages_tx: Sender<Message>,
     pub highlights: Highlights<SectionId>,
+    worker: Worker,
 }
 
 #[derive(Debug, Default)]
@@ -98,13 +101,14 @@ impl Details {
             syntax_set: OnDemand::new(|| Ok(SyntaxSet::load_defaults_newlines())).into(),
             syntax_theme: OnDemand::new(|| theme.load_syntax_highlighting_theme()).into(),
             strings: Default::default(),
-            selected_section: Cell::default(),
+            selected_section: Default::default(),
             line_reader: Default::default(),
             scroll: Default::default(),
             layout_cache: Default::default(),
             cache: Default::default(),
             out_of_band_messages_tx,
             highlights: Default::default(),
+            worker: Worker::new(),
         }
     }
 
@@ -117,12 +121,16 @@ impl Details {
         }
     }
 
-    pub fn num_threads(&self) -> usize {
-        NUM_THREADS.load(std::sync::atomic::Ordering::SeqCst)
+    pub fn worker_is_busy(&self) -> bool {
+        self.worker.is_busy()
     }
 
     pub fn cache_size(&self) -> usize {
         self.cache.num_lines
+    }
+
+    pub fn on_hidden(&mut self) {
+        self.reset_line_reader();
     }
 
     pub fn update(
@@ -133,7 +141,7 @@ impl Details {
     ) -> anyhow::Result<bool> {
         if !is_visible {
             self.clear_lines();
-            self.line_reader = Default::default();
+            self.reset_line_reader();
             self.reset_scroll();
             return Ok(false);
         }
@@ -141,21 +149,21 @@ impl Details {
         let (selection, selection_did_change) = match (self.selection.as_ref(), new_selection) {
             (None, None) => {
                 // no selection
-                self.line_reader = Default::default();
+                self.reset_line_reader();
 
                 return Ok(false);
             }
             (None, Some(new)) => {
                 // selected something
                 self.selection = Some(new.clone());
-                self.line_reader = Default::default();
+                self.reset_line_reader();
 
                 (new, true)
             }
             (Some(_), None) => {
                 // deselected
                 self.selection = None;
-                self.line_reader = Default::default();
+                self.reset_line_reader();
                 self.clear_lines();
                 self.reset_scroll();
 
@@ -169,7 +177,7 @@ impl Details {
                 } else {
                     // selected something new
                     self.selection = Some(new.clone());
-                    self.line_reader = Default::default();
+                    self.reset_line_reader();
                     (new, true)
                 }
             }
@@ -267,6 +275,7 @@ impl Details {
                 )
             }
             CliId::Stack { .. } => {
+                self.reset_line_reader();
                 self.clear_lines();
                 self.reset_scroll();
                 push_line(
@@ -282,6 +291,7 @@ impl Details {
                 Ok(true)
             }
             CliId::PathPrefix { .. } => {
+                self.reset_line_reader();
                 self.clear_lines();
                 self.reset_scroll();
                 Ok(true)
@@ -352,8 +362,6 @@ impl Details {
             }
         }
 
-        let num_threads_guard = NumThreadsGuard::new();
-
         match &mut self.line_reader {
             ChannelLineReader::NotStarted => {
                 tracing::debug!("spawning thread");
@@ -373,10 +381,7 @@ impl Details {
                 let ctx = ctx.to_sync();
                 let error_tx = self.out_of_band_messages_tx.clone();
 
-                // spawning a new thread immediately here without a pool is fine since, if the
-                // selection changes the previous will thread will end when it tries to send on
-                // the, now disconnected, channel
-                let thread = std::thread::spawn(move || {
+                self.worker.replace_next_job(move || {
                     let mut ctx = ctx.into_thread_local();
                     let mut id_gen = IdGen::new(strings);
 
@@ -401,15 +406,7 @@ impl Details {
                             Err(_) => {}
                         }
                     });
-
-                    drop(num_threads_guard);
                 });
-
-                if cfg!(test) {
-                    // we don't bother with threads during tests since that makes since
-                    // non-deterministic, so just run the thread to completion right now
-                    thread.join().unwrap();
-                }
 
                 Ok(true)
             }
@@ -747,6 +744,7 @@ impl Details {
     }
 
     fn restore_cached_lines(&mut self, cached_lines: Vec<DetailsLine>) {
+        self.worker.clear_next_job();
         self.clear_lines();
         self.reset_scroll();
         self.line_reader = ChannelLineReader::Finished;
@@ -759,6 +757,11 @@ impl Details {
         self.lines.clear();
         self.sections.clear();
         self.selected_section.set(SelectedSection::None);
+    }
+
+    fn reset_line_reader(&mut self) {
+        self.line_reader = Default::default();
+        self.worker.clear_next_job();
     }
 
     fn update_selected_section_for_visible_range(
@@ -934,24 +937,6 @@ fn extend_section_list(sections: &mut Vec<Section>, line_index: usize, line: &De
         first_line: line_index,
         last_line: line_index,
     });
-}
-
-/// Counter for tracking how many threads we're currently running.
-static NUM_THREADS: AtomicUsize = AtomicUsize::new(0);
-
-struct NumThreadsGuard;
-
-impl NumThreadsGuard {
-    fn new() -> Self {
-        NUM_THREADS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        Self
-    }
-}
-
-impl Drop for NumThreadsGuard {
-    fn drop(&mut self) {
-        NUM_THREADS.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
-    }
 }
 
 #[derive(Debug, Default)]

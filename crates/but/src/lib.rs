@@ -1418,7 +1418,7 @@ async fn match_subcommand(
                 .map_err(CliError::from)
         }
         #[cfg(feature = "legacy")]
-        Subcommands::Resolve { cmd, commit } => {
+        Subcommands::Resolve { cmd, commit, ai } => {
             let mut ctx = setup::init_ctx(
                 &args,
                 InitCtxOptions {
@@ -1427,7 +1427,7 @@ async fn match_subcommand(
                 },
                 out,
             )?;
-            command::legacy::resolve::handle(&mut ctx, out, cmd, commit)
+            command::legacy::resolve::handle(&mut ctx, out, cmd, commit, ai)
                 .context("Failed to handle conflict resolution.")
                 .emit_metrics(metrics_ctx)
                 .show_root_cause_error_then_exit_without_destructors(output)

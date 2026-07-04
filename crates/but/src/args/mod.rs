@@ -390,6 +390,9 @@ pub enum Subcommands {
     /// 4. Finalize resolution: `but resolve finish`
     ///    Or cancel: `but resolve cancel`
     ///
+    /// Alternatively, resolve with AI in one step: `but resolve <commit-id> --ai`,
+    /// or `but resolve --ai` to resolve all conflicted commits, oldest first.
+    ///
     /// When in resolution mode, `but status` will also show that you're resolving conflicts.
     ///
     #[cfg(feature = "legacy")]
@@ -400,6 +403,13 @@ pub enum Subcommands {
         cmd: Option<resolve::Subcommands>,
         /// Commit ID to enter resolution mode for (when no subcommand is provided)
         commit: Option<String>,
+        /// Resolve the conflicts with the configured AI model and apply the result.
+        ///
+        /// With a commit ID this resolves only that commit; without one it
+        /// resolves all conflicted commits in the workspace, oldest first.
+        /// Undo the result with `but undo`.
+        #[clap(long)]
+        ai: bool,
     },
 
     /// Unapply a branch from the workspace.

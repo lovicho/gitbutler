@@ -10,6 +10,7 @@
 	interface LocalCommitContextData extends BaseContextData {
 		commitStatus: "LocalOnly" | "LocalAndRemote";
 		stackId?: string;
+		hasConflicts?: boolean;
 		onUncommitClick: (event: MouseEvent) => void;
 		onEditMessageClick: (event: MouseEvent) => void;
 		/** When set, indicates multiple commits are selected. */
@@ -44,12 +45,19 @@
 		position: { coords?: { x: number; y: number }; element?: HTMLElement };
 		data: CommitContextData;
 	};
+
+	// Commits with an AI resolution in flight. Module-scoped because the menu
+	// instance (and its mutation state) is destroyed when the menu closes,
+	// while the resolution keeps running.
+	const resolvingCommits = new Set<string>();
 </script>
 
 <script lang="ts">
 	import IrcSendToSubmenus from "$components/diff/IrcSendToSubmenus.svelte";
+	import { AI_SERVICE } from "$lib/ai/service";
 	import { CLIPBOARD_SERVICE } from "$lib/backend/clipboard";
 	import { URL_SERVICE } from "$lib/backend/url";
+	import { projectAiGenEnabled } from "$lib/config/config";
 	import { rewrapCommitMessage } from "$lib/config/uiFeatureFlags";
 	import { DIFF_SERVICE } from "$lib/hunks/diffService.svelte";
 	import { IRC_API_SERVICE } from "$lib/irc/ircApiService";
@@ -57,6 +65,7 @@
 	import { buildSharedCommitPayload } from "$lib/irc/sharedStack";
 	import { editPatch } from "$lib/mode/editPatchUtils";
 	import { MODE_SERVICE } from "$lib/mode/modeService";
+	import { dismissToast, showToast } from "$lib/notifications/toasts";
 	import { PROJECTS_SERVICE } from "$lib/project/projectsService";
 	import { STACK_SERVICE } from "$lib/stacks/stackService.svelte";
 	import { inject, injectOptional } from "@gitbutler/core/context";
@@ -92,8 +101,34 @@
 	const diffService = inject(DIFF_SERVICE);
 	const ircApiService = inject(IRC_API_SERVICE);
 	const projectsService = inject(PROJECTS_SERVICE);
+	const aiService = inject(AI_SERVICE);
 	const [insertBlankCommitInBranch, commitInsertion] = stackService.insertBlankCommit.useMutation();
 	const [createRef, refCreation] = stackService.createReference;
+	const [resolveConflictsAi, aiResolution] = stackService.resolveCommitConflictsAi;
+
+	const aiGenEnabled = $derived(projectAiGenEnabled(projectId));
+	const commitHasConflicts = $derived(
+		contextData !== undefined && "hasConflicts" in contextData && !!contextData.hasConflicts,
+	);
+	let aiConfigurationValid = $state(false);
+
+	// Validating the AI configuration costs several backend calls, so only do
+	// it for the rare rows that can actually offer the AI-resolve action.
+	$effect(() => {
+		if (!commitHasConflicts || !$aiGenEnabled) return;
+		let stale = false;
+		aiService.validateConfiguration().then(
+			(valid) => {
+				if (!stale) aiConfigurationValid = valid;
+			},
+			() => {
+				if (!stale) aiConfigurationValid = false;
+			},
+		);
+		return () => {
+			stale = true;
+		};
+	});
 
 	const projectQuery = $derived(projectsService.getProject(projectId));
 	const projectTitle = $derived(projectQuery.response?.title ?? projectId);
@@ -146,6 +181,40 @@
 			stackId,
 			projectId,
 		});
+	}
+
+	async function handleResolveConflictsAi(commitId: string, stackId: string) {
+		if (isReadOnly || !$aiGenEnabled || !aiConfigurationValid) return;
+		if (resolvingCommits.has(commitId)) return;
+		resolvingCommits.add(commitId);
+		const progressToastId = `resolve-conflicts-ai-${commitId}`;
+		showToast({
+			id: progressToastId,
+			style: "info",
+			title: "Resolving conflicts with AI…",
+			message: "This can take a moment. The resolution is applied when it completes.",
+		});
+		try {
+			const result = await resolveConflictsAi({ projectId, stackId, commitId });
+			dismissToast(progressToastId);
+			const fileList = result.files
+				.map((file) => `- \`${file.path}\` — ${file.reasoning}`)
+				.join("\n");
+			showToast({
+				style: "success",
+				title: "Conflicts resolved with AI",
+				message: `${result.summary ?? ""}\n\n${fileList}\n\nIf this isn't right, undo it from the operations history.`,
+			});
+		} catch (error: unknown) {
+			dismissToast(progressToastId);
+			showToast({
+				style: "danger",
+				title: "Failed to resolve conflicts with AI",
+				error,
+			});
+		} finally {
+			resolvingCommits.delete(commitId);
+		}
 	}
 
 	async function sendCommitToChannel(
@@ -261,6 +330,20 @@
 								}
 							}}
 						/>
+						{#if contextData.hasConflicts && $aiGenEnabled && aiConfigurationValid}
+							<ContextMenuItem
+								label="Resolve conflicts with AI"
+								icon="ai"
+								testId={TestId.CommitRowContextMenu_ResolveConflictsAi}
+								disabled={isReadOnly || aiResolution.current.isLoading}
+								onclick={() => {
+									if (!isReadOnly && contextData.stackId) {
+										handleResolveConflictsAi(commitId, contextData.stackId);
+										close();
+									}
+								}}
+							/>
+						{/if}
 					</ContextMenuSection>
 				{/if}
 			{/if}

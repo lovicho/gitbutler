@@ -39,6 +39,9 @@ pub mod land;
 /// Functions that operate commits
 pub mod commit;
 
+/// Resolve the conflicts of a conflicted commit with an LLM.
+pub mod resolve;
+
 /// Functions that show what changed in various Git entities, like trees, commits and the worktree.
 pub mod diff;
 

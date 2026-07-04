@@ -439,6 +439,7 @@
 									commitId,
 									commitMessage: commit.message,
 									commitStatus: commit.state.type,
+									hasConflicts: commit.hasConflicts,
 									commitUrl: forgeInfo ? commitUrl(forgeInfo, commitId) : undefined,
 									onUncommitClick: () => handleUncommit(commit.id),
 									onEditMessageClick: () => startEditingCommitMessage(commit.id),

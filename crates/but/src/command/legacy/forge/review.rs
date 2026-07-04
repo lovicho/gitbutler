@@ -440,8 +440,8 @@ fn get_branches_without_prs(
 }
 
 fn get_branch_names(project: &Project, branch_id: &str) -> anyhow::Result<Vec<String>> {
-    let mut ctx = Context::new_from_legacy_project(project.clone())?;
-    let id_map = IdMap::legacy_new_from_context(&mut ctx, None)?;
+    let ctx = Context::new_from_legacy_project(project.clone())?;
+    let id_map = IdMap::legacy_new_from_context(&ctx, None)?;
     let branch_ids = id_map
         .parse_using_context(branch_id, &ctx)?
         .iter()

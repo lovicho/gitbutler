@@ -103,6 +103,7 @@ but-gitlab.workspace = true
 # 'legacy' is needed while this is only a sketch of what the oplog could be.
 # For single-branch testing, we also want the oplog and just take it as it is.
 but-oplog = { workspace = true, features = ["legacy"] }
+but-llm.workspace = true
 but-askpass = { workspace = true, optional = true }
 itertools.workspace = true
 
@@ -154,6 +155,7 @@ objc2-foundation = { version = "0.3.2", default-features = false, features = ["s
 [dev-dependencies]
 but-api = { path = ".", features = ["legacy"] }
 but-testsupport.workspace = true
+gitbutler-oplog.workspace = true
 snapbox.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["full"] }

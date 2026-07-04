@@ -205,6 +205,7 @@
 					commitId: commit.id,
 					commitMessage: commit.message,
 					commitStatus: commit.state.type,
+					hasConflicts: commit.hasConflicts,
 					commitUrl: forgeInfo ? commitUrl(forgeInfo, commit.id) : undefined,
 					onUncommitClick: () => handleUncommit(),
 					onEditMessageClick: () => {

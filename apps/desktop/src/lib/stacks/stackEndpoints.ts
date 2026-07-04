@@ -25,6 +25,7 @@ import type {
 import type { BackendEndpointBuilder } from "$lib/state/backendApi";
 import type {
 	AbsorptionTarget,
+	AiResolutionResult,
 	BranchLandResult,
 	CommitAbsorption,
 	BranchDetails,
@@ -451,6 +452,26 @@ export function buildStackEndpoints(build: BackendEndpointBuilder) {
 			transformResponse: (response: CommitRewordResult) => response.newCommit,
 			invalidatesTags: (_result, _error, { stackId }) => [
 				invalidatesList(ReduxTag.HeadSha),
+				...(stackId ? [invalidatesItem(ReduxTag.StackDetails, stackId)] : []),
+			],
+		}),
+		resolveCommitConflictsAi: build.mutation<
+			AiResolutionResult,
+			{ projectId: string; stackId?: string; commitId: string }
+		>({
+			extraOptions: {
+				command: "resolve_commit_conflicts_ai",
+				actionName: "Resolve Conflicts with AI",
+			},
+			query: ({ projectId, commitId }) => ({
+				projectId,
+				commitId,
+				dryRun: false,
+			}),
+			invalidatesTags: (_result, _error, { stackId }) => [
+				invalidatesList(ReduxTag.HeadSha),
+				invalidatesList(ReduxTag.BranchChanges),
+				invalidatesList(ReduxTag.WorktreeChanges),
 				...(stackId ? [invalidatesItem(ReduxTag.StackDetails, stackId)] : []),
 			],
 		}),

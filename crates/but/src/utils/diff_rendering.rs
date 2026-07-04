@@ -394,7 +394,7 @@ pub struct Options {
 
 pub fn render_commit(
     commit: ObjectId,
-    ctx: &mut Context,
+    ctx: &Context,
     theme: &'static Theme,
     id_gen: &mut IdGen<'_>,
     options: Options,
@@ -477,7 +477,7 @@ pub fn render_commit(
 
 pub fn render_branch(
     name: String,
-    ctx: &mut Context,
+    ctx: &Context,
     theme: &'static Theme,
     id_gen: &mut IdGen<'_>,
     options: Options,
@@ -502,7 +502,7 @@ pub fn render_branch(
 }
 
 pub fn render_uncommitted(
-    ctx: &mut Context,
+    ctx: &Context,
     theme: &'static Theme,
     id_gen: &mut IdGen<'_>,
     options: Options,
@@ -600,7 +600,7 @@ pub fn render_committed_file(
     commit: ObjectId,
     path: BString,
     id: ShortId,
-    ctx: &mut Context,
+    ctx: &Context,
     theme: &'static Theme,
     id_gen: &mut IdGen<'_>,
     options: Options,
@@ -1013,7 +1013,7 @@ fn compute_line_stats_from_uncommitted_hunks(
 }
 
 fn filter_uncommitted_hunks<'a, F>(
-    ctx: &'a mut Context,
+    ctx: &'a Context,
     id_map: &'a IdMap,
     mut filter: F,
 ) -> anyhow::Result<Vec<(&'a str, Arc<CliId>, &'a UncommittedHunk)>>

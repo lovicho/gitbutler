@@ -14,7 +14,9 @@
 use std::sync::Arc;
 
 use anyhow::{Context, bail};
-use but_api::{branch, commit, diff, github, gitlab, land, legacy, open, platform, workspace};
+use but_api::{
+    branch, commit, diff, github, gitlab, land, legacy, open, platform, resolve, workspace,
+};
 #[cfg(feature = "irc")]
 use but_irc::IrcManager;
 use but_settings::AppSettingsWithDiskSync;
@@ -523,6 +525,7 @@ fn main() -> anyhow::Result<()> {
                 commit::uncommit::tauri_commit_uncommit::commit_uncommit,
                 workspace::tauri_workspace_integrate_upstream::workspace_integrate_upstream,
                 land::tauri_branch_land::branch_land,
+                resolve::tauri_resolve_commit_conflicts_ai::resolve_commit_conflicts_ai,
                 platform::tauri_build_type::build_type,
             ])
             .menu(menu::build)

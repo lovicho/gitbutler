@@ -177,6 +177,7 @@ pub enum OperationKind {
     MoveCommitFile,
     FileChanges,
     EnterEditMode,
+    ResolveConflictsAi,
     SyncWorkspace,
     CreateDependentBranch,
     RemoveDependentBranch,
@@ -237,6 +238,7 @@ impl OperationKind {
             | OperationKind::UpdateDependentBranchDescription
             | OperationKind::UpdateDependentBranchPrNumber => "UPDATE_BRANCH",
             OperationKind::SplitBranch => "SPLIT_BRANCH",
+            OperationKind::ResolveConflictsAi => "AI_RESOLVE",
             OperationKind::StashIntoBranch
             | OperationKind::SetBaseBranch
             | OperationKind::MergeUpstream
@@ -291,6 +293,7 @@ impl OperationKind {
             OperationKind::MoveCommitFile => "Moved file",
             OperationKind::FileChanges => "Updated file changes",
             OperationKind::EnterEditMode => "Entered edit mode",
+            OperationKind::ResolveConflictsAi => "Resolved conflicts with AI",
             OperationKind::SyncWorkspace => "Synced workspace",
             OperationKind::CreateDependentBranch => "Created branch",
             OperationKind::RemoveDependentBranch => "Removed branch",
@@ -347,6 +350,7 @@ impl OperationKind {
             OperationKind::MoveCommitFile => "MoveCommitFile",
             OperationKind::FileChanges => "FileChanges",
             OperationKind::EnterEditMode => "EnterEditMode",
+            OperationKind::ResolveConflictsAi => "ResolveConflictsAi",
             OperationKind::SyncWorkspace => "SyncWorkspace",
             OperationKind::CreateDependentBranch => "CreateDependentBranch",
             OperationKind::RemoveDependentBranch => "RemoveDependentBranch",
@@ -403,6 +407,7 @@ impl OperationKind {
             "MoveCommitFile" => Self::MoveCommitFile,
             "FileChanges" => Self::FileChanges,
             "EnterEditMode" => Self::EnterEditMode,
+            "ResolveConflictsAi" => Self::ResolveConflictsAi,
             "SyncWorkspace" => Self::SyncWorkspace,
             "CreateDependentBranch" => Self::CreateDependentBranch,
             "RemoveDependentBranch" => Self::RemoveDependentBranch,

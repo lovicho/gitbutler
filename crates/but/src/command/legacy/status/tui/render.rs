@@ -1304,12 +1304,12 @@ fn render_debug(app: &App, area: Rect, frame: &mut Frame) {
     );
 
     let details_selection = String::new();
-    let details_num_threads = format!("Threads: {}", app.details.num_threads());
+    let details_worker_busy = format!("Worker busy: {}", app.details.worker_is_busy());
     let details_cache_size = format!("Cache size: {} lines", app.details.cache_size());
     let details_selection = once(ListItem::new("Details").black().on_blue()).chain(
         details_selection
             .lines()
-            .chain(details_num_threads.lines())
+            .chain(details_worker_busy.lines())
             .chain(details_cache_size.lines())
             .take(100)
             .map(|line| ListItem::new(line.to_owned())),

@@ -686,7 +686,7 @@ impl IdMap {
     // Use `new_from_context` instead - it takes `perm`, and forces you to think about repository locks
     // in the light of mutations.
     pub fn legacy_new_from_context(
-        ctx: &mut Context,
+        ctx: &Context,
         assignments: Option<Vec<HunkAssignment>>,
     ) -> anyhow::Result<Self> {
         let guard = ctx.shared_worktree_access();
