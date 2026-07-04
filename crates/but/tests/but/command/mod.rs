@@ -19,6 +19,8 @@ mod commit2;
 mod config;
 #[cfg(feature = "legacy")]
 mod diff;
+#[cfg(all(feature = "legacy", feature = "but-2"))]
+mod diff2;
 #[cfg(feature = "legacy")]
 mod discard;
 #[cfg(unix)]

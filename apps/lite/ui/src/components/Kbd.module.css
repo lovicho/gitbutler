@@ -1,20 +1,27 @@
 .keys {
 	display: inline-flex;
 	align-items: center;
-	gap: 1px;
+	gap: 3px;
 }
 
 .key {
+	--outline-color: light-dark(
+		color-mix(in srgb, var(--text-1) 10%, transparent),
+		color-mix(in srgb, var(--text-1) 20%, transparent)
+	);
 	display: inline-flex;
 	position: relative;
 	align-items: center;
 	justify-content: center;
 	padding: 2px 3px;
 	border-radius: var(--radius-s);
-	background-color: color-mix(in srgb, var(--fill-gray-bg) 10%, transparent);
-	color: color-mix(in srgb, var(--text-1) 70%, transparent);
+	background-color: var(--bg-1);
+	box-shadow:
+		0 1px 3px 0 rgba(0, 0, 0, 0.18),
+		0 0 0 1px var(--outline-color);
+	color: color-mix(in srgb, var(--text-1) 60%, transparent);
 	font-size: 11px;
-	line-height: 1;
+	line-height: 1.2;
 	font-family: inherit;
 	white-space: nowrap;
 }

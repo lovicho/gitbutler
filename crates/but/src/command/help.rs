@@ -80,6 +80,8 @@ fn print_grouped_with_truncation(
                 SubcommandDiscriminant::Status => Group::Inspection,
                 #[cfg(feature = "legacy")]
                 SubcommandDiscriminant::Diff => Group::Inspection,
+                #[cfg(all(feature = "legacy", feature = "but-2"))]
+                SubcommandDiscriminant::_Diff2 => Group::Inspection,
                 #[cfg(feature = "legacy")]
                 SubcommandDiscriminant::Show => Group::Inspection,
 

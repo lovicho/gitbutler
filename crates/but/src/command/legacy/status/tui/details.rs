@@ -19,7 +19,7 @@ use ratatui::{
     style::{Color, Stylize as _},
     text::Line,
 };
-use syntect::{highlighting, parsing::SyntaxSet};
+use syntect::{easy::HighlightLines, highlighting, parsing::SyntaxSet};
 
 use crate::{
     CliId,
@@ -184,8 +184,15 @@ impl Details {
                     ctx,
                     Some(CacheKey::Commit(commit)),
                     selection_did_change,
-                    move |ctx, theme, id_gen, line_writer| {
-                        diff_rendering::render_commit(commit, ctx, theme, id_gen, line_writer)
+                    move |ctx, theme, id_gen, line_writer, options| {
+                        diff_rendering::render_commit(
+                            commit,
+                            ctx,
+                            theme,
+                            id_gen,
+                            options,
+                            line_writer,
+                        )
                     },
                 )
             }
@@ -195,8 +202,15 @@ impl Details {
                     ctx,
                     None,
                     selection_did_change,
-                    move |ctx, theme, id_gen, line_writer| {
-                        diff_rendering::render_branch(name, ctx, theme, id_gen, line_writer)
+                    move |ctx, theme, id_gen, line_writer, options| {
+                        diff_rendering::render_branch(
+                            name,
+                            ctx,
+                            theme,
+                            id_gen,
+                            options,
+                            line_writer,
+                        )
                     },
                 )
             }
@@ -204,8 +218,8 @@ impl Details {
                 ctx,
                 None,
                 selection_did_change,
-                move |ctx, theme, id_gen, line_writer| {
-                    diff_rendering::render_uncommitted(ctx, theme, id_gen, line_writer)
+                move |ctx, theme, id_gen, line_writer, options| {
+                    diff_rendering::render_uncommitted(ctx, theme, id_gen, options, line_writer)
                 },
             ),
             CliId::UncommittedHunkOrFile(uncommitted) => {
@@ -214,12 +228,13 @@ impl Details {
                     ctx,
                     None,
                     selection_did_change,
-                    move |ctx, theme, id_gen, line_writer| {
+                    move |ctx, theme, id_gen, line_writer, options| {
                         diff_rendering::render_uncommitted_hunk(
                             uncommitted,
                             ctx,
                             theme,
                             id_gen,
+                            options,
                             line_writer,
                         )
                     },
@@ -237,7 +252,7 @@ impl Details {
                     ctx,
                     None,
                     selection_did_change,
-                    move |ctx, theme, id_gen, line_writer| {
+                    move |ctx, theme, id_gen, line_writer, options| {
                         diff_rendering::render_committed_file(
                             commit,
                             path,
@@ -245,6 +260,7 @@ impl Details {
                             ctx,
                             theme,
                             id_gen,
+                            options,
                             line_writer,
                         )
                     },
@@ -286,6 +302,7 @@ impl Details {
                 &'static Theme,
                 &mut IdGen<'_>,
                 &mut dyn DiffLineWriter,
+                diff_rendering::Options,
             ) -> anyhow::Result<()>
             + Clone
             + Send
@@ -319,6 +336,7 @@ impl Details {
                 &'static Theme,
                 &mut IdGen<'_>,
                 &mut dyn DiffLineWriter,
+                diff_rendering::Options,
             ) -> anyhow::Result<()>
             + Send
             + 'static,
@@ -363,8 +381,14 @@ impl Details {
                     let mut id_gen = IdGen::new(strings);
 
                     count_allocations("details fetch diff", || {
-                        match f(&mut ctx, theme, &mut id_gen, &mut line_writer)
-                            .context("failed rendering commit diff")
+                        match f(
+                            &mut ctx,
+                            theme,
+                            &mut id_gen,
+                            &mut line_writer,
+                            diff_rendering::Options::default(),
+                        )
+                        .context("failed rendering commit diff")
                         {
                             Ok(()) => {
                                 _ = line_writer.tx.send(RenderThreadMessage::Finished);
@@ -457,13 +481,16 @@ impl Details {
             && let ChannelLineReader::Started { start, .. } = &self.line_reader
             && start.elapsed() > Duration::from_millis(500)
         {
-            let n = (start.elapsed().as_millis() % 4) as usize;
-            frame.render_widget(format!("Loading diff{}", ".".repeat(n)).dim(), area);
+            frame.render_widget(
+                format!("Loading diff ({:.1}s)", start.elapsed().as_secs_f32()).dim(),
+                area,
+            );
             return;
         }
 
         let syntax_set = self.syntax_set.get().unwrap();
         let syntax_theme = self.syntax_theme.get().unwrap();
+        let mut highlight_lines = None;
 
         let section_selected_bg = self.theme.discrete_selection_highlight.bg.unwrap();
 
@@ -513,6 +540,7 @@ impl Details {
                 section_selected_bg,
                 &syntax_set,
                 &syntax_theme,
+                &mut highlight_lines,
                 frame,
             );
 
@@ -600,7 +628,7 @@ impl Details {
     }
 
     #[expect(clippy::too_many_arguments)]
-    fn render_details_line(
+    fn render_details_line<'a>(
         &self,
         line: &DetailsLine,
         skip_display_lines: usize,
@@ -608,8 +636,9 @@ impl Details {
         width: u16,
         tui_has_focus: bool,
         section_selected_bg: Color,
-        syntax_set: &SyntaxSet,
-        syntax_theme: &highlighting::Theme,
+        syntax_set: &'a SyntaxSet,
+        syntax_theme: &'a syntect::highlighting::Theme,
+        highlight_lines: &mut Option<HighlightLines<'a>>,
         frame: &mut Frame,
     ) -> RenderedLine {
         match line {
@@ -618,6 +647,8 @@ impl Details {
                 id,
                 skip_when_copying_hunk: _,
             } => {
+                *highlight_lines = None;
+
                 if skip_display_lines == 0 {
                     let Some(line_area) = areas.next() else {
                         return RenderedLine::viewport_filled();
@@ -637,6 +668,8 @@ impl Details {
                 }
             }
             DetailsLine::TextToWrap { text, id } => {
+                *highlight_lines = None;
+
                 for line in wrapped_text_lines(text, width).skip(skip_display_lines) {
                     let Some(line_area) = areas.next() else {
                         return RenderedLine::viewport_filled();
@@ -657,15 +690,25 @@ impl Details {
                         return RenderedLine::viewport_filled();
                     };
 
-                    let id = line.id;
+                    if highlight_lines.is_none() {
+                        let syntax = line.syntax(syntax_set);
+                        *highlight_lines = Some(HighlightLines::new(syntax, syntax_theme));
+                    }
 
+                    let id = line.id;
                     let mut strings = self.strings.lock();
-                    line.ensure_highlighted(syntax_set, syntax_theme, self.theme, &mut strings);
+
+                    line.ensure_highlighted(
+                        syntax_set,
+                        highlight_lines.as_mut().unwrap(),
+                        self.theme,
+                        &mut strings,
+                    );
 
                     let highlighted_line = line.highlighted_line.borrow();
                     let highlighted_line = highlighted_line
                         .as_ref()
-                        .expect("ensure_highlighted was just called");
+                        .expect("line should have been highlighted by now");
 
                     if self.section_is_highlighted(id) {
                         frame.render_widget(
@@ -683,6 +726,8 @@ impl Details {
                 }
             }
             DetailsLine::SectionSeparator => {
+                *highlight_lines = None;
+
                 if skip_display_lines == 0 {
                     let Some(line_area) = areas.next() else {
                         return RenderedLine::viewport_filled();

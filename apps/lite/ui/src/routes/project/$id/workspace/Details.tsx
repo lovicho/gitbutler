@@ -37,7 +37,6 @@ import {
 } from "#ui/projects/state.ts";
 import { getButtonClassName } from "#ui/components/Button.tsx";
 import { Icon } from "#ui/components/Icon.tsx";
-import { Kbd } from "#ui/components/Kbd.tsx";
 import { TooltipPopup } from "#ui/components/Tooltip.tsx";
 import { ToggleGroupStyles, ToggleStyles } from "#ui/components/ToggleGroup.tsx";
 import { OperationSourceC } from "#ui/routes/project/$id/workspace/OperationSourceC.tsx";
@@ -1159,7 +1158,6 @@ const PullRequestForm: FC<{
 				>
 					{updateReview.isPending && <Icon name="spinner" />}
 					Update
-					<Kbd hotkey={pullRequestHotkeys.update.hotkey} />
 				</button>
 			</div>
 		</form>

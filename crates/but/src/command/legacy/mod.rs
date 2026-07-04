@@ -13,6 +13,8 @@ pub mod commit;
 pub mod commit2;
 pub mod commit_message_prep;
 pub mod diff;
+#[cfg(all(feature = "legacy", feature = "but-2"))]
+pub mod diff2;
 pub mod discard;
 pub mod forge;
 pub mod land;

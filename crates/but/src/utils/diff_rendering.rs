@@ -22,7 +22,10 @@ use ratatui::{
     style::{Color, Stylize as _},
     text::{Line, Span},
 };
-use syntect::{easy::HighlightLines, highlighting, parsing::SyntaxSet};
+use syntect::{
+    easy::HighlightLines,
+    parsing::{SyntaxReference, SyntaxSet},
+};
 use unicode_width::UnicodeWidthStr as _;
 
 use crate::{
@@ -130,6 +133,71 @@ pub trait DiffLineWriter {
     }
 }
 
+#[cfg(feature = "but-2")]
+pub struct WithSyntaxHighlighting<'a, T> {
+    inner: T,
+    strings: Strings,
+    syntax_set: &'a SyntaxSet,
+    syntax_theme: &'a syntect::highlighting::Theme,
+    highlight_lines: Option<HighlightLines<'a>>,
+    theme: &'static Theme,
+}
+
+#[cfg(feature = "but-2")]
+impl<'a, T> WithSyntaxHighlighting<'a, T> {
+    pub fn new(
+        inner: T,
+        strings: Strings,
+        syntax_set: &'a SyntaxSet,
+        syntax_theme: &'a syntect::highlighting::Theme,
+    ) -> Self {
+        Self {
+            inner,
+            strings,
+            syntax_set,
+            syntax_theme,
+            highlight_lines: None,
+            theme: crate::theme::get(),
+        }
+    }
+}
+
+#[cfg(feature = "but-2")]
+impl<T> DiffLineWriter for WithSyntaxHighlighting<'_, T>
+where
+    T: DiffLineWriter,
+{
+    fn write(&mut self, line: DetailsLine) -> anyhow::Result<()> {
+        match line {
+            DetailsLine::Code(code_line) => {
+                if self.highlight_lines.is_none() {
+                    let syntax = code_line.syntax(self.syntax_set);
+                    self.highlight_lines = Some(HighlightLines::new(syntax, self.syntax_theme));
+                }
+
+                let highlight_lines = self.highlight_lines.as_mut().unwrap();
+
+                let mut strings = self.strings.lock();
+
+                code_line.ensure_highlighted(
+                    self.syntax_set,
+                    highlight_lines,
+                    self.theme,
+                    &mut strings,
+                );
+
+                self.inner.write(DetailsLine::Code(code_line))?;
+            }
+            other => {
+                self.highlight_lines = None;
+                self.inner.write(other)?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum DetailsLine {
@@ -168,50 +236,33 @@ impl DetailsCodeLine {
     pub fn ensure_highlighted(
         &self,
         syntax_set: &SyntaxSet,
-        syntax_theme: &highlighting::Theme,
+        highlight_lines: &mut HighlightLines<'_>,
         theme: &'static Theme,
         strings: &mut SharedStrings,
     ) {
-        let Self {
-            highlighted_line,
-            line_numbers,
-            path,
-            line_start_end: _,
-            diff: _,
-            id: _,
-        } = self;
-
-        if highlighted_line.borrow().is_some() {
+        if self.highlighted_line.borrow().is_some() {
             return;
         }
 
-        let syntax = {
-            let path = path.to_path_lossy();
-            path.extension()
-                .and_then(|ext| syntax_set.find_syntax_by_extension(ext.to_str()?))
-                .or_else(|| {
-                    path.file_name().and_then(|file_name| {
-                        syntax_set.find_syntax_by_extension(file_name.to_str()?)
-                    })
-                })
-                .unwrap_or_else(|| syntax_set.find_syntax_plain_text())
-        };
-
-        // TODO: creating a new `HighlightLines` per line isn't ideal. Instead we should have reuse
-        // two `HighlightLines` per hunk. One for added+context lines and one for deleted lines.
-        // That should highlight correctly across lines and reuse internal buffers better.
-        //
-        // Remember to advance both `HighlightLines` on context lines.
-        let mut highlight_lines = HighlightLines::new(syntax, syntax_theme);
-
         self.with_line_from_diff(|line| {
-            let bg = line_numbers.kind.bg(theme);
-            let line_numbers = line_numbers.spans(strings, theme);
-            *highlighted_line.borrow_mut() =
+            let bg = self.line_numbers.kind.bg(theme);
+            let line_numbers = self.line_numbers.spans(strings, theme);
+            *self.highlighted_line.borrow_mut() =
                 Some(Line::from_iter(line_numbers.into_iter().chain(
-                    syntax_highlight(line, bg, &mut highlight_lines, syntax_set),
+                    syntax_highlight(line, bg, highlight_lines, syntax_set),
                 )));
         });
+    }
+
+    pub fn syntax<'a>(&self, syntax_set: &'a SyntaxSet) -> &'a SyntaxReference {
+        let path = self.path.to_path_lossy();
+        path.extension()
+            .and_then(|ext| syntax_set.find_syntax_by_extension(ext.to_str()?))
+            .or_else(|| {
+                path.file_name()
+                    .and_then(|file_name| syntax_set.find_syntax_by_extension(file_name.to_str()?))
+            })
+            .unwrap_or_else(|| syntax_set.find_syntax_plain_text())
     }
 
     pub fn with_line_from_diff<F, T>(&self, f: F) -> T
@@ -335,11 +386,18 @@ impl CodeLineNumbers {
     }
 }
 
+#[derive(Debug, Copy, Clone, Default)]
+pub struct Options {
+    pub skip_commit_header: bool,
+    pub skip_line_stats: bool,
+}
+
 pub fn render_commit(
     commit: ObjectId,
     ctx: &mut Context,
     theme: &'static Theme,
     id_gen: &mut IdGen<'_>,
+    options: Options,
     out: &mut dyn DiffLineWriter,
 ) -> anyhow::Result<()> {
     let mut id_gen = id_gen.scoped("commits");
@@ -350,40 +408,52 @@ pub fn render_commit(
 
     let header_id = id_gen.new_id("header");
 
-    out.write_selectable_text(
-        header_id,
-        Line::from_iter([
-            Span::raw(format!("{:<11}", "Commit ID:")),
-            Span::styled(commit.to_hex().to_string(), theme.commit_id),
-        ]),
-    )?;
-    out.write_selectable_text(
-        header_id,
-        Line::from_iter(
-            once(Span::raw(format!("{:<11}", "Author:")))
-                .chain(render_signature(&commit_details.commit.author, theme)),
-        ),
-    )?;
-    out.write_selectable_text(
-        header_id,
-        Line::from_iter(
-            once(Span::raw(format!("{:<11}", "Committer:")))
-                .chain(render_signature(&commit_details.commit.committer, theme)),
-        ),
-    )?;
-
-    out.write_empty_line(header_id)?;
-
-    let message = commit_details.commit.message.to_string();
-    if message.is_empty() {
+    if !options.skip_commit_header {
         out.write_selectable_text(
             header_id,
-            Line::from("(no commit message)").style(theme.hint),
+            Line::from_iter([
+                Span::raw(format!("{:<11}", "Commit ID:")),
+                Span::styled(commit.to_hex().to_string(), theme.commit_id),
+            ]),
         )?;
-    } else {
-        out.write_text_to_wrap(header_id, message)?;
+        out.write_selectable_text(
+            header_id,
+            Line::from_iter([
+                Span::raw(format!("{:<11}", "Change ID:")),
+                Span::styled(
+                    commit_details.commit.change_id().to_string(),
+                    theme.change_id,
+                ),
+            ]),
+        )?;
+        out.write_selectable_text(
+            header_id,
+            Line::from_iter(
+                once(Span::raw(format!("{:<11}", "Author:")))
+                    .chain(render_signature(&commit_details.commit.author, theme)),
+            ),
+        )?;
+        out.write_selectable_text(
+            header_id,
+            Line::from_iter(
+                once(Span::raw(format!("{:<11}", "Committer:")))
+                    .chain(render_signature(&commit_details.commit.committer, theme)),
+            ),
+        )?;
+
+        out.write_empty_line(header_id)?;
+
+        let message = commit_details.commit.message.to_string();
+        if message.is_empty() {
+            out.write_selectable_text(
+                header_id,
+                Line::from("(no commit message)").style(theme.hint),
+            )?;
+        } else {
+            out.write_text_to_wrap(header_id, message)?;
+        }
+        out.write_empty_line(header_id)?;
     }
-    out.write_empty_line(header_id)?;
 
     let tree_changes = commit_details
         .diff_with_first_parent
@@ -393,10 +463,12 @@ pub fn render_commit(
 
     let tree_changes = tree_changes_with_patches(ctx, tree_changes);
 
-    let mut line_stats = LineStats::default();
-    compute_line_stats_from_tree_changes(&tree_changes, &mut line_stats);
-    out.write_selectable_text(header_id, render_line_stats(line_stats))?;
-    out.write_section_separator()?;
+    if !options.skip_line_stats {
+        let mut line_stats = LineStats::default();
+        compute_line_stats_from_tree_changes(&tree_changes, &mut line_stats);
+        out.write_selectable_text(header_id, render_line_stats(line_stats))?;
+        out.write_section_separator()?;
+    }
 
     render_tree_changes(tree_changes, theme, &mut id_gen, out)?;
 
@@ -408,6 +480,7 @@ pub fn render_branch(
     ctx: &mut Context,
     theme: &'static Theme,
     id_gen: &mut IdGen<'_>,
+    options: Options,
     out: &mut dyn DiffLineWriter,
 ) -> anyhow::Result<()> {
     let mut id_gen = id_gen.scoped("branches");
@@ -416,10 +489,12 @@ pub fn render_branch(
     let tree_changes = but_api::branch::branch_diff(ctx, name.clone())?;
     let tree_changes = tree_changes_with_patches(ctx, tree_changes.changes);
 
-    let mut line_stats = LineStats::default();
-    compute_line_stats_from_tree_changes(&tree_changes, &mut line_stats);
-    out.write_selectable_text(id_gen.new_id("line_stats"), render_line_stats(line_stats))?;
-    out.write_section_separator()?;
+    if !options.skip_line_stats {
+        let mut line_stats = LineStats::default();
+        compute_line_stats_from_tree_changes(&tree_changes, &mut line_stats);
+        out.write_selectable_text(id_gen.new_id("line_stats"), render_line_stats(line_stats))?;
+        out.write_section_separator()?;
+    }
 
     render_tree_changes(tree_changes, theme, &mut id_gen, out)?;
 
@@ -430,6 +505,7 @@ pub fn render_uncommitted(
     ctx: &mut Context,
     theme: &'static Theme,
     id_gen: &mut IdGen<'_>,
+    options: Options,
     out: &mut dyn DiffLineWriter,
 ) -> anyhow::Result<()> {
     let mut id_gen = id_gen.scoped("uncommitted");
@@ -440,11 +516,13 @@ pub fn render_uncommitted(
         hunk_assignment.stack_id.is_none()
     })?;
 
-    let line_stats = render_line_stats(compute_line_stats_from_uncommitted_hunks(
-        &uncommitted_hunks,
-    ));
-    out.write_selectable_text(id_gen.new_id("line_stats"), line_stats)?;
-    out.write_section_separator()?;
+    if !options.skip_line_stats {
+        let line_stats = render_line_stats(compute_line_stats_from_uncommitted_hunks(
+            &uncommitted_hunks,
+        ));
+        out.write_selectable_text(id_gen.new_id("line_stats"), line_stats)?;
+        out.write_section_separator()?;
+    }
 
     for (pos, (raw_id, _cli_id, UncommittedHunk { hunk_assignment })) in
         uncommitted_hunks.into_iter().with_position()
@@ -474,6 +552,7 @@ pub fn render_uncommitted_hunk(
     ctx: &mut Context,
     theme: &'static Theme,
     id_gen: &mut IdGen<'_>,
+    options: Options,
     out: &mut dyn DiffLineWriter,
 ) -> anyhow::Result<()> {
     let mut id_gen = id_gen.scoped("hunk");
@@ -485,11 +564,13 @@ pub fn render_uncommitted_hunk(
         uncommitted_hunk_matches_selection(hunk_assignment, &hunk)
     })?;
 
-    let line_stats = render_line_stats(compute_line_stats_from_uncommitted_hunks(
-        &uncommitted_hunks,
-    ));
-    out.write_selectable_text(id_gen.new_id("line_stats"), line_stats)?;
-    out.write_section_separator()?;
+    if !options.skip_line_stats {
+        let line_stats = render_line_stats(compute_line_stats_from_uncommitted_hunks(
+            &uncommitted_hunks,
+        ));
+        out.write_selectable_text(id_gen.new_id("line_stats"), line_stats)?;
+        out.write_section_separator()?;
+    }
 
     for (pos, (raw_id, _cli_id, UncommittedHunk { hunk_assignment })) in
         uncommitted_hunks.into_iter().with_position()
@@ -514,6 +595,7 @@ pub fn render_uncommitted_hunk(
     Ok(())
 }
 
+#[expect(clippy::too_many_arguments)]
 pub fn render_committed_file(
     commit: ObjectId,
     path: BString,
@@ -521,6 +603,7 @@ pub fn render_committed_file(
     ctx: &mut Context,
     theme: &'static Theme,
     id_gen: &mut IdGen<'_>,
+    options: Options,
     out: &mut dyn DiffLineWriter,
 ) -> anyhow::Result<()> {
     let mut id_gen = id_gen.scoped("committed_file");
@@ -538,10 +621,12 @@ pub fn render_committed_file(
         .collect::<Vec<_>>();
     let tree_changes = tree_changes_with_patches(ctx, tree_changes);
 
-    let mut line_stats = LineStats::default();
-    compute_line_stats_from_tree_changes(&tree_changes, &mut line_stats);
-    out.write_selectable_text(id_gen.new_id("line_stats"), render_line_stats(line_stats))?;
-    out.write_section_separator()?;
+    if !options.skip_line_stats {
+        let mut line_stats = LineStats::default();
+        compute_line_stats_from_tree_changes(&tree_changes, &mut line_stats);
+        out.write_selectable_text(id_gen.new_id("line_stats"), render_line_stats(line_stats))?;
+        out.write_section_separator()?;
+    }
 
     render_tree_changes(tree_changes, theme, &mut id_gen, out)?;
 

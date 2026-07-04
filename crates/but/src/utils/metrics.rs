@@ -92,6 +92,8 @@ impl Subcommands {
             Subcommands::Rub { .. } => Rub,
             #[cfg(feature = "legacy")]
             Subcommands::Diff { .. } => Diff,
+            #[cfg(all(feature = "legacy", feature = "but-2"))]
+            Subcommands::_Diff2(..) => Diff2,
             #[cfg(feature = "legacy")]
             Subcommands::Show { .. } => Show,
             #[cfg(feature = "legacy")]

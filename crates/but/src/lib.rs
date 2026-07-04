@@ -189,6 +189,11 @@ pub async fn handle_args(args: impl Iterator<Item = OsString>) -> Result<()> {
         out.request_pager();
     }
 
+    #[cfg(all(feature = "legacy", feature = "but-2"))]
+    if matches!(&args.cmd, Some(Subcommands::_Diff2(_))) {
+        out.request_pager();
+    }
+
     if let (Err(theme_preset_err), Some(out)) = (theme_preset_from_env, out.for_human_ui()) {
         writeln!(
             out,
@@ -1102,6 +1107,27 @@ async fn match_subcommand(
                 command::legacy::move2::r#move(&mut ctx, IntermediateChannel::new(out), move_args)
                     .emit_metrics(metrics_ctx)?;
             out.print_cli_output_human(outcome)?;
+            Ok(())
+        }
+        #[cfg(all(feature = "legacy", feature = "but-2"))]
+        Subcommands::_Diff2(diff_args) => {
+            use crate::utils::{IntermediateChannel, OutputChannelExt};
+
+            let status_after = args.status_after;
+            let mut ctx = setup::init_ctx(
+                &args,
+                InitCtxOptions {
+                    background_sync: BackgroundSync::Enabled { silent: false },
+                    ..Default::default()
+                },
+                out,
+            )?;
+            out.begin_status_after(status_after);
+
+            let outcome =
+                command::legacy::diff2::diff(&mut ctx, IntermediateChannel::new(out), diff_args)
+                    .emit_metrics(metrics_ctx)?;
+            out.print_cli_output(outcome)?;
             Ok(())
         }
         #[cfg(feature = "legacy")]

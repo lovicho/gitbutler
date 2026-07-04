@@ -40,7 +40,7 @@ impl<'out> IntermediateChannel<'out> {
 }
 
 pub trait CliOutputHuman {
-    fn on_human(self, out: &mut dyn WriteWithUtils, theme: &Theme) -> anyhow::Result<()>;
+    fn on_human(self, out: &mut dyn WriteWithUtils, theme: &'static Theme) -> anyhow::Result<()>;
 }
 
 #[allow(dead_code)]
@@ -49,7 +49,7 @@ pub trait CliOutput: CliOutputHuman {
 
     fn on_json(self) -> impl serde::Serialize;
 
-    fn on_agent(self, out: &mut dyn WriteWithUtils, theme: &Theme) -> anyhow::Result<()>
+    fn on_agent(self, out: &mut dyn WriteWithUtils, theme: &'static Theme) -> anyhow::Result<()>
     where
         Self: Sized,
     {

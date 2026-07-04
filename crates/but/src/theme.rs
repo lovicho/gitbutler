@@ -240,6 +240,8 @@ pub struct Theme {
     pub remote_branch: Style,
     /// Commit short hash / object ID wherever it appears outside of CLI IDs.
     pub commit_id: Style,
+    /// Stable identifiers for commits
+    pub change_id: Style,
     /// Short CLI identifiers
     pub cli_id: Style,
     /// PR / review number decorations
@@ -385,6 +387,7 @@ impl Theme {
             local_branch: style_fg(Color::Green),
             remote_branch: style_fg(Color::Magenta),
             commit_id: style_fg(Color::Cyan),
+            change_id: style_fg(Color::Magenta),
             cli_id: style_fg_bold(Color::Blue),
             pr_number: style_fg(Color::Blue),
             link: Style::new()

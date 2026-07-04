@@ -6,7 +6,6 @@ import { getHeadInfoIndex, resolveRelativeTo } from "#ui/api/ref-info.ts";
 import { getButtonClassName } from "#ui/components/Button.tsx";
 import { classes } from "#ui/components/classes.ts";
 import { Icon } from "#ui/components/Icon.tsx";
-import { Kbd } from "#ui/components/Kbd.tsx";
 import { TooltipPopup } from "#ui/components/Tooltip.tsx";
 import {
 	changesHotkeys,
@@ -259,7 +258,6 @@ export const CommitForm: FC<{
 							render={<Button focusableWhenDisabled type="submit" disabled={!canCommit} />}
 						>
 							Commit
-							<Kbd hotkey={changesHotkeys.commit.hotkey} />
 						</Tooltip.Trigger>
 						<Tooltip.Portal>
 							<Tooltip.Positioner sideOffset={4}>

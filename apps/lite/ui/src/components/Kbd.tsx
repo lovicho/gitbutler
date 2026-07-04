@@ -1,5 +1,6 @@
 import { formatForDisplaySorted } from "#ui/hotkeys.ts";
 import styles from "./Kbd.module.css";
+import { classes } from "#ui/components/classes.ts";
 import { HotkeySequence } from "@tanstack/react-hotkeys";
 import { FC } from "react";
 
@@ -14,7 +15,7 @@ const formatKeys = (hotkey: string | HotkeySequence): string =>
 		: hotkey.map(formatForDisplaySorted).join(" ");
 
 export const Kbd: FC<Props> = ({ hotkey }) => (
-	<span className={styles.keys}>
+	<span className={classes(styles.keys, "text-semibold")}>
 		{formatKeys(hotkey)
 			.split(" ")
 			.map((key, index) => (
