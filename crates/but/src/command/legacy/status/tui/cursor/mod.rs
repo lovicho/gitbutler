@@ -41,6 +41,39 @@ impl Cursor {
         self.0
     }
 
+    pub fn scroll_top_for_viewport(
+        self,
+        current_top: usize,
+        total_rows: usize,
+        viewport_height: usize,
+        context_rows: usize,
+    ) -> usize {
+        let max_scroll_top = total_rows.saturating_sub(viewport_height);
+        let current_top = current_top.min(max_scroll_top);
+        if viewport_height == 0 {
+            return current_top;
+        }
+
+        let context_rows = context_rows.min(viewport_height.saturating_sub(1) / 2);
+        let visible_start_with_context = current_top.saturating_add(context_rows);
+        if self.0 < visible_start_with_context {
+            return self.0.saturating_sub(context_rows).min(max_scroll_top);
+        }
+
+        let visible_end = current_top.saturating_add(viewport_height);
+        let visible_end_with_context = visible_end.saturating_sub(context_rows);
+        if self.0 >= visible_end_with_context {
+            return self
+                .0
+                .saturating_add(context_rows)
+                .saturating_add(1)
+                .saturating_sub(viewport_height)
+                .min(max_scroll_top);
+        }
+
+        current_top
+    }
+
     pub fn restore(selected_cli_id: &CliId, lines: &[StatusOutputLine]) -> Option<Self> {
         let idx = lines
             .iter()

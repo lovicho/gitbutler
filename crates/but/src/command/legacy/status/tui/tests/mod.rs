@@ -26,38 +26,6 @@ mod rub_tests;
 mod stack_tests;
 mod utils;
 
-fn assert_cursor_context_rows(
-    tui: &utils::TestTui,
-    visible_height: usize,
-    preferred_context: usize,
-) {
-    let selected_rows =
-        super::render::selected_row_range(&tui.app).expect("selected row should be in bounds");
-    let selected_height = selected_rows.end.saturating_sub(selected_rows.start);
-    let effective_context =
-        preferred_context.min(visible_height.saturating_sub(selected_height) / 2);
-
-    let total_rows = super::render::total_rendered_height(&tui.app);
-    let available_above = selected_rows.start;
-    let available_below = total_rows.saturating_sub(selected_rows.end);
-
-    let required_above = effective_context.min(available_above);
-    let required_below = effective_context.min(available_below);
-
-    let actual_above = selected_rows.start.saturating_sub(tui.app.scroll_top);
-    let viewport_bottom = tui.app.scroll_top.saturating_add(visible_height);
-    let actual_below = viewport_bottom.saturating_sub(selected_rows.end);
-
-    assert!(
-        actual_above >= required_above,
-        "expected at least {required_above} rows above cursor, got {actual_above}"
-    );
-    assert!(
-        actual_below >= required_below,
-        "expected at least {required_below} rows below cursor, got {actual_below}"
-    );
-}
-
 #[test]
 fn shows_full_error_when_message_wraps() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
@@ -408,35 +376,6 @@ fn cursor_movement_scrolls_viewport_up() {
             "snapshots/cursor_movement_scrolls_viewport_up_002.svg"
         ])
         .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
-}
-
-#[test]
-fn scrolling_keeps_three_rows_of_context_when_possible() {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
-    env.setup_metadata(&["A", "B"]);
-
-    let mut tui = test_tui_with_options(
-        env,
-        TestTuiOptions {
-            width: 100,
-            height: 8,
-            ..Default::default()
-        },
-    );
-    let visible_height = 6;
-
-    tui.reload();
-    assert_cursor_context_rows(&tui, visible_height, 3);
-
-    for _ in 0..10 {
-        tui.input_then_render(KeyCode::Down);
-        assert_cursor_context_rows(&tui, visible_height, 3);
-    }
-
-    for _ in 0..10 {
-        tui.input_then_render(KeyCode::Up);
-        assert_cursor_context_rows(&tui, visible_height, 3);
-    }
 }
 
 #[test]

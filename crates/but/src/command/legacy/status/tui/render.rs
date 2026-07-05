@@ -2,8 +2,6 @@ use std::{borrow::Cow, collections::HashMap, iter::once};
 
 use but_core::ref_metadata::StackId;
 use but_rebase::graph_rebase::mutate::InsertSide;
-use but_workspace::commit::squash_commits::MessageCombinationStrategy;
-use itertools::{Either, Itertools, Position};
 use nonempty::NonEmpty;
 use ratatui::{
     Frame,
@@ -24,8 +22,10 @@ use crate::{
             CommandModeKind, Markable,
             app::{
                 CommandMode, CommitMessageComposer, CommitMode, JumpMode, MoveMode, MoveSource,
-                MoveStackMode, RubMode, RubSource, StackMode, rub_operation_display,
+                MoveStackMode, NormalMode, PickChangesMode, RubMode, RubSource, StackMode,
+                rub_operation_display,
             },
+            mode::DetailsMode,
         },
     },
     theme::Theme,
@@ -36,6 +36,7 @@ use super::{
     cursor::is_selectable_in_mode,
     graph_extension::{ExtensionDirection, extend_connector_spans},
     highlight::with_highlight,
+    key_bind::KeyBind,
     mode::{Mode, ModeDiscriminant},
     nonempty_from_refs, toast,
 };
@@ -100,7 +101,7 @@ pub fn render_app(app: &App, frame: &mut Frame) {
         render_debug(app, inner_area, frame);
     }
 
-    render_hotbar(app, layout.hotbar_area, frame);
+    render_hot_bar(app, layout.hotbar_area, frame);
     render_toasts(app, layout.toast_area(), frame);
 
     match &app.modal {
@@ -298,44 +299,66 @@ pub fn status_layout(app: &App, area: Rect) -> StatusLayout {
     }
 }
 
-fn render_status(app: &App, content_area: Rect, frame: &mut Frame) {
-    let visible_height = content_area.height as usize;
+fn render_status(app: &App, area: Rect, frame: &mut Frame) {
+    update_status_scroll(app, area);
+
     let stack_highlight_rows = stack_highlight_rows(app);
-    let items = app
+
+    let mut areas = available_lines_in_area(area);
+
+    for (idx, tui_line) in app
         .status_lines
         .iter()
         .enumerate()
-        .flat_map(|(idx, tui_line)| {
-            render_status_list_item_with_stack_highlight(
-                app,
-                tui_line,
-                app.cursor.index() == idx,
-                stack_highlight_rows.get(idx).copied().unwrap_or_default(),
-            )
-        })
-        .skip(app.scroll_top)
-        .take(visible_height);
-    let list = List::new(items);
-
-    frame.render_widget(list, content_area);
-
-    render_inline_reword(app, content_area, frame);
+        .skip(app.status_scroll.top())
+    {
+        let stack_highlight = stack_highlight_rows
+            .as_ref()
+            .is_some_and(|rows| rows.get(idx).copied().unwrap_or_default());
+        if !render_status_list_item(
+            app,
+            tui_line,
+            app.cursor.index() == idx,
+            stack_highlight,
+            &mut areas,
+            frame,
+        ) {
+            break;
+        }
+    }
 }
 
-fn stack_highlight_rows(app: &App) -> Vec<bool> {
+fn update_status_scroll(app: &App, area: Rect) {
+    let viewport_height = area.height as usize;
+    let max_scroll_top = app.status_lines.len().saturating_sub(viewport_height);
+    let mut scroll_top = app.status_scroll.top().min(max_scroll_top);
+
+    if app.status_scroll.take_pending_cursor() {
+        scroll_top = app.cursor.scroll_top_for_viewport(
+            scroll_top,
+            app.status_lines.len(),
+            viewport_height,
+            CURSOR_CONTEXT_ROWS,
+        );
+    }
+
+    app.status_scroll.set_top(scroll_top);
+}
+
+fn stack_highlight_rows(app: &App) -> Option<Vec<bool>> {
     let Mode::Stack(..) = &*app.mode else {
-        return vec![false; app.status_lines.len()];
+        return None;
     };
 
     let row_stack_ids = row_stack_ids(&app.status_lines);
-    let Some(selected_stack_id) = row_stack_ids.get(app.cursor.index()).copied().flatten() else {
-        return vec![false; app.status_lines.len()];
-    };
+    let selected_stack_id = row_stack_ids.get(app.cursor.index()).copied().flatten()?;
 
-    row_stack_ids
-        .into_iter()
-        .map(|stack_id| stack_id == Some(selected_stack_id))
-        .collect()
+    Some(
+        row_stack_ids
+            .into_iter()
+            .map(|stack_id| stack_id == Some(selected_stack_id))
+            .collect(),
+    )
 }
 
 fn row_stack_ids(lines: &[StatusOutputLine]) -> Vec<Option<StackId>> {
@@ -437,41 +460,80 @@ fn stack_id_from_cli_id(cli_id: &CliId) -> Option<StackId> {
     }
 }
 
-pub fn render_status_list_item(
-    app: &App,
-    tui_line: &StatusOutputLine,
-    is_selected: bool,
-) -> StatusListItem {
-    render_status_list_item_with_stack_highlight(app, tui_line, is_selected, false)
-}
-
-fn render_status_list_item_with_stack_highlight(
+#[must_use]
+fn render_status_list_item(
     app: &App,
     tui_line: &StatusOutputLine,
     is_selected: bool,
     stack_highlight: bool,
-) -> StatusListItem {
+    areas: &mut dyn Iterator<Item = Rect>,
+    frame: &mut Frame,
+) -> bool {
+    let Some(area) = areas.next() else {
+        return false;
+    };
+
+    let highlight_current_line = !matches!(app.modal, Some(Modal::Help { .. })) && app.has_focus;
+
     let StatusOutputLine {
         connector,
         content,
         data,
     } = tui_line;
 
-    let mut line = Line::default();
+    let operation_extension = if is_selected {
+        selected_operation_extension(app, data)
+    } else {
+        None
+    };
 
+    let (area, operation_extension_area) = match operation_extension {
+        Some(extension) => match extension.direction() {
+            ExtensionDirection::Above => {
+                let Some(next_area) = areas.next() else {
+                    render_operation_extension_line(
+                        app,
+                        data,
+                        connector.as_deref(),
+                        area,
+                        extension,
+                        frame,
+                    );
+                    return true;
+                };
+                (next_area, Some((area, extension)))
+            }
+            ExtensionDirection::Below => (area, areas.next().map(|area| (area, extension))),
+        },
+        None => (area, None),
+    };
+
+    if let Some((area, extension)) = operation_extension_area {
+        render_operation_extension_line(app, data, connector.as_deref(), area, extension, frame);
+    }
+
+    if (is_selected || stack_highlight) && highlight_current_line {
+        frame
+            .buffer_mut()
+            .set_style(area, app.theme.selection_highlight);
+    }
+
+    let mut line = RenderSingleLineSpans::new(frame, area);
+
+    // ┊╭┄dp [dp-branch-1]
+    // ^^^ render the connector
     if let Some(connector) = connector {
         if data
             .cli_id()
-            .and_then(|id| Markable::try_from_cli_id(id))
-            .is_some_and(|markable| app.marks().is_some_and(|marks| marks.contains(&markable)))
+            .is_some_and(|id| app.marks().is_some_and(|marks| marks.contains_cli_id(id)))
         {
             for (idx, span) in connector.iter().enumerate() {
                 if idx == 1 {
-                    line.push_span(app.theme.sym().mark.span());
+                    line.render(app.theme.sym().mark.span());
                 } else if idx == 2 {
                     // after the indicator is a bunch of spaces
                     for (c_idx, c) in span.content.chars().enumerate() {
-                        line.push_span(if c_idx == 0 {
+                        line.render(if c_idx == 0 {
                             // color the background of the first space the same as the mark indicator
                             // since the checkmark symbol we use takes up more than one cell
                             Span::raw(c.to_string()).style(app.theme.tui_mark)
@@ -480,11 +542,13 @@ fn render_status_list_item_with_stack_highlight(
                         });
                     }
                 } else {
-                    line.push_span(span.clone());
+                    line.render_ref(span);
                 }
             }
         } else {
-            line.extend(connector.clone());
+            for span in connector {
+                line.render_ref(span);
+            }
         }
     }
 
@@ -495,459 +559,270 @@ fn render_status_list_item_with_stack_highlight(
             .any(|to_be_discarded| to_be_discarded == selection)
     });
 
+    // ┊●   << source >> 982b7d85c5 my commit
+    //      ^^^^^^^^^^^^ render target/source labels
     if line_is_to_be_discarded {
         line.extend([Span::raw("<< discard >>").black().on_red(), Span::raw(" ")]);
     } else if is_selected {
-        match &*app.mode {
-            Mode::Normal(..)
-            | Mode::PickChanges(..)
-            | Mode::InlineReword(..)
-            | Mode::Command(..)
-            | Mode::Jump(..)
-            | Mode::Details(..) => {}
-            Mode::Rub(RubMode {
-                source,
-                how_to_combine_messages,
-                available_targets: _,
-            }) => {
-                render_rub_inline_labels_for_selected_line(
-                    app,
-                    data,
-                    source,
-                    *how_to_combine_messages,
-                    &mut line,
-                );
-            }
-            Mode::Commit(commit_mode) => {
-                if data
-                    .cli_id()
-                    .is_some_and(|target| commit_mode.source.contains(target))
-                {
-                    render_commit_labels_for_selected_line(app, data, commit_mode, &mut line);
-                }
-            }
-            Mode::Move(move_mode) => {
-                if data
-                    .cli_id()
-                    .is_some_and(|target| move_mode.source.contains(target))
-                    || matches!(data, StatusOutputLineData::MergeBase)
-                {
-                    render_move_labels_for_selected_line(app, data, move_mode, &mut line);
-                }
-            }
-            Mode::MoveStack(move_mode) => {
-                if data
-                    .cli_id()
-                    .is_some_and(|target| move_mode.source.matches(target))
-                {
-                    render_reorder_labels_for_selected_line(app, data, move_mode, &mut line);
-                }
-            }
-            Mode::Stack(stack_mode) => {
-                if let Some(display) = stack_operation_display(data, stack_mode) {
-                    line.extend([
-                        Span::raw("<< ").mode_colors(&*app.mode, app.theme),
-                        Span::raw(display).mode_colors(&*app.mode, app.theme),
-                        Span::raw(" >>").mode_colors(&*app.mode, app.theme),
-                        Span::raw(" "),
-                    ]);
-                }
-            }
-        }
+        app.mode
+            .as_mode_render()
+            .render_operation_target_marker(app, data, &mut line);
     } else {
-        match &*app.mode {
-            Mode::Normal(..)
-            | Mode::PickChanges(..)
-            | Mode::InlineReword(..)
-            | Mode::Command(..)
-            | Mode::Details(..)
-            | Mode::Jump(..)
-            | Mode::Stack(..) => {}
-            Mode::Rub(RubMode {
-                source,
-                how_to_combine_messages: _,
-                available_targets: _,
+        app.mode
+            .as_mode_render()
+            .render_operation_source_marker(app, data, &mut line);
+    }
+
+    // ┊●   982b7d85c5 my commit
+    //      ^^^^^^^^^^^^^^^^^^^^ render the main content
+    let area_used_by_main_content = line.area_used_by(|line| {
+        match content {
+            StatusOutputContent::Plain(spans) => {
+                line.extend(spans);
+            }
+            StatusOutputContent::Commit(CommitLineContent {
+                sha,
+                author,
+                message,
+                suffix,
             }) => {
-                if let Some(cli_id) = data.cli_id()
-                    && source.contains(cli_id)
-                {
-                    line.extend([source_span(app.theme), Span::raw(" ")]);
+                if line_has_copied_highlight {
+                    line.extend(sha.iter().cloned().map(with_highlight));
+                } else if let Mode::Jump(jump_mode) = &*app.mode {
+                    line.extend(style_jump_mode_matches(sha, jump_mode));
+                } else {
+                    line.extend(sha);
                 }
-            }
-            Mode::Commit(CommitMode { source, .. }) => {
-                if let Some(cli_id) = data.cli_id()
-                    && source.contains(cli_id)
-                {
-                    line.extend([source_span(app.theme), Span::raw(" ")]);
-                }
-            }
-            Mode::Move(MoveMode { source, .. }) => {
-                if let Some(cli_id) = data.cli_id()
-                    && source.contains(cli_id)
-                {
-                    line.extend([source_span(app.theme), Span::raw(" ")]);
-                }
-            }
-            Mode::MoveStack(MoveStackMode { source, .. }) => {
-                if let Some(cli_id) = data.cli_id()
-                    && source.matches(cli_id)
-                {
-                    line.extend([source_span(app.theme), Span::raw(" ")]);
-                }
-            }
-        }
-    }
+                line.extend(author);
 
-    let mut content_spans = match content {
-        StatusOutputContent::Plain(spans) => spans.clone(),
-        StatusOutputContent::Commit(CommitLineContent {
-            sha,
-            author,
-            message,
-            suffix,
-        }) => {
-            let mut spans =
-                Vec::with_capacity(sha.len() + author.len() + message.len() + suffix.len());
-            if line_has_copied_highlight {
-                spans.extend(sha.iter().cloned().map(with_highlight));
-            } else if let Mode::Jump(jump_mode) = &*app.mode {
-                spans.extend(style_jump_mode_matches(sha, jump_mode));
-            } else {
-                spans.extend(sha.iter().cloned());
+                if let Some(id) = data.cli_id()
+                    && let CliId::Commit { commit_id, .. } = &**id
+                    && let Mode::InlineReword(InlineRewordMode::Commit {
+                        textarea,
+                        commit_id: source,
+                    }) = &*app.mode
+                    && commit_id == source
+                {
+                    line.render(Span::raw(" "));
+                    line.render_textarea(textarea);
+                } else {
+                    line.extend(message);
+                    line.extend(suffix);
+                }
             }
-            spans.extend(author.iter().cloned());
-            spans.extend(message.iter().cloned());
-            spans.extend(suffix.iter().cloned());
-            spans
-        }
-        StatusOutputContent::Branch(BranchLineContent {
-            id,
-            decoration_start,
-            branch_name,
-            decoration_end,
-            suffix,
-        }) => {
-            let mut spans = Vec::with_capacity(
-                id.len()
-                    + decoration_start.len()
-                    + branch_name.len()
-                    + decoration_end.len()
-                    + suffix.len(),
-            );
-            if line_has_copied_highlight {
-                spans.extend(id.iter().cloned());
-            } else if let Mode::Jump(jump_mode) = &*app.mode {
-                spans.extend(style_jump_mode_matches(id, jump_mode));
-            } else {
-                spans.extend(id.iter().cloned());
-            }
-            spans.extend(decoration_start.iter().cloned());
-            if line_has_copied_highlight {
-                spans.extend(branch_name.iter().cloned().map(with_highlight));
-            } else {
-                spans.extend(branch_name.iter().cloned());
-            }
-            spans.extend(decoration_end.iter().cloned());
-            spans.extend(suffix.iter().cloned());
-            spans
-        }
-        StatusOutputContent::File(FileLineContent { id, status, path }) => {
-            let mut spans = Vec::with_capacity(id.len() + status.len() + path.len());
-            if line_has_copied_highlight {
-                spans.extend(id.iter().cloned());
-            } else if let Mode::Jump(jump_mode) = &*app.mode {
-                spans.extend(style_jump_mode_matches(id, jump_mode));
-            } else {
-                spans.extend(id.iter().cloned());
-            }
-            spans.extend(status.iter().cloned());
-            if line_has_copied_highlight {
-                spans.extend(path.iter().cloned().map(with_highlight));
-            } else {
-                spans.extend(path.iter().cloned());
-            }
-            spans
-        }
-        StatusOutputContent::Uncommitted(UncommittedLineContent {
-            id,
-            decoration_start,
-            label,
-            decoration_end,
-            suffix,
-        }) => {
-            let mut spans = Vec::with_capacity(
-                id.len()
-                    + decoration_start.len()
-                    + label.len()
-                    + decoration_end.len()
-                    + suffix.len(),
-            );
-            if line_has_copied_highlight {
-                spans.extend(id.iter().cloned().map(with_highlight));
-            } else if let Mode::Jump(jump_mode) = &*app.mode {
-                spans.extend(style_jump_mode_matches(id, jump_mode));
-            } else {
-                spans.extend(id.iter().cloned());
-            }
-            spans.extend(decoration_start.iter().cloned());
-            spans.extend(label.iter().cloned());
-            spans.extend(decoration_end.iter().cloned());
-            spans.extend(suffix.iter().cloned());
-            spans
-        }
-    };
+            StatusOutputContent::Branch(BranchLineContent {
+                id,
+                decoration_start,
+                branch_name,
+                decoration_end,
+                suffix,
+            }) => {
+                if line_has_copied_highlight {
+                    line.extend(id);
+                } else if let Mode::Jump(jump_mode) = &*app.mode {
+                    line.extend(style_jump_mode_matches(id, jump_mode));
+                } else {
+                    line.extend(id);
+                }
+                line.extend(decoration_start);
 
+                if let Some(id) = data.cli_id()
+                    && let CliId::Branch { name, .. } = &**id
+                    && let Mode::InlineReword(InlineRewordMode::Branch {
+                        textarea,
+                        name: source,
+                        ..
+                    }) = &*app.mode
+                    && name == source
+                {
+                    line.render_textarea(textarea);
+                } else {
+                    if line_has_copied_highlight {
+                        line.extend(branch_name.iter().cloned().map(with_highlight));
+                    } else {
+                        line.extend(branch_name);
+                    }
+                }
+
+                line.extend(decoration_end);
+                line.extend(suffix);
+            }
+            StatusOutputContent::File(FileLineContent { id, status, path }) => {
+                if line_has_copied_highlight {
+                    line.extend(id);
+                } else if let Mode::Jump(jump_mode) = &*app.mode {
+                    line.extend(style_jump_mode_matches(id, jump_mode));
+                } else {
+                    line.extend(id);
+                }
+                line.extend(status);
+                if line_has_copied_highlight {
+                    line.extend(path.iter().cloned().map(with_highlight));
+                } else {
+                    line.extend(path);
+                }
+            }
+            StatusOutputContent::Uncommitted(UncommittedLineContent {
+                id,
+                decoration_start,
+                label,
+                decoration_end,
+                suffix,
+            }) => {
+                if line_has_copied_highlight {
+                    line.extend(id.iter().cloned().map(with_highlight));
+                } else if let Mode::Jump(jump_mode) = &*app.mode {
+                    line.extend(style_jump_mode_matches(id, jump_mode));
+                } else {
+                    line.extend(id);
+                }
+                line.extend(decoration_start);
+                line.extend(label);
+                line.extend(decoration_end);
+                line.extend(suffix);
+            }
+        };
+    });
+
+    // Style the main content section when the line is queued for discard.
     if line_is_to_be_discarded {
-        content_spans = content_spans
-            .into_iter()
-            .map(|span| span.crossed_out())
-            .collect();
+        line.frame
+            .buffer_mut()
+            .set_style(area_used_by_main_content, Style::default().crossed_out());
     }
 
+    if !is_selectable_in_mode(tui_line, &app.mode, app.flags.show_files) {
+        line.frame
+            .buffer_mut()
+            .set_style(area_used_by_main_content, app.theme.hint);
+    }
+
+    if is_selected && let Mode::MoveStack(move_mode) = &*app.mode {
+        // ┊<< move stack >>
+        //  ^^^^^^^^^^^^^^^^ render move stack label for in between rows
+        if !data.cli_id().is_some_and(|id| move_mode.source.matches(id)) {
+            render_move_stack_operation_target_marker(app, data, move_mode, &mut line);
+        }
+    }
+
+    true
+}
+
+#[derive(Clone, Copy)]
+enum OperationExtension<'a> {
+    Commit {
+        mode: &'a CommitMode,
+        direction: ExtensionDirection,
+    },
+    Move {
+        mode: &'a MoveMode,
+        direction: ExtensionDirection,
+    },
+}
+
+impl OperationExtension<'_> {
+    const fn direction(self) -> ExtensionDirection {
+        match self {
+            Self::Commit { direction, .. } | Self::Move { direction, .. } => direction,
+        }
+    }
+}
+
+fn selected_operation_extension<'a>(
+    app: &'a App,
+    data: &StatusOutputLineData,
+) -> Option<OperationExtension<'a>> {
     match &*app.mode {
-        Mode::InlineReword(inline_reword_mode) => {
-            if is_selected {
-                match inline_reword_mode {
-                    InlineRewordMode::Commit { .. } => {
-                        if let StatusOutputContent::Commit(commit_content) = content {
-                            line.extend(commit_content.sha.iter().cloned());
-                        }
-                    }
-                    InlineRewordMode::Branch { textarea, .. } => {
-                        if let StatusOutputContent::Branch(branch_content) = content {
-                            line.extend(branch_content.id.iter().cloned());
-                            line.extend(branch_content.decoration_start.iter().cloned());
-
-                            let len = textarea
-                                .lines()
-                                .first()
-                                .map(|line| line.width())
-                                .unwrap_or(0);
-                            let padding = if cursor_at_end(textarea) { 1 } else { 0 };
-                            line.push_span(Span::raw(" ".repeat(len + padding)));
-
-                            line.extend(branch_content.decoration_end.iter().cloned());
-                            line.extend(branch_content.suffix.iter().cloned());
-                        }
-                    }
-                }
+        Mode::Commit(mode) => {
+            if matches!(data, StatusOutputLineData::Commit { .. }) {
+                Some(OperationExtension::Commit {
+                    mode,
+                    direction: mode.insert_side.into(),
+                })
+            } else if matches!(data, StatusOutputLineData::Branch { .. }) {
+                Some(OperationExtension::Commit {
+                    mode,
+                    direction: ExtensionDirection::Below,
+                })
             } else {
-                line.extend(content_spans);
+                None
+            }
+        }
+        Mode::Move(mode) => {
+            if let StatusOutputLineData::Commit { cli_id: target, .. } = data
+                && !mode.source.contains(target)
+            {
+                Some(OperationExtension::Move {
+                    mode,
+                    direction: mode.insert_side.into(),
+                })
+            } else if let StatusOutputLineData::Branch { cli_id: target, .. } = data
+                && !mode.source.contains(target)
+            {
+                let source_is_commit = match &*mode.source {
+                    MoveSource::Marks(..) | MoveSource::Commit { .. } => true,
+                    MoveSource::Branch { .. } => false,
+                };
+                Some(OperationExtension::Move {
+                    mode,
+                    direction: if source_is_commit {
+                        ExtensionDirection::Below
+                    } else {
+                        ExtensionDirection::Above
+                    },
+                })
+            } else {
+                None
             }
         }
         Mode::Normal(..)
+        | Mode::MoveStack(..)
         | Mode::PickChanges(..)
         | Mode::Details(..)
-        | Mode::Move(..)
-        | Mode::MoveStack(..)
-        | Mode::Stack(..)
-        | Mode::Command(..)
         | Mode::Rub(..)
+        | Mode::Stack(..)
+        | Mode::InlineReword(..)
         | Mode::Jump(..)
-        | Mode::Commit(..) => {
-            if is_selectable_in_mode(tui_line, &app.mode, app.flags.show_files) {
-                line.extend(content_spans);
-            } else {
-                line.extend(
-                    content_spans
-                        .into_iter()
-                        .map(|span| span.style(app.theme.hint)),
-                );
-            }
-        }
-    }
-
-    let highlight_current_line = !matches!(app.modal, Some(Modal::Help { .. })) && app.has_focus;
-
-    if is_selected {
-        match &*app.mode {
-            Mode::Commit(commit_mode) => {
-                if matches!(data, StatusOutputLineData::Commit { .. }) {
-                    let mut extension_line =
-                        highlight_line_if(Line::default(), app.has_focus, app.theme);
-                    extend_connector_spans(
-                        connector.as_deref().unwrap_or_default(),
-                        commit_mode.insert_side.into(),
-                        &mut extension_line,
-                    );
-                    render_commit_labels_for_selected_line(
-                        app,
-                        data,
-                        commit_mode,
-                        &mut extension_line,
-                    );
-                    let line = highlight_line_if(line, highlight_current_line, app.theme);
-                    return match commit_mode.insert_side {
-                        InsertSide::Above => StatusListItem::Double(extension_line, line),
-                        InsertSide::Below => StatusListItem::Double(line, extension_line),
-                    };
-                } else if matches!(data, StatusOutputLineData::Branch { .. }) {
-                    let mut extension_line =
-                        highlight_line_if(Line::default(), app.has_focus, app.theme);
-                    extend_connector_spans(
-                        connector.as_deref().unwrap_or_default(),
-                        ExtensionDirection::Below,
-                        &mut extension_line,
-                    );
-                    render_commit_labels_for_selected_line(
-                        app,
-                        data,
-                        commit_mode,
-                        &mut extension_line,
-                    );
-                    let line = highlight_line_if(line, highlight_current_line, app.theme);
-                    return StatusListItem::Double(line, extension_line);
-                }
-            }
-            Mode::Move(move_mode) => {
-                if let StatusOutputLineData::Commit { cli_id: target, .. } = data
-                    && !move_mode.source.contains(target)
-                {
-                    let mut extension_line =
-                        highlight_line_if(Line::default(), app.has_focus, app.theme);
-                    extend_connector_spans(
-                        connector.as_deref().unwrap_or_default(),
-                        move_mode.insert_side.into(),
-                        &mut extension_line,
-                    );
-                    render_move_labels_for_selected_line(app, data, move_mode, &mut extension_line);
-                    let line = highlight_line_if(line, highlight_current_line, app.theme);
-                    return match move_mode.insert_side {
-                        InsertSide::Above => StatusListItem::Double(extension_line, line),
-                        InsertSide::Below => StatusListItem::Double(line, extension_line),
-                    };
-                } else if let StatusOutputLineData::Branch { cli_id: target, .. } = data
-                    && !move_mode.source.contains(target)
-                {
-                    let source_is_commit = match &*move_mode.source {
-                        MoveSource::Marks(..) | MoveSource::Commit { .. } => true,
-                        MoveSource::Branch { .. } => false,
-                    };
-                    if source_is_commit {
-                        let mut extension_line =
-                            highlight_line_if(Line::default(), app.has_focus, app.theme);
-                        extend_connector_spans(
-                            connector.as_deref().unwrap_or_default(),
-                            ExtensionDirection::Below,
-                            &mut extension_line,
-                        );
-                        render_move_labels_for_selected_line(
-                            app,
-                            data,
-                            move_mode,
-                            &mut extension_line,
-                        );
-                        let line = highlight_line_if(line, highlight_current_line, app.theme);
-                        return StatusListItem::Double(line, extension_line);
-                    } else {
-                        let mut extension_line =
-                            highlight_line_if(Line::default(), app.has_focus, app.theme);
-                        extend_connector_spans(
-                            connector.as_deref().unwrap_or_default(),
-                            ExtensionDirection::Above,
-                            &mut extension_line,
-                        );
-                        render_move_labels_for_selected_line(
-                            app,
-                            data,
-                            move_mode,
-                            &mut extension_line,
-                        );
-                        let line = highlight_line_if(line, highlight_current_line, app.theme);
-                        return StatusListItem::Double(extension_line, line);
-                    }
-                }
-            }
-            Mode::MoveStack(move_mode) => {
-                if !data.cli_id().is_some_and(|id| move_mode.source.matches(id)) {
-                    render_reorder_labels_for_selected_line(app, data, move_mode, &mut line);
-                }
-            }
-            Mode::Normal(..)
-            | Mode::PickChanges(..)
-            | Mode::Details(..)
-            | Mode::Rub(..)
-            | Mode::Stack(..)
-            | Mode::InlineReword(..)
-            | Mode::Jump(..)
-            | Mode::Command(..) => {}
-        }
-    }
-
-    line = highlight_line_if(
-        line,
-        (is_selected || stack_highlight) && highlight_current_line,
-        app.theme,
-    );
-
-    StatusListItem::Single(line)
-}
-
-fn highlight_line_if(line: Line<'static>, highlight: bool, theme: &'static Theme) -> Line<'static> {
-    if highlight {
-        line.style(theme.selection_highlight)
-    } else {
-        line
+        | Mode::Command(..) => None,
     }
 }
 
-fn render_rub_inline_labels_for_selected_line(
+fn render_operation_extension_line(
     app: &App,
     data: &StatusOutputLineData,
-    source: &RubSource,
-    how_to_combine_messages: MessageCombinationStrategy,
-    line: &mut Line<'static>,
+    connector: Option<&[Span<'_>]>,
+    area: Rect,
+    extension: OperationExtension<'_>,
+    frame: &mut Frame,
 ) {
-    let Some(target) = data.cli_id() else {
-        return;
-    };
-
-    if source.contains(target) {
-        line.extend([source_span(app.theme), Span::raw(" ")]);
+    if app.has_focus {
+        frame
+            .buffer_mut()
+            .set_style(area, app.theme.selection_highlight);
     }
 
-    let display = match source {
-        RubSource::CliId(source) => Cow::Borrowed(
-            rub_operation_display(NonEmpty::new(source), target, how_to_combine_messages)
-                .unwrap_or("invalid"),
-        ),
-        RubSource::Marks(marks) => {
-            let sources = marks
-                .iter()
-                .cloned()
-                .map(Markable::into_cli_id)
-                .collect::<Vec<_>>();
-            let mut sources = sources.iter();
-            let Some(sources) = sources
-                .next()
-                .map(|first| nonempty_from_refs(first, sources))
-            else {
-                return;
-            };
-            Cow::Borrowed(
-                rub_operation_display(sources, target, how_to_combine_messages).unwrap_or({
-                    if source.contains(target) {
-                        NOOP
-                    } else {
-                        "invalid"
-                    }
-                }),
-            )
+    let mut line = RenderSingleLineSpans::new(frame, area);
+    extend_connector_spans(
+        connector.unwrap_or_default(),
+        extension.direction(),
+        &mut line,
+    );
+
+    match extension {
+        OperationExtension::Commit { mode, .. } => {
+            render_commit_operation_target_marker(app, data, mode, &mut line);
         }
-    };
-    line.extend([
-        Span::raw("<< ").mode_colors(&*app.mode, app.theme),
-        Span::raw(display).mode_colors(&*app.mode, app.theme),
-        Span::raw(" >>").mode_colors(&*app.mode, app.theme),
-        Span::raw(" "),
-    ]);
+        OperationExtension::Move { mode, .. } => {
+            render_move_operation_target_marker(app, data, mode, &mut line);
+        }
+    }
 }
 
-fn render_commit_labels_for_selected_line(
+fn render_commit_operation_target_marker(
     app: &App,
     data: &StatusOutputLineData,
     mode: &CommitMode,
-    line: &mut Line<'static>,
+    line: &mut RenderSingleLineSpans<'_, '_>,
 ) {
     let Some(target) = data.cli_id() else {
         return;
@@ -999,11 +874,11 @@ fn render_commit_labels_for_selected_line(
     }
 }
 
-fn render_move_labels_for_selected_line(
+fn render_move_operation_target_marker(
     app: &App,
     data: &StatusOutputLineData,
     mode: &MoveMode,
-    line: &mut Line<'static>,
+    line: &mut RenderSingleLineSpans<'_, '_>,
 ) {
     if data
         .cli_id()
@@ -1026,11 +901,11 @@ fn render_move_labels_for_selected_line(
     }
 }
 
-fn render_reorder_labels_for_selected_line(
+fn render_move_stack_operation_target_marker(
     app: &App,
     data: &StatusOutputLineData,
     mode: &MoveStackMode,
-    line: &mut Line<'static>,
+    line: &mut RenderSingleLineSpans<'_, '_>,
 ) {
     if data
         .cli_id()
@@ -1053,12 +928,9 @@ fn render_reorder_labels_for_selected_line(
     }
 }
 
-fn render_hotbar(app: &App, area: Rect, frame: &mut Frame) {
-    let mode_span = Span::raw(format!(
-        "  {}  ",
-        ModeDiscriminant::from(&*app.mode).hotbar_string()
-    ))
-    .mode_colors(&*app.mode, app.theme);
+fn render_hot_bar(app: &App, area: Rect, frame: &mut Frame) {
+    let mode_span = Span::raw(ModeDiscriminant::from(&*app.mode).hotbar_str())
+        .mode_colors(&*app.mode, app.theme);
 
     let layout = Layout::horizontal([
         Constraint::Length(mode_span.width() as _),
@@ -1071,221 +943,37 @@ fn render_hotbar(app: &App, area: Rect, frame: &mut Frame) {
 
     frame.render_widget(" ", layout[1]);
 
-    match &*app.mode {
-        Mode::Normal(..)
-        | Mode::PickChanges(..)
-        | Mode::Details(..)
-        | Mode::Rub(..)
-        | Mode::Commit(..)
-        | Mode::Move(..)
-        | Mode::MoveStack(..)
-        | Mode::Stack(..)
-        | Mode::InlineReword(..) => {
-            let separator = Span::styled(" • ", app.theme.hint);
-            let area = layout[2];
-
-            let items = app
-                .active_key_binds()
-                .iter_key_binds_available_in_mode(ModeDiscriminant::from(&*app.mode))
-                .filter(|key_bind| !key_bind.hide_from_hotbar())
-                .with_position()
-                .map(|(pos, key_bind)| {
-                    let show_sep = match pos {
-                        Position::First | Position::Only => false,
-                        Position::Middle | Position::Last => true,
-                    };
-
-                    let separator = show_sep.then(|| separator.clone());
-                    let chord = Span::styled(key_bind.chord_display(), app.theme.legend);
-                    let space = Span::raw(" ");
-                    let description = Span::styled(key_bind.short_description(), app.theme.hint);
-
-                    (
-                        key_bind,
-                        HotBarItem {
-                            chord,
-                            space,
-                            description,
-                            separator,
-                        },
-                    )
-                })
-                .collect::<Vec<_>>();
-
-            let always_show = items
-                .iter()
-                .filter(|(key_bind, _)| key_bind.always_show_in_hot_bar())
-                .cloned()
-                .collect::<Vec<_>>();
-
-            let mut available_width = area.width as usize;
-            let mut line = Line::default();
-
-            for (key_bind, item) in items {
-                if key_bind.always_show_in_hot_bar() {
-                    continue;
-                }
-
-                if let Some(remaining_width_after_item) = item.fits_in_hot_bar(available_width)
-                    && always_show
-                        .iter()
-                        .try_fold(remaining_width_after_item, |remaining, (_, item)| {
-                            item.fits_in_hot_bar(remaining)
-                        })
-                        .is_some()
-                {
-                    available_width = remaining_width_after_item;
-                } else {
-                    break;
-                }
-
-                item.extend_line(&mut line);
-            }
-            for (_, item) in always_show {
-                item.extend_line(&mut line);
-            }
-
-            frame.render_widget(line, area);
-        }
-        Mode::Command(CommandMode { textarea, kind }) => {
-            let command_layout = Layout::horizontal([
-                match kind {
-                    CommandModeKind::But => Constraint::Length(4),
-                    CommandModeKind::Shell => Constraint::Length(2),
-                },
-                Constraint::Min(1),
-            ])
-            .split(layout[2]);
-
-            match kind {
-                CommandModeKind::But => {
-                    frame.render_widget("but ", command_layout[0]);
-                }
-                CommandModeKind::Shell => {
-                    frame.render_widget("$ ", command_layout[0]);
-                }
-            }
-            frame.render_widget(&**textarea, command_layout[1]);
-        }
-        Mode::Jump(JumpMode { textarea, .. }) => {
-            let jump_layout =
-                Layout::horizontal([Constraint::Length(2), Constraint::Min(1)]).split(layout[2]);
-
-            frame.render_widget("/ ", jump_layout[0]);
-            frame.render_widget(&**textarea, jump_layout[1]);
-        }
-    }
+    app.mode
+        .as_mode_render()
+        .render_hot_bar_content(app, layout[2], frame);
 }
 
-#[derive(Clone)]
-struct HotBarItem<'a> {
-    chord: Span<'a>,
-    space: Span<'a>,
-    description: Span<'a>,
-    separator: Option<Span<'a>>,
+const HOT_BAR_ITEM_SEPARATOR: &str = " • ";
+const HOT_BAR_ITEM_SPACE: &str = " ";
+
+fn hot_bar_item_width(key_bind: &KeyBind, include_separator: bool) -> usize {
+    usize::from(include_separator) * HOT_BAR_ITEM_SEPARATOR.width()
+        + key_bind.chord_display().width()
+        + HOT_BAR_ITEM_SPACE.width()
+        + key_bind.short_description().width()
 }
 
-impl<'a> HotBarItem<'a> {
-    fn width(&self) -> usize {
-        self.chord.width()
-            + self.space.width()
-            + self.description.width()
-            + self.separator.as_ref().map_or(0, |s| s.width())
+fn render_hot_bar_item(
+    line: &mut RenderSingleLineSpans<'_, '_>,
+    key_bind: &KeyBind,
+    include_separator: bool,
+    theme: &'static Theme,
+) {
+    if include_separator {
+        line.render(Span::styled(HOT_BAR_ITEM_SEPARATOR, theme.hint));
     }
-
-    fn extend_line(self, line: &mut Line<'a>) {
-        let HotBarItem {
-            chord,
-            space,
-            description,
-            separator,
-        } = self;
-        line.extend(separator);
-        line.extend([chord, space, description]);
-    }
-
-    fn fits_in_hot_bar(&self, available_width: usize) -> Option<usize> {
-        available_width.checked_sub(self.width())
-    }
+    line.render(Span::styled(key_bind.chord_display(), theme.legend));
+    line.render(Span::raw(HOT_BAR_ITEM_SPACE));
+    line.render(Span::styled(key_bind.short_description(), theme.hint));
 }
 
 fn render_toasts(app: &App, area: Rect, frame: &mut Frame) {
     toast::render_toasts(frame, area, &app.toasts, app.theme);
-}
-
-fn render_inline_reword(app: &App, area: Rect, frame: &mut Frame) {
-    let inline_reword_mode = if let Mode::InlineReword(inline_reword_mode) = &*app.mode {
-        inline_reword_mode
-    } else {
-        return;
-    };
-
-    let selected_idx = app.cursor.index();
-    let Some(selected_rows) = selected_row_range(app) else {
-        return;
-    };
-    if selected_rows.start < app.scroll_top {
-        return;
-    }
-    let idx = selected_rows.start - app.scroll_top;
-    if idx >= area.height as usize {
-        return;
-    }
-    let Some(line) = app.status_lines.get(selected_idx) else {
-        return;
-    };
-
-    match inline_reword_mode {
-        InlineRewordMode::Commit { textarea, .. } => {
-            let StatusOutputLineData::Commit { .. } = &line.data else {
-                return;
-            };
-            let Some(connector) = &line.connector else {
-                return;
-            };
-            let StatusOutputContent::Commit(commit_content) = &line.content else {
-                return;
-            };
-            let connector_and_prefix = connector
-                .iter()
-                .chain(&commit_content.sha)
-                .map(|span| span.width() as u16)
-                .sum::<u16>();
-            let padding = 1;
-
-            let start_x = connector_and_prefix + padding;
-            let x = area.x.saturating_add(start_x);
-            let width = area.right().saturating_sub(x);
-            let area = Rect::new(x, area.y.saturating_add(idx as u16), width, 1);
-            frame.render_widget(&**textarea, area);
-        }
-        InlineRewordMode::Branch { textarea, .. } => {
-            let StatusOutputLineData::Branch { .. } = &line.data else {
-                return;
-            };
-            let Some(connector) = &line.connector else {
-                return;
-            };
-            let StatusOutputContent::Branch(branch_content) = &line.content else {
-                return;
-            };
-
-            let connector_and_prefix = connector
-                .iter()
-                .chain(&branch_content.id)
-                .chain(&branch_content.decoration_start)
-                .map(|span| span.width() as u16)
-                .sum::<u16>();
-
-            let padding = 0;
-
-            let start_x = connector_and_prefix + padding;
-            let x = area.x.saturating_add(start_x);
-            let width = area.right().saturating_sub(x);
-            let area = Rect::new(x, area.y.saturating_add(idx as u16), width, 1);
-            frame.render_widget(&**textarea, area);
-        }
-    }
 }
 
 fn render_debug(app: &App, area: Rect, frame: &mut Frame) {
@@ -1553,109 +1241,9 @@ impl SpanExt<ModeDiscriminant> for Span<'_> {
     }
 }
 
-pub enum StatusListItem {
-    Single(Line<'static>),
-    Double(Line<'static>, Line<'static>),
-}
-
-impl IntoIterator for StatusListItem {
-    type Item = ListItem<'static>;
-    type IntoIter =
-        Either<std::iter::Once<ListItem<'static>>, std::array::IntoIter<ListItem<'static>, 2>>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        match self {
-            StatusListItem::Single(line) => Either::Left(once(ListItem::new(line))),
-            StatusListItem::Double(line1, line2) => {
-                Either::Right([ListItem::new(line1), ListItem::new(line2)].into_iter())
-            }
-        }
-    }
-}
-
 pub struct StatusLayout {
     pub status_area: Rect,
     pub details_area: Option<Rect>,
-}
-
-/// Returns the status content area within the terminal.
-fn status_content_area(terminal_area: Rect) -> Rect {
-    Layout::vertical([Constraint::Min(1), Constraint::Length(1)]).split(terminal_area)[0]
-}
-
-/// Returns the number of terminal rows available for rendering the status list.
-pub fn status_viewport_height(app: &App, terminal_area: Rect) -> usize {
-    let content_area = status_content_area(terminal_area);
-    let status_area = status_layout(app, content_area).status_area;
-
-    // The status pane uses a bottom border, so the inner list viewport is one row shorter
-    // than the outer area.
-    usize::from(status_area.height.saturating_sub(1)).max(1)
-}
-
-/// Returns the rendered height in terminal rows for the given status line.
-fn rendered_height_for_status_line(app: &App, line_idx: usize) -> usize {
-    app.status_lines
-        .get(line_idx)
-        .map(|line| {
-            render_status_list_item(app, line, app.cursor.index() == line_idx)
-                .into_iter()
-                .count()
-        })
-        .unwrap_or(0)
-}
-
-/// Returns the total rendered height of the entire status list.
-pub fn total_rendered_height(app: &App) -> usize {
-    (0..app.status_lines.len())
-        .map(|idx| rendered_height_for_status_line(app, idx))
-        .sum()
-}
-
-/// Returns the rendered row range occupied by the selected line.
-pub fn selected_row_range(app: &App) -> Option<std::ops::Range<usize>> {
-    let selected_idx = app.cursor.index();
-    let selected_line = app.status_lines.get(selected_idx)?;
-    let start = (0..selected_idx)
-        .map(|idx| rendered_height_for_status_line(app, idx))
-        .sum();
-    let len = render_status_list_item(app, selected_line, true)
-        .into_iter()
-        .count();
-    Some(start..start.saturating_add(len))
-}
-
-/// Clamps the topmost visible rendered row to the available content height.
-fn clamp_scroll_top(app: &mut App, visible_height: usize) {
-    let max_scroll_top = total_rendered_height(app).saturating_sub(visible_height);
-    app.scroll_top = app.scroll_top.min(max_scroll_top);
-}
-
-/// Adjusts the viewport so the selected line stays visible with context rows above and below
-/// whenever possible.
-pub fn ensure_cursor_visible(app: &mut App, visible_height: usize) {
-    clamp_scroll_top(app, visible_height);
-
-    let Some(selected_rows) = selected_row_range(app) else {
-        return;
-    };
-
-    let selected_height = selected_rows.end.saturating_sub(selected_rows.start);
-    let context_rows = CURSOR_CONTEXT_ROWS.min(visible_height.saturating_sub(selected_height) / 2);
-
-    let min_scroll_top = selected_rows
-        .end
-        .saturating_add(context_rows)
-        .saturating_sub(visible_height);
-    let max_scroll_top = selected_rows.start.saturating_sub(context_rows);
-
-    if app.scroll_top < min_scroll_top {
-        app.scroll_top = min_scroll_top;
-    } else if app.scroll_top > max_scroll_top {
-        app.scroll_top = max_scroll_top;
-    }
-
-    clamp_scroll_top(app, visible_height);
 }
 
 fn cursor_at_end(textarea: &TextArea<'_>) -> bool {
@@ -1717,4 +1305,421 @@ fn style_jump_mode_matches(
     }
     styled_content.extend(trailing.iter().cloned());
     Either::Right(styled_content.into_iter())
+}
+
+impl Mode {
+    fn as_mode_render(&self) -> &dyn ModeRender {
+        match self {
+            Mode::Normal(mode) => mode,
+            Mode::Rub(mode) => mode,
+            Mode::InlineReword(mode) => mode,
+            Mode::Command(mode) => mode,
+            Mode::Commit(mode) => mode,
+            Mode::Move(mode) => mode,
+            Mode::Details(mode) => mode,
+            Mode::Stack(mode) => mode,
+            Mode::MoveStack(mode) => mode,
+            Mode::PickChanges(mode) => mode,
+            Mode::Jump(mode) => mode,
+        }
+    }
+}
+
+pub trait ModeRender {
+    // ┊●   << source >> 982b7d85c5 my commit
+    //      ^^^^^^^^^^^^ render source labels
+    #[allow(unused_variables)]
+    fn render_operation_target_marker(
+        &self,
+        app: &App,
+        data: &StatusOutputLineData,
+        line: &mut RenderSingleLineSpans<'_, '_>,
+    ) {
+    }
+
+    // ┊●   << target >> 982b7d85c5 my commit
+    //      ^^^^^^^^^^^^ render target labels
+    #[allow(unused_variables)]
+    fn render_operation_source_marker(
+        &self,
+        app: &App,
+        data: &StatusOutputLineData,
+        line: &mut RenderSingleLineSpans<'_, '_>,
+    ) {
+    }
+
+    // Renders the mode specific content in the hot bar.
+    //
+    // For most modes that is key binds but some modes, such as command mode, override that.
+    fn render_hot_bar_content(&self, app: &App, area: Rect, frame: &mut Frame) {
+        let mode = ModeDiscriminant::from(&*app.mode);
+        let key_binds = app.active_key_binds();
+        let always_show_count = key_binds
+            .iter_key_binds_available_in_mode(mode)
+            .filter(|key_bind| !key_bind.hide_from_hotbar())
+            .filter(|key_bind| key_bind.always_show_in_hot_bar())
+            .count();
+        let always_show_width_without_separators = key_binds
+            .iter_key_binds_available_in_mode(mode)
+            .filter(|key_bind| !key_bind.hide_from_hotbar())
+            .filter(|key_bind| key_bind.always_show_in_hot_bar())
+            .map(|key_bind| hot_bar_item_width(key_bind, false))
+            .sum::<usize>();
+
+        let always_show_width = |rendered_before: bool| {
+            let separator_count = match (always_show_count, rendered_before) {
+                (0, _) => 0,
+                (count, true) => count,
+                (count, false) => count - 1,
+            };
+            always_show_width_without_separators + separator_count * HOT_BAR_ITEM_SEPARATOR.width()
+        };
+
+        let mut available_width = area.width as usize;
+        let mut rendered_any = false;
+        let mut line = RenderSingleLineSpans::new(frame, area);
+
+        for key_bind in key_binds
+            .iter_key_binds_available_in_mode(mode)
+            .filter(|key_bind| !key_bind.hide_from_hotbar())
+            .filter(|key_bind| !key_bind.always_show_in_hot_bar())
+        {
+            let width = hot_bar_item_width(key_bind, rendered_any);
+            let Some(remaining_width_after_item) = available_width.checked_sub(width) else {
+                break;
+            };
+            if remaining_width_after_item < always_show_width(true) {
+                break;
+            }
+
+            render_hot_bar_item(&mut line, key_bind, rendered_any, app.theme);
+            rendered_any = true;
+            available_width = remaining_width_after_item;
+        }
+
+        for key_bind in key_binds
+            .iter_key_binds_available_in_mode(mode)
+            .filter(|key_bind| !key_bind.hide_from_hotbar())
+            .filter(|key_bind| key_bind.always_show_in_hot_bar())
+        {
+            render_hot_bar_item(&mut line, key_bind, rendered_any, app.theme);
+            rendered_any = true;
+        }
+    }
+}
+
+impl ModeRender for NormalMode {}
+
+impl ModeRender for RubMode {
+    fn render_operation_target_marker(
+        &self,
+        app: &App,
+        data: &StatusOutputLineData,
+        line: &mut RenderSingleLineSpans<'_, '_>,
+    ) {
+        let Some(target) = data.cli_id() else {
+            return;
+        };
+
+        if self.source.contains(target) {
+            line.extend([source_span(app.theme), Span::raw(" ")]);
+        }
+
+        let display = match &self.source {
+            RubSource::CliId(source) => Cow::Borrowed(
+                rub_operation_display(NonEmpty::new(source), target, self.how_to_combine_messages)
+                    .unwrap_or("invalid"),
+            ),
+            RubSource::Marks(marks) => {
+                let sources = marks
+                    .iter()
+                    .cloned()
+                    .map(Markable::into_cli_id)
+                    .collect::<Vec<_>>();
+                let mut sources = sources.iter();
+                let Some(sources) = sources
+                    .next()
+                    .map(|first| nonempty_from_refs(first, sources))
+                else {
+                    return;
+                };
+                Cow::Borrowed(
+                    rub_operation_display(sources, target, self.how_to_combine_messages).unwrap_or(
+                        {
+                            if self.source.contains(target) {
+                                NOOP
+                            } else {
+                                "invalid"
+                            }
+                        },
+                    ),
+                )
+            }
+        };
+        line.extend([
+            Span::raw("<< ").mode_colors(&*app.mode, app.theme),
+            Span::raw(display).mode_colors(&*app.mode, app.theme),
+            Span::raw(" >>").mode_colors(&*app.mode, app.theme),
+            Span::raw(" "),
+        ]);
+    }
+
+    fn render_operation_source_marker(
+        &self,
+        app: &App,
+        data: &StatusOutputLineData,
+        line: &mut RenderSingleLineSpans<'_, '_>,
+    ) {
+        if let Some(cli_id) = data.cli_id()
+            && self.source.contains(cli_id)
+        {
+            line.extend([source_span(app.theme), Span::raw(" ")]);
+        }
+    }
+}
+
+impl ModeRender for InlineRewordMode {}
+
+impl ModeRender for CommitMode {
+    fn render_operation_target_marker(
+        &self,
+        app: &App,
+        data: &StatusOutputLineData,
+        line: &mut RenderSingleLineSpans<'_, '_>,
+    ) {
+        if data
+            .cli_id()
+            .is_some_and(|target| self.source.contains(target))
+        {
+            render_commit_operation_target_marker(app, data, self, line);
+        }
+    }
+
+    fn render_operation_source_marker(
+        &self,
+        app: &App,
+        data: &StatusOutputLineData,
+        line: &mut RenderSingleLineSpans<'_, '_>,
+    ) {
+        if let Some(cli_id) = data.cli_id()
+            && self.source.contains(cli_id)
+        {
+            line.extend([source_span(app.theme), Span::raw(" ")]);
+        }
+    }
+}
+
+impl ModeRender for MoveMode {
+    fn render_operation_target_marker(
+        &self,
+        app: &App,
+        data: &StatusOutputLineData,
+        line: &mut RenderSingleLineSpans<'_, '_>,
+    ) {
+        if data
+            .cli_id()
+            .is_some_and(|target| self.source.contains(target))
+            || matches!(data, StatusOutputLineData::MergeBase)
+        {
+            render_move_operation_target_marker(app, data, self, line);
+        }
+    }
+
+    fn render_operation_source_marker(
+        &self,
+        app: &App,
+        data: &StatusOutputLineData,
+        line: &mut RenderSingleLineSpans<'_, '_>,
+    ) {
+        if let Some(cli_id) = data.cli_id()
+            && self.source.contains(cli_id)
+        {
+            line.extend([source_span(app.theme), Span::raw(" ")]);
+        }
+    }
+}
+
+impl ModeRender for DetailsMode {}
+
+impl ModeRender for StackMode {
+    fn render_operation_target_marker(
+        &self,
+        app: &App,
+        data: &StatusOutputLineData,
+        line: &mut RenderSingleLineSpans<'_, '_>,
+    ) {
+        let Some(display) = stack_operation_display(data, self) else {
+            return;
+        };
+        line.extend([
+            Span::raw("<< ").mode_colors(&*app.mode, app.theme),
+            Span::raw(display).mode_colors(&*app.mode, app.theme),
+            Span::raw(" >>").mode_colors(&*app.mode, app.theme),
+            Span::raw(" "),
+        ]);
+    }
+}
+
+impl ModeRender for MoveStackMode {
+    fn render_operation_target_marker(
+        &self,
+        app: &App,
+        data: &StatusOutputLineData,
+        line: &mut RenderSingleLineSpans<'_, '_>,
+    ) {
+        if data
+            .cli_id()
+            .is_some_and(|target| self.source.matches(target))
+        {
+            render_move_stack_operation_target_marker(app, data, self, line);
+        }
+    }
+
+    fn render_operation_source_marker(
+        &self,
+        app: &App,
+        data: &StatusOutputLineData,
+        line: &mut RenderSingleLineSpans<'_, '_>,
+    ) {
+        if let Some(cli_id) = data.cli_id()
+            && self.source.matches(cli_id)
+        {
+            line.extend([source_span(app.theme), Span::raw(" ")]);
+        }
+    }
+}
+
+impl ModeRender for PickChangesMode {}
+
+impl ModeRender for CommandMode {
+    fn render_hot_bar_content(&self, _app: &App, area: Rect, frame: &mut Frame) {
+        let command_layout = Layout::horizontal([
+            match self.kind {
+                CommandModeKind::But => Constraint::Length(4),
+                CommandModeKind::Shell => Constraint::Length(2),
+            },
+            Constraint::Min(1),
+        ])
+        .split(area);
+
+        match self.kind {
+            CommandModeKind::But => {
+                frame.render_widget("but ", command_layout[0]);
+            }
+            CommandModeKind::Shell => {
+                frame.render_widget("$ ", command_layout[0]);
+            }
+        }
+        frame.render_widget(&*self.textarea, command_layout[1]);
+    }
+}
+
+impl ModeRender for JumpMode {
+    fn render_hot_bar_content(&self, _app: &App, area: Rect, frame: &mut Frame) {
+        let jump_layout =
+            Layout::horizontal([Constraint::Length(2), Constraint::Min(1)]).split(area);
+
+        frame.render_widget("/ ", jump_layout[0]);
+        frame.render_widget(&*self.textarea, jump_layout[1]);
+    }
+}
+
+pub fn available_lines_in_area(area: Rect) -> impl Iterator<Item = Rect> {
+    (0..area.height).map(move |i| {
+        let y = area.y + i;
+        Rect {
+            x: area.x,
+            y,
+            width: area.width,
+            height: 1,
+        }
+    })
+}
+
+/// Render `Span`s onto a single line without allocating a `Line`. Just render one `Span` after the
+/// next.
+pub struct RenderSingleLineSpans<'a, 'b> {
+    frame: &'a mut Frame<'b>,
+    area: Rect,
+}
+
+impl<'a, 'b> RenderSingleLineSpans<'a, 'b> {
+    fn new(frame: &'a mut Frame<'b>, area: Rect) -> Self {
+        Self { frame, area }
+    }
+
+    pub fn render(&mut self, span: Span<'_>) {
+        self.render_ref(&span);
+    }
+
+    pub fn render_ref(&mut self, span: &Span<'_>) {
+        if self.area.width == 0 {
+            return;
+        }
+
+        let width = span.width().min(self.area.width as usize) as u16;
+        let area = Rect { width, ..self.area };
+        self.frame.render_widget(span, area);
+        self.area = Rect {
+            x: self.area.x.saturating_add(width),
+            width: self.area.width.saturating_sub(width),
+            ..self.area
+        };
+    }
+
+    pub fn render_textarea(&mut self, textarea: &TextArea<'_>) {
+        let content_width = textarea
+            .lines()
+            .first()
+            .map(|line| line.width())
+            .unwrap_or_default();
+        let cursor_padding = usize::from(cursor_at_end(textarea));
+        let width = content_width
+            .saturating_add(cursor_padding)
+            .max(1)
+            .min(self.area.width as usize) as u16;
+        let area = Rect { width, ..self.area };
+
+        self.frame.render_widget(textarea, area);
+        self.area = Rect {
+            x: self.area.x.saturating_add(width),
+            width: self.area.width.saturating_sub(width),
+            ..self.area
+        };
+    }
+
+    pub fn area_used_by<F>(&mut self, f: F) -> Rect
+    where
+        F: FnOnce(&mut Self),
+    {
+        let area_before = self.area;
+        f(self);
+        let area_after = self.area;
+        Rect {
+            width: area_before.width.saturating_sub(area_after.width),
+            ..area_before
+        }
+    }
+}
+
+impl<'a> Extend<Span<'a>> for RenderSingleLineSpans<'_, '_> {
+    fn extend<T>(&mut self, iter: T)
+    where
+        T: IntoIterator<Item = Span<'a>>,
+    {
+        for span in iter {
+            self.render(span);
+        }
+    }
+}
+
+impl<'a, 'b> Extend<&'a Span<'b>> for RenderSingleLineSpans<'_, '_> {
+    fn extend<T>(&mut self, iter: T)
+    where
+        T: IntoIterator<Item = &'a Span<'b>>,
+    {
+        for span in iter {
+            self.render_ref(span);
+        }
+    }
 }

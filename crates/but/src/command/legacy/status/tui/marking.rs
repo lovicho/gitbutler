@@ -41,6 +41,10 @@ impl Marks {
         self.marks.contains(markable)
     }
 
+    pub fn contains_cli_id(&self, cli_id: &CliId) -> bool {
+        self.marks.iter().any(|mark| mark.matches_cli_id(cli_id))
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = &Markable> {
         self.into_iter()
     }
@@ -80,6 +84,20 @@ pub enum Markable {
 }
 
 impl Markable {
+    pub fn matches_cli_id(&self, cli_id: &CliId) -> bool {
+        match (self, cli_id) {
+            (
+                Self::Commit { commit_id, id },
+                CliId::Commit {
+                    commit_id: other_commit_id,
+                    id: other_id,
+                },
+            ) => commit_id == other_commit_id && id == other_id,
+            (Self::Uncommitted(marked), CliId::UncommittedHunkOrFile(other)) => marked == other,
+            _ => false,
+        }
+    }
+
     pub fn try_from_cli_id(cli_id: &CliId) -> Option<Self> {
         match cli_id {
             CliId::Commit { commit_id, id } => Some(Self::Commit {

@@ -171,6 +171,8 @@ where
 {
     render(app, terminal_guard)?;
 
+    let mut events = Vec::with_capacity(128);
+
     loop {
         if app
             .launch_options
@@ -184,6 +186,7 @@ where
             app,
             terminal_guard,
             &mut *event_polling,
+            &mut events,
             messages,
             other_messages,
             &received_watcher_event,
@@ -203,6 +206,7 @@ fn render_loop_once<T, E>(
     app: &mut App,
     terminal_guard: &mut T,
     event_polling: E,
+    events: &mut Vec<Event>,
     messages: &mut Vec<Message>,
     other_messages: &mut Vec<Message>,
     received_watcher_event: &AtomicBool,
@@ -220,6 +224,7 @@ where
             app,
             terminal_guard,
             event_polling,
+            events,
             messages,
             other_messages,
             received_watcher_event,
@@ -241,6 +246,7 @@ fn update<T, E>(
     app: &mut App,
     terminal_guard: &mut T,
     event_polling: E,
+    events: &mut Vec<Event>,
     messages: &mut Vec<Message>,
     other_messages: &mut Vec<Message>,
     received_watcher_event: &AtomicBool,
@@ -262,7 +268,9 @@ where
         Duration::from_millis(30)
     };
     // poll terminal events
-    for event in event_polling.poll(event_poll_timeout)? {
+    events.clear();
+    event_polling.poll_into(event_poll_timeout, events)?;
+    for event in events.drain(..) {
         let terminal_area: Rect = terminal_guard.terminal_mut().size()?.into();
         event_to_messages(event, app, terminal_area, messages);
     }
@@ -378,8 +386,6 @@ where
 }
 
 fn event_to_messages(ev: Event, app: &App, terminal_area: Rect, messages: &mut Vec<Message>) {
-    tracing::debug!("event: {ev:?}");
-
     let key_binds = app.active_key_binds();
     let mode = &*app.mode;
     match ev {

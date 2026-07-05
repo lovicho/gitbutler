@@ -128,7 +128,7 @@ impl Help {
             List::new(list_entries().map(|entry| {
                 match entry {
                     HelpLine::Section { mode } => ListItem::new(
-                        Span::raw(center(mode.hotbar_string(), columns_layout[0].width as _))
+                        Span::raw(center(mode.hotbar_str(), columns_layout[0].width as _))
                             .mode_colors(mode, self.theme),
                     ),
                     HelpLine::Item(help_item) => ListItem::new(

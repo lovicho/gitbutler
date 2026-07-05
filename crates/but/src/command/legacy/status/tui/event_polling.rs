@@ -6,7 +6,7 @@ use crossterm::event::{self, Event, KeyCode};
 pub trait EventPolling {
     type Error: std::error::Error + Send + Sync + 'static;
 
-    fn poll(self, timeout: Duration) -> Result<impl IntoIterator<Item = Event>, Self::Error>;
+    fn poll_into(self, timeout: Duration, events: &mut Vec<Event>) -> Result<(), Self::Error>;
 }
 
 /// An [`EventPolling`] implementation that polls events for real using crossterm.
@@ -18,18 +18,19 @@ pub struct CrosstermEventPolling {
 impl EventPolling for &mut CrosstermEventPolling {
     type Error = std::io::Error;
 
-    fn poll(self, timeout: Duration) -> Result<impl IntoIterator<Item = Event>, Self::Error> {
+    fn poll_into(self, timeout: Duration, events: &mut Vec<Event>) -> Result<(), Self::Error> {
         if !event::poll(timeout)? {
-            return Ok(self.filter.flush());
+            self.filter.flush_into(events);
+            return Ok(());
         }
 
-        let mut events = self.filter.push(event::read()?)?;
+        self.filter.push_into(event::read()?, events)?;
         let mut events_read = 1;
         while events_read < MAX_EVENTS_PER_POLL && event::poll(Duration::ZERO)? {
-            events.extend(self.filter.push(event::read()?)?);
+            self.filter.push_into(event::read()?, events)?;
             events_read += 1;
         }
-        Ok(events)
+        Ok(())
     }
 }
 
@@ -55,31 +56,30 @@ struct TerminalInputFilter {
 }
 
 impl TerminalInputFilter {
-    fn push(&mut self, event: Event) -> Result<Vec<Event>, std::io::Error> {
+    fn push_into(&mut self, event: Event, events: &mut Vec<Event>) -> Result<(), std::io::Error> {
         if self.pending.is_empty() {
             if event_is_escape_key(&event) {
                 self.pending.push(event);
-                return Ok(Vec::new());
+                return Ok(());
             }
 
-            return Ok(vec![event]);
+            events.push(event);
+            return Ok(());
         }
 
         self.pending.push(event);
         match classify_sgr_mouse_sequence(&self.pending) {
             SgrMouseSequence::Complete => {
                 self.pending.clear();
-                Ok(Vec::new())
             }
-            SgrMouseSequence::Prefix if self.pending.len() <= MAX_SGR_MOUSE_SEQUENCE_LEN => {
-                Ok(Vec::new())
-            }
-            SgrMouseSequence::Prefix | SgrMouseSequence::NotMatch => Ok(self.flush()),
+            SgrMouseSequence::Prefix if self.pending.len() <= MAX_SGR_MOUSE_SEQUENCE_LEN => {}
+            SgrMouseSequence::Prefix | SgrMouseSequence::NotMatch => self.flush_into(events),
         }
+        Ok(())
     }
 
-    fn flush(&mut self) -> Vec<Event> {
-        std::mem::take(&mut self.pending)
+    fn flush_into(&mut self, events: &mut Vec<Event>) {
+        events.append(&mut self.pending);
     }
 }
 
@@ -167,16 +167,16 @@ pub struct NoopEventPolling;
 impl EventPolling for NoopEventPolling {
     type Error = Infallible;
 
-    fn poll(self, _timeout: Duration) -> Result<impl IntoIterator<Item = Event>, Self::Error> {
-        Ok(None)
+    fn poll_into(self, _timeout: Duration, _events: &mut Vec<Event>) -> Result<(), Self::Error> {
+        Ok(())
     }
 }
 
 impl EventPolling for &mut NoopEventPolling {
     type Error = Infallible;
 
-    fn poll(self, _timeout: Duration) -> Result<impl IntoIterator<Item = Event>, Self::Error> {
-        Ok(None)
+    fn poll_into(self, _timeout: Duration, _events: &mut Vec<Event>) -> Result<(), Self::Error> {
+        Ok(())
     }
 }
 
@@ -193,9 +193,11 @@ mod tests {
         let mut filter = TerminalInputFilter::default();
         let mut output = Vec::new();
         for event in sgr_mouse_sequence() {
-            output.extend(filter.push(event).expect("filter is infallible"));
+            filter
+                .push_into(event, &mut output)
+                .expect("filter is infallible");
         }
-        output.extend(filter.flush());
+        filter.flush_into(&mut output);
 
         assert!(
             output.is_empty(),
@@ -207,15 +209,16 @@ mod tests {
     fn replays_events_when_sequence_is_not_sgr_mouse() {
         let mut filter = TerminalInputFilter::default();
 
+        let mut output = Vec::new();
+        filter
+            .push_into(key(KeyCode::Esc), &mut output)
+            .expect("filter is infallible");
         assert!(
-            filter
-                .push(key(KeyCode::Esc))
-                .expect("filter is infallible")
-                .is_empty(),
+            output.is_empty(),
             "escape is buffered until we know whether it starts a mouse sequence"
         );
-        let output = filter
-            .push(key(KeyCode::Char('x')))
+        filter
+            .push_into(key(KeyCode::Char('x')), &mut output)
             .expect("filter is infallible");
 
         assert_eq!(
@@ -229,16 +232,15 @@ mod tests {
     fn flushes_partial_sequence_when_no_more_input_is_available() {
         let mut filter = TerminalInputFilter::default();
 
-        assert!(
-            filter
-                .push(key(KeyCode::Esc))
-                .expect("filter is infallible")
-                .is_empty(),
-            "escape is initially buffered"
-        );
+        let mut output = Vec::new();
+        filter
+            .push_into(key(KeyCode::Esc), &mut output)
+            .expect("filter is infallible");
+        assert!(output.is_empty(), "escape is initially buffered");
 
+        filter.flush_into(&mut output);
         assert_eq!(
-            filter.flush(),
+            output,
             vec![key(KeyCode::Esc)],
             "a real escape key should be emitted when no mouse sequence follows"
         );
@@ -254,8 +256,12 @@ mod tests {
             modifiers: KeyModifiers::NONE,
         });
 
+        let mut output = Vec::new();
+        filter
+            .push_into(event.clone(), &mut output)
+            .expect("filter is infallible");
         assert_eq!(
-            filter.push(event.clone()).expect("filter is infallible"),
+            output,
             vec![event],
             "already parsed mouse events should pass through"
         );

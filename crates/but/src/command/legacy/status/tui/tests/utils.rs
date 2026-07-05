@@ -192,10 +192,12 @@ impl TestTui {
         with_stable_commit_env(|| {
             let mut ctx = self.env().context();
             let mut out = TestTuiInputOutputChannel(&mut self.out);
+            let mut events = Vec::with_capacity(1);
             render_loop_once(
                 &mut self.app,
                 &mut self.terminal,
                 event,
+                &mut events,
                 &mut messages,
                 &mut other_messages,
                 &AtomicBool::default(),
@@ -663,19 +665,20 @@ where
 {
     type Error = Infallible;
 
-    fn poll(self, timeout: Duration) -> Result<impl IntoIterator<Item = Event>, Self::Error> {
-        Ok(self.into_iter().flat_map(move |inner| {
-            let Ok(iter) = inner.poll(timeout);
-            iter
-        }))
+    fn poll_into(self, timeout: Duration, events: &mut Vec<Event>) -> Result<(), Self::Error> {
+        for inner in self {
+            inner.poll_into(timeout, events)?;
+        }
+        Ok(())
     }
 }
 
 impl EventPolling for Option<Event> {
     type Error = Infallible;
 
-    fn poll(mut self, _timeout: Duration) -> Result<impl IntoIterator<Item = Event>, Self::Error> {
-        Ok(self.take())
+    fn poll_into(mut self, _timeout: Duration, events: &mut Vec<Event>) -> Result<(), Self::Error> {
+        events.extend(self.take());
+        Ok(())
     }
 }
 
@@ -691,13 +694,14 @@ impl InputEventPolling for KeyCode {}
 impl EventPolling for KeyCode {
     type Error = Infallible;
 
-    fn poll(self, _timeout: Duration) -> Result<impl IntoIterator<Item = Event>, Self::Error> {
-        Ok([Event::Key(KeyEvent {
+    fn poll_into(self, _timeout: Duration, events: &mut Vec<Event>) -> Result<(), Self::Error> {
+        events.push(Event::Key(KeyEvent {
             code: self,
             modifiers: KeyModifiers::NONE,
             kind: KeyEventKind::Press,
             state: KeyEventState::NONE,
-        })])
+        }));
+        Ok(())
     }
 }
 
@@ -706,13 +710,14 @@ impl InputEventPolling for (KeyModifiers, KeyCode) {}
 impl EventPolling for (KeyModifiers, KeyCode) {
     type Error = Infallible;
 
-    fn poll(self, _timeout: Duration) -> Result<impl IntoIterator<Item = Event>, Self::Error> {
-        Ok([Event::Key(KeyEvent {
+    fn poll_into(self, _timeout: Duration, events: &mut Vec<Event>) -> Result<(), Self::Error> {
+        events.push(Event::Key(KeyEvent {
             code: self.1,
             modifiers: self.0,
             kind: KeyEventKind::Press,
             state: KeyEventState::NONE,
-        })])
+        }));
+        Ok(())
     }
 }
 
@@ -721,13 +726,14 @@ impl InputEventPolling for (KeyModifiers, char) {}
 impl EventPolling for (KeyModifiers, char) {
     type Error = Infallible;
 
-    fn poll(self, _timeout: Duration) -> Result<impl IntoIterator<Item = Event>, Self::Error> {
-        Ok([Event::Key(KeyEvent {
+    fn poll_into(self, _timeout: Duration, events: &mut Vec<Event>) -> Result<(), Self::Error> {
+        events.push(Event::Key(KeyEvent {
             code: KeyCode::Char(self.1),
             modifiers: self.0,
             kind: KeyEventKind::Press,
             state: KeyEventState::NONE,
-        })])
+        }));
+        Ok(())
     }
 }
 
@@ -736,8 +742,8 @@ impl InputEventPolling for char {}
 impl EventPolling for char {
     type Error = Infallible;
 
-    fn poll(self, timeout: Duration) -> Result<impl IntoIterator<Item = Event>, Self::Error> {
-        KeyCode::Char(self).poll(timeout)
+    fn poll_into(self, timeout: Duration, events: &mut Vec<Event>) -> Result<(), Self::Error> {
+        KeyCode::Char(self).poll_into(timeout, events)
     }
 }
 
@@ -746,15 +752,16 @@ impl InputEventPolling for &str {}
 impl EventPolling for &str {
     type Error = Infallible;
 
-    fn poll(self, _timeout: Duration) -> Result<impl IntoIterator<Item = Event>, Self::Error> {
-        Ok(self.chars().map(KeyCode::Char).map(|code| {
+    fn poll_into(self, _timeout: Duration, events: &mut Vec<Event>) -> Result<(), Self::Error> {
+        events.extend(self.chars().map(KeyCode::Char).map(|code| {
             Event::Key(KeyEvent {
                 code,
                 modifiers: KeyModifiers::NONE,
                 kind: KeyEventKind::Press,
                 state: KeyEventState::NONE,
             })
-        }))
+        }));
+        Ok(())
     }
 }
 
@@ -763,8 +770,8 @@ impl InputEventPolling for String {}
 impl EventPolling for String {
     type Error = Infallible;
 
-    fn poll(self, timeout: Duration) -> Result<impl IntoIterator<Item = Event>, Self::Error> {
-        Ok(self.as_str().poll(timeout)?.into_iter().collect::<Vec<_>>())
+    fn poll_into(self, timeout: Duration, events: &mut Vec<Event>) -> Result<(), Self::Error> {
+        self.as_str().poll_into(timeout, events)
     }
 }
 

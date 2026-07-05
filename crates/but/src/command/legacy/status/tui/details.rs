@@ -26,6 +26,7 @@ use crate::{
         Message, count_allocations,
         details::worker::Worker,
         highlight::{self, Highlights},
+        render::available_lines_in_area,
     },
     theme::Theme,
     utils::{
@@ -1152,18 +1153,6 @@ impl RenderedLine {
             filled_viewport: false,
         }
     }
-}
-
-fn available_lines_in_area(area: Rect) -> impl Iterator<Item = Rect> {
-    (0..area.height).map(move |i| {
-        let y = area.y + i;
-        Rect {
-            x: area.x,
-            y,
-            width: area.width,
-            height: 1,
-        }
-    })
 }
 
 #[derive(Debug, Copy, Clone, Default)]

@@ -104,19 +104,19 @@ impl ModeDiscriminant {
         }
     }
 
-    pub fn hotbar_string(self) -> &'static str {
+    pub fn hotbar_str(self) -> &'static str {
         match self {
-            Self::Normal => "normal",
-            Self::Rub => "rub",
-            Self::InlineReword => "reword",
-            Self::Command => "command",
-            Self::Commit => "commit",
-            Self::PickChanges => "pick changes",
-            Self::Move => "move",
-            Self::Details => "details",
-            Self::Stack => "stack",
-            Self::MoveStack => "move stack",
-            Self::Jump => "jump",
+            Self::Normal => "  normal  ",
+            Self::Rub => "  rub  ",
+            Self::InlineReword => "  reword  ",
+            Self::Command => "  command  ",
+            Self::Commit => "  commit  ",
+            Self::PickChanges => "  pick changes  ",
+            Self::Move => "  move  ",
+            Self::Details => "  details  ",
+            Self::Stack => "  stack  ",
+            Self::MoveStack => "  move stack  ",
+            Self::Jump => "  jump  ",
         }
     }
 }

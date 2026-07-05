@@ -1,5 +1,6 @@
 use std::{
     borrow::Cow,
+    cell::Cell,
     sync::{Arc, mpsc::Receiver},
     time::Instant,
 };
@@ -11,7 +12,6 @@ use gitbutler_operating_modes::OperatingMode;
 use gix::refs::{Category, FullName};
 use nonempty::NonEmpty;
 use ratatui::prelude::*;
-use tracing::Level;
 
 use crate::{
     CliId,
@@ -44,7 +44,6 @@ use super::{
     marking::MarkClasses,
     mode::Mode,
     operations,
-    render::{ensure_cursor_visible, status_viewport_height},
     toast::{ToastKind, Toasts},
 };
 
@@ -87,7 +86,7 @@ pub struct App {
     pub outcome: Option<TuiOutcome>,
     pub should_render: bool,
     pub cursor: Cursor,
-    pub scroll_top: usize,
+    pub status_scroll: StatusScroll,
     pub mode: RememberToUpdateBackstack<Mode>,
     pub toasts: Toasts,
     pub renders: u64,
@@ -149,7 +148,7 @@ impl App {
             status_lines,
             flags,
             cursor,
-            scroll_top: 0,
+            status_scroll: StatusScroll::default(),
             outcome: None,
             should_render: true,
             mode,
@@ -194,7 +193,6 @@ impl App {
         }
     }
 
-    #[tracing::instrument(level = Level::TRACE, skip(self, ctx, out, mode, terminal_guard, messages))]
     pub fn handle_message<T>(
         &mut self,
         ctx: &mut Context,
@@ -226,8 +224,6 @@ impl App {
         anyhow::Error: From<<T::Backend as Backend>::Error>,
     {
         self.should_render = true;
-        let terminal_area: Rect = terminal_guard.terminal_mut().size()?.into();
-        let visible_height = status_viewport_height(self, terminal_area);
 
         match msg {
             Message::Quit => {
@@ -423,6 +419,7 @@ impl App {
             }
             Message::Help(help_message) => match self.modal.take() {
                 Some(Modal::Help { help, key_binds }) => {
+                    let terminal_area = Rect::from(terminal_guard.terminal_mut().size()?);
                     self.modal = help
                         .handle_message(help_message, terminal_area)?
                         .map(|help| Modal::Help { help, key_binds });
@@ -494,7 +491,7 @@ impl App {
             Message::Jump(jump_message) => self.handle_jump(jump_message, messages),
         }
 
-        ensure_cursor_visible(self, visible_height);
+        self.status_scroll.to_cursor();
 
         Ok(())
     }
@@ -1073,6 +1070,41 @@ impl App {
                 key_binds: help_key_binds(),
             });
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct StatusScroll {
+    top: Cell<usize>,
+    pending_cursor: Cell<bool>,
+}
+
+impl Default for StatusScroll {
+    fn default() -> Self {
+        Self {
+            top: Cell::new(0),
+            pending_cursor: Cell::new(true),
+        }
+    }
+}
+
+impl StatusScroll {
+    pub fn top(&self) -> usize {
+        self.top.get()
+    }
+
+    pub fn set_top(&self, top: usize) {
+        self.top.set(top);
+    }
+
+    pub fn to_cursor(&self) {
+        self.pending_cursor.set(true);
+    }
+
+    pub fn take_pending_cursor(&self) -> bool {
+        let pending = self.pending_cursor.get();
+        self.pending_cursor.set(false);
+        pending
     }
 }
 
