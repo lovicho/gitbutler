@@ -14,7 +14,7 @@ use crate::{
                 App, normal_mode::NormalMode, pick_changes_mode::PickChangesMode,
                 rub_mode::RubSource,
             },
-            marking::{Markable, Marks},
+            marking::{Markable, MarkableRef, Marks},
             mode::Mode,
         },
     },
@@ -36,7 +36,7 @@ impl App {
                     selection,
                     self.mode
                         .get_mut_without_updating_backstack_and_i_promise_not_to_change_state(),
-                ) && let Some(new_cursor) = self.cursor.move_down_within_section(
+                )? && let Some(new_cursor) = self.cursor.move_down_within_section(
                     &self.status_lines,
                     &self.mode,
                     self.flags.show_files,
@@ -79,7 +79,7 @@ impl App {
                 {
                     Mode::Normal(NormalMode { marks })
                     | Mode::PickChanges(PickChangesMode { marks }) => {
-                        handle_mark_uncommitted(marks, &self.status_lines);
+                        handle_mark_uncommitted(marks, &self.status_lines)?;
                     }
                     Mode::Rub(..)
                     | Mode::InlineReword(..)
@@ -123,17 +123,17 @@ impl App {
     }
 }
 
-fn handle_mark_cli_id(commit: &CliId, mode: &mut Mode) -> bool {
-    let Some(markable) = Markable::try_from_cli_id(commit) else {
-        return false;
+fn handle_mark_cli_id(commit: &CliId, mode: &mut Mode) -> anyhow::Result<bool> {
+    let Some(markable) = MarkableRef::try_from_cli_id(commit).map(|m| m.to_owned()) else {
+        return Ok(false);
     };
 
     match mode {
         Mode::Normal(normal_mode) => {
-            normal_mode.marks.toggle(markable);
+            normal_mode.marks.toggle(markable)?;
         }
         Mode::PickChanges(pick_uncommitted_mode) => {
-            pick_uncommitted_mode.marks.toggle(markable);
+            pick_uncommitted_mode.marks.toggle(markable)?;
         }
         Mode::Rub(rub_mode) => {
             match &mut rub_mode.source {
@@ -143,33 +143,34 @@ fn handle_mark_cli_id(commit: &CliId, mode: &mut Mode) -> bool {
                             // we only support rubbing commits, meaning the source
                             // also most be a commit
                             let mut marks = Marks::default();
-                            if let Some(previous_source) = Markable::try_from_cli_id(cli_id)
+                            if let Some(previous_source) = MarkableRef::try_from_cli_id(cli_id)
                                 && markable != previous_source
                             {
-                                marks.toggle(previous_source);
+                                marks.toggle(previous_source.to_owned())?;
                             }
-                            marks.toggle(markable);
-                            rub_mode.source = RubSource::Marks(marks);
+                            marks.toggle(markable)?;
+                            rub_mode.source = RubSource::Marks(Box::new(marks));
                         }
                         CliId::UncommittedHunkOrFile(..)
                         | CliId::PathPrefix { .. }
                         | CliId::CommittedFile { .. }
                         | CliId::Branch { .. }
                         | CliId::Uncommitted { .. }
-                        | CliId::Stack { .. } => return false,
+                        | CliId::Stack { .. } => return Ok(false),
                     }
                 }
                 RubSource::Marks(marks) => {
-                    marks.toggle(markable.clone());
+                    marks.toggle(markable.clone())?;
 
                     match marks.len() {
                         0 => {
                             rub_mode.source = RubSource::CliId(Arc::new(markable.into_cli_id()));
                         }
                         1 => {
-                            let only_remaining_mark = marks.iter().next().cloned();
+                            let only_remaining_mark = marks.iter().next();
                             if let Some(mark) = only_remaining_mark {
-                                rub_mode.source = RubSource::CliId(Arc::new(mark.into_cli_id()));
+                                rub_mode.source =
+                                    RubSource::CliId(Arc::new(mark.to_owned().into_cli_id()));
                             }
                         }
                         _ => {
@@ -187,11 +188,11 @@ fn handle_mark_cli_id(commit: &CliId, mode: &mut Mode) -> bool {
         | Mode::MoveStack(..)
         | Mode::Jump(..)
         | Mode::Details(..) => {
-            return false;
+            return Ok(false);
         }
     }
 
-    true
+    Ok(true)
 }
 
 fn handle_mark_branch(
@@ -203,7 +204,7 @@ fn handle_mark_branch(
     let Some(commits) = commits_on_branch(ctx, stack_id, name)?
         .into_iter()
         .map(|(commit_id, short_id)| {
-            Markable::try_from_cli_id(&CliId::Commit {
+            Markable::try_from_cli_id(CliId::Commit {
                 commit_id,
                 id: short_id,
             })
@@ -213,14 +214,19 @@ fn handle_mark_branch(
         return Ok(());
     };
 
-    toggle_markables(marks, commits);
+    toggle_markables(marks, commits)?;
 
     Ok(())
 }
 
-fn handle_mark_uncommitted(marks: &mut Marks, status_lines: &[StatusOutputLine]) {
+fn handle_mark_uncommitted(
+    marks: &mut Marks,
+    status_lines: &[StatusOutputLine],
+) -> anyhow::Result<()> {
     let uncommitted_files = status_lines.iter().filter_map(|line| match &line.data {
-        StatusOutputLineData::UncommittedFile { cli_id } => Markable::try_from_cli_id(cli_id),
+        StatusOutputLineData::UncommittedFile { cli_id } => {
+            MarkableRef::try_from_cli_id(cli_id).map(|m| m.to_owned())
+        }
         StatusOutputLineData::UpdateNotice
         | StatusOutputLineData::Connector
         | StatusOutputLineData::BetweenStacks
@@ -239,31 +245,38 @@ fn handle_mark_uncommitted(marks: &mut Marks, status_lines: &[StatusOutputLine])
         | StatusOutputLineData::NoAssignmentsUnstaged => None,
     });
 
-    toggle_markables(marks, uncommitted_files);
+    toggle_markables(marks, uncommitted_files)?;
+
+    Ok(())
 }
 
-fn toggle_markables(marks: &mut Marks, markables: impl IntoIterator<Item = Markable>) {
+fn toggle_markables(
+    marks: &mut Marks,
+    markables: impl IntoIterator<Item = Markable>,
+) -> anyhow::Result<()> {
     let (marked, unmarked) = markables
         .into_iter()
-        .partition::<Vec<_>, _>(|markable| marks.contains(markable));
+        .partition::<Vec<_>, _>(|markable| marks.contains(markable.as_ref()));
 
     match (marked.is_empty(), unmarked.is_empty()) {
         (true, false) => {
             for markable in unmarked {
-                marks.insert(markable);
+                marks.insert(markable)?;
             }
         }
         (false, true) => {
             for markable in marked {
-                marks.remove(&markable);
+                marks.remove(markable.as_ref());
             }
         }
         _ => {
             for markable in unmarked {
-                marks.insert(markable);
+                marks.insert(markable)?;
             }
         }
     }
+
+    Ok(())
 }
 
 pub fn commits_on_branch(

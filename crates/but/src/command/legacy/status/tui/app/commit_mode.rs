@@ -5,7 +5,7 @@ use but_ctx::Context;
 use but_rebase::graph_rebase::mutate::InsertSide;
 use gix::refs::Category;
 use nonempty::NonEmpty;
-use ratatui::backend::Backend;
+use ratatui::{backend::Backend, prelude::Span};
 
 use crate::{
     CliId,
@@ -14,7 +14,12 @@ use crate::{
         status::{
             output::StatusOutputLineData,
             tui::{
-                App, Markable, Marks, Message, Mode, ReloadCause, RewordMessage, SelectAfterReload,
+                App, Marks, Message, Mode, ReloadCause, RewordMessage, SelectAfterReload,
+                marking::MarkableRef,
+                render::{
+                    ModeRender, RenderSingleLineSpans, render_commit_operation_target_marker,
+                    source_span,
+                },
                 stack_has_assigned_changes,
             },
         },
@@ -50,7 +55,6 @@ pub enum CommitMessageComposer {
 
 /// A subset of [`CliId`] that supports being committed
 #[derive(Debug)]
-#[expect(clippy::large_enum_variant)]
 pub enum CommitSource {
     Marks(Marks),
     UncommittedArea(UncommittedAreaCommitSource),
@@ -66,6 +70,35 @@ pub struct UncommittedAreaCommitSource {
 #[derive(Debug)]
 pub struct StackCommitSource {
     pub stack_id: StackId,
+}
+
+impl ModeRender for CommitMode {
+    fn render_operation_target_marker(
+        &self,
+        app: &App,
+        data: &StatusOutputLineData,
+        line: &mut RenderSingleLineSpans<'_, '_>,
+    ) {
+        if data
+            .cli_id()
+            .is_some_and(|target| self.source.contains(target))
+        {
+            render_commit_operation_target_marker(app, data, self, line);
+        }
+    }
+
+    fn render_operation_source_marker(
+        &self,
+        app: &App,
+        data: &StatusOutputLineData,
+        line: &mut RenderSingleLineSpans<'_, '_>,
+    ) {
+        if let Some(cli_id) = data.cli_id()
+            && self.source.contains(cli_id)
+        {
+            line.extend([source_span(app.theme), Span::raw(" ")]);
+        }
+    }
 }
 
 impl CommitSource {
@@ -87,9 +120,7 @@ impl CommitSource {
 
     pub fn contains(&self, other: &CliId) -> bool {
         match self {
-            CommitSource::Marks(marks) => {
-                Markable::try_from_cli_id(other).is_some_and(|markable| marks.contains(&markable))
-            }
+            CommitSource::Marks(marks) => marks.contains_cli_id(other),
             CommitSource::UncommittedArea(UncommittedAreaCommitSource { id: lhs_id }) => {
                 if let CliId::Uncommitted { id: rhs_id } = other {
                     lhs_id == rhs_id
@@ -281,20 +312,7 @@ impl App {
             return;
         }
 
-        let uncommitted = normal_mode
-            .marks
-            .iter()
-            .cloned()
-            .map(|mark| match mark {
-                Markable::Uncommitted(uncommitted_cli_id) => Some(uncommitted_cli_id),
-                Markable::Commit { .. } => None,
-            })
-            .collect::<Option<Vec<_>>>();
-        let Some(uncommitted) = uncommitted else {
-            return;
-        };
-
-        if uncommitted.is_empty() {
+        if !normal_mode.marks.marked_uncommitted() {
             return;
         }
 
@@ -491,12 +509,12 @@ where
     let commit_selection = match &**source {
         CommitSource::Marks(marks) => {
             let mut hunks = Vec::new();
-            for mark in marks {
+            for mark in marks.iter() {
                 match mark {
-                    Markable::Uncommitted(hunk) => {
+                    MarkableRef::Uncommitted(hunk) => {
                         hunks.push(hunk.clone());
                     }
-                    Markable::Commit { .. } => {
+                    MarkableRef::Commit { .. } => {
                         anyhow::bail!("Error: Cannot commit a commit");
                     }
                 }

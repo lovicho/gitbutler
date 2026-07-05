@@ -17,8 +17,14 @@ use crate::{
         tui::{
             App, Cursor, FuzzyPicker, Message, Modal, Mode, ReloadCause, SelectAfterReload,
             ToastKind,
+            app::NormalMode,
+            cursor::is_selectable_in_mode,
             fuzzy_picker::{Col, FuzzyPickerItem, SearchableToken},
             fuzzy_picker_key_binds,
+            render::{
+                ModeRender, RenderSingleLineSpans, SpanExt,
+                render_move_stack_operation_target_marker, source_span, stack_operation_display,
+            },
         },
     },
     resolve_legacy_top_level_apply_branch_name,
@@ -40,6 +46,54 @@ pub struct MoveStackMode {
 pub struct ReorderStackSource {
     pub stack: StackId,
     pub branch: String,
+}
+
+impl ModeRender for StackMode {
+    fn render_operation_target_marker(
+        &self,
+        app: &App,
+        data: &StatusOutputLineData,
+        line: &mut RenderSingleLineSpans<'_, '_>,
+    ) {
+        let Some(display) = stack_operation_display(data, self) else {
+            return;
+        };
+        line.extend([
+            Span::raw("<< ").mode_colors(&*app.mode, app.theme),
+            Span::raw(display).mode_colors(&*app.mode, app.theme),
+            Span::raw(" >>").mode_colors(&*app.mode, app.theme),
+            Span::raw(" "),
+        ]);
+    }
+}
+
+impl ModeRender for MoveStackMode {
+    fn render_operation_target_marker(
+        &self,
+        app: &App,
+        data: &StatusOutputLineData,
+        line: &mut RenderSingleLineSpans<'_, '_>,
+    ) {
+        if data
+            .cli_id()
+            .is_some_and(|target| self.source.matches(target))
+        {
+            render_move_stack_operation_target_marker(app, data, self, line);
+        }
+    }
+
+    fn render_operation_source_marker(
+        &self,
+        app: &App,
+        data: &StatusOutputLineData,
+        line: &mut RenderSingleLineSpans<'_, '_>,
+    ) {
+        if let Some(cli_id) = data.cli_id()
+            && self.source.matches(cli_id)
+        {
+            line.extend([source_span(app.theme), Span::raw(" ")]);
+        }
+    }
 }
 
 impl ReorderStackSource {
@@ -518,5 +572,22 @@ impl App {
         self.cursor
             .selected_line(&self.status_lines)
             .is_some_and(line_uses_top_stack_for_stack_mode)
+    }
+
+    pub fn restore_cursor_before_move_stack(&mut self, messages: &mut Vec<Message>) -> bool {
+        if matches!(&*self.mode, Mode::MoveStack(_)) {
+            self.mode.update(&mut self.backstack, |backstack, mode| {
+                let _ = backstack;
+                *mode = Mode::Normal(NormalMode::default());
+            });
+            if let Some(line) = self.cursor.selected_line(&self.status_lines)
+                && !is_selectable_in_mode(line, &self.mode, self.flags.show_files)
+            {
+                messages.push(Message::MoveCursorDown(1));
+            }
+            return true;
+        }
+
+        false
     }
 }

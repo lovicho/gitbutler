@@ -41,7 +41,6 @@ use super::{
         KeyBinds, default_key_binds, fuzzy_picker_key_binds, help_key_binds,
         normal_with_marks_key_binds,
     },
-    marking::MarkClasses,
     mode::Mode,
     operations,
     toast::{ToastKind, Toasts},
@@ -515,8 +514,7 @@ impl App {
             Mode::PickChanges(PickChangesMode { marks }) => {
                 let ids = marks
                     .iter()
-                    .cloned()
-                    .map(|mark| mark.into_cli_id())
+                    .map(|mark| mark.to_owned().into_cli_id())
                     .collect();
                 Some(TuiOutcome::CliIds(ids))
             }
@@ -562,7 +560,10 @@ impl App {
     fn handle_backstack_entry(&mut self, entry: BackstackEntry, messages: &mut Vec<Message>) {
         match entry {
             BackstackEntry::LeaveNormalMode => {
-                if !self.restore_mode_before_details(messages) && !self.restore_mode_before_jump() {
+                if !self.restore_mode_before_details(messages)
+                    && !self.restore_mode_before_jump()
+                    && !self.restore_cursor_before_move_stack(messages)
+                {
                     let marks = self.marks().cloned().unwrap_or_default();
                     self.mode.update(&mut self.backstack, |backstack, mode| {
                         let _ = backstack;
@@ -659,26 +660,18 @@ impl App {
     ) -> anyhow::Result<()> {
         if let Mode::Normal(normal_mode) = &*self.mode
             && !normal_mode.marks.is_empty()
+            && normal_mode.marks.marked_commits()
         {
-            let MarkClasses {
-                marked_commits,
-                // with marked uncommitted files the cursor cannot move out of the uncommitted
-                // changes section, thus you can never toggle files for a commit because that
-                // requires selecting the commit
-                marked_uncommitted: _,
-            } = normal_mode.marks.classify();
-            if marked_commits {
-                match self.flags.show_files {
-                    FilesStatusFlag::None => {
-                        return Ok(());
-                    }
-                    FilesStatusFlag::Commit(_) => {}
-                    FilesStatusFlag::All => {
-                        self.flags.show_files = FilesStatusFlag::None;
-                        self.backstack.remove_show_file_list();
-                        messages.push(Message::Reload(None, ReloadCause::ViewOnly));
-                        return Ok(());
-                    }
+            match self.flags.show_files {
+                FilesStatusFlag::None => {
+                    return Ok(());
+                }
+                FilesStatusFlag::Commit(_) => {}
+                FilesStatusFlag::All => {
+                    self.flags.show_files = FilesStatusFlag::None;
+                    self.backstack.remove_show_file_list();
+                    messages.push(Message::Reload(None, ReloadCause::ViewOnly));
+                    return Ok(());
                 }
             }
         }

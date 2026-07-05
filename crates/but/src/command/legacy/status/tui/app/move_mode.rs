@@ -3,6 +3,7 @@ use std::sync::Arc;
 use but_core::ref_metadata::StackId;
 use but_ctx::Context;
 use but_rebase::graph_rebase::mutate::InsertSide;
+use ratatui::prelude::Span;
 
 use crate::{
     CliId,
@@ -10,8 +11,11 @@ use crate::{
         output::StatusOutputLineData,
         tui::{
             App, Message, Mode, ReloadCause, SelectAfterReload,
-            marking::{MarkClasses, Markable, Marks},
+            marking::{MarkableRef, Marks},
             operations,
+            render::{
+                ModeRender, RenderSingleLineSpans, render_move_operation_target_marker, source_span,
+            },
         },
     },
     id::ShortId,
@@ -26,7 +30,7 @@ pub struct MoveMode {
 /// A subset of [`CliId`] that supports being moved
 #[derive(Debug)]
 pub enum MoveSource {
-    Marks(Marks),
+    Marks(Box<Marks>),
     Commit {
         commit_id: gix::ObjectId,
         id: ShortId,
@@ -44,12 +48,40 @@ enum MoveTarget<'a> {
     MergeBase,
 }
 
+impl ModeRender for MoveMode {
+    fn render_operation_target_marker(
+        &self,
+        app: &App,
+        data: &StatusOutputLineData,
+        line: &mut RenderSingleLineSpans<'_, '_>,
+    ) {
+        if data
+            .cli_id()
+            .is_some_and(|target| self.source.contains(target))
+            || matches!(data, StatusOutputLineData::MergeBase)
+        {
+            render_move_operation_target_marker(app, data, self, line);
+        }
+    }
+
+    fn render_operation_source_marker(
+        &self,
+        app: &App,
+        data: &StatusOutputLineData,
+        line: &mut RenderSingleLineSpans<'_, '_>,
+    ) {
+        if let Some(cli_id) = data.cli_id()
+            && self.source.contains(cli_id)
+        {
+            line.extend([source_span(app.theme), Span::raw(" ")]);
+        }
+    }
+}
+
 impl MoveSource {
     pub fn contains(&self, other: &CliId) -> bool {
         match self {
-            MoveSource::Marks(marks) => {
-                Markable::try_from_cli_id(other).is_some_and(|markable| marks.contains(&markable))
-            }
+            MoveSource::Marks(marks) => marks.contains_cli_id(other),
             MoveSource::Commit {
                 commit_id: commit_id_lhs,
                 id: id_lhs,
@@ -135,15 +167,11 @@ impl App {
         let move_mode = if let Some(marks) = self.marks()
             && !marks.is_empty()
         {
-            let MarkClasses {
-                marked_commits,
-                marked_uncommitted,
-            } = marks.classify();
-            if !marked_commits || marked_uncommitted {
+            if !marks.marked_commits() || marks.marked_uncommitted() {
                 return;
             }
             MoveMode {
-                source: Arc::new(MoveSource::Marks(marks.clone())),
+                source: Arc::new(MoveSource::Marks(Box::new(marks.clone()))),
                 insert_side: InsertSide::Above,
             }
         } else {
@@ -291,8 +319,8 @@ impl App {
                 let Some(sources) = marks
                     .iter()
                     .map(|mark| match mark {
-                        Markable::Commit { commit_id, .. } => Some(*commit_id),
-                        Markable::Uncommitted(..) => None,
+                        MarkableRef::Commit(mark) => Some(mark.commit_id),
+                        MarkableRef::Uncommitted(..) => None,
                     })
                     .collect::<Option<Vec<_>>>()
                 else {

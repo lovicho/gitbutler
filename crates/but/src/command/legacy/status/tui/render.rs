@@ -1,8 +1,7 @@
-use std::{borrow::Cow, collections::HashMap, iter::once};
+use std::{collections::HashMap, iter::once};
 
 use but_core::ref_metadata::StackId;
 use but_rebase::graph_rebase::mutate::InsertSide;
-use nonempty::NonEmpty;
 use ratatui::{
     Frame,
     prelude::*,
@@ -18,14 +17,9 @@ use crate::{
         output::{
             BranchLineContent, StatusOutputContent, StatusOutputLineData, UncommittedLineContent,
         },
-        tui::{
-            CommandModeKind, Markable,
-            app::{
-                CommandMode, CommitMessageComposer, CommitMode, JumpMode, MoveMode, MoveSource,
-                MoveStackMode, NormalMode, PickChangesMode, RubMode, RubSource, StackMode,
-                rub_operation_display,
-            },
-            mode::DetailsMode,
+        tui::app::{
+            CommitMessageComposer, CommitMode, JumpMode, MoveMode, MoveSource, MoveStackMode,
+            StackMode,
         },
     },
     theme::Theme,
@@ -38,7 +32,7 @@ use super::{
     highlight::with_highlight,
     key_bind::KeyBind,
     mode::{Mode, ModeDiscriminant},
-    nonempty_from_refs, toast,
+    toast,
 };
 
 pub fn render_app(app: &App, frame: &mut Frame) {
@@ -818,7 +812,7 @@ fn render_operation_extension_line(
     }
 }
 
-fn render_commit_operation_target_marker(
+pub(crate) fn render_commit_operation_target_marker(
     app: &App,
     data: &StatusOutputLineData,
     mode: &CommitMode,
@@ -874,7 +868,7 @@ fn render_commit_operation_target_marker(
     }
 }
 
-fn render_move_operation_target_marker(
+pub(crate) fn render_move_operation_target_marker(
     app: &App,
     data: &StatusOutputLineData,
     mode: &MoveMode,
@@ -901,7 +895,7 @@ fn render_move_operation_target_marker(
     }
 }
 
-fn render_move_stack_operation_target_marker(
+pub(crate) fn render_move_stack_operation_target_marker(
     app: &App,
     data: &StatusOutputLineData,
     mode: &MoveStackMode,
@@ -1221,7 +1215,7 @@ pub fn stack_operation_display(
     }
 }
 
-fn source_span(theme: &'static Theme) -> Span<'static> {
+pub(crate) fn source_span(theme: &'static Theme) -> Span<'static> {
     Span::raw("<< source >>").mode_colors(ModeDiscriminant::Normal, theme)
 }
 
@@ -1405,222 +1399,6 @@ pub trait ModeRender {
             render_hot_bar_item(&mut line, key_bind, rendered_any, app.theme);
             rendered_any = true;
         }
-    }
-}
-
-impl ModeRender for NormalMode {}
-
-impl ModeRender for RubMode {
-    fn render_operation_target_marker(
-        &self,
-        app: &App,
-        data: &StatusOutputLineData,
-        line: &mut RenderSingleLineSpans<'_, '_>,
-    ) {
-        let Some(target) = data.cli_id() else {
-            return;
-        };
-
-        if self.source.contains(target) {
-            line.extend([source_span(app.theme), Span::raw(" ")]);
-        }
-
-        let display = match &self.source {
-            RubSource::CliId(source) => Cow::Borrowed(
-                rub_operation_display(NonEmpty::new(source), target, self.how_to_combine_messages)
-                    .unwrap_or("invalid"),
-            ),
-            RubSource::Marks(marks) => {
-                let sources = marks
-                    .iter()
-                    .cloned()
-                    .map(Markable::into_cli_id)
-                    .collect::<Vec<_>>();
-                let mut sources = sources.iter();
-                let Some(sources) = sources
-                    .next()
-                    .map(|first| nonempty_from_refs(first, sources))
-                else {
-                    return;
-                };
-                Cow::Borrowed(
-                    rub_operation_display(sources, target, self.how_to_combine_messages).unwrap_or(
-                        {
-                            if self.source.contains(target) {
-                                NOOP
-                            } else {
-                                "invalid"
-                            }
-                        },
-                    ),
-                )
-            }
-        };
-        line.extend([
-            Span::raw("<< ").mode_colors(&*app.mode, app.theme),
-            Span::raw(display).mode_colors(&*app.mode, app.theme),
-            Span::raw(" >>").mode_colors(&*app.mode, app.theme),
-            Span::raw(" "),
-        ]);
-    }
-
-    fn render_operation_source_marker(
-        &self,
-        app: &App,
-        data: &StatusOutputLineData,
-        line: &mut RenderSingleLineSpans<'_, '_>,
-    ) {
-        if let Some(cli_id) = data.cli_id()
-            && self.source.contains(cli_id)
-        {
-            line.extend([source_span(app.theme), Span::raw(" ")]);
-        }
-    }
-}
-
-impl ModeRender for InlineRewordMode {}
-
-impl ModeRender for CommitMode {
-    fn render_operation_target_marker(
-        &self,
-        app: &App,
-        data: &StatusOutputLineData,
-        line: &mut RenderSingleLineSpans<'_, '_>,
-    ) {
-        if data
-            .cli_id()
-            .is_some_and(|target| self.source.contains(target))
-        {
-            render_commit_operation_target_marker(app, data, self, line);
-        }
-    }
-
-    fn render_operation_source_marker(
-        &self,
-        app: &App,
-        data: &StatusOutputLineData,
-        line: &mut RenderSingleLineSpans<'_, '_>,
-    ) {
-        if let Some(cli_id) = data.cli_id()
-            && self.source.contains(cli_id)
-        {
-            line.extend([source_span(app.theme), Span::raw(" ")]);
-        }
-    }
-}
-
-impl ModeRender for MoveMode {
-    fn render_operation_target_marker(
-        &self,
-        app: &App,
-        data: &StatusOutputLineData,
-        line: &mut RenderSingleLineSpans<'_, '_>,
-    ) {
-        if data
-            .cli_id()
-            .is_some_and(|target| self.source.contains(target))
-            || matches!(data, StatusOutputLineData::MergeBase)
-        {
-            render_move_operation_target_marker(app, data, self, line);
-        }
-    }
-
-    fn render_operation_source_marker(
-        &self,
-        app: &App,
-        data: &StatusOutputLineData,
-        line: &mut RenderSingleLineSpans<'_, '_>,
-    ) {
-        if let Some(cli_id) = data.cli_id()
-            && self.source.contains(cli_id)
-        {
-            line.extend([source_span(app.theme), Span::raw(" ")]);
-        }
-    }
-}
-
-impl ModeRender for DetailsMode {}
-
-impl ModeRender for StackMode {
-    fn render_operation_target_marker(
-        &self,
-        app: &App,
-        data: &StatusOutputLineData,
-        line: &mut RenderSingleLineSpans<'_, '_>,
-    ) {
-        let Some(display) = stack_operation_display(data, self) else {
-            return;
-        };
-        line.extend([
-            Span::raw("<< ").mode_colors(&*app.mode, app.theme),
-            Span::raw(display).mode_colors(&*app.mode, app.theme),
-            Span::raw(" >>").mode_colors(&*app.mode, app.theme),
-            Span::raw(" "),
-        ]);
-    }
-}
-
-impl ModeRender for MoveStackMode {
-    fn render_operation_target_marker(
-        &self,
-        app: &App,
-        data: &StatusOutputLineData,
-        line: &mut RenderSingleLineSpans<'_, '_>,
-    ) {
-        if data
-            .cli_id()
-            .is_some_and(|target| self.source.matches(target))
-        {
-            render_move_stack_operation_target_marker(app, data, self, line);
-        }
-    }
-
-    fn render_operation_source_marker(
-        &self,
-        app: &App,
-        data: &StatusOutputLineData,
-        line: &mut RenderSingleLineSpans<'_, '_>,
-    ) {
-        if let Some(cli_id) = data.cli_id()
-            && self.source.matches(cli_id)
-        {
-            line.extend([source_span(app.theme), Span::raw(" ")]);
-        }
-    }
-}
-
-impl ModeRender for PickChangesMode {}
-
-impl ModeRender for CommandMode {
-    fn render_hot_bar_content(&self, _app: &App, area: Rect, frame: &mut Frame) {
-        let command_layout = Layout::horizontal([
-            match self.kind {
-                CommandModeKind::But => Constraint::Length(4),
-                CommandModeKind::Shell => Constraint::Length(2),
-            },
-            Constraint::Min(1),
-        ])
-        .split(area);
-
-        match self.kind {
-            CommandModeKind::But => {
-                frame.render_widget("but ", command_layout[0]);
-            }
-            CommandModeKind::Shell => {
-                frame.render_widget("$ ", command_layout[0]);
-            }
-        }
-        frame.render_widget(&*self.textarea, command_layout[1]);
-    }
-}
-
-impl ModeRender for JumpMode {
-    fn render_hot_bar_content(&self, _app: &App, area: Rect, frame: &mut Frame) {
-        let jump_layout =
-            Layout::horizontal([Constraint::Length(2), Constraint::Min(1)]).split(area);
-
-        frame.render_widget("/ ", jump_layout[0]);
-        frame.render_widget(&*self.textarea, jump_layout[1]);
     }
 }
 

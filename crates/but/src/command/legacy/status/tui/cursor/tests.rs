@@ -20,7 +20,7 @@ use crate::{
                 CommitMessageComposer, CommitMode, CommitSource, MoveMode, MoveSource,
                 MoveStackMode, ReorderStackSource, RubMode, RubSource, UncommittedAreaCommitSource,
             },
-            marking::{Markable, Marks},
+            marking::{MarkableRef, Marks},
         },
     },
     id::UncommittedHunkOrFile,
@@ -130,16 +130,19 @@ fn uncommitted_source(cli_ids: &[Arc<CliId>]) -> CommitSource {
     }
 }
 
-fn marks(markables: impl IntoIterator<Item = Markable>) -> Marks {
+fn marks<'a, I>(markables: I) -> Marks
+where
+    I: IntoIterator<Item = MarkableRef<'a>>,
+{
     let mut marks = Marks::default();
     for markable in markables {
-        marks.insert(markable);
+        marks.insert(markable.to_owned()).unwrap();
     }
     marks
 }
 
-fn markable(cli_id: &Arc<CliId>) -> Markable {
-    Markable::try_from_cli_id(cli_id).expect("test cli ID should be markable")
+fn markable(cli_id: &Arc<CliId>) -> MarkableRef<'_> {
+    MarkableRef::try_from_cli_id(cli_id).expect("test cli ID should be markable")
 }
 
 fn commit_line(hex: &str, id: &str) -> StatusOutputLine {

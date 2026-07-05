@@ -1,8 +1,9 @@
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
 use but_ctx::Context;
 use but_workspace::commit::squash_commits::MessageCombinationStrategy;
 use nonempty::NonEmpty;
+use ratatui::prelude::Span;
 
 use crate::{
     CliId,
@@ -10,11 +11,13 @@ use crate::{
         rub::{CommitToUncommittedAreaOperation, RubOperation, SquashCommitsOperation},
         status::{
             FilesStatusFlag,
+            output::StatusOutputLineData,
             tui::{
-                App, Message, ReloadCause, SelectAfterReload, cursor,
-                marking::{MarkClasses, Markable, Marks},
+                App, Message, NOOP, ReloadCause, SelectAfterReload, cursor,
+                marking::{MarkableRef, Marks},
                 mode::Mode,
                 nonempty_from_refs, operations,
+                render::{ModeRender, RenderSingleLineSpans, SpanExt, source_span},
             },
         },
     },
@@ -30,17 +33,82 @@ pub struct RubMode {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RubSource {
-    Marks(Marks),
+    Marks(Box<Marks>),
     CliId(Arc<CliId>),
 }
 
 impl RubSource {
     pub fn contains(&self, other: &CliId) -> bool {
         match self {
-            RubSource::Marks(marks) => {
-                Markable::try_from_cli_id(other).is_some_and(|markable| marks.contains(&markable))
-            }
+            RubSource::Marks(marks) => marks.contains_cli_id(other),
             RubSource::CliId(source) => &**source == other,
+        }
+    }
+}
+
+impl ModeRender for RubMode {
+    fn render_operation_target_marker(
+        &self,
+        app: &App,
+        data: &StatusOutputLineData,
+        line: &mut RenderSingleLineSpans<'_, '_>,
+    ) {
+        let Some(target) = data.cli_id() else {
+            return;
+        };
+
+        if self.source.contains(target) {
+            line.extend([source_span(app.theme), Span::raw(" ")]);
+        }
+
+        let display = match &self.source {
+            RubSource::CliId(source) => Cow::Borrowed(
+                rub_operation_display(NonEmpty::new(source), target, self.how_to_combine_messages)
+                    .unwrap_or("invalid"),
+            ),
+            RubSource::Marks(marks) => {
+                let sources = marks
+                    .iter()
+                    .map(|m| m.to_owned().into_cli_id())
+                    .collect::<Vec<_>>();
+                let mut sources = sources.iter();
+                let Some(sources) = sources
+                    .next()
+                    .map(|first| nonempty_from_refs(first, sources))
+                else {
+                    return;
+                };
+                Cow::Borrowed(
+                    rub_operation_display(sources, target, self.how_to_combine_messages).unwrap_or(
+                        {
+                            if self.source.contains(target) {
+                                NOOP
+                            } else {
+                                "invalid"
+                            }
+                        },
+                    ),
+                )
+            }
+        };
+        line.extend([
+            Span::raw("<< ").mode_colors(&*app.mode, app.theme),
+            Span::raw(display).mode_colors(&*app.mode, app.theme),
+            Span::raw(" >>").mode_colors(&*app.mode, app.theme),
+            Span::raw(" "),
+        ]);
+    }
+
+    fn render_operation_source_marker(
+        &self,
+        app: &App,
+        data: &StatusOutputLineData,
+        line: &mut RenderSingleLineSpans<'_, '_>,
+    ) {
+        if let Some(cli_id) = data.cli_id()
+            && self.source.contains(cli_id)
+        {
+            line.extend([source_span(app.theme), Span::raw(" ")]);
         }
     }
 }
@@ -91,7 +159,9 @@ impl App {
         if normal_mode.marks.is_empty() {
             self.handle_rub_start_with_source(RubSource::CliId(Arc::clone(cli_id)));
         } else {
-            self.handle_rub_start_with_source(RubSource::Marks(normal_mode.marks.clone()));
+            self.handle_rub_start_with_source(RubSource::Marks(Box::new(
+                normal_mode.marks.clone(),
+            )));
         }
     }
 
@@ -115,8 +185,7 @@ impl App {
             RubSource::Marks(marks) => {
                 let marks = marks
                     .iter()
-                    .cloned()
-                    .map(|mark| mark.into_cli_id())
+                    .map(|mark| mark.to_owned().into_cli_id())
                     .collect::<Vec<_>>();
                 self.status_lines
                     .iter()
@@ -147,16 +216,12 @@ impl App {
                 }
             }
             RubSource::Marks(marks) => {
-                let MarkClasses {
-                    marked_commits,
-                    marked_uncommitted,
-                } = marks.classify();
-                if marked_commits && marked_uncommitted {
+                if marks.marked_commits() && marks.marked_uncommitted() {
                     return;
                 }
 
-                for mark in marks {
-                    if !mark_supports_rubbing(mark) {
+                for mark in marks.iter() {
+                    if !mark_supports_being_rub_source(mark) {
                         return;
                     }
                 }
@@ -328,8 +393,7 @@ impl App {
             RubSource::Marks(marks) => {
                 let sources = marks
                     .iter()
-                    .cloned()
-                    .map(|mark| mark.into_cli_id())
+                    .map(|mark| mark.to_owned().into_cli_id())
                     .filter(|source| source != &**target)
                     .collect::<Vec<_>>();
                 let mut iter = sources.iter();
@@ -413,9 +477,9 @@ pub fn supports_rubbing(id: &CliId) -> bool {
     }
 }
 
-pub fn mark_supports_rubbing(mark: &Markable) -> bool {
+pub fn mark_supports_being_rub_source(mark: MarkableRef<'_>) -> bool {
     match mark {
-        Markable::Commit { .. } | Markable::Uncommitted(..) => true,
+        MarkableRef::Commit { .. } | MarkableRef::Uncommitted(..) => true,
     }
 }
 

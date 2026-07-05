@@ -7,6 +7,7 @@ use crate::{
             CommandMode, CommitMode, CommitSource, JumpMode, MoveMode, MoveSource, MoveStackMode,
             NormalMode, PickChangesMode, RubMode, RubSource, StackMode,
         },
+        render::ModeRender,
     },
     theme::Theme,
 };
@@ -132,6 +133,8 @@ pub enum DetailsReturnMode {
     Normal(NormalMode),
     PickChanges(PickChangesMode),
 }
+
+impl ModeRender for DetailsMode {}
 
 impl DetailsReturnMode {
     fn marks(&self) -> &Marks {

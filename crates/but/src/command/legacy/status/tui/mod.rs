@@ -35,7 +35,7 @@ use crate::{
             },
             help::HelpMessage,
             key_bind::{KeyBinds, fuzzy_picker_key_binds},
-            marking::{Markable, Marks},
+            marking::Marks,
             mode::{Mode, ModeDiscriminant},
             operations::stack_has_assigned_changes,
             toast::ToastKind,

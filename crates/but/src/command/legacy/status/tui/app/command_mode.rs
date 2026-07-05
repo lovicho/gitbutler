@@ -1,12 +1,13 @@
 use std::{ffi::OsString, process::Command};
 
 use crossterm::event::Event;
-use ratatui::backend::Backend;
+use ratatui::{backend::Backend, prelude::*};
 use ratatui_textarea::{CursorMove, TextArea};
 
 use crate::{
     command::legacy::status::tui::{
         App, Message, Mode, ReloadCause, ToastKind, TuiInputOutputChannel, format_error_for_tui,
+        render::ModeRender,
     },
     tui::TerminalGuard,
     utils::binary_path::current_exe_for_but_exec,
@@ -29,6 +30,29 @@ pub enum CommandMessage {
     Start(CommandModeKind),
     Input(Event),
     Confirm,
+}
+
+impl ModeRender for CommandMode {
+    fn render_hot_bar_content(&self, _app: &App, area: Rect, frame: &mut Frame) {
+        let command_layout = Layout::horizontal([
+            match self.kind {
+                CommandModeKind::But => Constraint::Length(4),
+                CommandModeKind::Shell => Constraint::Length(2),
+            },
+            Constraint::Min(1),
+        ])
+        .split(area);
+
+        match self.kind {
+            CommandModeKind::But => {
+                frame.render_widget("but ", command_layout[0]);
+            }
+            CommandModeKind::Shell => {
+                frame.render_widget("$ ", command_layout[0]);
+            }
+        }
+        frame.render_widget(&*self.textarea, command_layout[1]);
+    }
 }
 
 impl App {

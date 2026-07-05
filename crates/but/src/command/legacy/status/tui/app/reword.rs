@@ -9,7 +9,9 @@ use crate::{
     CliId,
     command::legacy::{
         reword::get_branch_name_from_editor,
-        status::tui::{App, Message, Mode, ReloadCause, SelectAfterReload, operations},
+        status::tui::{
+            App, Message, Mode, ReloadCause, SelectAfterReload, operations, render::ModeRender,
+        },
     },
     tui::TerminalGuard,
 };
@@ -26,6 +28,8 @@ pub enum InlineRewordMode {
         textarea: Box<TextArea<'static>>,
     },
 }
+
+impl ModeRender for InlineRewordMode {}
 
 impl InlineRewordMode {
     pub fn textarea(&self) -> &TextArea<'static> {

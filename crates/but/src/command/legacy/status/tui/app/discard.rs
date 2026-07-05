@@ -13,7 +13,7 @@ use crate::{
         app::{App, Modal, mark::commits_on_branch},
         confirm::Confirm,
         key_bind::confirm_key_binds,
-        marking::Markable,
+        marking::MarkableRef,
         message_on_drop,
         mode::Mode,
         operations,
@@ -258,8 +258,8 @@ impl App {
             .marks
             .iter()
             .filter_map(|mark| match mark {
-                Markable::Commit { commit_id, .. } => Some(*commit_id),
-                Markable::Uncommitted(..) => None,
+                MarkableRef::Commit(mark) => Some(mark.commit_id),
+                MarkableRef::Uncommitted(..) => None,
             })
             .collect::<Vec<_>>();
 
@@ -268,12 +268,12 @@ impl App {
             let (_guard, repo, ws, mut db) = ctx.workspace_and_db_mut()?;
             let mut builder = DiffSpecBuilder::new(&mut db, &repo, &ws, context_lines);
 
-            for mark in &normal_mode.marks {
+            for mark in normal_mode.marks.iter() {
                 match mark {
-                    Markable::Uncommitted(uncommitted) => {
+                    MarkableRef::Uncommitted(uncommitted) => {
                         builder.push_changes_from_uncommitted(uncommitted)?;
                     }
-                    Markable::Commit { .. } => {}
+                    MarkableRef::Commit { .. } => {}
                 }
             }
 
@@ -283,8 +283,7 @@ impl App {
         self.to_be_discarded = normal_mode
             .marks
             .iter()
-            .cloned()
-            .map(|mark| Arc::new(mark.into_cli_id()))
+            .map(|mark| Arc::new(mark.to_owned().into_cli_id()))
             .collect::<Vec<_>>();
 
         let select_after_reload = self

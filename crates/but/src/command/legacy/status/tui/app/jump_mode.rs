@@ -1,11 +1,12 @@
 use crossterm::event::Event;
+use ratatui::prelude::*;
 use ratatui_textarea::{CursorMove, TextArea};
 
 use crate::{
     CliId,
     command::legacy::status::{
         FilesStatusFlag, StatusOutputLine,
-        tui::{App, Backstack, Message, Mode, NormalMode, cursor},
+        tui::{App, Backstack, Message, Mode, NormalMode, cursor, render::ModeRender},
     },
 };
 
@@ -14,6 +15,16 @@ pub struct JumpMode {
     pub textarea: Box<TextArea<'static>>,
     pub return_mode: Box<Mode>,
     pub return_backstack: Backstack,
+}
+
+impl ModeRender for JumpMode {
+    fn render_hot_bar_content(&self, _app: &App, area: Rect, frame: &mut Frame) {
+        let jump_layout =
+            Layout::horizontal([Constraint::Length(2), Constraint::Min(1)]).split(area);
+
+        frame.render_widget("/ ", jump_layout[0]);
+        frame.render_widget(&*self.textarea, jump_layout[1]);
+    }
 }
 
 impl JumpMode {

@@ -1,6 +1,6 @@
 use but_testsupport::Sandbox;
 use crossterm::event::*;
-use snapbox::file;
+use snapbox::{file, str};
 
 use crate::command::legacy::status::tui::tests::utils::test_tui;
 
@@ -122,4 +122,43 @@ fn applying_stacks() {
         .assert_rendered_term_svg_eq(file!["snapshots/applying_stacks_004.svg"]);
     tui.input_then_render(KeyCode::Enter)
         .assert_rendered_term_svg_eq(file!["snapshots/applying_stacks_005.svg"]);
+}
+
+#[test]
+fn escape_moves_cursor_back_to_valid_position() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings(
+        "two-stacks-one-single-and-ready-to-mingle-one-double",
+    );
+    env.setup_metadata(&["A", "B"]);
+
+    let mut tui = test_tui(env);
+
+    tui.input_then_render('j')
+        .assert_current_line_eq(str![["┊╭┄g0 [A]"]]);
+    tui.input_then_render('s');
+    tui.input_then_render('m');
+    tui.input_then_render('j');
+
+    // cancelling should put the cursor at a valid position
+    tui.input_then_render(KeyCode::Esc)
+        .assert_current_line_eq(str![["┴ 0dc3733 (common base) 2000-01-02 add M"]]);
+}
+
+#[test]
+fn maintains_cursor_position_if_on_source() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings(
+        "two-stacks-one-single-and-ready-to-mingle-one-double",
+    );
+    env.setup_metadata(&["A", "B"]);
+
+    let mut tui = test_tui(env);
+
+    tui.input_then_render('j')
+        .assert_current_line_eq(str![["┊╭┄g0 [A]"]]);
+    tui.input_then_render('s');
+    tui.input_then_render('m');
+
+    // cancelling should put the cursor at a valid position
+    tui.input_then_render(KeyCode::Esc)
+        .assert_current_line_eq(str![["┊╭┄g0 [A]"]]);
 }
