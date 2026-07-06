@@ -20,6 +20,7 @@
 	import { BRANCH_SERVICE } from "$lib/branches/branchService.svelte";
 	import { newBranchApplyFeature } from "$lib/config/uiFeatureFlags";
 	import { isNormalizedError } from "$lib/error/normalizedError";
+	import { useBitbucketForgeUser } from "$lib/forge/bitbucket/hooks.svelte";
 	import { FORGE_INFO_SERVICE } from "$lib/forge/forgeInfo.svelte";
 	import { useGitHubForgeUser } from "$lib/forge/github/hooks.svelte";
 	import { useGitLabForgeUser } from "$lib/forge/gitlab/hooks.svelte";
@@ -63,12 +64,15 @@
 	const projectIdRef = reactive(() => projectId);
 	const githubUser = useGitHubForgeUser(projectIdRef);
 	const gitlabUser = useGitLabForgeUser(projectIdRef);
+	const bitbucketUser = useBitbucketForgeUser(projectIdRef);
 	const forgeUser = $derived.by(() => {
 		switch (forgeInfo?.name) {
 			case "github":
 				return githubUser.user.current;
 			case "gitlab":
 				return gitlabUser.user.current;
+			case "bitbucket":
+				return bitbucketUser.user.current;
 			default:
 				return undefined;
 		}
@@ -270,6 +274,7 @@
 								{#if sidebarEntrySubject.type === "branchListing"}
 									<BranchListCard
 										reviewUnit={prUnit}
+										forge={forgeInfo?.name}
 										{projectId}
 										branchListing={sidebarEntrySubject.subject}
 										prs={sidebarEntrySubject.prs}
@@ -295,6 +300,7 @@
 								{:else}
 									<PRListCard
 										reviewUnit={prUnit}
+										forge={forgeInfo?.name}
 										number={sidebarEntrySubject.subject.number}
 										isDraft={sidebarEntrySubject.subject.draft}
 										title={sidebarEntrySubject.subject.title}

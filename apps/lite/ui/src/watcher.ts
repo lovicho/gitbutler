@@ -1,4 +1,4 @@
-import { changesInWorktreeQueryOptions, QueryKey } from "#ui/api/queries.ts";
+import type { QueryKey } from "#ui/api/queries.ts";
 import { WatcherEvent } from "@gitbutler/but-sdk";
 import { QueryClient } from "@tanstack/react-query";
 
@@ -10,26 +10,34 @@ export const handleWatcher = (
 	switch (event.payload.type) {
 		case "gitActivity":
 		case "workspaceActivity": {
-			void client.invalidateQueries({ queryKey: [QueryKey.AbsorptionPlan, projectId] });
-			void client.invalidateQueries({ queryKey: [QueryKey.Branches, projectId] });
-			void client.invalidateQueries({ queryKey: [QueryKey.BranchDetails, projectId] });
-			void client.invalidateQueries({ queryKey: [QueryKey.BranchDiff, projectId] });
-			void client.invalidateQueries({ queryKey: [QueryKey.ChangesInWorktree, projectId] });
-			void client.invalidateQueries({ queryKey: [QueryKey.CommitDetailsWithLineStats, projectId] });
-			void client.invalidateQueries({ queryKey: [QueryKey.DryRun, projectId] });
-			void client.invalidateQueries({ queryKey: [QueryKey.HeadInfo, projectId] });
-			void client.invalidateQueries({ queryKey: [QueryKey.TreeChangeDiffs, projectId] });
+			void client.invalidateQueries({ queryKey: ["absorptionPlan" satisfies QueryKey, projectId] });
+			void client.invalidateQueries({ queryKey: ["branches" satisfies QueryKey, projectId] });
+			void client.invalidateQueries({ queryKey: ["branchDetails" satisfies QueryKey, projectId] });
+			void client.invalidateQueries({ queryKey: ["branchDiff" satisfies QueryKey, projectId] });
+			void client.invalidateQueries({
+				queryKey: ["changesInWorktree" satisfies QueryKey, projectId],
+			});
+			void client.invalidateQueries({
+				queryKey: ["commitDetailsWithLineStats" satisfies QueryKey, projectId],
+			});
+			void client.invalidateQueries({ queryKey: ["dryRun" satisfies QueryKey, projectId] });
+			void client.invalidateQueries({ queryKey: ["headInfo" satisfies QueryKey, projectId] });
+			void client.invalidateQueries({
+				queryKey: ["treeChangeDiffs" satisfies QueryKey, projectId],
+			});
 			break;
 		}
 		case "worktreeChanges":
 			const workspaceChanges = event.payload.subject.changes;
 			client.setQueryData(
-				changesInWorktreeQueryOptions(projectId).queryKey,
+				["changesInWorktree" satisfies QueryKey, projectId],
 				() => workspaceChanges,
 			);
-			void client.invalidateQueries({ queryKey: [QueryKey.AbsorptionPlan, projectId] });
-			void client.invalidateQueries({ queryKey: [QueryKey.DryRun, projectId] });
-			void client.invalidateQueries({ queryKey: [QueryKey.TreeChangeDiffs, projectId] });
+			void client.invalidateQueries({ queryKey: ["absorptionPlan" satisfies QueryKey, projectId] });
+			void client.invalidateQueries({ queryKey: ["dryRun" satisfies QueryKey, projectId] });
+			void client.invalidateQueries({
+				queryKey: ["treeChangeDiffs" satisfies QueryKey, projectId],
+			});
 			break;
 	}
 };

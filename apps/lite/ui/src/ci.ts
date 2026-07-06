@@ -18,7 +18,7 @@ type SDKStatus = Extract<CiStatus, string> | CiConclusion;
 type AggregateCIChecks = {
 	status: AggregateCIStatus;
 	total: number;
-} & Record<SDKStatus, number>;
+} & Record<SDKStatus, Array<CiCheck>>;
 
 export const aggregateCIChecks = (checks: Array<CiCheck>): AggregateCIChecks | null => {
 	if (checks.length === 0) return null;
@@ -26,26 +26,33 @@ export const aggregateCIChecks = (checks: Array<CiCheck>): AggregateCIChecks | n
 	const aggregate: AggregateCIChecks = {
 		status: "unknown",
 		total: checks.length,
-		failure: 0,
-		timedOut: 0,
-		actionRequired: 0,
-		cancelled: 0,
-		inProgress: 0,
-		queued: 0,
-		success: 0,
-		neutral: 0,
-		skipped: 0,
-		unknown: 0,
+		failure: [],
+		timedOut: [],
+		actionRequired: [],
+		cancelled: [],
+		inProgress: [],
+		queued: [],
+		success: [],
+		neutral: [],
+		skipped: [],
+		unknown: [],
 	};
 
 	for (const check of checks)
-		aggregate[typeof check.status === "string" ? check.status : check.status.complete.conclusion]++;
+		aggregate[
+			typeof check.status === "string" ? check.status : check.status.complete.conclusion
+		].push(check);
 
-	if (aggregate.failure > 0 || aggregate.timedOut > 0) aggregate.status = "failure";
-	else if (aggregate.actionRequired > 0) aggregate.status = "action_required";
-	else if (aggregate.cancelled > 0) aggregate.status = "cancelled";
-	else if (aggregate.inProgress > 0 || aggregate.queued > 0) aggregate.status = "in_progress";
-	else if (aggregate.success > 0 || aggregate.neutral > 0 || aggregate.skipped > 0)
+	if (aggregate.failure.length > 0 || aggregate.timedOut.length > 0) aggregate.status = "failure";
+	else if (aggregate.actionRequired.length > 0) aggregate.status = "action_required";
+	else if (aggregate.cancelled.length > 0) aggregate.status = "cancelled";
+	else if (aggregate.inProgress.length > 0 || aggregate.queued.length > 0)
+		aggregate.status = "in_progress";
+	else if (
+		aggregate.success.length > 0 ||
+		aggregate.neutral.length > 0 ||
+		aggregate.skipped.length > 0
+	)
 		aggregate.status = "success";
 
 	return aggregate;

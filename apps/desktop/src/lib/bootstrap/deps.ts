@@ -20,6 +20,10 @@ import {
 } from "$lib/dragging/stackingReorderDropzoneManager";
 import { FILE_SERVICE, FileService } from "$lib/files/fileService";
 import { ResizeSync, RESIZE_SYNC } from "$lib/floating/resizeSync";
+import {
+	BITBUCKET_USER_SERVICE,
+	BitbucketUserService,
+} from "$lib/forge/bitbucket/bitbucketUserService.svelte";
 import { CHECKS_MONITOR, ChecksMonitor } from "$lib/forge/checksMonitor.svelte";
 import { FORGE_INFO_SERVICE, ForgeInfoService } from "$lib/forge/forgeInfo.svelte";
 import { GitHubUserService, GITHUB_USER_SERVICE } from "$lib/forge/github/githubUserService.svelte";
@@ -129,6 +133,7 @@ export function initDependencies(args: {
 	const clientState = new ClientState(backend, posthog);
 	const githubUserService = new GitHubUserService(clientState.backendApi);
 	const gitlabUserService = new GitLabUserService(clientState.backendApi, secretsService);
+	const bitbucketUserService = new BitbucketUserService(clientState.backendApi);
 
 	const uiState = new UiState(
 		reactive(() => clientState.uiState ?? uiStateSlice.getInitialState()),
@@ -326,6 +331,7 @@ export function initDependencies(args: {
 		[REPO_SERVICE, repoService],
 		[GITHUB_USER_SERVICE, githubUserService],
 		[GITLAB_USER_SERVICE, gitlabUserService],
+		[BITBUCKET_USER_SERVICE, bitbucketUserService],
 		[GIT_CONFIG_SERVICE, gitConfig],
 		[GIT_SERVICE, gitService],
 		[HISTORY_SERVICE, historyService],

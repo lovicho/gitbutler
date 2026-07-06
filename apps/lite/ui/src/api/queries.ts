@@ -11,39 +11,38 @@ import type {
 import { aggregateCIChecks } from "#ui/ci.ts";
 import { queryOptions } from "@tanstack/react-query";
 
-export enum QueryKey {
-	BranchDetails = "branchDetails",
-	BranchDiff = "branchDiff",
-	ChangesInWorktree = "changesInWorktree",
-	CIChecks = "ciChecks",
-	CommitDetailsWithLineStats = "commitDetailsWithLineStats",
-	ForgeInfo = "forgeInfo",
-	HeadInfo = "headInfo",
-	Review = "review",
-	ReviewMergeStatus = "reviewMergeStatus",
-	Branches = "branches",
-	Editors = "editors",
-	Projects = "projects",
-	TreeChangeDiffs = "treeChangeDiffs",
-	AbsorptionPlan = "absorptionPlan",
-	DryRun = "dryRun",
-}
+export type QueryKey =
+	| "branchDetails"
+	| "branchDiff"
+	| "changesInWorktree"
+	| "ciChecks"
+	| "commitDetailsWithLineStats"
+	| "forgeInfo"
+	| "headInfo"
+	| "review"
+	| "reviewMergeStatus"
+	| "branches"
+	| "editors"
+	| "projects"
+	| "treeChangeDiffs"
+	| "absorptionPlan"
+	| "dryRun";
 
 export const branchDetailsQueryOptions = ({ projectId, ...params }: BranchDetailsParams) =>
 	queryOptions({
-		queryKey: [QueryKey.BranchDetails, projectId, params],
+		queryKey: ["branchDetails" satisfies QueryKey, projectId, params],
 		queryFn: () => window.lite.branchDetails({ projectId, ...params }),
 	});
 
 export const branchDiffQueryOptions = ({ projectId, ...params }: BranchDiffParams) =>
 	queryOptions({
-		queryKey: [QueryKey.BranchDiff, projectId, params],
+		queryKey: ["branchDiff" satisfies QueryKey, projectId, params],
 		queryFn: () => window.lite.branchDiff({ projectId, ...params }),
 	});
 
 export const changesInWorktreeQueryOptions = (projectId: string) =>
 	queryOptions({
-		queryKey: [QueryKey.ChangesInWorktree, projectId],
+		queryKey: ["changesInWorktree" satisfies QueryKey, projectId],
 		queryFn: () => window.lite.changesInWorktree(projectId),
 	});
 
@@ -52,48 +51,48 @@ export const commitDetailsWithLineStatsQueryOptions = ({
 	...params
 }: CommitDetailsWithLineStatsParams) =>
 	queryOptions({
-		queryKey: [QueryKey.CommitDetailsWithLineStats, projectId, params],
+		queryKey: ["commitDetailsWithLineStats" satisfies QueryKey, projectId, params],
 		queryFn: () => window.lite.commitDetailsWithLineStats({ projectId, ...params }),
 	});
 
 export const forgeInfoOptions = (projectId: string) =>
 	queryOptions({
-		queryKey: [QueryKey.ForgeInfo, projectId],
+		queryKey: ["forgeInfo" satisfies QueryKey, projectId],
 		queryFn: () => window.lite.forgeInfo(projectId),
 	});
 
 export const headInfoQueryOptions = (projectId: string) =>
 	queryOptions({
-		queryKey: [QueryKey.HeadInfo, projectId],
+		queryKey: ["headInfo" satisfies QueryKey, projectId],
 		queryFn: () => window.lite.headInfo(projectId),
 	});
 
 export const getReviewQueryOptions = ({ projectId, reviewId }: GetReviewParams) =>
 	queryOptions({
-		queryKey: [QueryKey.Review, projectId, reviewId],
+		queryKey: ["review" satisfies QueryKey, projectId, reviewId],
 		queryFn: () => window.lite.getReview({ projectId, reviewId }),
 	});
 
 export const getReviewMergeStatusQueryOptions = ({ projectId, reviewId }: GetReviewParams) =>
 	queryOptions({
-		queryKey: [QueryKey.ReviewMergeStatus, projectId, reviewId],
+		queryKey: ["reviewMergeStatus" satisfies QueryKey, projectId, reviewId],
 		queryFn: () => window.lite.getReviewMergeStatus({ projectId, reviewId }),
 	});
 
 /** @public */
 export const listBranchesQueryOptions = ({ projectId, ...params }: ListBranchesParams) =>
 	queryOptions({
-		queryKey: [QueryKey.Branches, projectId, params],
+		queryKey: ["branches" satisfies QueryKey, projectId, params],
 		queryFn: () => window.lite.listBranches(projectId, params.filter),
 	});
 
 export const listProjectsQueryOptions = queryOptions({
-	queryKey: [QueryKey.Projects],
+	queryKey: ["projects" satisfies QueryKey],
 	queryFn: () => window.lite.listProjectsStateless(),
 });
 
 export const listEditorsQueryOptions = queryOptions({
-	queryKey: [QueryKey.Editors],
+	queryKey: ["editors" satisfies QueryKey],
 	queryFn: () => window.lite.listEditors(),
 });
 
@@ -106,7 +105,7 @@ export const listCIChecksQueryOptions = ({
 	polling: "passive" | "priority";
 }) =>
 	queryOptions({
-		queryKey: [QueryKey.CIChecks, projectId, reference],
+		queryKey: ["ciChecks" satisfies QueryKey, projectId, reference],
 		queryFn: async () => {
 			// Aggregated data is needed in queryFn to adjust refetching behaviour. Aggregating here, for
 			// use as mentioned and also at call sites, is more efficient.
@@ -163,12 +162,12 @@ export const listCIChecksQueryOptions = ({
 
 export const treeChangeDiffsQueryOptions = ({ projectId, change }: TreeChangeDiffParams) =>
 	queryOptions({
-		queryKey: [QueryKey.TreeChangeDiffs, projectId, change],
+		queryKey: ["treeChangeDiffs" satisfies QueryKey, projectId, change],
 		queryFn: () => window.lite.treeChangeDiffs({ projectId, change }),
 	});
 
 export const absorptionPlanQueryOptions = ({ projectId, target }: AbsorptionPlanParams) =>
 	queryOptions({
-		queryKey: [QueryKey.AbsorptionPlan, projectId, target],
+		queryKey: ["absorptionPlan" satisfies QueryKey, projectId, target],
 		queryFn: () => window.lite.absorptionPlan({ projectId, target }),
 	});

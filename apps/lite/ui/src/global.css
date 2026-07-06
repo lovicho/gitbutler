@@ -23,6 +23,7 @@ button {
 }
 
 a {
+	color: unset;
 	text-decoration: unset;
 	cursor: default;
 

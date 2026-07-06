@@ -218,10 +218,6 @@
 	{/if}
 </div>
 
-<p class="text-12 text-body gitlab-integration-settings__text">
-	🔒 Credentials are persisted locally in your OS Keychain / Credential Manager.
-</p>
-
 {#snippet addProfileButton(noAccounts: boolean)}
 	<AddForgeAccountButton
 		{noAccounts}

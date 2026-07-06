@@ -107,6 +107,7 @@
 		<div class="pr-card">
 			<PRListCard
 				reviewUnit={prUnit}
+				forge={forgeInfo?.name}
 				number={pr.number}
 				title={pr.title}
 				sourceBranch={pr.sourceBranch}

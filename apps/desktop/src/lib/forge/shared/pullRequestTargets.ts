@@ -4,9 +4,9 @@ import type { PullRequest } from "$lib/forge/interface/types";
 /**
  * Whether `pr` targets the project's base branch. Without the
  * base-repo check, a fork PR using the same branch name as the user's
- * base would enable "Merge" against a stranger's fork. GitLab is
- * branch-only because its fork model uses numeric project IDs rather
- * than URL identity.
+ * base would enable "Merge" against a stranger's fork. GitLab and
+ * Bitbucket are branch-only: GitLab's fork model uses numeric project
+ * IDs rather than URL identity.
  */
 export function pullRequestTargetsBaseBranch(args: {
 	pr: PullRequest | undefined;
@@ -18,7 +18,7 @@ export function pullRequestTargetsBaseBranch(args: {
 	const { pr, baseBranchShortName, baseBranchRepoHash, prBaseRepoUrl, forgeName } = args;
 	if (!pr) return false;
 	if (pr.targetBranch !== baseBranchShortName) return false;
-	if (forgeName === "gitlab") return true;
+	if (forgeName === "gitlab" || forgeName === "bitbucket") return true;
 	if (!prBaseRepoUrl || !baseBranchRepoHash) return false;
 	const prBaseRepo = parseRemoteUrl(prBaseRepoUrl);
 	return prBaseRepo?.hash === baseBranchRepoHash;

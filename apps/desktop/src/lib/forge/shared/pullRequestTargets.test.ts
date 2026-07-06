@@ -130,10 +130,34 @@ describe("pullRequestTargetsBaseBranch", () => {
 		).toBe(false);
 	});
 
+	test("Bitbucket: branch-name match alone is sufficient — backend exposes no base-repo URL", () => {
+		expect(
+			pullRequestTargetsBaseBranch({
+				pr: makePr({ targetBranch: "main" }),
+				baseBranchShortName: "main",
+				baseBranchRepoHash: UPSTREAM_HASH,
+				prBaseRepoUrl: null,
+				forgeName: "bitbucket",
+			}),
+		).toBe(true);
+	});
+
+	test("Bitbucket: branch-name mismatch still wins", () => {
+		expect(
+			pullRequestTargetsBaseBranch({
+				pr: makePr({ targetBranch: "develop" }),
+				baseBranchShortName: "main",
+				baseBranchRepoHash: UPSTREAM_HASH,
+				prBaseRepoUrl: null,
+				forgeName: "bitbucket",
+			}),
+		).toBe(false);
+	});
+
 	test("unknown forge name falls back to URL-hash comparison (treats like GitHub)", () => {
 		// New forges should not silently match by branch name only — the
-		// helper's `forgeName === 'gitlab'` short-circuit is intentionally
-		// narrow. Any other value defaults to the strict GitHub-style
+		// branch-only short-circuit is intentionally limited to GitLab and
+		// Bitbucket. Any other value defaults to the strict GitHub-style
 		// comparison.
 		expect(
 			pullRequestTargetsBaseBranch({
@@ -141,7 +165,7 @@ describe("pullRequestTargetsBaseBranch", () => {
 				baseBranchShortName: "main",
 				baseBranchRepoHash: UPSTREAM_HASH,
 				prBaseRepoUrl: FORK_URL,
-				forgeName: "bitbucket",
+				forgeName: "azure",
 			}),
 		).toBe(false);
 	});

@@ -781,6 +781,39 @@ export type BaseBranchResolutionApproach = {
   type: "hardReset";
 };
 
+export type BitbucketAccountIdentifier = {
+  type: "apiToken";
+  info: {
+    email: string;
+  };
+};
+
+/** Serializable version of [`AuthStatusResponse`] with exposed access token. */
+export type BitbucketAuthStatusResponseSensitive = {
+  /** The Bitbucket access token as a plain string (sensitive data). */
+  accessToken: string;
+  /** The Bitbucket username. */
+  username: string;
+  /** The user's display name, if available. */
+  name: string | null;
+  /** The Atlassian account email used for authentication. */
+  email: string | null;
+};
+
+/** Serializable version of [`AuthenticatedUser`] with exposed access token. */
+export type BitbucketAuthenticatedUserSensitive = {
+  /** The Bitbucket access token as a plain string (sensitive data). */
+  accessToken: string;
+  /** The Bitbucket username. */
+  username: string;
+  /** The URL to the user's avatar image, if available. */
+  avatarUrl: string | null;
+  /** The user's display name, if available. */
+  name: string | null;
+  /** The Atlassian account email used for authentication. */
+  email: string | null;
+};
+
 /** JSON transport type describing one stack bottom to update. */
 export type BottomUpdate = {
   /** How the selected stack bottom should be updated. */
@@ -1597,6 +1630,9 @@ export type ForgeUser = {
 } | {
   provider: "gitlab";
   details: GitlabAccountIdentifier;
+} | {
+  provider: "bitbucket";
+  details: BitbucketAccountIdentifier;
 };
 
 /**

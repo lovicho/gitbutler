@@ -21,16 +21,16 @@ use crate::args::atoms::CliIdArg;
 #[derive(Debug, clap::Parser)]
 #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
 pub struct Platform {
-    /// Creates the commit without a commit message.
-    #[clap(long, group = "commit_message")]
-    pub no_message: bool,
-
     /// The message to use for the commit.
     ///
     /// Can be supplied any amount of times, each value being appended to the preceding ones with a
     /// blank line in between.
     #[clap(short, long, group = "commit_message")]
     pub message: Option<Vec<String>>,
+
+    /// Creates the commit without a commit message.
+    #[clap(long, group = "commit_message")]
+    pub no_message: bool,
 
     /// Place the commit on the branch `BRANCH`.
     ///

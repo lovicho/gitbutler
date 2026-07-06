@@ -19,7 +19,6 @@ import {
 	selectProjectFilesVisible,
 	selectProjectOutlineModeState,
 } from "#ui/projects/state.ts";
-import { getButtonClassName } from "#ui/components/Button.tsx";
 import { PickerDialog } from "#ui/components/PickerDialog.tsx";
 import { globalHotkeys, workspaceHotkeys } from "#ui/hotkeys.ts";
 import { lastOpenedProjectKey } from "#ui/projects/last-opened.ts";
@@ -34,7 +33,7 @@ import {
 } from "@tanstack/react-query";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { Match } from "effect";
-import { type FC, Activity, Component, ReactNode, useDeferredValue } from "react";
+import { type FC, Activity, useDeferredValue } from "react";
 import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panels";
 import {
 	branchOperand,
@@ -59,6 +58,7 @@ import { getOperations } from "#ui/operations/operation.ts";
 import { buildIndexByKey, type NavigationIndex } from "#ui/workspace/navigation-index.ts";
 import { reverse } from "effect/Array";
 import { OperationControls } from "#ui/routes/project/$id/workspace/OperationControls.tsx";
+import { WorkspacePageErrorBoundary } from "./WorkspacePageErrorBoundary.tsx";
 
 // This must be unique as to not collide with other IDs, and stable because it's
 // stored in local storage.
@@ -458,52 +458,6 @@ const WorkspacePage: FC = () => {
 		</>
 	);
 };
-
-class WorkspacePageErrorBoundary extends Component<
-	{
-		onReset: () => void;
-		children: ReactNode;
-	},
-	{
-		error: Error | null;
-	}
-> {
-	state = { error: null as Error | null };
-
-	static getDerivedStateFromError(error: unknown) {
-		return {
-			error:
-				error instanceof Error
-					? error
-					: new Error(typeof error === "string" ? error : JSON.stringify(error)),
-		};
-	}
-
-	handleRetry(): void {
-		this.props.onReset();
-		this.setState({ error: null });
-	}
-
-	render(): ReactNode {
-		if (!this.state.error) return this.props.children;
-
-		return (
-			<div className={styles.error}>
-				<h1 className={styles.errorTitle}>Something went wrong.</h1>
-				<div className={styles.errorActions}>
-					<button
-						type="button"
-						className={getButtonClassName({})}
-						onClick={() => this.handleRetry()}
-					>
-						Retry
-					</button>
-				</div>
-				<code className={styles.errorMessage}>{this.state.error.message}</code>
-			</div>
-		);
-	}
-}
 
 export const Route: FC = () => {
 	const { id: projectId } = useParams({ from: "/project/$id/workspace" });
