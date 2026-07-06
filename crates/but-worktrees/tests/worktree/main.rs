@@ -12,7 +12,7 @@ mod util {
 
     pub fn test_ctx(name: &str) -> anyhow::Result<TestContext> {
         let (repo, tmpdir) = but_testsupport::writable_scenario(name);
-        let ctx = Context::from_repo(repo)?;
+        let ctx = Context::from_repo_for_testing(repo)?;
 
         Ok(TestContext { ctx, tmpdir })
     }

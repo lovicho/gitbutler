@@ -14,7 +14,6 @@ import {
 	toElectronAccelerator,
 } from "#ui/hotkeys.ts";
 import { nativeMenuItem, showNativeMenuFromTrigger, type NativeMenuItem } from "#ui/native-menu.ts";
-import { uncommittedChangesOperand } from "#ui/operands.ts";
 import { projectActions, selectProjectOutlineModeState } from "#ui/projects/state.ts";
 import { focusSelectionScope } from "#ui/selection-scopes.ts";
 import { useAppDispatch, useAppSelector } from "#ui/store.ts";
@@ -69,7 +68,6 @@ export const CommitForm: FC<{
 
 	const { data: worktreeChanges } = useQuery(changesInWorktreeQueryOptions(projectId));
 
-	const operand = uncommittedChangesOperand;
 	const commitTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
 	const isDefaultMode = useAppSelector(
@@ -102,9 +100,6 @@ export const CommitForm: FC<{
 		setOpen(false);
 	};
 
-	const selectChanges = () => {
-		dispatch(projectActions.selectOutline({ projectId, selection: operand }));
-	};
 	const createCommit = () => {
 		if (!commitTarget) return;
 
@@ -202,7 +197,6 @@ export const CommitForm: FC<{
 				readOnly={isCommitOrAmendPending}
 				placeholder={commitTextareaLabel}
 				className={classes("text-13", "text-body", styles.textarea)}
-				onFocus={selectChanges}
 			/>
 
 			<div className={styles.footer}>

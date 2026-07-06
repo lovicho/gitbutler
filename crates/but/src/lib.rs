@@ -96,6 +96,23 @@ fn early_help_format(args: &[OsString]) -> OutputFormat {
         .unwrap_or_default()
 }
 
+static APP_SETTINGS: std::sync::OnceLock<AppSettings> = std::sync::OnceLock::new();
+
+/// The application settings, loaded from the default path once per process.
+///
+/// Concurrent first calls may load twice with one winner - harmless, and avoids
+/// the still-unstable `OnceLock::get_or_try_init`.
+pub(crate) fn app_settings() -> Result<&'static AppSettings> {
+    if let Some(settings) = APP_SETTINGS.get() {
+        return Ok(settings);
+    }
+    match AppSettings::load_from_default_path_creating_without_customization() {
+        Ok(settings) => Ok(APP_SETTINGS.get_or_init(|| settings)),
+        // A concurrent caller may have initialized while our load failed.
+        Err(err) => APP_SETTINGS.get().ok_or(err),
+    }
+}
+
 /// Handle `args` which must be what's passed by `std::env::args_os()`.
 pub async fn handle_args(args: impl Iterator<Item = OsString>) -> Result<()> {
     let theme_preset_from_env: anyhow::Result<theme::ThemePreset> =
@@ -157,9 +174,11 @@ pub async fn handle_args(args: impl Iterator<Item = OsString>) -> Result<()> {
         return Ok(());
     }
 
-    // Handle `but help -h` and `but help --help` to show the grouped help output
-    if args_vec.iter().any(|arg| arg == "help")
-        && args_vec.iter().any(|arg| arg == "--help" || arg == "-h")
+    // Handle bare `but help -h` and `but help --help` to show the grouped help output.
+    // Topic help flags, like `but help cli-ids --help`, are left to clap.
+    if args_vec.len() == 3
+        && args_vec[1] == "help"
+        && matches!(args_vec[2].as_str(), "--help" | "-h")
     {
         let mut out = OutputChannel::new(early_help_format(&args));
         command::help::print_grouped(&mut out)?;
@@ -208,7 +227,7 @@ pub async fn handle_args(args: impl Iterator<Item = OsString>) -> Result<()> {
         };
         return run_agentlog_command(&args.current_dir, cmd, &mut out);
     }
-    let app_settings = AppSettings::load_from_default_path_creating_without_customization()?;
+    let app_settings = app_settings()?.clone();
 
     let result = match args.cmd.take() {
         Some(cmd @ Subcommands::External(_)) => {
@@ -412,8 +431,8 @@ async fn match_subcommand(
                 .emit_metrics(metrics_ctx)
                 .map_err(CliError::from)
         }
-        Subcommands::Help => {
-            command::help::print_grouped(out)?;
+        Subcommands::Help { topic } => {
+            command::help::print(out, topic)?;
             Ok(())
         }
         Subcommands::Onboarding => command::onboarding::handle(out).map_err(CliError::from),
@@ -1261,7 +1280,7 @@ async fn match_subcommand(
                 }
                 _ => command::legacy::setup::find_or_initialize_repo(&args.current_dir, out, init)?,
             };
-            let mut ctx = but_ctx::Context::from_repo(repo)?;
+            let mut ctx = but_ctx::Context::from_repo_with_settings(repo, app_settings.clone())?;
             let mut guard = ctx.exclusive_worktree_access();
             command::legacy::setup::repo(&mut ctx, &args.current_dir, out, guard.write_permission())
                 .context("Failed to set up GitButler project.")

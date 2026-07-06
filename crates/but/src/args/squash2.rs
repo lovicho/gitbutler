@@ -59,6 +59,8 @@ pub struct Platform {
     /// If `TARGET` is a branch the sources will be added to the first commit on the branch.
     ///
     /// If `TARGET` is the uncommitted area (`zz`) the sources will be uncommitted.
+    ///
+    /// Takes a CLI ID, see `but help cli-ids` for details.
     #[clap(long, short)]
     pub target: Option<CliIdArg>,
 
@@ -84,6 +86,8 @@ pub struct Platform {
     ///
     /// It is not possible to mix sources of different types, i.e., all sources must either be
     /// commits, branches, uncommitted files, `zz`, or committed files.
+    ///
+    /// Takes CLI IDs, see `but help cli-ids` for details.
     #[clap(required = true)]
     pub sources: Vec<CliIdArg>,
 }

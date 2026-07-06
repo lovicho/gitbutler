@@ -168,3 +168,40 @@ Error: Branch name 'A/new/branch' collides with existing branch 'A'
 
 "#]]);
 }
+
+#[test]
+fn creates_new_branches_on_top() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.but("branch new one").assert().success();
+
+    env.but("status").assert().success().stdout_eq(str![[r#"
+╭┄zz [uncommitted] (no changes)
+┊
+┊╭┄on [one] (no commits)
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    env.but("branch new two").assert().success();
+
+    env.but("status").assert().success().stdout_eq(str![[r#"
+╭┄zz [uncommitted] (no changes)
+┊
+┊╭┄tw [two] (no commits)
+├╯
+┊
+┊╭┄on [one] (no commits)
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}

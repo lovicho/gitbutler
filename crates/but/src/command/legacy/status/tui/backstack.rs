@@ -1,8 +1,15 @@
 use std::{collections::VecDeque, ops::Deref};
 
-#[derive(Debug, Default, Clone)]
+#[derive(Default, Clone)]
 pub struct Backstack {
     stack: VecDeque<BackstackEntry>,
+}
+
+impl std::fmt::Debug for Backstack {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Self { stack } = self;
+        stack.fmt(f)
+    }
 }
 
 impl Backstack {

@@ -13,7 +13,12 @@ impl App {
             }
 
             self.restore_mode_before_details(messages);
-            self.maybe_move_cursor_into_file_list();
+
+            if !self.maybe_move_cursor_into_file_list() {
+                // the line that we were on when we opened the detail view must have been
+                // selectable since otherwise the cursor couldn't have been on it
+            }
+
             return;
         }
 

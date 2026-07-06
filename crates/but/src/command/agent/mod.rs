@@ -742,7 +742,7 @@ fn apply_plan(out: &mut OutputChannel, current_dir: &Path, plan: &Plan) -> Resul
 #[cfg(feature = "legacy")]
 fn run_but_setup(current_dir: &Path, out: &mut OutputChannel) -> Result<()> {
     let repo = gix::discover(current_dir).context("No git repository found for `but setup`.")?;
-    let mut ctx = but_ctx::Context::from_repo(repo)?;
+    let mut ctx = but_ctx::Context::from_repo_with_settings(repo, crate::app_settings()?.clone())?;
     let mut guard = ctx.exclusive_worktree_access();
     crate::command::legacy::setup::repo(&mut ctx, current_dir, out, guard.write_permission())
         .context("Failed to set up GitButler project.")

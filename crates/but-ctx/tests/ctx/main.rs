@@ -7,52 +7,56 @@ use snapbox::ToDebug;
 
 #[test]
 fn new_from_project_handle_uses_repo_gitdir() -> anyhow::Result<()> {
-    let repo = but_testsupport::read_only_in_memory_scenario("unborn-empty")?;
-    let worktree = repo.workdir().expect("fixture is non-bare").to_owned();
+    but_testsupport::isolated_app_data_dir(|| {
+        let repo = but_testsupport::read_only_in_memory_scenario("unborn-empty")?;
+        let worktree = repo.workdir().expect("fixture is non-bare").to_owned();
 
-    assert!(repo.path().is_relative());
-    for input in [
-        repo.git_dir().to_owned(),
-        repo.workdir().expect("non-bare").to_owned(),
-    ] {
-        let handle = ProjectHandle::from_path(&input)?;
-        let ctx = Context::new_from_project_handle(handle)?;
+        assert!(repo.path().is_relative());
+        for input in [
+            repo.git_dir().to_owned(),
+            repo.workdir().expect("non-bare").to_owned(),
+        ] {
+            let handle = ProjectHandle::from_path(&input)?;
+            let ctx = Context::new_from_project_handle(handle)?;
 
-        let expected_gitdir = gix::path::realpath(ctx.repo.get()?.path())?;
-        let expected_worktree = gix::path::realpath(&worktree)?;
+            let expected_gitdir = gix::path::realpath(ctx.repo.get()?.path())?;
+            let expected_worktree = gix::path::realpath(&worktree)?;
+            assert_eq!(
+                ctx.gitdir, expected_gitdir,
+                "the Git dir is the realpath, so ProjectHandles can be worktrees or git directories"
+            );
+            assert_ne!(ctx.gitdir, repo.path(), "even though we didn't pass it");
+            assert_eq!(
+                ctx.workdir()?.as_deref(),
+                Some(expected_worktree.as_path()),
+                "real-pathiness translates to the worktree"
+            );
+        }
+
+        let ctx = Context::from_repo_for_testing(repo.clone())?;
         assert_eq!(
-            ctx.gitdir, expected_gitdir,
-            "the Git dir is the realpath, so ProjectHandles can be worktrees or git directories"
+            ctx.gitdir,
+            repo.path(),
+            "When creating a context from a repo directly, it will not alter the stored path though."
         );
-        assert_ne!(ctx.gitdir, repo.path(), "even though we didn't pass it");
-        assert_eq!(
-            ctx.workdir()?.as_deref(),
-            Some(expected_worktree.as_path()),
-            "real-pathiness translates to the worktree"
-        );
-    }
-
-    let ctx = Context::from_repo(repo.clone())?;
-    assert_eq!(
-        ctx.gitdir,
-        repo.path(),
-        "When creating a context from a repo directly, it will not alter the stored path though."
-    );
-    Ok(())
+        Ok(())
+    })
 }
 
 #[test]
 fn new_from_project_handle_keeps_repo_cached() -> anyhow::Result<()> {
-    let repo = but_testsupport::read_only_in_memory_scenario("unborn-empty")?;
-    let handle = ProjectHandle::from_path(repo.git_dir())?;
-    let ctx = Context::new_from_project_handle(handle)?;
+    but_testsupport::isolated_app_data_dir(|| {
+        let repo = but_testsupport::read_only_in_memory_scenario("unborn-empty")?;
+        let handle = ProjectHandle::from_path(repo.git_dir())?;
+        let ctx = Context::new_from_project_handle(handle)?;
 
-    assert!(
-        ctx.repo.get_opt().is_some(),
-        "the repository used during construction should be kept in context"
-    );
-    assert!(ctx.to_sync().repo.is_some());
-    Ok(())
+        assert!(
+            ctx.repo.get_opt().is_some(),
+            "the repository used during construction should be kept in context"
+        );
+        assert!(ctx.to_sync().repo.is_some());
+        Ok(())
+    })
 }
 
 #[test]
@@ -65,7 +69,7 @@ fn project_data_dir_comes_from_git_config() -> anyhow::Result<()> {
         .run();
     let repo = open_repo(repo_dir.path())?;
 
-    let ctx = Context::from_repo(repo)?;
+    let ctx = Context::from_repo_for_testing(repo)?;
     assert_eq!(ctx.project_data_dir(), ctx.gitdir.join("gitbutler-custom"));
 
     let db = ctx.db.get_cache()?;
@@ -93,7 +97,7 @@ fn sync_context_preserves_project_data_dir() -> anyhow::Result<()> {
     let repo_dir = TempDir::new()?;
     gix::init(repo_dir.path())?;
     let repo = open_repo(repo_dir.path())?;
-    let ctx = Context::from_repo(repo)?;
+    let ctx = Context::from_repo_for_testing(repo)?;
 
     let sync = ctx.to_sync();
     let restored = sync.into_thread_local();
@@ -115,24 +119,26 @@ fn discover_with_app_channel_uses_requested_project_data_dir() -> anyhow::Result
         .args(["config", "--local", dev_key, "gitbutler-dev"])
         .run();
 
-    let nightly_ctx = Context::discover_with_app_channel(repo_dir.path(), AppChannel::Nightly)?;
-    assert_eq!(
-        nightly_ctx.project_data_dir(),
-        nightly_ctx.gitdir.join("gitbutler-nightly")
-    );
+    but_testsupport::isolated_app_data_dir(|| {
+        let nightly_ctx = Context::discover_with_app_channel(repo_dir.path(), AppChannel::Nightly)?;
+        assert_eq!(
+            nightly_ctx.project_data_dir(),
+            nightly_ctx.gitdir.join("gitbutler-nightly")
+        );
 
-    let dev_ctx = Context::discover_with_app_channel(repo_dir.path(), AppChannel::Dev)?;
-    assert_eq!(
-        dev_ctx.project_data_dir(),
-        dev_ctx.gitdir.join("gitbutler-dev")
-    );
-    Ok(())
+        let dev_ctx = Context::discover_with_app_channel(repo_dir.path(), AppChannel::Dev)?;
+        assert_eq!(
+            dev_ctx.project_data_dir(),
+            dev_ctx.gitdir.join("gitbutler-dev")
+        );
+        Ok(())
+    })
 }
 
 #[test]
 fn set_project_meta_updates_git_config_toml_and_database() -> anyhow::Result<()> {
     let (_tmp, repo, target_commit_id) = run_fixture("project-meta-base")?;
-    let ctx = Context::from_repo(repo)?;
+    let ctx = Context::from_repo_for_testing(repo)?;
     let project_meta = project_meta(target_commit_id, "refs/remotes/origin/main", "fork")?;
 
     snapbox::assert_data_eq!(
@@ -220,7 +226,7 @@ fn set_project_meta_fills_missing_target_commit_id_from_target_ref() -> anyhow::
         let mut target_ref = repo.find_reference("refs/remotes/origin/main")?;
         target_ref.peel_to_commit()?.id
     };
-    let ctx = Context::from_repo(repo)?;
+    let ctx = Context::from_repo_for_testing(repo)?;
 
     ctx.set_project_meta(ProjectMeta {
         target_ref: Some("refs/remotes/origin/main".try_into()?),
@@ -242,7 +248,7 @@ fn set_project_meta_fills_missing_target_commit_id_from_target_ref() -> anyhow::
 #[test]
 fn set_project_meta_clears_missing_target_ref() -> anyhow::Result<()> {
     let (_tmp, repo, _target_commit_id) = run_fixture("project-meta-base")?;
-    let ctx = Context::from_repo(repo)?;
+    let ctx = Context::from_repo_for_testing(repo)?;
 
     ctx.set_project_meta(ProjectMeta {
         target_ref: Some("refs/remotes/origin/missing".try_into()?),
@@ -260,7 +266,7 @@ fn set_project_meta_clears_missing_target_ref() -> anyhow::Result<()> {
 #[test]
 fn project_meta_defaults_when_config_and_toml_are_unset() -> anyhow::Result<()> {
     let (_tmp, repo, _target_commit_id) = run_fixture("project-meta-base")?;
-    let ctx = Context::from_repo(repo)?;
+    let ctx = Context::from_repo_for_testing(repo)?;
 
     snapbox::assert_data_eq!(
         storage_state(&ctx)?.to_debug(),
@@ -319,11 +325,11 @@ StorageState {
 #[test]
 fn project_meta_observes_changes_made_through_other_repository_handles() -> anyhow::Result<()> {
     let (_tmp, repo, target_commit_id) = run_fixture("project-meta-base")?;
-    let ctx = Context::from_repo(repo)?;
+    let ctx = Context::from_repo_for_testing(repo)?;
     assert_eq!(ctx.project_meta()?.target_ref, None);
 
     // Write through an independent handle, like another process would.
-    let other_ctx = Context::from_repo(open_repo(&ctx.gitdir)?)?;
+    let other_ctx = Context::from_repo_for_testing(open_repo(&ctx.gitdir)?)?;
     other_ctx.set_project_meta(project_meta(
         target_commit_id,
         "refs/remotes/origin/main",
@@ -341,7 +347,7 @@ fn project_meta_observes_changes_made_through_other_repository_handles() -> anyh
 #[test]
 fn project_meta_falls_back_to_toml_and_ports_on_first_write() -> anyhow::Result<()> {
     let (_tmp, repo, _target_commit_id) = run_fixture("project-meta-toml")?;
-    let ctx = Context::from_repo(repo)?;
+    let ctx = Context::from_repo_for_testing(repo)?;
 
     snapbox::assert_data_eq!(
         storage_state(&ctx)?.to_debug(),
@@ -452,7 +458,7 @@ StorageState {
 #[test]
 fn project_meta_reads_git_config_when_ported_even_if_toml_differs() -> anyhow::Result<()> {
     let (_tmp, repo, _target_commit_id) = run_fixture("project-meta-ported")?;
-    let ctx = Context::from_repo(repo)?;
+    let ctx = Context::from_repo_for_testing(repo)?;
 
     snapbox::assert_data_eq!(
         storage_state(&ctx)?.to_debug(),
@@ -537,7 +543,7 @@ StorageState {
 #[test]
 fn resync_project_meta_from_legacy_leaves_unported_repos_alone() -> anyhow::Result<()> {
     let (_tmp, repo, _target_commit_id) = run_fixture("project-meta-toml")?;
-    let ctx = Context::from_repo(repo)?;
+    let ctx = Context::from_repo_for_testing(repo)?;
 
     ctx.resync_project_meta_from_legacy()?;
 
@@ -578,7 +584,7 @@ StorageState {
 #[test]
 fn resync_project_meta_from_legacy_rewrites_config_from_toml_when_ported() -> anyhow::Result<()> {
     let (_tmp, repo, _target_commit_id) = run_fixture("project-meta-ported")?;
-    let ctx = Context::from_repo(repo)?;
+    let ctx = Context::from_repo_for_testing(repo)?;
 
     ctx.resync_project_meta_from_legacy()?;
 

@@ -21,7 +21,6 @@ import { RowBubble, RowBubbleGroup, RowLabel, RowLabelContainer, RowToolbar } fr
 import { ItemRow } from "./ItemRow.tsx";
 import { useQueries } from "@tanstack/react-query";
 import { treeChangeDiffsQueryOptions } from "#ui/api/queries.ts";
-import { commitMessageInputId } from "../CommitForm.tsx";
 
 type LineStats = {
 	linesAdded: number;
@@ -36,10 +35,6 @@ const getLineStats = (diffs: Array<UnifiedPatch | null | undefined>): LineStats 
 		stats.linesRemoved += diff.subject.linesRemoved;
 	}
 	return stats;
-};
-
-const focusCommitMessageInput = () => {
-	document.getElementById(commitMessageInputId)?.focus();
 };
 
 export const UncommittedChangesRow: FC<{
@@ -76,11 +71,6 @@ export const UncommittedChangesRow: FC<{
 		focusSelectionScope("outline");
 	};
 
-	const composeCommitMessage = () => {
-		dispatch(projectActions.selectOutline({ projectId, selection: uncommittedChangesOperand }));
-		focusCommitMessageInput();
-	};
-
 	const discardChanges = () => {
 		discardWorktreeChanges.mutate({
 			projectId,
@@ -89,12 +79,6 @@ export const UncommittedChangesRow: FC<{
 	};
 
 	const menuItems: Array<NativeMenuItem> = [
-		nativeMenuItem({
-			label: "Compose Commit Message",
-			accelerator: toElectronAccelerator(outlineHotkeys.composeCommitMessageFromChanges.hotkey),
-			onSelect: composeCommitMessage,
-			enabled: isDefaultMode,
-		}),
 		nativeMenuItem({
 			label: "Cut Changes",
 			enabled: changes.length > 0,

@@ -35,7 +35,6 @@ use crate::{
             },
             help::HelpMessage,
             key_bind::{KeyBinds, fuzzy_picker_key_binds},
-            marking::Marks,
             mode::{Mode, ModeDiscriminant},
             operations::stack_has_assigned_changes,
             toast::ToastKind,
@@ -63,7 +62,6 @@ mod graph_extension;
 mod help;
 mod highlight;
 mod key_bind;
-mod marking;
 mod message_on_drop;
 mod mode;
 mod operations;
@@ -680,7 +678,7 @@ enum ReloadCause {
 #[derive(Debug, Clone)]
 enum FilesMessage {
     ToggleGlobalFilesList,
-    ToggleFilesForCommit,
+    ToggleFilesForSelectedCommit,
 }
 
 /// What to select after reloading

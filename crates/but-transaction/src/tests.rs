@@ -1,5 +1,5 @@
 use but_api::WorkspaceState;
-use but_core::DryRun;
+use but_core::{DiffSpec, DryRun};
 use but_ctx::Context;
 use but_oplog::legacy::{OperationKind, SnapshotDetails};
 use but_rebase::graph_rebase::mutate::{InsertSide, RelativeTo};
@@ -28,6 +28,14 @@ fn find_commits<const N: usize>(env: &Sandbox, commits: [&str; N]) -> [ObjectId;
     commits.map(|commit| repo.rev_parse_single(commit).unwrap().detach())
 }
 
+fn diff_spec_for_file(path: &str) -> DiffSpec {
+    DiffSpec {
+        previous_path: None,
+        path: path.into(),
+        hunk_headers: vec![],
+    }
+}
+
 #[track_caller]
 fn assert_num_snapshots(ctx: &Context, expected: usize) {
     assert_eq!(
@@ -46,7 +54,7 @@ fn squashing_three_commits() {
     let [three, two, one] = find_commits(&env, ["1e25c58", "9b3b3d5", "dbdbcea"]);
 
     let repo = but_testsupport::open_repo(env.projects_root()).unwrap();
-    let mut ctx = Context::from_repo(repo)
+    let mut ctx = Context::from_repo_for_testing(repo)
         .map(Context::with_memory_app_cache)
         .unwrap();
 
@@ -99,7 +107,7 @@ fn rollback() {
     let [three, two, one] = find_commits(&env, ["1e25c58", "9b3b3d5", "dbdbcea"]);
 
     let repo = but_testsupport::open_repo(env.projects_root()).unwrap();
-    let mut ctx = Context::from_repo(repo)
+    let mut ctx = Context::from_repo_for_testing(repo)
         .map(Context::with_memory_app_cache)
         .unwrap();
 
@@ -145,7 +153,7 @@ fn create_reference_without_creating_commits() {
     let [three] = find_commits(&env, ["1e25c58"]);
 
     let repo = but_testsupport::open_repo(env.projects_root()).unwrap();
-    let mut ctx = Context::from_repo(repo)
+    let mut ctx = Context::from_repo_for_testing(repo)
         .map(Context::with_memory_app_cache)
         .unwrap();
 
@@ -187,7 +195,7 @@ fn create_reference_relative_to_various_anchors() {
     let [three, two, base] = find_commits(&env, ["1e25c58", "9b3b3d5", "6674d4f"]);
 
     let repo = but_testsupport::open_repo(env.projects_root()).unwrap();
-    let mut ctx = Context::from_repo(repo)
+    let mut ctx = Context::from_repo_for_testing(repo)
         .map(Context::with_memory_app_cache)
         .unwrap();
 
@@ -254,7 +262,7 @@ fn create_reference_then_remove_it_in_same_transaction() {
     let [three] = find_commits(&env, ["1e25c58"]);
 
     let repo = but_testsupport::open_repo(env.projects_root()).unwrap();
-    let mut ctx = Context::from_repo(repo)
+    let mut ctx = Context::from_repo_for_testing(repo)
         .map(Context::with_memory_app_cache)
         .unwrap();
 
@@ -297,7 +305,7 @@ fn create_reference_then_commit_below_anchor_keeps_commit_in_workspace() {
     let [three, base] = find_commits(&env, ["1e25c58", "6674d4f"]);
 
     let repo = but_testsupport::open_repo(env.projects_root()).unwrap();
-    let mut ctx = Context::from_repo(repo)
+    let mut ctx = Context::from_repo_for_testing(repo)
         .map(Context::with_memory_app_cache)
         .unwrap();
 
@@ -368,7 +376,7 @@ fn move_commits_then_commit_relative_to_moved_commit() {
     let [three, one] = find_commits(&env, ["1e25c58", "dbdbcea"]);
 
     let repo = but_testsupport::open_repo(env.projects_root()).unwrap();
-    let mut ctx = Context::from_repo(repo)
+    let mut ctx = Context::from_repo_for_testing(repo)
         .map(Context::with_memory_app_cache)
         .unwrap();
 
@@ -424,7 +432,7 @@ fn move_commits_reorders_multiple_subjects() {
     let [three, two, one] = find_commits(&env, ["1e25c58", "9b3b3d5", "dbdbcea"]);
 
     let repo = but_testsupport::open_repo(env.projects_root()).unwrap();
-    let mut ctx = Context::from_repo(repo)
+    let mut ctx = Context::from_repo_for_testing(repo)
         .map(Context::with_memory_app_cache)
         .unwrap();
 
@@ -466,7 +474,7 @@ fn create_reference_then_commit_relative_to_it() {
     let [three] = find_commits(&env, ["1e25c58"]);
 
     let repo = but_testsupport::open_repo(env.projects_root()).unwrap();
-    let mut ctx = Context::from_repo(repo)
+    let mut ctx = Context::from_repo_for_testing(repo)
         .map(Context::with_memory_app_cache)
         .unwrap();
 
@@ -513,7 +521,7 @@ fn create_reference_is_removed_on_rollback() {
     let [three] = find_commits(&env, ["1e25c58"]);
 
     let repo = but_testsupport::open_repo(env.projects_root()).unwrap();
-    let mut ctx = Context::from_repo(repo)
+    let mut ctx = Context::from_repo_for_testing(repo)
         .map(Context::with_memory_app_cache)
         .unwrap();
 
@@ -556,7 +564,7 @@ fn dynamic_rollback() {
     let [three, two, one] = find_commits(&env, ["1e25c58", "9b3b3d5", "dbdbcea"]);
 
     let repo = but_testsupport::open_repo(env.projects_root()).unwrap();
-    let mut ctx = Context::from_repo(repo)
+    let mut ctx = Context::from_repo_for_testing(repo)
         .map(Context::with_memory_app_cache)
         .unwrap();
 
@@ -620,7 +628,7 @@ fn discarding_three_commits() {
     let [three, two, one] = find_commits(&env, ["1e25c58", "9b3b3d5", "dbdbcea"]);
 
     let repo = but_testsupport::open_repo(env.projects_root()).unwrap();
-    let mut ctx = Context::from_repo(repo)
+    let mut ctx = Context::from_repo_for_testing(repo)
         .map(Context::with_memory_app_cache)
         .unwrap();
 
@@ -657,6 +665,63 @@ fn discarding_three_commits() {
 }
 
 #[test]
+fn discard_changes_from_commit() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    let [two] = find_commits(&env, ["9b3b3d5"]);
+
+    let repo = but_testsupport::open_repo(env.projects_root()).unwrap();
+    let mut ctx = Context::from_repo_for_testing(repo)
+        .map(Context::with_memory_app_cache)
+        .unwrap();
+
+    assert_num_snapshots(&ctx, 0);
+
+    let mut meta = ctx.meta().unwrap();
+    let snapshot_details = SnapshotDetails::new(OperationKind::DiscardChanges);
+
+    let outcome = with_transaction(
+        &mut ctx,
+        &mut meta,
+        snapshot_details,
+        DryRun::No,
+        |mut tx| {
+            let new_two =
+                tx.discard_changes_from_commit(two, vec![diff_spec_for_file("file-two")])?;
+
+            Ok(DynamicOutcome::<_, ()>::Commit(new_two))
+        },
+    )
+    .unwrap();
+
+    let DynamicOutcome::Commit((new_two, _workspace)) = outcome else {
+        panic!("transaction should commit");
+    };
+
+    let repo = env.open_repo();
+    let new_two_tree_id = repo
+        .find_commit(new_two)
+        .unwrap()
+        .tree_id()
+        .unwrap()
+        .detach();
+    let new_two_tree = repo.find_tree(new_two_tree_id).unwrap();
+    assert!(
+        new_two_tree
+            .lookup_entry_by_path("file-two")
+            .unwrap()
+            .is_none(),
+        "discarded file should be removed from the rewritten commit"
+    );
+    assert!(
+        !env.projects_root().join("file-two").exists(),
+        "discarded file should be removed from the worktree"
+    );
+    assert_num_snapshots(&ctx, 1);
+}
+
+#[test]
 fn remove_references() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
     env.setup_metadata(&["A"]);
@@ -676,7 +741,7 @@ fn remove_references() {
     let [three, two, one] = find_commits(&env, ["1e25c58", "9b3b3d5", "dbdbcea"]);
 
     let repo = but_testsupport::open_repo(env.projects_root()).unwrap();
-    let mut ctx = Context::from_repo(repo)
+    let mut ctx = Context::from_repo_for_testing(repo)
         .map(Context::with_memory_app_cache)
         .unwrap();
 

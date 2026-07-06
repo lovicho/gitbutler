@@ -1,25 +1,29 @@
 use std::sync::Arc;
 
-use but_core::{DryRun, ref_metadata::StackId};
+use but_core::{DiffSpec, DryRun, ref_metadata::StackId};
 use but_ctx::Context;
 use gitbutler_oplog::entry::{OperationKind, SnapshotDetails};
-use gix::refs::Category;
+use gix::{ObjectId, refs::Category};
 use nonempty::NonEmpty;
 
 use crate::{
     CliId,
     command::legacy::status::tui::{
         Message, ReloadCause, SelectAfterReload,
-        app::{App, Modal, mark::commits_on_branch},
+        app::{
+            App, Modal,
+            mark::{MarkableRef, commits_on_branch},
+        },
         confirm::Confirm,
         key_bind::confirm_key_binds,
-        marking::MarkableRef,
         message_on_drop,
         mode::Mode,
         operations,
     },
     utils::diff_specs::DiffSpecBuilder,
 };
+
+use super::mark::Marks;
 
 impl App {
     pub fn select_top_branch_for_stack_after_reload(
@@ -46,7 +50,7 @@ impl App {
         ctx: &mut Context,
         messages: &mut Vec<Message>,
     ) -> anyhow::Result<()> {
-        if self.marks().is_none_or(|marks| marks.is_empty()) {
+        if self.marks_ref().is_empty() {
             self.handle_discard_selection(ctx, messages)
         } else {
             self.handle_discard_marks(ctx, messages)
@@ -233,7 +237,67 @@ impl App {
                         },
                     )
                 }
-                CliId::PathPrefix { .. } | CliId::CommittedFile { .. } => return Ok(()),
+                CliId::CommittedFile {
+                    commit_id,
+                    path,
+                    id: _,
+                } => {
+                    let commit_id = *commit_id;
+                    let path = path.to_owned();
+
+                    self.to_be_discarded = Vec::from([Arc::clone(cli_id)]);
+                    let drop_to_be_discarded =
+                        message_on_drop::message_on_drop(Message::DropToBeDiscarded, messages);
+
+                    Confirm::new(
+                        NonEmpty::new(format!("Discard changes to {path}?").into()),
+                        self.theme,
+                        move |ctx, messages| {
+                            let mut perm = ctx.exclusive_worktree_access();
+                            let mut meta = ctx.meta()?;
+                            let snapshot_details = SnapshotDetails::new(OperationKind::DiscardFile);
+
+                            let changes = {
+                                let context_lines = ctx.settings.context_lines;
+                                let (repo, ws, mut db) =
+                                    ctx.workspace_and_db_mut_with_perm(perm.read_permission())?;
+                                let mut builder =
+                                    DiffSpecBuilder::new(&mut db, &repo, &ws, context_lines);
+                                builder
+                                    .push_changes_from_committed_file(commit_id, path.as_ref())?;
+                                builder.into_diff_specs()
+                            };
+
+                            let (new_commit, _ws) = but_transaction::with_transaction_with_perm(
+                                ctx,
+                                &mut meta,
+                                perm.write_permission(),
+                                snapshot_details,
+                                DryRun::No,
+                                |mut tx| {
+                                    let new_commit =
+                                        tx.discard_changes_from_commit(commit_id, changes)?;
+                                    Ok(but_transaction::Commit(new_commit))
+                                },
+                            )?;
+
+                            let select_after_reload =
+                                if operations::commit_is_empty(ctx, new_commit)? {
+                                    SelectAfterReload::Commit(new_commit)
+                                } else {
+                                    SelectAfterReload::FirstFileInCommit(new_commit)
+                                };
+                            messages.push(Message::Reload(
+                                Some(select_after_reload),
+                                ReloadCause::Mutation,
+                            ));
+
+                            drop(drop_to_be_discarded);
+                            Ok(())
+                        },
+                    )
+                }
+                CliId::PathPrefix { .. } => return Ok(()),
             },
             key_binds: confirm_key_binds(),
         });
@@ -254,30 +318,53 @@ impl App {
             return Ok(());
         }
 
-        let commits = normal_mode
+        let commits_to_discard = normal_mode
             .marks
             .iter()
             .filter_map(|mark| match mark {
                 MarkableRef::Commit(mark) => Some(mark.commit_id),
-                MarkableRef::Uncommitted(..) => None,
+                _ => None,
             })
             .collect::<Vec<_>>();
 
-        let uncommitted_diff_specs = {
+        enum ChangesToDiscard {
+            Uncommitted(Vec<DiffSpec>),
+            CommittedFiles(ObjectId, Vec<DiffSpec>),
+        }
+
+        let changes_to_discard = {
             let context_lines = ctx.settings.context_lines;
             let (_guard, repo, ws, mut db) = ctx.workspace_and_db_mut()?;
             let mut builder = DiffSpecBuilder::new(&mut db, &repo, &ws, context_lines);
 
-            for mark in normal_mode.marks.iter() {
-                match mark {
-                    MarkableRef::Uncommitted(uncommitted) => {
-                        builder.push_changes_from_uncommitted(uncommitted)?;
+            match &normal_mode.marks {
+                Marks::Empty | Marks::Commits(..) => None,
+                Marks::Hunks(hunks) => {
+                    for hunk in hunks {
+                        builder.push_changes_from_uncommitted(hunk)?;
                     }
-                    MarkableRef::Commit { .. } => {}
+                    Some(ChangesToDiscard::Uncommitted(builder.into_diff_specs()))
+                }
+                Marks::CommittedFiles(files) => {
+                    let commit = files.head.commit_id;
+                    for file in files {
+                        // One day the API will support this but it doesn't right now.
+                        //
+                        // Linear ticket: https://linear.app/gitbutler/issue/GB-1684/missing-api-moving-hunks-between-commits-with-multiple-sources
+                        anyhow::ensure!(
+                            commit == file.commit_id,
+                            "BUG: it should not be possible to mark commits from multiple sources"
+                        );
+
+                        builder
+                            .push_changes_from_committed_file(file.commit_id, file.path.as_ref())?;
+                    }
+                    Some(ChangesToDiscard::CommittedFiles(
+                        commit,
+                        builder.into_diff_specs(),
+                    ))
                 }
             }
-
-            builder.into_diff_specs()
         };
 
         self.to_be_discarded = normal_mode
@@ -305,16 +392,27 @@ impl App {
                     snapshot_details,
                     DryRun::No,
                     |mut tx| {
-                        if !commits.is_empty() {
-                            tx.discard_commits(commits)?;
+                        if !commits_to_discard.is_empty() {
+                            tx.discard_commits(commits_to_discard)?;
                         }
 
-                        if !uncommitted_diff_specs.is_empty() {
-                            but_workspace::discard_workspace_changes(
-                                tx.repo(),
-                                uncommitted_diff_specs,
-                                tx.context_lines(),
-                            )?;
+                        if let Some(changes_to_discard) = changes_to_discard {
+                            match changes_to_discard {
+                                ChangesToDiscard::Uncommitted(changes) => {
+                                    if !changes.is_empty() {
+                                        but_workspace::discard_workspace_changes(
+                                            tx.repo(),
+                                            changes,
+                                            tx.context_lines(),
+                                        )?;
+                                    }
+                                }
+                                ChangesToDiscard::CommittedFiles(commit, changes) => {
+                                    if !changes.is_empty() {
+                                        tx.discard_changes_from_commit(commit, changes)?;
+                                    }
+                                }
+                            }
                         }
 
                         Ok(())
@@ -328,6 +426,14 @@ impl App {
                             .copied()
                             .unwrap_or(target_commit_id);
                         SelectAfterReload::Commit(remapped_target_commit_id)
+                    }
+                    SelectAfterReload::FirstFileInCommit(target_commit_id) => {
+                        let remapped_target_commit_id = workspace
+                            .replaced_commits
+                            .get(&target_commit_id)
+                            .copied()
+                            .unwrap_or(target_commit_id);
+                        SelectAfterReload::FirstFileInCommit(remapped_target_commit_id)
                     }
                     other => other,
                 });

@@ -14,8 +14,7 @@ use crate::{
         status::{
             output::StatusOutputLineData,
             tui::{
-                App, Marks, Message, Mode, ReloadCause, RewordMessage, SelectAfterReload,
-                marking::MarkableRef,
+                App, Message, Mode, ReloadCause, RewordMessage, SelectAfterReload,
                 render::{
                     ModeRender, RenderSingleLineSpans, render_commit_operation_target_marker,
                     source_span,
@@ -56,7 +55,7 @@ pub enum CommitMessageComposer {
 /// A subset of [`CliId`] that supports being committed
 #[derive(Debug)]
 pub enum CommitSource {
-    Marks(Marks),
+    Marks(NonEmpty<UncommittedHunkOrFile>),
     UncommittedArea(UncommittedAreaCommitSource),
     Uncommitted(UncommittedHunkOrFile),
     Stack(StackCommitSource),
@@ -120,7 +119,13 @@ impl CommitSource {
 
     pub fn contains(&self, other: &CliId) -> bool {
         match self {
-            CommitSource::Marks(marks) => marks.contains_cli_id(other),
+            CommitSource::Marks(hunks) => {
+                if let CliId::UncommittedHunkOrFile(rhs) = other {
+                    hunks.iter().any(|lhs| lhs == rhs)
+                } else {
+                    false
+                }
+            }
             CommitSource::UncommittedArea(UncommittedAreaCommitSource { id: lhs_id }) => {
                 if let CliId::Uncommitted { id: rhs_id } = other {
                     lhs_id == rhs_id
@@ -193,7 +198,7 @@ impl App {
     }
 
     fn handle_commit_start(&mut self, ctx: &mut Context) -> anyhow::Result<()> {
-        if self.marks().is_none_or(|marks| marks.is_empty()) {
+        if self.marks_ref().is_empty() {
             self.handle_commit_start_selection(ctx)?;
         } else {
             self.handle_commit_start_marks();
@@ -308,15 +313,11 @@ impl App {
             return;
         };
 
-        if normal_mode.marks.is_empty() {
+        let Some(hunks) = normal_mode.marks.as_hunks().cloned() else {
             return;
-        }
+        };
 
-        if !normal_mode.marks.marked_uncommitted() {
-            return;
-        }
-
-        let source = Arc::new(CommitSource::Marks(normal_mode.marks.clone()));
+        let source = Arc::new(CommitSource::Marks(hunks));
 
         if let Some(cursor) = self
             .cursor
@@ -507,23 +508,7 @@ where
     );
 
     let commit_selection = match &**source {
-        CommitSource::Marks(marks) => {
-            let mut hunks = Vec::new();
-            for mark in marks.iter() {
-                match mark {
-                    MarkableRef::Uncommitted(hunk) => {
-                        hunks.push(hunk.clone());
-                    }
-                    MarkableRef::Commit { .. } => {
-                        anyhow::bail!("Error: Cannot commit a commit");
-                    }
-                }
-            }
-            let Some(hunks) = NonEmpty::from_vec(hunks) else {
-                return Ok(());
-            };
-            commit2::CommitSelection::Changes(Box::new(hunks))
-        }
+        CommitSource::Marks(hunks) => commit2::CommitSelection::Changes(Box::new(hunks.clone())),
         CommitSource::UncommittedArea(..) => commit2::CommitSelection::AllChanges,
         CommitSource::Uncommitted(hunk) => {
             commit2::CommitSelection::Changes(Box::new(NonEmpty::new(hunk.clone())))

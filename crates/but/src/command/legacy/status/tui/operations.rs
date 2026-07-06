@@ -16,6 +16,7 @@ use but_ctx::Context;
 use but_rebase::graph_rebase::mutate::{InsertSide, RelativeTo};
 use gitbutler_operating_modes::OperatingMode;
 use gitbutler_oplog::entry::Snapshot;
+use gix::prelude::ObjectIdExt;
 
 use crate::{
     args::OutputFormat,
@@ -312,8 +313,18 @@ pub fn assigned_file_count_for_stack(ctx: &Context, stack_id: StackId) -> anyhow
 }
 
 pub fn commit_is_empty(ctx: &mut Context, commit_id: gix::ObjectId) -> anyhow::Result<bool> {
-    let commit_details = but_api::diff::commit_details(ctx, commit_id, ComputeLineStats::No)?;
-    Ok(commit_details.diff_with_first_parent.is_empty())
+    let repo = ctx.repo.get()?;
+    let commit = but_core::Commit::from_id(commit_id.attach(&repo))?;
+    let commit_tree_id = commit.tree_id_or_auto_resolution()?.detach();
+
+    let Some(first_parent_id) = commit.inner.parents.first().copied() else {
+        let commit_tree = repo.find_tree(commit_tree_id)?;
+        return Ok(commit_tree.iter().next().transpose()?.is_none());
+    };
+
+    let first_parent = but_core::Commit::from_id(first_parent_id.attach(&repo))?;
+    let first_parent_tree_id = first_parent.tree_id_or_auto_resolution()?.detach();
+    Ok(commit_tree_id == first_parent_tree_id)
 }
 
 pub fn reword_branch_legacy(

@@ -257,7 +257,7 @@ impl Sandbox {
     /// This feature is only meant for higher-level Client or API tests. Plumbing crates must not use the [`but_ctx::Context`].
     #[cfg(feature = "sandbox-but-api")]
     pub fn context(&self) -> but_ctx::Context {
-        but_ctx::Context::from_repo(self.open_repo())
+        but_ctx::Context::from_repo_with_settings(self.open_repo(), self.app_settings().clone())
             .map(but_ctx::Context::with_memory_app_cache)
             .unwrap()
     }

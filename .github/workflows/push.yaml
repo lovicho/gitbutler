@@ -275,6 +275,10 @@ jobs:
     env:
       CARGO_TERM_COLOR: always
       GITBUTLER_TESTS_NO_CLEANUP: "1"
+      # Redirect the app-data dir so any test that loads user-level settings writes here.
+      # The final step asserts nothing did - see 'Assert test hermeticity'.
+      # (a literal path - the `runner` context is not available in job-level `env`)
+      E2E_TEST_APP_DATA_DIR: /tmp/hermeticity-guard
     defaults:
       run:
         shell: bash
@@ -338,6 +342,13 @@ jobs:
         run: |
           set -x
           (cd crates/gitbutler-filemonitor/vendor/debouncer && cargo test)
+      - name: Assert test hermeticity
+        run: |
+          if [ -e "$E2E_TEST_APP_DATA_DIR" ]; then
+            echo "::error::Tests wrote to the user-level app-data dir. Use Context::from_repo_for_testing or but_testsupport::isolated_app_data_dir instead of settings-loading constructors:"
+            find "$E2E_TEST_APP_DATA_DIR"
+            exit 1
+          fi
 
   rust-test-but-api-macros:
     needs: changes

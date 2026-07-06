@@ -1,4 +1,4 @@
-use crate::command::legacy::status::tui::{Marks, render::ModeRender};
+use crate::command::legacy::status::tui::{app::mark::Marks, render::ModeRender};
 
 #[derive(Debug, Default, Clone)]
 pub struct NormalMode {

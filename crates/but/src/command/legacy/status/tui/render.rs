@@ -519,7 +519,7 @@ fn render_status_list_item(
     if let Some(connector) = connector {
         if data
             .cli_id()
-            .is_some_and(|id| app.marks().is_some_and(|marks| marks.contains_cli_id(id)))
+            .is_some_and(|id| app.marks_ref().contains_cli_id(id))
         {
             for (idx, span) in connector.iter().enumerate() {
                 if idx == 1 {
@@ -985,6 +985,14 @@ fn render_debug(app: &App, area: Rect, frame: &mut Frame) {
             .map(|line| ListItem::new(line.to_owned())),
     );
 
+    let marks = format!("{:#?}", app.marks_ref());
+    let marks = once(ListItem::new("Marks").black().on_blue()).chain(
+        marks
+            .lines()
+            .take(100)
+            .map(|line| ListItem::new(line.to_owned())),
+    );
+
     let details_selection = String::new();
     let details_worker_busy = format!("Worker busy: {}", app.details.worker_is_busy());
     let details_cache_size = format!("Cache size: {} lines", app.details.cache_size());
@@ -1009,6 +1017,8 @@ fn render_debug(app: &App, area: Rect, frame: &mut Frame) {
         renders
             .chain(once(ListItem::new("")))
             .chain(backstack)
+            .chain(once(ListItem::new("")))
+            .chain(marks)
             .chain(once(ListItem::new("")))
             .chain(details_selection)
             .chain(once(ListItem::new("")))

@@ -143,7 +143,7 @@ pub fn create_reference_with_perm(
         &ws,
         &mut meta,
         |_| StackId::generate(),
-        None,
+        Some(0),
     )?;
 
     if let Some(snapshot) = maybe_oplog_entry {

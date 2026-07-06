@@ -95,6 +95,26 @@ pub fn generate_command_mdx(cmd: &Command) -> String {
     replace_rustdoc_hyperlinks(&output)
 }
 
+pub fn generate_topic_mdx(cmd: &Command, path: &[&str]) -> String {
+    let mut output = String::new();
+    let command_path = path.join(" ");
+    let title = format!("`but {command_path}`");
+    let (description, remaining_body) = get_description_and_body(cmd);
+
+    output.push_str("---\n");
+    output.push_str(&format!("title: \"{title}\"\n"));
+    output.push_str(&format!("description: \"{description}\"\n"));
+    output.push_str("---\n\n");
+
+    if let Some(body) = remaining_body {
+        output.push_str(&format!("{body}\n\n"));
+    }
+
+    output.push_str(&format!("**Usage:** `but {command_path}`\n\n"));
+
+    replace_rustdoc_hyperlinks(&output)
+}
+
 fn replace_rustdoc_hyperlinks(input: &str) -> String {
     let mut output = String::with_capacity(input.len());
     let mut remaining = input;

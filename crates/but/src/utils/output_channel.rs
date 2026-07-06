@@ -200,7 +200,12 @@ impl OutputChannel {
     ///
     /// Note that this is implied to be true if [Self::prepare_for_terminal_input()] returns `Some()`.
     pub fn can_prompt(&self) -> bool {
-        self.format.allows_human_ui() && std::io::stdin().is_terminal() && self.stdout.is_terminal()
+        self.format.allows_human_ui() && std::io::stdin().is_terminal() && self.is_terminal()
+    }
+
+    /// Return `true` if this channel is connected to a terminal.
+    pub fn is_terminal(&self) -> bool {
+        self.stdout.is_terminal()
     }
 
     /// Before performing further output, obtain an input channel which always bypasses the pager when writing,

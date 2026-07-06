@@ -617,7 +617,9 @@ fn run_dump_with_options(
     }
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
-    but_debug::handle_args(args.into_iter(), &mut stdout, &mut stderr)?;
+    but_testsupport::isolated_app_data_dir(|| {
+        but_debug::handle_args(args.into_iter(), &mut stdout, &mut stderr)
+    })?;
     Ok(DumpOutput {
         stdout: String::from_utf8(stdout)?,
         stderr: String::from_utf8(stderr)?,
@@ -637,7 +639,9 @@ fn run_dump_diagnostics(repo: &Path, output: &Path) -> anyhow::Result<DumpOutput
     ];
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
-    but_debug::handle_args(args.into_iter(), &mut stdout, &mut stderr)?;
+    but_testsupport::isolated_app_data_dir(|| {
+        but_debug::handle_args(args.into_iter(), &mut stdout, &mut stderr)
+    })?;
     Ok(DumpOutput {
         stdout: String::from_utf8(stdout)?,
         stderr: String::from_utf8(stderr)?,

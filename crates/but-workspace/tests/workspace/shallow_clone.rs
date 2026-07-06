@@ -32,7 +32,7 @@ fn log_target_first_parent_stops_gracefully_in_shallow_repo() -> anyhow::Result<
         .run();
 
     let repo = open_repo(&clone_dir)?;
-    let ctx = but_ctx::Context::from_repo(repo)?;
+    let ctx = but_ctx::Context::from_repo_for_testing(repo)?;
     let repo = ctx.repo.get()?;
     let head_id = repo.head_id()?;
 

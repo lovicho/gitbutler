@@ -28,7 +28,7 @@ fn record_push_metadata_fallback_url() -> anyhow::Result<()> {
         .expect("gb header are set")
         .change_id
         .expect("commit has change id");
-    let ctx = but_ctx::Context::from_repo(repo)?;
+    let ctx = but_ctx::Context::from_repo_for_testing(repo)?;
     let repo = ctx.repo.get()?;
     let mut db = ctx.db.get_cache_mut()?;
     record_push_metadata(&repo, &mut db, candidate_ids, push_output)?;

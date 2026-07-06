@@ -1639,6 +1639,7 @@ dependencies = [
  "regex",
  "shell-words",
  "snapbox",
+ "temp-env",
  "termtree",
 ]
 

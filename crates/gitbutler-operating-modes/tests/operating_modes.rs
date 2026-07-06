@@ -22,7 +22,7 @@ fn new_case() -> Case {
     )
     .unwrap();
     let repo = open_repo(tmp.path()).unwrap();
-    let ctx = Context::from_repo(repo).unwrap();
+    let ctx = Context::from_repo_for_testing(repo).unwrap();
     std::fs::create_dir_all(ctx.project_data_dir()).unwrap();
 
     Case { ctx, _tmp: tmp }

@@ -267,7 +267,8 @@ fn bootstrap_missing_target_preserves_existing_workspace_ref() -> anyhow::Result
     })?;
     drop(repo);
 
-    let mut reopened: Context = project_id.clone().try_into()?;
+    let mut reopened: Context =
+        but_testsupport::isolated_app_data_dir(|| project_id.clone().try_into())?;
     assert!(
         gitbutler_stack::VirtualBranchesHandle::new(reopened.project_data_dir())
             .read_file()?

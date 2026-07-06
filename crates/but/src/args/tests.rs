@@ -332,6 +332,41 @@ fn clap() {
     Args::command().debug_assert();
 }
 
+#[test]
+fn help_parses_without_topic() {
+    use clap::Parser;
+
+    let args = Args::try_parse_from(["but", "help"]).expect("parse help args");
+
+    match args.cmd.expect("subcommand") {
+        Subcommands::Help { topic } => assert_eq!(topic, None),
+        _ => panic!("unexpected command shape"),
+    }
+}
+
+#[test]
+fn help_parses_cli_ids_topic() {
+    use clap::Parser;
+
+    let args = Args::try_parse_from(["but", "help", "cli-ids"]).expect("parse help topic args");
+
+    match args.cmd.expect("subcommand") {
+        Subcommands::Help { topic } => assert_eq!(topic, Some(HelpTopic::CliIds)),
+        _ => panic!("unexpected command shape"),
+    }
+}
+
+#[test]
+fn help_rejects_unknown_topic() {
+    use clap::Parser;
+
+    let err = Args::try_parse_from(["but", "help", "unknown-topic"]).expect_err("reject topic");
+    assert!(
+        err.to_string().contains("unknown-topic"),
+        "rejected topic should appear in clap error"
+    );
+}
+
 #[cfg(feature = "legacy")]
 #[test]
 fn status_short_is_hidden_noop_compatibility_flag() {

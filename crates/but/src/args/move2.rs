@@ -41,6 +41,8 @@ pub struct Platform {
     /// If `BRANCH` is provided, `<SOURCES>` must be either commits or committed files.
     ///
     /// Attempting to place `<SOURCES>` on a branch that exists but is not applied is an error.
+    ///
+    /// Takes a CLI ID, see `but help cli-ids` for details.
     #[clap(short, long, value_name = "BRANCH")]
     pub branch: Option<Option<CliIdArg>>,
     /// Place `<SOURCES>` above `BRANCH_OR_COMMIT`, which must be an applied branch or commit.
@@ -52,6 +54,8 @@ pub struct Platform {
     /// branch.
     ///
     /// This target is applicable for all kinds of `<SOURCES>`.
+    ///
+    /// Takes a CLI ID, see `but help cli-ids` for details.
     #[clap(short = 'A', long, value_name = "BRANCH_OR_COMMIT")]
     pub above: Option<CliIdArg>,
     /// Place `<SOURCES>` below `BRANCH_OR_COMMIT`, which must be an applied branch or commit.
@@ -64,6 +68,8 @@ pub struct Platform {
     /// the oldest ancestor on that branch.
     ///
     /// This target is only applicable for `<SOURCES>` that are commits or committed files.
+    ///
+    /// Takes a CLI ID, see `but help cli-ids` for details.
     #[clap(short = 'B', long, value_name = "BRANCH_OR_COMMIT")]
     pub below: Option<CliIdArg>,
     /// Unstack `<SOURCES>` from their current stacks.
@@ -88,6 +94,8 @@ pub struct Platform {
     ///
     /// Providing any of the sources as an argument for a target such as `--above` or `--below` is
     /// an error.
+    ///
+    /// Takes CLI IDs, see `but help cli-ids` for details.
     #[clap(required = true)]
     pub sources: Vec<CliIdArg>,
 }

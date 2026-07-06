@@ -1,8 +1,8 @@
 use but_testsupport::Sandbox;
-use crossterm::event::KeyCode;
+use crossterm::event::{KeyCode, KeyModifiers};
 use snapbox::{file, str};
 
-use crate::command::legacy::status::tui::tests::utils::test_tui;
+use crate::command::legacy::status::tui::{backstack::BackstackEntry, tests::utils::test_tui};
 
 #[test]
 fn discard_prompt_can_be_cancelled() {
@@ -249,26 +249,6 @@ fn discard_branch_cancel_keeps_branch() {
 }
 
 #[test]
-fn discard_on_committed_file_row_is_noop() {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
-    env.setup_metadata(&["A", "B"]);
-
-    let mut tui = test_tui(env);
-
-    tui.input_then_render([KeyCode::Down, KeyCode::Down])
-        .assert_current_line_eq(str!["┊●   9477ae7 add A"]);
-
-    tui.input_then_render('f')
-        .assert_current_line_eq(str!["┊│     94:tm A A"]);
-
-    tui.input_then_render('x')
-        .assert_current_line_eq(str!["┊│     94:tm A A"])
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/discard_on_committed_file_row_is_noop_final.svg"
-        ]);
-}
-
-#[test]
 fn discard_multiple_commits() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
     env.setup_metadata(&[]);
@@ -320,4 +300,244 @@ fn mark_and_discard_uncommitted_files() {
     tui.reload().assert_rendered_term_svg_eq(file![
         "snapshots/mark_and_discard_uncommitted_files_final.svg"
     ]);
+}
+
+#[test]
+fn discard_individual_committed_files_from_local_file_list() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.file("one", "");
+    env.file("two", "");
+    env.file("three", "");
+
+    let mut tui = test_tui(env);
+
+    tui.input_then_render('c');
+    tui.input_then_render('e');
+    tui.input_then_render('b');
+
+    tui.input_then_render('f')
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/discard_individual_committed_files_from_local_file_list_001.svg"
+        ]);
+
+    tui.input_then_render('x')
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/discard_individual_committed_files_from_local_file_list_002.svg"
+        ]);
+    tui.input_then_render('y')
+        .assert_current_line_eq(str![["┊│     5f:or A three"]])
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/discard_individual_committed_files_from_local_file_list_003.svg"
+        ])
+        .assert_backstack_eq([BackstackEntry::ShowFileList]);
+
+    tui.input_then_render('x')
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/discard_individual_committed_files_from_local_file_list_004.svg"
+        ]);
+    tui.input_then_render('y')
+        .assert_current_line_eq(str![["┊│     c0:tw A two"]])
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/discard_individual_committed_files_from_local_file_list_005.svg"
+        ])
+        .assert_backstack_eq([BackstackEntry::ShowFileList]);
+
+    tui.input_then_render('x')
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/discard_individual_committed_files_from_local_file_list_006.svg"
+        ]);
+    tui.input_then_render('y')
+        .assert_current_line_eq(str![["┊●   0b42c46 (no commit message) (no changes)"]])
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/discard_individual_committed_files_from_local_file_list_007.svg"
+        ])
+        .assert_backstack_eq([]);
+}
+
+#[test]
+fn discard_individual_committed_files_from_global_file_list() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.file("one", "");
+    env.file("two", "");
+    env.file("three", "");
+
+    let mut tui = test_tui(env);
+
+    tui.input_then_render('c');
+    tui.input_then_render('e');
+    tui.input_then_render('b');
+    tui.input_then_render((KeyModifiers::SHIFT, 'F'))
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/discard_individual_committed_files_from_global_file_list_001.svg"
+        ]);
+
+    tui.input_then_render('j');
+
+    tui.input_then_render('x')
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/discard_individual_committed_files_from_global_file_list_002.svg"
+        ]);
+    tui.input_then_render('y')
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/discard_individual_committed_files_from_global_file_list_003.svg"
+        ]);
+
+    tui.input_then_render('x');
+    tui.input_then_render('y')
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/discard_individual_committed_files_from_global_file_list_004.svg"
+        ]);
+
+    tui.input_then_render('x');
+    tui.input_then_render('y')
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/discard_individual_committed_files_from_global_file_list_005.svg"
+        ])
+        .assert_backstack_eq([]);
+}
+
+#[test]
+fn discard_marked_committed_files_from_local_file_list() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.file("one", "");
+    env.file("two", "");
+    env.file("three", "");
+
+    let mut tui = test_tui(env);
+
+    tui.input_then_render('c');
+    tui.input_then_render('e');
+    tui.input_then_render('b');
+    tui.input_then_render('f')
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/discard_marked_committed_files_from_local_file_list_001.svg"
+        ]);
+
+    tui.input_then_render(' ');
+    tui.input_then_render(' ')
+        .assert_backstack_eq([BackstackEntry::Mark, BackstackEntry::ShowFileList])
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/discard_marked_committed_files_from_local_file_list_002.svg"
+        ]);
+
+    tui.input_then_render('x')
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/discard_marked_committed_files_from_local_file_list_003.svg"
+        ]);
+    tui.input_then_render('y')
+        .assert_current_line_eq(str![["┊│     c0:tw A two"]])
+        .assert_backstack_eq([BackstackEntry::ShowFileList])
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/discard_marked_committed_files_from_local_file_list_004.svg"
+        ]);
+
+    tui.input_then_render(' ')
+        .assert_backstack_eq([BackstackEntry::Mark, BackstackEntry::ShowFileList]);
+
+    tui.input_then_render('x');
+    tui.input_then_render('y')
+        .assert_current_line_eq(str![["┊●   0b42c46 (no commit message) (no changes)"]])
+        .assert_backstack_eq([])
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/discard_marked_committed_files_from_local_file_list_005.svg"
+        ]);
+}
+
+#[test]
+fn discard_marked_committed_files_from_global_file_list() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.file("one", "");
+    env.file("two", "");
+    env.file("three", "");
+
+    let mut tui = test_tui(env);
+
+    tui.input_then_render('c');
+    tui.input_then_render('e');
+    tui.input_then_render('b');
+    tui.input_then_render((KeyModifiers::SHIFT, 'F'))
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/discard_marked_committed_files_from_global_file_list_001.svg"
+        ]);
+
+    tui.input_then_render('j');
+    tui.input_then_render(' ');
+    tui.input_then_render(' ')
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/discard_marked_committed_files_from_global_file_list_002.svg"
+        ]);
+
+    tui.input_then_render('x')
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/discard_marked_committed_files_from_global_file_list_003.svg"
+        ]);
+    tui.input_then_render('y')
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/discard_marked_committed_files_from_global_file_list_004.svg"
+        ]);
+
+    tui.input_then_render('k')
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/discard_marked_committed_files_from_global_file_list_005.svg"
+        ]);
+}
+
+#[test]
+fn global_file_list_stays_open_after_discarding_the_last_file_in_a_commit() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+    env.setup_metadata(&["A", "B"]);
+
+    let mut tui = test_tui(env);
+
+    tui.input_then_render((KeyModifiers::SHIFT, 'F'))
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/global_file_list_stays_open_after_discarding_the_last_file_in_a_commit_001.svg"
+        ]);
+
+    // discard the file in the top commit
+    tui.input_then_render('j');
+    tui.input_then_render('j');
+    tui.input_then_render('j')
+        .assert_current_line_eq(str![["┊│     94:tm A A"]]);
+    tui.input_then_render('x');
+    tui.input_then_render('y');
+
+    // after discarding the last file in the commit the global file list should still be open
+    tui.input_then_render('g')
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/global_file_list_stays_open_after_discarding_the_last_file_in_a_commit_002.svg"
+        ])
+        .assert_backstack_eq([BackstackEntry::ShowFileList]);
+}
+
+#[test]
+fn global_file_list_stays_open_after_marking_and_discarding_all_files_in_a_commit() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+    env.setup_metadata(&["A", "B"]);
+
+    let mut tui = test_tui(env);
+
+    tui.input_then_render((KeyModifiers::SHIFT, 'F'));
+
+    tui.input_then_render('j');
+    tui.input_then_render('j');
+    tui.input_then_render('j');
+    tui.input_then_render(' ');
+    tui.input_then_render('x')
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/global_file_list_stays_open_after_marking_and_discarding_all_files_in_a_commit_001.svg"
+        ]);
+    tui.input_then_render('y')
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/global_file_list_stays_open_after_marking_and_discarding_all_files_in_a_commit_002.svg"
+        ])
+        .assert_backstack_eq([BackstackEntry::ShowFileList]);
 }

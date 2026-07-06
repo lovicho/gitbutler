@@ -17,7 +17,7 @@ fn checkout_returns_head_info_matching_fresh_head_info() -> anyhow::Result<()> {
 "]]
     );
 
-    let mut ctx = but_ctx::Context::from_repo(repo)?.with_memory_app_cache();
+    let mut ctx = but_ctx::Context::from_repo_for_testing(repo)?.with_memory_app_cache();
     let result = but_api::branch::branch_checkout(
         &mut ctx,
         gix::refs::FullName::try_from("refs/heads/feature")?,
@@ -154,7 +154,7 @@ fn checkout_new_returns_head_info_matching_fresh_head_info() -> anyhow::Result<(
     let (repo, _tmp) = crate::support::writable_scenario("checkout-head-info");
     let target_commit_id = crate::support::persist_default_target(&repo)?;
 
-    let mut ctx = but_ctx::Context::from_repo(repo)?.with_memory_app_cache();
+    let mut ctx = but_ctx::Context::from_repo_for_testing(repo)?.with_memory_app_cache();
     let result = but_api::branch::branch_checkout_new(&mut ctx, Some("new branch".into()))?;
 
     {

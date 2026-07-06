@@ -937,7 +937,7 @@ mod util {
     fn test_scenario(name: &str) -> anyhow::Result<TestContext> {
         // TODO: make this a read-only scenario once we don't rely on vb.toml anymore.
         let (repo, tmpdir) = but_testsupport::writable_scenario(name);
-        let ctx = but_ctx::Context::from_repo(repo)?;
+        let ctx = but_ctx::Context::from_repo_for_testing(repo)?;
 
         Ok(TestContext {
             ctx,

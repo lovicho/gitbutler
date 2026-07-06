@@ -158,6 +158,17 @@ pub fn deprecated_stable_env_vars() {
     _ = std::mem::ManuallyDrop::new(env);
 }
 
+/// Run `f` with `E2E_TEST_APP_DATA_DIR` pointing at a temporary directory, so code that
+/// resolves application-wide directories via `but_path` cannot read or write user-level files.
+///
+/// Use this when testing code that loads `AppSettings` from the default location.
+/// Calls are serialized process-wide via `temp_env`'s global mutex, so concurrent
+/// use from parallel tests is safe.
+pub fn isolated_app_data_dir<R>(f: impl FnOnce() -> R) -> R {
+    let tmp = gix_testtools::tempfile::TempDir::new().unwrap();
+    temp_env::with_var("E2E_TEST_APP_DATA_DIR", Some(tmp.path()), f)
+}
+
 /// Utilities for the [`git()`] command.
 pub trait CommandExt {
     /// Run the command successfully or print panic with all available command output.

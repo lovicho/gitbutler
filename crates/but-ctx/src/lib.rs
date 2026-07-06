@@ -196,14 +196,6 @@ impl From<ThreadSafeContext> for Context {
     }
 }
 
-impl TryFrom<gix::Repository> for Context {
-    type Error = anyhow::Error;
-
-    fn try_from(repo: gix::Repository) -> Result<Self, Self::Error> {
-        Context::from_repo(repo)
-    }
-}
-
 impl TryFrom<ProjectHandle> for Context {
     type Error = anyhow::Error;
 
@@ -474,18 +466,29 @@ impl Context {
         }
     }
 
-    /// Create a context that already has `repo` initialised and ready to be returned.
+    /// Create a context that already has `repo` initialised and ready to be returned,
+    /// using [compiled-in default settings](AppSettings::default()) so tests stay hermetic -
+    /// user-level settings are neither read nor created.
     ///
-    /// Particularly useful in testing, which might start off with just a Git repository.
+    /// **Note that it does not have support for legacy projects to encourage single-branch compatible code.**
+    pub fn from_repo_for_testing(repo: gix::Repository) -> anyhow::Result<Context> {
+        Self::from_repo_with_settings(repo, AppSettings::default())
+    }
+
+    /// Create a context that already has `repo` initialised and ready to be returned,
+    /// with the given `settings`.
+    ///
     /// **Note that it does not have support for legacy projects to encourage single-branch compatible code.**
     #[expect(
         deprecated,
         reason = "Context owns the deprecated boundary cache and must initialize it."
     )]
-    pub fn from_repo(repo: gix::Repository) -> anyhow::Result<Context> {
+    pub fn from_repo_with_settings(
+        repo: gix::Repository,
+        settings: AppSettings,
+    ) -> anyhow::Result<Context> {
         let gitdir = repo.git_dir().to_owned();
         let project_data_dir = repo.gitbutler_storage_path()?;
-        let settings = app_settings(but_path::app_config_dir()?)?;
         let app_cache_dir = but_path::app_cache_dir().ok();
         let repo_open_mode =
             if repo.open_options().permissions == gix::open::Permissions::isolated() {

@@ -1268,7 +1268,7 @@ mod tests {
     fn set_default_target_accepts_remote_tracking_ref_and_persists_metadata() -> anyhow::Result<()>
     {
         let (repo, _tmp) = repo_with_feature_branch()?;
-        let mut ctx = but_ctx::Context::from_repo(repo)?.with_memory_app_cache();
+        let mut ctx = but_ctx::Context::from_repo_for_testing(repo)?.with_memory_app_cache();
         let target_ref = gix::refs::FullName::try_from("refs/remotes/origin/main")?;
 
         let project_meta =
@@ -1286,7 +1286,7 @@ mod tests {
     #[test]
     fn set_default_target_rejects_local_branch_refs() -> anyhow::Result<()> {
         let (repo, _tmp) = repo_with_feature_branch()?;
-        let mut ctx = but_ctx::Context::from_repo(repo)?.with_memory_app_cache();
+        let mut ctx = but_ctx::Context::from_repo_for_testing(repo)?.with_memory_app_cache();
         let target_ref = gix::refs::FullName::try_from("refs/heads/feature")?;
 
         let err = super::set_default_target(&mut ctx, target_ref.as_ref(), None)
@@ -1323,7 +1323,7 @@ mod tests {
         let expected_merge_base = repo.merge_base(current_head, target_tip)?.detach();
         assert_ne!(expected_merge_base, target_tip);
 
-        let mut ctx = but_ctx::Context::from_repo(repo)?.with_memory_app_cache();
+        let mut ctx = but_ctx::Context::from_repo_for_testing(repo)?.with_memory_app_cache();
         let project_meta = super::set_default_target(&mut ctx, target_ref.as_ref(), None)?;
 
         assert_eq!(project_meta.target_commit_id, Some(expected_merge_base));
@@ -1335,7 +1335,7 @@ mod tests {
     #[test]
     fn checkout_branch_switches_head_and_returns_workspace() -> anyhow::Result<()> {
         let (repo, _tmp) = repo_with_feature_branch()?;
-        let mut ctx = but_ctx::Context::from_repo(repo)?.with_memory_app_cache();
+        let mut ctx = but_ctx::Context::from_repo_for_testing(repo)?.with_memory_app_cache();
         let branch = gix::refs::FullName::try_from("refs/heads/feature")?;
         let result = super::branch_checkout(&mut ctx, branch)?;
 
@@ -1381,7 +1381,7 @@ mod tests {
     #[test]
     fn checkout_branch_rejects_remote_refs() -> anyhow::Result<()> {
         let (repo, _tmp) = repo_with_feature_branch()?;
-        let mut ctx = but_ctx::Context::from_repo(repo)?.with_memory_app_cache();
+        let mut ctx = but_ctx::Context::from_repo_for_testing(repo)?.with_memory_app_cache();
         let branch = gix::refs::FullName::try_from("refs/remotes/origin/main")?;
 
         let err = super::branch_checkout(&mut ctx, branch)
@@ -1399,7 +1399,7 @@ mod tests {
     {
         let (repo, _tmp) = repo_with_feature_branch()?;
         let target_commit_id = set_project_target_to_feature(&repo)?;
-        let mut ctx = but_ctx::Context::from_repo(repo)?.with_memory_app_cache();
+        let mut ctx = but_ctx::Context::from_repo_for_testing(repo)?.with_memory_app_cache();
 
         let result = super::branch_checkout_new(&mut ctx, Some("new branch".into()))?;
 
@@ -1417,7 +1417,7 @@ mod tests {
     fn branch_checkout_new_rejects_existing_explicit_name() -> anyhow::Result<()> {
         let (repo, _tmp) = repo_with_feature_branch()?;
         set_project_target_to_feature(&repo)?;
-        let mut ctx = but_ctx::Context::from_repo(repo)?.with_memory_app_cache();
+        let mut ctx = but_ctx::Context::from_repo_for_testing(repo)?.with_memory_app_cache();
 
         let err = super::branch_checkout_new(&mut ctx, Some("feature".into()))
             .expect_err("explicit names must not be uniquified");

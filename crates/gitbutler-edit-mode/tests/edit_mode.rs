@@ -34,7 +34,7 @@ fn command_ctx(folder: &str) -> Result<(Context, TempDir)> {
     )
     .map_err(anyhow::Error::from_boxed)?;
     let repo = open_repo(tmp.path().join(&folder).as_path())?;
-    let ctx = Context::from_repo(repo)?;
+    let ctx = Context::from_repo_for_testing(repo)?;
     Ok((ctx, tmp))
 }
 

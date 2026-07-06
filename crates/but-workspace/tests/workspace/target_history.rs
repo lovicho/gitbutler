@@ -34,7 +34,7 @@ fn log_target_first_parent_uses_persisted_target_outside_workspace() -> anyhow::
         .args(["checkout", "-b", "feature", "origin/feature"])
         .run();
 
-    let ctx = but_ctx::Context::from_repo(open_repo(&clone_dir)?)?;
+    let ctx = but_ctx::Context::from_repo_for_testing(open_repo(&clone_dir)?)?;
     let (main_tip, feature_tip) = {
         let repo = ctx.repo.get()?;
         (

@@ -39,6 +39,7 @@ shell-words = {  workspace = true, optional = true }
 gix-testtools.workspace = true
 gix.workspace = true
 anyhow.workspace = true
+temp-env = "0.3"
 termtree = "0.5.1"
 regex = { workspace = true }
 snapbox = { workspace = true, optional = true, features = ["regex"] }

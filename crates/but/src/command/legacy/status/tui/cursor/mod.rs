@@ -10,8 +10,8 @@ use crate::{
         output::StatusOutputLineData,
         tui::{
             Mode, NormalMode, PickChangesMode, SelectAfterReload,
+            app::mark::{Marks, MarksRef},
             app::{CommitSource, prefix_match},
-            marking::Marks,
             render::{
                 commit_operation_display, move_operation_display, reorder_operation_display,
                 stack_operation_display,
@@ -642,10 +642,10 @@ fn first_selectable_in_section(
 fn select_after_reload_for_cli_id(cli_id: &Arc<CliId>) -> SelectAfterReload {
     match &**cli_id {
         CliId::Commit { commit_id, .. } => SelectAfterReload::Commit(*commit_id),
+        CliId::CommittedFile { commit_id, .. } => SelectAfterReload::FirstFileInCommit(*commit_id),
         CliId::Uncommitted { .. }
         | CliId::UncommittedHunkOrFile(..)
         | CliId::PathPrefix { .. }
-        | CliId::CommittedFile { .. }
         | CliId::Branch { .. }
         | CliId::Stack { .. } => SelectAfterReload::CliId(Arc::clone(cli_id)),
     }
@@ -801,25 +801,40 @@ pub fn is_selectable_in_mode(
 
     // don't allow mixing marks
     match mode {
-        Mode::Normal(NormalMode { marks }) | Mode::PickChanges(PickChangesMode { marks }) => {
-            if !marks.is_empty() {
-                if marks.marked_commits()
-                    && !matches!(
-                        &line.data,
-                        StatusOutputLineData::Branch { .. } | StatusOutputLineData::Commit { .. }
-                    )
-                {
+        Mode::Normal(NormalMode { marks }) => match marks {
+            Marks::Empty => {}
+            Marks::Hunks(..) => {
+                if !matches!(
+                    &line.data,
+                    StatusOutputLineData::UncommittedChanges { .. }
+                        | StatusOutputLineData::UncommittedFile { .. },
+                ) {
                     return false;
                 }
-                if marks.marked_uncommitted()
-                    && !matches!(
-                        &line.data,
-                        StatusOutputLineData::UncommittedChanges { .. }
-                            | StatusOutputLineData::UncommittedFile { .. },
-                    )
-                {
+            }
+            Marks::Commits(..) => {
+                if !matches!(
+                    &line.data,
+                    StatusOutputLineData::Branch { .. } | StatusOutputLineData::Commit { .. }
+                ) {
                     return false;
                 }
+            }
+            Marks::CommittedFiles(..) => {
+                if !matches!(&line.data, StatusOutputLineData::File { .. }) {
+                    return false;
+                }
+            }
+        },
+        Mode::PickChanges(PickChangesMode { marks }) => {
+            if !marks.is_empty()
+                && !matches!(
+                    &line.data,
+                    StatusOutputLineData::UncommittedChanges { .. }
+                        | StatusOutputLineData::UncommittedFile { .. },
+                )
+            {
+                return false;
             }
         }
         Mode::Rub(..)
@@ -831,6 +846,20 @@ pub fn is_selectable_in_mode(
         | Mode::MoveStack(..)
         | Mode::Jump(..)
         | Mode::Stack(..) => {}
+    }
+
+    if let FilesStatusFlag::All = show_files_flag
+        && let MarksRef::CommittedFiles { head, .. } = mode.marks_ref()
+    {
+        let Some(id) = line.data.cli_id() else {
+            return false;
+        };
+        let CliId::CommittedFile { commit_id, .. } = &**id else {
+            return false;
+        };
+        if *commit_id != head.commit_id {
+            return false;
+        }
     }
 
     match mode {

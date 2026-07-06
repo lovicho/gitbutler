@@ -3,7 +3,7 @@ fn apply_only_threads_returned_workspace_back_into_context_cache() -> anyhow::Re
     let (repo, _tmp) = crate::support::writable_scenario("checkout-head-info");
     crate::support::persist_default_target(&repo)?;
 
-    let mut ctx = but_ctx::Context::from_repo(repo)?.with_memory_app_cache();
+    let mut ctx = but_ctx::Context::from_repo_for_testing(repo)?.with_memory_app_cache();
     let feature = gix::refs::FullName::try_from("refs/heads/feature")?;
     let sibling = gix::refs::FullName::try_from("refs/heads/sibling")?;
 

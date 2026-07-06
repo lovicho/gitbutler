@@ -290,10 +290,17 @@ const TransferKeyboardOperationControls: FC<{
 	headInfoIndex: HeadInfoIndex;
 	projectId: string;
 	mode: KeyboardTransferMode;
-	target: Operand;
-}> = ({ headInfoIndex, projectId, mode, target }) => {
+	outlineNavigationIndex: NavigationIndex<Operand>;
+}> = ({ headInfoIndex, projectId, mode, outlineNavigationIndex }) => {
+	const selection = useOutlineSelection({ projectId, navigationIndex: outlineNavigationIndex });
+
 	const dispatch = useAppDispatch();
 	const { mutate: runOperation } = useRunOperation();
+
+	if (!selection) return null;
+
+	const target = selection;
+
 	const operations = getOperations(mode.source, target);
 	const operation = operations[mode.operationType];
 
@@ -345,7 +352,6 @@ export const OperationControls: FC<{ outlineNavigationIndex: NavigationIndex<Ope
 	outlineNavigationIndex,
 }) => {
 	const { id: projectId } = useParams({ from: "/project/$id/workspace" });
-	const selection = useOutlineSelection({ projectId, navigationIndex: outlineNavigationIndex });
 	const outlineMode = useAppSelector((state) => selectProjectOutlineModeState(state, projectId));
 	const { data: headInfoIndex } = useQuery({
 		...headInfoQueryOptions(projectId),
@@ -376,13 +382,12 @@ export const OperationControls: FC<{ outlineNavigationIndex: NavigationIndex<Ope
 				Match.value(mode).pipe(
 					Match.tags({
 						Keyboard: (mode) =>
-							selection &&
 							headInfoIndex && (
 								<TransferKeyboardOperationControls
 									headInfoIndex={headInfoIndex}
 									projectId={projectId}
 									mode={mode}
-									target={selection}
+									outlineNavigationIndex={outlineNavigationIndex}
 								/>
 							),
 					}),

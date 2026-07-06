@@ -112,6 +112,52 @@ impl OutputFormat {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::Subcommand)]
+pub enum HelpTopic {
+    /// Smart IDs to reference commits, branches and more in `but`.
+    ///
+    /// CLI IDs are used by `but` to reference things such as commits, branches and files. While
+    /// obvious identifiers like full commit hashes and entire branch names are viable CLI IDs,
+    /// there are also various shorter identifiers that can be used in place of the full names.
+    ///
+    /// In general, `but status` will show all currently available CLI IDs in front of the "thing".
+    ///
+    /// Typical CLI IDs include:
+    ///
+    /// * **Commit:** The first few characters of the commit hash
+    /// * **Branch:** A couple of characters from the branch name
+    /// * **Uncommitted file:** A path-derived ID that's typically 2-3 characters
+    /// * **Uncommitted hunk:** `<uncommitted_file_cli_id>:<hunk_cli_id>`
+    ///     - Run `but diff` to show all current uncommitted hunks and their IDs
+    /// * **Uncommitted area:** Always `zz`
+    /// * **Committed file:** `<commit_cli_id>:<file_cli_id>`
+    ///     - Run `but status -f` to show committed files
+    ///
+    /// CLI IDs depend on the context and may change if the context changes, such as when new data
+    /// is written to files, commits are made or rearranged and branches are created or deleted.
+    ///
+    /// Most but not all commands accept CLI IDs to perform various actions. See the documentation
+    /// for the individual command (`but <command> --help`) for details on how to use CLI IDs for
+    /// that command in particular.
+    #[clap(name = "cli-ids")]
+    #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
+    CliIds,
+}
+
+impl HelpTopic {
+    pub fn name(self) -> &'static str {
+        match self {
+            HelpTopic::CliIds => "cli-ids",
+        }
+    }
+
+    pub fn title(self) -> &'static str {
+        match self {
+            HelpTopic::CliIds => "CLI IDs",
+        }
+    }
+}
+
 #[derive(
     Debug, clap::Subcommand, strum::VariantNames, strum::AsRefStr, strum::EnumDiscriminants,
 )]
@@ -1346,15 +1392,19 @@ pub enum Subcommands {
         cmd: but_agentlog::Command,
     },
 
-    /// Show help information grouped by category.
+    /// Show help information.
     ///
-    /// Displays all available commands organized into functional categories
+    /// Without a topic, displays all available commands organized into functional categories
     /// such as Inspection, Branching and Committing, Server Interactions, etc.
     ///
-    /// This is equivalent to running `but -h` to see the command overview.
+    /// With a topic, displays help for that topic, such as `but help cli-ids`.
     #[clap(hide = true)]
     #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
-    Help,
+    Help {
+        /// Help topic to show.
+        #[clap(subcommand)]
+        topic: Option<HelpTopic>,
+    },
 
     /// INTERNAL: First-run onboarding that shows metrics info and marks onboarding complete.
     ///

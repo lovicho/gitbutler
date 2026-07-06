@@ -35,7 +35,6 @@ pub fn default_key_binds() -> KeyBinds {
                 builder.rub_confirm().register();
                 builder.rub_use_target_message().register();
                 builder.rub_use_source_message().register();
-                builder.mark().register();
                 register_non_mode_specific_key_binds(&mut builder, WithFocusDetails::No);
             }
             ModeDiscriminant::Commit => {
@@ -719,7 +718,7 @@ impl KeyBindsBuilder<'_> {
         self.key_bind(
             "files",
             press().code(KeyCode::Char('f')),
-            Message::Files(FilesMessage::ToggleFilesForCommit),
+            Message::Files(FilesMessage::ToggleFilesForSelectedCommit),
         )
         .long_description("Show files in commit")
     }

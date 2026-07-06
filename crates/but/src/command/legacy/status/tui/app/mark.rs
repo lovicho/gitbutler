@@ -1,8 +1,11 @@
-use std::sync::Arc;
+use std::{convert::Infallible, ops::Deref};
 
 use anyhow::Context as _;
+use bstr::{BStr, BString};
 use but_core::ref_metadata::StackId;
 use but_ctx::Context;
+use nonempty::NonEmpty;
+use strum::VariantArray;
 
 use crate::{
     CliId, IdMap,
@@ -10,15 +13,534 @@ use crate::{
         StatusOutputLine,
         output::StatusOutputLineData,
         tui::{
-            app::{
-                App, normal_mode::NormalMode, pick_changes_mode::PickChangesMode,
-                rub_mode::RubSource,
-            },
-            marking::{Markable, MarkableRef, Marks},
+            app::{App, normal_mode::NormalMode, pick_changes_mode::PickChangesMode},
             mode::Mode,
         },
     },
+    id::{ShortId, UncommittedHunkOrFile},
 };
+
+#[derive(Default, Debug, Clone, PartialEq)]
+pub enum Marks {
+    #[default]
+    Empty,
+    Hunks(NonEmpty<UncommittedHunkOrFile>),
+    Commits(NonEmpty<MarkedCommit>),
+    CommittedFiles(NonEmpty<MarkedCommittedFile>),
+}
+
+impl Marks {
+    pub fn clear(&mut self) {
+        *self = Self::Empty;
+    }
+
+    pub fn as_hunks(&self) -> Option<&NonEmpty<UncommittedHunkOrFile>> {
+        match self {
+            Self::Hunks(hunks) => Some(hunks),
+            _ => None,
+        }
+    }
+
+    pub fn as_commits(&self) -> Option<&NonEmpty<MarkedCommit>> {
+        match self {
+            Self::Commits(commits) => Some(commits),
+            _ => None,
+        }
+    }
+
+    pub fn as_committed_files(&self) -> Option<&NonEmpty<MarkedCommittedFile>> {
+        match self {
+            Self::CommittedFiles(files) => Some(files),
+            _ => None,
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        matches!(self, Self::Empty)
+    }
+
+    pub fn contains_cli_id(&self, cli_id: &CliId) -> bool {
+        self.iter().any(|mark| mark.matches_cli_id(cli_id))
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = MarkableRef<'_>> {
+        match self {
+            Marks::Empty => Box::new(std::iter::empty()) as Box<dyn Iterator<Item = _>>,
+            Marks::Hunks(hunks) => {
+                let iter = hunks.iter().map(MarkableRef::Uncommitted);
+                Box::new(iter)
+            }
+            Marks::Commits(commits) => {
+                let iter = commits
+                    .iter()
+                    .map(|inner| inner.as_ref())
+                    .map(MarkableRef::Commit);
+                Box::new(iter)
+            }
+            Marks::CommittedFiles(files) => {
+                let iter = files
+                    .iter()
+                    .map(|inner| inner.as_ref())
+                    .map(MarkableRef::CommittedFile);
+                Box::new(iter)
+            }
+        }
+    }
+
+    pub fn as_ref(&self) -> MarksRef<'_> {
+        match self {
+            Self::Empty => MarksRef::Empty,
+            Self::Hunks(hunks) => MarksRef::from_hunks(hunks),
+            Self::Commits(commits) => MarksRef::from_commits(commits),
+            Self::CommittedFiles(files) => MarksRef::from_committed_files(files),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum MarksRef<'a> {
+    Empty,
+    Hunks {
+        head: &'a UncommittedHunkOrFile,
+        tail: &'a [UncommittedHunkOrFile],
+    },
+    Commits {
+        head: &'a MarkedCommit,
+        tail: &'a [MarkedCommit],
+    },
+    CommittedFiles {
+        head: &'a MarkedCommittedFile,
+        tail: &'a [MarkedCommittedFile],
+    },
+}
+
+impl<'a> MarksRef<'a> {
+    pub fn from_hunks(hunks: &'a NonEmpty<UncommittedHunkOrFile>) -> Self {
+        Self::Hunks {
+            head: &hunks.head,
+            tail: &hunks.tail,
+        }
+    }
+
+    pub fn from_hunk_slice(hunks: &'a [UncommittedHunkOrFile]) -> Self {
+        let Some((head, tail)) = hunks.split_first() else {
+            return Self::Empty;
+        };
+        Self::Hunks { head, tail }
+    }
+
+    pub fn from_commits(commits: &'a NonEmpty<MarkedCommit>) -> Self {
+        Self::Commits {
+            head: &commits.head,
+            tail: &commits.tail,
+        }
+    }
+
+    pub fn from_committed_files(commits: &'a NonEmpty<MarkedCommittedFile>) -> Self {
+        Self::CommittedFiles {
+            head: &commits.head,
+            tail: &commits.tail,
+        }
+    }
+
+    pub fn is_empty(self) -> bool {
+        matches!(self, Self::Empty)
+    }
+
+    pub fn contains_cli_id(self, cli_id: &CliId) -> bool {
+        match self {
+            Self::Empty => false,
+            Self::Hunks { head, tail } => {
+                let CliId::UncommittedHunkOrFile(uncommitted) = cli_id else {
+                    return false;
+                };
+                std::iter::once(head)
+                    .chain(tail)
+                    .any(|hunk| hunk == uncommitted)
+            }
+            Self::Commits { head, tail } => {
+                let CliId::Commit { commit_id, id } = cli_id else {
+                    return false;
+                };
+                std::iter::once(head)
+                    .chain(tail)
+                    .any(|commit| commit.commit_id == *commit_id && commit.id == *id)
+            }
+            Self::CommittedFiles { head, tail } => {
+                let CliId::CommittedFile {
+                    commit_id,
+                    path,
+                    id,
+                } = cli_id
+                else {
+                    return false;
+                };
+                std::iter::once(head).chain(tail).any(|file| {
+                    file.commit_id == *commit_id && &file.path == path && &file.id == id
+                })
+            }
+        }
+    }
+
+    pub fn to_owned(self) -> Marks {
+        match self {
+            Self::Empty => Marks::Empty,
+            Self::Hunks { head, tail } => {
+                let mut hunks = NonEmpty::new(head.clone());
+                hunks.extend(tail.iter().cloned());
+                Marks::Hunks(hunks)
+            }
+            Self::Commits { head, tail } => {
+                let mut commits = NonEmpty::new(head.clone());
+                commits.extend(tail.iter().cloned());
+                Marks::Commits(commits)
+            }
+            Self::CommittedFiles { head, tail } => {
+                let mut files = NonEmpty::new(head.clone());
+                files.extend(tail.iter().cloned());
+                Marks::CommittedFiles(files)
+            }
+        }
+    }
+}
+
+pub trait MarkStore<T> {
+    type Error;
+
+    fn contains_mark(&self, mark: &T) -> bool;
+    fn insert_mark(&mut self, mark: T) -> Result<(), Self::Error>;
+    fn remove_mark(&mut self, mark: &T);
+}
+
+impl MarkStore<UncommittedHunkOrFile> for Marks {
+    type Error = anyhow::Error;
+
+    fn contains_mark(&self, mark: &UncommittedHunkOrFile) -> bool {
+        self.as_hunks()
+            .is_some_and(|hunks| hunks.iter().any(|hunk| hunk == mark))
+    }
+
+    fn insert_mark(&mut self, mark: UncommittedHunkOrFile) -> Result<(), Self::Error> {
+        match self {
+            Self::Empty => *self = Self::Hunks(NonEmpty::new(mark)),
+            Self::Hunks(hunks) => hunks.push(mark),
+            _ => anyhow::bail!("cannot mix mark sources"),
+        }
+        Ok(())
+    }
+
+    fn remove_mark(&mut self, mark: &UncommittedHunkOrFile) {
+        let Self::Hunks(hunks) = self else {
+            return;
+        };
+
+        if remove_from_non_empty(hunks, |marked| marked == mark) {
+            *self = Self::Empty;
+        }
+    }
+}
+
+impl MarkStore<MarkedCommit> for Marks {
+    type Error = anyhow::Error;
+
+    fn contains_mark(&self, mark: &MarkedCommit) -> bool {
+        self.as_commits()
+            .is_some_and(|commits| commits.iter().any(|commit| commit == mark))
+    }
+
+    fn insert_mark(&mut self, mark: MarkedCommit) -> Result<(), Self::Error> {
+        match self {
+            Self::Empty => *self = Self::Commits(NonEmpty::new(mark)),
+            Self::Commits(commits) => commits.push(mark),
+            _ => anyhow::bail!("cannot mix mark sources"),
+        }
+        Ok(())
+    }
+
+    fn remove_mark(&mut self, mark: &MarkedCommit) {
+        let Self::Commits(commits) = self else {
+            return;
+        };
+
+        if remove_from_non_empty(commits, |marked| marked.commit_id == mark.commit_id) {
+            *self = Self::Empty;
+        }
+    }
+}
+
+impl MarkStore<MarkedCommittedFile> for Marks {
+    type Error = anyhow::Error;
+
+    fn contains_mark(&self, mark: &MarkedCommittedFile) -> bool {
+        self.as_committed_files()
+            .is_some_and(|files| files.iter().any(|file| file == mark))
+    }
+
+    fn insert_mark(&mut self, mark: MarkedCommittedFile) -> Result<(), Self::Error> {
+        match self {
+            Self::Empty => *self = Self::CommittedFiles(NonEmpty::new(mark)),
+            Self::CommittedFiles(files) => {
+                if files.head.commit_id != mark.commit_id {
+                    anyhow::bail!("cannot mark files from multiple commits");
+                }
+                files.push(mark);
+            }
+            _ => anyhow::bail!("cannot mix mark sources"),
+        }
+        Ok(())
+    }
+
+    fn remove_mark(&mut self, mark: &MarkedCommittedFile) {
+        let Self::CommittedFiles(files) = self else {
+            return;
+        };
+
+        if remove_from_non_empty(files, |marked| {
+            marked.commit_id == mark.commit_id && marked.path == mark.path
+        }) {
+            *self = Self::Empty;
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SingleSourceMarks<T>(Vec<T>);
+
+impl<T> Default for SingleSourceMarks<T> {
+    fn default() -> Self {
+        Self(Default::default())
+    }
+}
+
+impl<T> SingleSourceMarks<T> {
+    pub fn clear(&mut self) {
+        self.0.clear();
+    }
+}
+
+impl<T> Deref for SingleSourceMarks<T> {
+    type Target = [T];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> MarkStore<T> for SingleSourceMarks<T>
+where
+    T: PartialEq,
+{
+    type Error = Infallible;
+
+    fn contains_mark(&self, mark: &T) -> bool {
+        self.0.iter().any(|hunk| hunk == mark)
+    }
+
+    fn insert_mark(&mut self, mark: T) -> Result<(), Self::Error> {
+        self.0.push(mark);
+        Ok(())
+    }
+
+    fn remove_mark(&mut self, mark: &T) {
+        if let Some(index) = self.0.iter().position(|hunk| hunk == mark) {
+            self.0.remove(index);
+        }
+    }
+}
+
+fn remove_from_non_empty<T>(items: &mut NonEmpty<T>, predicate: impl Fn(&T) -> bool) -> bool {
+    let Some(index) = items.iter().position(predicate) else {
+        return false;
+    };
+
+    if index == 0 {
+        if items.tail.is_empty() {
+            true
+        } else {
+            items.head = items.tail.remove(0);
+            false
+        }
+    } else {
+        items.tail.remove(index - 1);
+        false
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Markable {
+    Uncommitted(UncommittedHunkOrFile),
+    Commit(MarkedCommit),
+    CommittedFile(MarkedCommittedFile),
+}
+
+impl Markable {
+    pub fn into_cli_id(self) -> CliId {
+        match self {
+            Markable::Uncommitted(uncommitted_cli_id) => {
+                CliId::UncommittedHunkOrFile(uncommitted_cli_id)
+            }
+            Markable::Commit(MarkedCommit { commit_id, id }) => CliId::Commit { commit_id, id },
+            Markable::CommittedFile(MarkedCommittedFile {
+                commit_id,
+                path,
+                id,
+            }) => CliId::CommittedFile {
+                commit_id,
+                path,
+                id,
+            },
+        }
+    }
+
+    pub fn as_ref(&self) -> MarkableRef<'_> {
+        match self {
+            Markable::Uncommitted(hunk) => MarkableRef::Uncommitted(hunk),
+            Markable::Commit(inner) => MarkableRef::Commit(inner.as_ref()),
+            Markable::CommittedFile(inner) => MarkableRef::CommittedFile(inner.as_ref()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MarkedCommit {
+    pub commit_id: gix::ObjectId,
+    pub id: ShortId,
+}
+
+impl MarkedCommit {
+    pub fn as_ref(&self) -> MarkedCommitRef<'_> {
+        MarkedCommitRef {
+            commit_id: self.commit_id,
+            id: &self.id,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, strum::EnumDiscriminants)]
+#[strum_discriminants(derive(strum::VariantArray))]
+pub enum MarkableRef<'a> {
+    Uncommitted(&'a UncommittedHunkOrFile),
+    Commit(MarkedCommitRef<'a>),
+    CommittedFile(MarkedCommittedFileRef<'a>),
+}
+
+impl<'a> MarkableRef<'a> {
+    pub fn try_from_cli_id(cli_id: &'a CliId) -> Option<Self> {
+        for variant in MarkableRefDiscriminants::VARIANTS {
+            match variant {
+                MarkableRefDiscriminants::Uncommitted => {
+                    if let CliId::UncommittedHunkOrFile(uncommitted) = cli_id {
+                        if uncommitted
+                            .hunk_assignments
+                            .iter()
+                            .any(|hunk| hunk.stack_id.is_some())
+                        {
+                            return None;
+                        }
+                        return Some(Self::Uncommitted(uncommitted));
+                    }
+                }
+                MarkableRefDiscriminants::Commit => {
+                    if let CliId::Commit { commit_id, id } = cli_id {
+                        return Some(Self::Commit(MarkedCommitRef {
+                            commit_id: *commit_id,
+                            id,
+                        }));
+                    }
+                }
+                MarkableRefDiscriminants::CommittedFile => {
+                    if let CliId::CommittedFile {
+                        commit_id,
+                        path,
+                        id,
+                    } = cli_id
+                    {
+                        return Some(Self::CommittedFile(MarkedCommittedFileRef {
+                            commit_id: *commit_id,
+                            path: path.as_ref(),
+                            id,
+                        }));
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    pub fn matches_cli_id(&self, cli_id: &CliId) -> bool {
+        MarkableRef::try_from_cli_id(cli_id).is_some_and(|id| self == &id)
+    }
+
+    pub fn to_owned(self) -> Markable {
+        match self {
+            MarkableRef::Uncommitted(hunk) => Markable::Uncommitted(hunk.clone()),
+            MarkableRef::Commit(inner) => Markable::Commit(inner.to_owned()),
+            MarkableRef::CommittedFile(inner) => Markable::CommittedFile(inner.to_owned()),
+        }
+    }
+}
+
+impl PartialEq<MarkableRef<'_>> for Markable {
+    fn eq(&self, other: &MarkableRef<'_>) -> bool {
+        <MarkableRef<'_> as PartialEq>::eq(&self.as_ref(), other)
+    }
+}
+
+impl PartialEq<Markable> for MarkableRef<'_> {
+    fn eq(&self, other: &Markable) -> bool {
+        <MarkableRef<'_> as PartialEq>::eq(&other.as_ref(), self)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MarkedCommitRef<'a> {
+    pub commit_id: gix::ObjectId,
+    pub id: &'a str,
+}
+
+impl MarkedCommitRef<'_> {
+    pub fn to_owned(self) -> MarkedCommit {
+        MarkedCommit {
+            commit_id: self.commit_id,
+            id: self.id.to_owned(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MarkedCommittedFile {
+    pub commit_id: gix::ObjectId,
+    pub path: BString,
+    pub id: ShortId,
+}
+
+impl MarkedCommittedFile {
+    pub fn as_ref(&self) -> MarkedCommittedFileRef<'_> {
+        MarkedCommittedFileRef {
+            commit_id: self.commit_id,
+            path: self.path.as_ref(),
+            id: &self.id,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MarkedCommittedFileRef<'a> {
+    pub commit_id: gix::ObjectId,
+    pub path: &'a BStr,
+    pub id: &'a str,
+}
+
+impl MarkedCommittedFileRef<'_> {
+    pub fn to_owned(self) -> MarkedCommittedFile {
+        MarkedCommittedFile {
+            commit_id: self.commit_id,
+            path: self.path.to_owned(),
+            id: self.id.to_owned(),
+        }
+    }
+}
 
 impl App {
     pub fn handle_mark(&mut self, ctx: &mut Context) -> anyhow::Result<()> {
@@ -31,7 +553,9 @@ impl App {
         };
 
         match &**selection {
-            CliId::Commit { .. } | CliId::UncommittedHunkOrFile(..) => {
+            CliId::Commit { .. }
+            | CliId::UncommittedHunkOrFile(..)
+            | CliId::CommittedFile { .. } => {
                 if handle_mark_cli_id(
                     selection,
                     self.mode
@@ -55,10 +579,10 @@ impl App {
                         .mode
                         .get_mut_without_updating_backstack_and_i_promise_not_to_change_state()
                     {
-                        Mode::Normal(NormalMode { marks })
-                        | Mode::PickChanges(PickChangesMode { marks }) => {
+                        Mode::Normal(NormalMode { marks }) => {
                             handle_mark_branch(marks, ctx, stack_id, name)?;
                         }
+                        Mode::PickChanges(..) => {}
                         Mode::Rub(..)
                         | Mode::InlineReword(..)
                         | Mode::Command(..)
@@ -77,9 +601,11 @@ impl App {
                     .mode
                     .get_mut_without_updating_backstack_and_i_promise_not_to_change_state()
                 {
-                    Mode::Normal(NormalMode { marks })
-                    | Mode::PickChanges(PickChangesMode { marks }) => {
+                    Mode::Normal(NormalMode { marks }) => {
                         handle_mark_uncommitted(marks, &self.status_lines)?;
+                    }
+                    Mode::PickChanges(PickChangesMode { marks }) => {
+                        let Ok(()) = handle_mark_uncommitted(marks, &self.status_lines);
                     }
                     Mode::Rub(..)
                     | Mode::InlineReword(..)
@@ -92,15 +618,13 @@ impl App {
                     | Mode::Stack(..) => {}
                 }
             }
-            CliId::PathPrefix { .. } | CliId::CommittedFile { .. } | CliId::Stack { .. } => {}
+            CliId::PathPrefix { .. } | CliId::Stack { .. } => {}
         }
 
-        if let Some(marks) = self.marks() {
-            if marks.is_empty() {
-                self.backstack.remove_mark();
-            } else {
-                self.backstack.push_mark();
-            }
+        if self.marks_ref().is_empty() {
+            self.backstack.remove_mark();
+        } else {
+            self.backstack.push_mark();
         }
 
         Ok(())
@@ -118,69 +642,28 @@ impl App {
         self.backstack.remove_mark();
     }
 
-    pub fn marks(&self) -> Option<&Marks> {
-        self.mode.marks()
+    pub fn marks_ref(&self) -> MarksRef<'_> {
+        self.mode.marks_ref()
     }
 }
 
 fn handle_mark_cli_id(commit: &CliId, mode: &mut Mode) -> anyhow::Result<bool> {
-    let Some(markable) = MarkableRef::try_from_cli_id(commit).map(|m| m.to_owned()) else {
+    let Some(markable) = MarkableRef::try_from_cli_id(commit) else {
         return Ok(false);
     };
 
     match mode {
         Mode::Normal(normal_mode) => {
-            normal_mode.marks.toggle(markable)?;
+            toggle_markable_ref(&mut normal_mode.marks, markable)?;
         }
         Mode::PickChanges(pick_uncommitted_mode) => {
-            pick_uncommitted_mode.marks.toggle(markable)?;
-        }
-        Mode::Rub(rub_mode) => {
-            match &mut rub_mode.source {
-                RubSource::CliId(cli_id) => {
-                    match &**cli_id {
-                        CliId::Commit { .. } => {
-                            // we only support rubbing commits, meaning the source
-                            // also most be a commit
-                            let mut marks = Marks::default();
-                            if let Some(previous_source) = MarkableRef::try_from_cli_id(cli_id)
-                                && markable != previous_source
-                            {
-                                marks.toggle(previous_source.to_owned())?;
-                            }
-                            marks.toggle(markable)?;
-                            rub_mode.source = RubSource::Marks(Box::new(marks));
-                        }
-                        CliId::UncommittedHunkOrFile(..)
-                        | CliId::PathPrefix { .. }
-                        | CliId::CommittedFile { .. }
-                        | CliId::Branch { .. }
-                        | CliId::Uncommitted { .. }
-                        | CliId::Stack { .. } => return Ok(false),
-                    }
-                }
-                RubSource::Marks(marks) => {
-                    marks.toggle(markable.clone())?;
-
-                    match marks.len() {
-                        0 => {
-                            rub_mode.source = RubSource::CliId(Arc::new(markable.into_cli_id()));
-                        }
-                        1 => {
-                            let only_remaining_mark = marks.iter().next();
-                            if let Some(mark) = only_remaining_mark {
-                                rub_mode.source =
-                                    RubSource::CliId(Arc::new(mark.to_owned().into_cli_id()));
-                            }
-                        }
-                        _ => {
-                            //
-                        }
-                    }
-                }
-            }
+            let MarkableRef::Uncommitted(hunk) = markable else {
+                return Ok(false);
+            };
+            let Ok(()) = toggle_markables(&mut pick_uncommitted_mode.marks, [hunk.clone()]);
         }
         Mode::InlineReword(..)
+        | Mode::Rub(..)
         | Mode::Command(..)
         | Mode::Commit(..)
         | Mode::Move(..)
@@ -195,37 +678,42 @@ fn handle_mark_cli_id(commit: &CliId, mode: &mut Mode) -> anyhow::Result<bool> {
     Ok(true)
 }
 
+fn toggle_markable_ref(marks: &mut Marks, markable: MarkableRef<'_>) -> anyhow::Result<()> {
+    match markable {
+        MarkableRef::Uncommitted(hunk) => toggle_markables(marks, [hunk.clone()]),
+        MarkableRef::Commit(commit) => toggle_markables(marks, [commit.to_owned()]),
+        MarkableRef::CommittedFile(file) => toggle_markables(marks, [file.to_owned()]),
+    }
+}
+
 fn handle_mark_branch(
     marks: &mut Marks,
     ctx: &Context,
     stack_id: StackId,
     name: &str,
 ) -> anyhow::Result<()> {
-    let Some(commits) = commits_on_branch(ctx, stack_id, name)?
+    let commits = commits_on_branch(ctx, stack_id, name)?
         .into_iter()
-        .map(|(commit_id, short_id)| {
-            Markable::try_from_cli_id(CliId::Commit {
-                commit_id,
-                id: short_id,
-            })
-        })
-        .collect::<Option<Vec<_>>>()
-    else {
-        return Ok(());
-    };
+        .map(|(commit_id, id)| MarkedCommit { commit_id, id });
 
     toggle_markables(marks, commits)?;
 
     Ok(())
 }
 
-fn handle_mark_uncommitted(
-    marks: &mut Marks,
+fn handle_mark_uncommitted<S>(
+    marks: &mut S,
     status_lines: &[StatusOutputLine],
-) -> anyhow::Result<()> {
+) -> Result<(), S::Error>
+where
+    S: MarkStore<crate::id::UncommittedHunkOrFile>,
+{
     let uncommitted_files = status_lines.iter().filter_map(|line| match &line.data {
         StatusOutputLineData::UncommittedFile { cli_id } => {
-            MarkableRef::try_from_cli_id(cli_id).map(|m| m.to_owned())
+            match MarkableRef::try_from_cli_id(cli_id) {
+                Some(MarkableRef::Uncommitted(hunk)) => Some(hunk.clone()),
+                Some(_) | None => None,
+            }
         }
         StatusOutputLineData::UpdateNotice
         | StatusOutputLineData::Connector
@@ -245,34 +733,34 @@ fn handle_mark_uncommitted(
         | StatusOutputLineData::NoAssignmentsUnstaged => None,
     });
 
-    toggle_markables(marks, uncommitted_files)?;
-
-    Ok(())
+    toggle_markables(marks, uncommitted_files)
 }
 
-fn toggle_markables(
-    marks: &mut Marks,
-    markables: impl IntoIterator<Item = Markable>,
-) -> anyhow::Result<()> {
-    let (marked, unmarked) = markables
-        .into_iter()
-        .partition::<Vec<_>, _>(|markable| marks.contains(markable.as_ref()));
+fn toggle_markables<T, S>(
+    marks: &mut S,
+    markables: impl IntoIterator<Item = T>,
+) -> Result<(), S::Error>
+where
+    S: MarkStore<T>,
+{
+    let mut marked = Vec::new();
+    let mut saw_unmarked = false;
 
-    match (marked.is_empty(), unmarked.is_empty()) {
-        (true, false) => {
-            for markable in unmarked {
-                marks.insert(markable)?;
+    for markable in markables {
+        if marks.contains_mark(&markable) {
+            if !saw_unmarked {
+                marked.push(markable);
             }
+        } else {
+            saw_unmarked = true;
+            marked.clear();
+            marks.insert_mark(markable)?;
         }
-        (false, true) => {
-            for markable in marked {
-                marks.remove(markable.as_ref());
-            }
-        }
-        _ => {
-            for markable in unmarked {
-                marks.insert(markable)?;
-            }
+    }
+
+    if !saw_unmarked {
+        for markable in &marked {
+            marks.remove_mark(markable);
         }
     }
 

@@ -3,6 +3,7 @@ use std::sync::Arc;
 use but_core::ref_metadata::StackId;
 use but_ctx::Context;
 use but_rebase::graph_rebase::mutate::InsertSide;
+use nonempty::NonEmpty;
 use ratatui::prelude::Span;
 
 use crate::{
@@ -11,7 +12,7 @@ use crate::{
         output::StatusOutputLineData,
         tui::{
             App, Message, Mode, ReloadCause, SelectAfterReload,
-            marking::{MarkableRef, Marks},
+            app::mark::MarkedCommit,
             operations,
             render::{
                 ModeRender, RenderSingleLineSpans, render_move_operation_target_marker, source_span,
@@ -30,7 +31,7 @@ pub struct MoveMode {
 /// A subset of [`CliId`] that supports being moved
 #[derive(Debug)]
 pub enum MoveSource {
-    Marks(Box<Marks>),
+    Marks(NonEmpty<MarkedCommit>),
     Commit {
         commit_id: gix::ObjectId,
         id: ShortId,
@@ -81,7 +82,19 @@ impl ModeRender for MoveMode {
 impl MoveSource {
     pub fn contains(&self, other: &CliId) -> bool {
         match self {
-            MoveSource::Marks(marks) => marks.contains_cli_id(other),
+            MoveSource::Marks(commits) => {
+                if let CliId::Commit {
+                    commit_id: rhs_commit_id,
+                    id: rhs_id,
+                } = other
+                {
+                    commits
+                        .iter()
+                        .any(|commit| commit.commit_id == *rhs_commit_id && commit.id == *rhs_id)
+                } else {
+                    false
+                }
+            }
             MoveSource::Commit {
                 commit_id: commit_id_lhs,
                 id: id_lhs,
@@ -164,14 +177,11 @@ impl App {
             return;
         };
 
-        let move_mode = if let Some(marks) = self.marks()
-            && !marks.is_empty()
+        let move_mode = if let Mode::Normal(normal_mode) = &*self.mode
+            && let Some(commits) = normal_mode.marks.as_commits().cloned()
         {
-            if !marks.marked_commits() || marks.marked_uncommitted() {
-                return;
-            }
             MoveMode {
-                source: Arc::new(MoveSource::Marks(Box::new(marks.clone()))),
+                source: Arc::new(MoveSource::Marks(commits)),
                 insert_side: InsertSide::Above,
             }
         } else {
@@ -315,17 +325,11 @@ impl App {
                     .copied()
                     .map(SelectAfterReload::Commit)
             }
-            MoveSource::Marks(marks) => {
-                let Some(sources) = marks
+            MoveSource::Marks(commits) => {
+                let sources = commits
                     .iter()
-                    .map(|mark| match mark {
-                        MarkableRef::Commit(mark) => Some(mark.commit_id),
-                        MarkableRef::Uncommitted(..) => None,
-                    })
-                    .collect::<Option<Vec<_>>>()
-                else {
-                    return Ok(());
-                };
+                    .map(|commit| commit.commit_id)
+                    .collect::<Vec<_>>();
 
                 let commit_move_result = match target {
                     MoveTarget::Branch { name } => {

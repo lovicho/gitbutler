@@ -1,7 +1,7 @@
 use indexmap::IndexMap;
 use strum::IntoEnumIterator as _;
 
-use crate::args::{Args, SubcommandDiscriminant};
+use crate::args::{Args, HelpTopic, SubcommandDiscriminant};
 use crate::theme::{self, Paint};
 use crate::tui::text::{terminal_width, truncate_text};
 use crate::utils::{OutputChannel, envs};
@@ -29,9 +29,46 @@ impl std::fmt::Display for Group {
     }
 }
 
+pub fn print(out: &mut OutputChannel, topic: Option<HelpTopic>) -> std::fmt::Result {
+    match topic {
+        Some(topic) => print_topic(out, topic),
+        None => print_grouped(out),
+    }
+}
+
 pub fn print_grouped(out: &mut OutputChannel) -> std::fmt::Result {
     let allow_truncation = out.format().allows_truncation();
     print_grouped_with_truncation(out, allow_truncation)
+}
+
+fn print_topic(out: &mut OutputChannel, topic: HelpTopic) -> std::fmt::Result {
+    use clap::CommandFactory;
+    use std::fmt::Write;
+
+    let mut cmd = Args::command();
+    let topic_command = cmd
+        .find_subcommand_mut("help")
+        .and_then(|help| help.find_subcommand_mut(topic.name()))
+        .expect("all help topics have clap command metadata");
+
+    let t = theme::get();
+    writeln!(out, "{}", t.important.paint(topic.title()))?;
+    writeln!(out)?;
+
+    // We can't easily hook into Clap's colorize choice. It's only implemented in
+    // `Command::print_long_help()` and that forces use of `std::io::Stdout`, side-stepping our
+    // OutputChannel implementation.
+    //
+    // A full implementation here would entail using `anstream::AutoStream` along with
+    // `Command::get_color()` and map that to `anstream::ColorChoice`. But just checking if the
+    // output is a terminal is generally sufficient as all modern terminals support ANSI escape
+    // codes, so we'll stay with this simple solution for now.
+    let long_help = topic_command.render_long_help();
+    if out.is_terminal() {
+        writeln!(out, "{}", long_help.ansi())
+    } else {
+        writeln!(out, "{long_help}")
+    }
 }
 
 fn print_grouped_with_truncation(
@@ -239,6 +276,33 @@ fn print_grouped_with_truncation(
         writeln!(out)?;
     }
 
+    if let Some(help_command) = clap_subcommands
+        .iter()
+        .find(|subcommand| subcommand.get_name() == "help")
+    {
+        writeln!(
+            out,
+            "{} (view with {}):",
+            t.important.paint("Help Topics"),
+            t.important.paint("but help <topic>")
+        )?;
+        for topic_command in help_command.get_subcommands() {
+            if topic_command.is_hide_set() {
+                continue;
+            }
+            let about = topic_command.get_about().unwrap_or_default().to_string();
+            let available_width = terminal_width.saturating_sub(LONGEST_COMMAND_LEN_AND_ELLIPSIS);
+            let truncated_about = truncate_text(&about, available_width);
+            writeln!(
+                out,
+                "  {:<LONGEST_COMMAND_LEN$}{}",
+                t.success.paint(topic_command.get_name()),
+                truncated_about,
+            )?;
+        }
+        writeln!(out)?;
+    }
+
     // Add command completion instructions
     writeln!(
         out,
@@ -361,6 +425,9 @@ Other Commands:
   agent        Set up GitButler for AI coding agents
   completions  Generate but shell completions
 
+Help Topics (view with but help <topic>):
+  cli-ids      Smart IDs to reference commits, branches and more in but
+
 To add command completion, add this to your shell rc: (for example ~/.zshrc)
   eval "$(but completions zsh)"
 
@@ -433,6 +500,9 @@ Other Commands:
   skill        Manage AI agent skills for GitButler
   agent        Set up GitButler for AI coding agents
   completions  Generate but shell completions
+
+Help Topics (view with but help <topic>):
+  cli-ids      Smart IDs to reference commits, branches and more in but
 
 To add command completion, add this to your shell rc: (for example ~/.zshrc)
   eval "$(but completions zsh)"

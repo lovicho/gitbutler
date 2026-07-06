@@ -2,7 +2,8 @@ use ratatui::style::Color;
 
 use crate::{
     command::legacy::status::tui::{
-        InlineRewordMode, Marks,
+        InlineRewordMode,
+        app::mark::MarksRef,
         app::{
             CommandMode, CommitMode, CommitSource, JumpMode, MoveMode, MoveSource, MoveStackMode,
             NormalMode, PickChangesMode, RubMode, RubSource, StackMode,
@@ -45,30 +46,32 @@ impl Mode {
         ModeDiscriminant::from(self).fg(theme)
     }
 
-    pub fn marks(&self) -> Option<&Marks> {
+    pub fn marks_ref(&self) -> MarksRef<'_> {
         match self {
-            Mode::Normal(normal_mode) => Some(&normal_mode.marks),
+            Mode::Normal(normal_mode) => normal_mode.marks.as_ref(),
             Mode::Rub(rub_mode) => match &rub_mode.source {
-                RubSource::Marks(marks) => Some(marks),
-                RubSource::CliId(..) => None,
+                RubSource::Marks(marks) => marks.as_ref(),
+                RubSource::CliId(..) => MarksRef::Empty,
             },
             Mode::Commit(commit_mode) => match &*commit_mode.source {
-                CommitSource::Marks(marks) => Some(marks),
+                CommitSource::Marks(hunks) => MarksRef::from_hunks(hunks),
                 CommitSource::UncommittedArea(..)
                 | CommitSource::Uncommitted(..)
-                | CommitSource::Stack(..) => None,
+                | CommitSource::Stack(..) => MarksRef::Empty,
             },
-            Mode::PickChanges(pick_uncommitted_mode) => Some(&pick_uncommitted_mode.marks),
-            Mode::Details(details_mode) => Some(details_mode.return_mode.marks()),
+            Mode::PickChanges(pick_uncommitted_mode) => {
+                MarksRef::from_hunk_slice(&pick_uncommitted_mode.marks)
+            }
+            Mode::Details(details_mode) => details_mode.return_mode.marks(),
             Mode::Move(move_mode) => match &*move_mode.source {
-                MoveSource::Marks(marks) => Some(marks),
-                MoveSource::Commit { .. } | MoveSource::Branch { .. } => None,
+                MoveSource::Marks(commits) => MarksRef::from_commits(commits),
+                MoveSource::Commit { .. } | MoveSource::Branch { .. } => MarksRef::Empty,
             },
             Mode::InlineReword(..)
             | Mode::Command(..)
             | Mode::Stack(..)
             | Mode::MoveStack(..)
-            | Mode::Jump(..) => None,
+            | Mode::Jump(..) => MarksRef::Empty,
         }
     }
 }
@@ -129,6 +132,7 @@ pub struct DetailsMode {
 }
 
 #[derive(Debug, Clone)]
+#[expect(clippy::large_enum_variant)]
 pub enum DetailsReturnMode {
     Normal(NormalMode),
     PickChanges(PickChangesMode),
@@ -137,10 +141,12 @@ pub enum DetailsReturnMode {
 impl ModeRender for DetailsMode {}
 
 impl DetailsReturnMode {
-    fn marks(&self) -> &Marks {
+    fn marks(&self) -> MarksRef<'_> {
         match self {
-            DetailsReturnMode::Normal(normal_mode) => &normal_mode.marks,
-            DetailsReturnMode::PickChanges(pick_uncommitted_mode) => &pick_uncommitted_mode.marks,
+            DetailsReturnMode::Normal(normal_mode) => normal_mode.marks.as_ref(),
+            DetailsReturnMode::PickChanges(pick_uncommitted_mode) => {
+                MarksRef::from_hunk_slice(&pick_uncommitted_mode.marks)
+            }
         }
     }
 }

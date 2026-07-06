@@ -31,6 +31,7 @@ export type CommandGroup =
 	| "Operations log"
 	| "Stack"
 	| "Uncommitted changes"
+	| "Outline"
 	| "Workspace";
 
 declare module "@tanstack/react-hotkeys" {

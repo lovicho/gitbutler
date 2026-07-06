@@ -351,7 +351,7 @@ const WorkspacePage: FC = () => {
 	]);
 
 	const absorptionPlanTarget = Match.value(outlineMode).pipe(
-		Match.tag("Absorb", ({ sourceTarget }) => sourceTarget),
+		Match.tags({ Absorb: ({ sourceTarget }) => sourceTarget }),
 		Match.orElse(() => null),
 	);
 	const [absorptionPlanQuery] = useQueries({

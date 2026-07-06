@@ -1569,7 +1569,7 @@ fn print_commit(
 
                     let (status, path) = tree_change_display_cli(inner);
                     output.file(
-                        Vec::from([Span::raw("┊│     ")]),
+                        Vec::from([Span::raw("┊"), Span::raw("│"), Span::raw("     ")]),
                         FileLineContent {
                             id: Vec::from([
                                 Span::styled(short_id.to_owned(), t.cli_id),

@@ -5,6 +5,7 @@ import {
 	getReviewMergeStatusQueryOptions,
 	getReviewQueryOptions,
 	headInfoQueryOptions,
+	type QueryKey,
 } from "#ui/api/queries.ts";
 import { shortCommitId } from "#ui/commit.ts";
 import { errorMessageForToast } from "#ui/errors.ts";
@@ -157,16 +158,45 @@ export const useBranchCreate = () => {
 	});
 };
 
+export const usePublishReview = () => {
+	const toastManager = Toast.useToastManager();
+
+	return useMutation({
+		mutationFn: window.lite.publishReview,
+		onSuccess: async (_response, input, _context, mutation) => {
+			await mutation.client.invalidateQueries({
+				queryKey: ["reviews" satisfies QueryKey, input.projectId],
+			});
+		},
+		onError: (error) => {
+			// oxlint-disable-next-line no-console
+			console.error(error);
+
+			toastManager.add({
+				type: "error",
+				title: "Failed to create pull request",
+				description: errorMessageForToast(error),
+				priority: "high",
+			});
+		},
+	});
+};
+
 export const useUpdateReview = () => {
 	const toastManager = Toast.useToastManager();
 
 	return useMutation({
 		mutationFn: window.lite.updateReview,
 		onSuccess: async (_response, input, _context, mutation) => {
-			await mutation.client.invalidateQueries({
-				queryKey: getReviewQueryOptions({ projectId: input.projectId, reviewId: input.reviewId })
-					.queryKey,
-			});
+			await Promise.all([
+				mutation.client.invalidateQueries({
+					queryKey: ["reviews" satisfies QueryKey, input.projectId],
+				}),
+				mutation.client.invalidateQueries({
+					queryKey: getReviewQueryOptions({ projectId: input.projectId, reviewId: input.reviewId })
+						.queryKey,
+				}),
+			]);
 		},
 		onError: (error) => {
 			// oxlint-disable-next-line no-console
@@ -182,6 +212,25 @@ export const useUpdateReview = () => {
 	});
 };
 
+export const useSetReviewAutoMerge = () => {
+	const toastManager = Toast.useToastManager();
+
+	return useMutation({
+		mutationFn: window.lite.setReviewAutoMerge,
+		onError: (error, input) => {
+			// oxlint-disable-next-line no-console
+			console.error(error);
+
+			toastManager.add({
+				type: "error",
+				title: `Failed to ${input.enable ? "enable" : "disable"} pull request auto-merge`,
+				description: errorMessageForToast(error),
+				priority: "high",
+			});
+		},
+	});
+};
+
 export const useMergeReview = () => {
 	const toastManager = Toast.useToastManager();
 
@@ -189,6 +238,9 @@ export const useMergeReview = () => {
 		mutationFn: window.lite.mergeReview,
 		onSuccess: async (_response, input, _context, mutation) => {
 			await Promise.all([
+				mutation.client.invalidateQueries({
+					queryKey: ["reviews" satisfies QueryKey, input.projectId],
+				}),
 				mutation.client.invalidateQueries({
 					queryKey: getReviewQueryOptions({ projectId: input.projectId, reviewId: input.reviewId })
 						.queryKey,
@@ -222,6 +274,9 @@ export const useSetReviewDraftiness = () => {
 		mutationFn: window.lite.setReviewDraftiness,
 		onSuccess: async (_response, input, _context, mutation) => {
 			await Promise.all([
+				mutation.client.invalidateQueries({
+					queryKey: ["reviews" satisfies QueryKey, input.projectId],
+				}),
 				mutation.client.invalidateQueries({
 					queryKey: getReviewQueryOptions({ projectId: input.projectId, reviewId: input.reviewId })
 						.queryKey,

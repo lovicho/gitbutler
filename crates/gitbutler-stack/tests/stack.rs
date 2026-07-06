@@ -762,7 +762,7 @@ fn command_ctx(name: &str) -> Result<(Context, TempDir)> {
     )
     .map_err(anyhow::Error::from_boxed)?;
     let repo = open_repo(tmp.path().join(name).as_path())?;
-    Ok((Context::from_repo(repo)?, tmp))
+    Ok((Context::from_repo_for_testing(repo)?, tmp))
 }
 
 fn seed_metadata(repo: &gix::Repository, name: &str) -> Result<()> {

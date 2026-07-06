@@ -89,6 +89,7 @@ pub fn init_ctx(
     options: InitCtxOptions,
     out: &mut OutputChannel,
 ) -> anyhow::Result<Context> {
+    let app_settings = crate::app_settings()?;
     // lets try to get the repo from the current directory
     let repo = match gix::discover(&args.current_dir) {
         Ok(repo) => repo,
@@ -122,7 +123,10 @@ pub fn init_ctx(
                     match prompt_for_setup(out, &message) {
                         SetupPromptResult::RunSetup => {
                             // Run setup
-                            let mut ctx = Context::from_repo(repo.clone())?;
+                            let mut ctx = Context::from_repo_with_settings(
+                                repo.clone(),
+                                app_settings.clone(),
+                            )?;
                             let mut guard = ctx.exclusive_worktree_access();
                             crate::command::legacy::setup::repo(
                                 &mut ctx,
@@ -148,7 +152,8 @@ pub fn init_ctx(
             };
 
             // Check project setup, prompt for setup if needed
-            let mut ctx = Context::new_from_legacy_project(project)?;
+            let mut ctx =
+                Context::new_from_legacy_project_and_settings(&project, app_settings.clone())?;
             {
                 let mut guard = ctx.exclusive_worktree_access();
                 if let Err(e) = check_project_setup(&ctx, guard.read_permission()) {
@@ -192,7 +197,7 @@ pub fn init_ctx(
         }
         #[cfg(not(feature = "legacy"))]
         {
-            let ctx = but_ctx::Context::from_repo(repo)?;
+            let ctx = but_ctx::Context::from_repo_with_settings(repo, app_settings.clone())?;
             // TODO: this can be implemented once project metadata is available from the project location itself,
             //       i.e. once it was migrated out of `projects.json` into `.git/gitbutler/…`
             let fetch_interval_disabled = 0;

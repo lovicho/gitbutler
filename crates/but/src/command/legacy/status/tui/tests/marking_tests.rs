@@ -154,3 +154,62 @@ fn marks_still_show_in_split_details() {
         .assert_backstack_eq([BackstackEntry::OpenSplitDetailsView, BackstackEntry::Mark])
         .assert_rendered_term_svg_eq(file!["snapshots/marks_still_show_in_split_details_005.svg"]);
 }
+
+#[test]
+fn can_only_mark_files_from_one_commit() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.file("one", "");
+    env.file("two", "");
+    env.file("three", "");
+    env.file("four", "");
+
+    let mut tui = test_tui(env);
+
+    tui.input_then_render('j');
+    tui.input_then_render(' ');
+    tui.input_then_render(' ');
+
+    tui.input_then_render('c');
+    tui.input_then_render('e');
+    tui.input_then_render('b');
+    tui.input_then_render('g');
+    tui.input_then_render(' ');
+    tui.input_then_render('c');
+    tui.input_then_render('e');
+    tui.input_then_render('j');
+    tui.input_then_render('j');
+    tui.input_then_render(KeyCode::Enter);
+
+    tui.input_then_render((KeyModifiers::SHIFT, 'F'))
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/can_only_mark_files_from_one_commit_001.svg"
+        ]);
+
+    tui.input_then_render('j');
+    tui.input_then_render(' ')
+        .assert_current_line_eq(str![["┊│     bd:tw A two"]])
+        .assert_backstack_eq([BackstackEntry::Mark, BackstackEntry::ShowFileList])
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/can_only_mark_files_from_one_commit_002.svg"
+        ]);
+
+    // we shouldn't be allowed to select lines outside the commit files
+    for _ in 0..10 {
+        tui.input_then_render('j')
+            .assert_current_line_eq(str![["┊│     bd:tw A two"]])
+            .assert_backstack_eq([BackstackEntry::Mark, BackstackEntry::ShowFileList])
+            .assert_rendered_term_svg_eq(file![
+                "snapshots/can_only_mark_files_from_one_commit_003.svg"
+            ]);
+    }
+    for _ in 0..10 {
+        tui.input_then_render('k')
+            .assert_current_line_eq(str![["┊✔︎     bd:or A three"]])
+            .assert_backstack_eq([BackstackEntry::Mark, BackstackEntry::ShowFileList])
+            .assert_rendered_term_svg_eq(file![
+                "snapshots/can_only_mark_files_from_one_commit_004.svg"
+            ]);
+    }
+}

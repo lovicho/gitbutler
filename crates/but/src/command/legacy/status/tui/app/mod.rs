@@ -48,7 +48,7 @@ use super::{
 
 mod details_layout;
 mod discard;
-mod mark;
+pub mod mark;
 mod undo_redo;
 
 mod command_mode;
@@ -345,8 +345,8 @@ impl App {
                 FilesMessage::ToggleGlobalFilesList => {
                     self.handle_files_toggle_global_files_list(messages)
                 }
-                FilesMessage::ToggleFilesForCommit => {
-                    self.handle_files_toggle_files_for_commit(ctx, messages)?
+                FilesMessage::ToggleFilesForSelectedCommit => {
+                    self.handle_files_toggle_files_for_selected_commit(ctx, messages)?
                 }
             },
             Message::Reload(select_after_reload, cause) => {
@@ -514,7 +514,8 @@ impl App {
             Mode::PickChanges(PickChangesMode { marks }) => {
                 let ids = marks
                     .iter()
-                    .map(|mark| mark.to_owned().into_cli_id())
+                    .cloned()
+                    .map(CliId::UncommittedHunkOrFile)
                     .collect();
                 Some(TuiOutcome::CliIds(ids))
             }
@@ -548,7 +549,11 @@ impl App {
             self.handle_backstack_entry(entry, messages);
         }
 
-        self.maybe_move_cursor_into_file_list();
+        if !self.maybe_move_cursor_into_file_list() {
+            // the cursor didn't move back into a file list but thats fine since all lines are
+            // selectable in normal mode. So we don't need to worry about the cursor being in an
+            // invalid position
+        }
     }
 
     fn handle_back(&mut self, messages: &mut Vec<Message>) {
@@ -564,13 +569,15 @@ impl App {
                     && !self.restore_mode_before_jump()
                     && !self.restore_cursor_before_move_stack(messages)
                 {
-                    let marks = self.marks().cloned().unwrap_or_default();
+                    let marks = self.marks_ref().to_owned();
                     self.mode.update(&mut self.backstack, |backstack, mode| {
                         let _ = backstack;
                         *mode = Mode::Normal(NormalMode { marks });
                     });
                 }
-                self.maybe_move_cursor_into_file_list();
+                if !self.maybe_move_cursor_into_file_list() {
+                    self.ensure_cursor_is_on_selectable_line();
+                }
             }
             BackstackEntry::ShowFileList => {
                 self.flags.show_files = FilesStatusFlag::None;
@@ -586,16 +593,8 @@ impl App {
                 Mode::PickChanges(pick_uncommitted_mode) => {
                     pick_uncommitted_mode.marks.clear();
                 }
-                Mode::Rub(..) => {
-                    *self
-                        .mode
-                        .get_mut_without_updating_backstack_and_i_promise_not_to_change_state() =
-                        Mode::Normal(NormalMode::default());
-                    self.backstack.remove_mark();
-                    self.backstack.remove_leave_normal_mode();
-                    self.maybe_move_cursor_into_file_list();
-                }
                 Mode::InlineReword(..)
+                | Mode::Rub(..)
                 | Mode::Command(..)
                 | Mode::Commit(..)
                 | Mode::Move(..)
@@ -612,7 +611,8 @@ impl App {
         }
     }
 
-    fn maybe_move_cursor_into_file_list(&mut self) {
+    #[must_use]
+    fn maybe_move_cursor_into_file_list(&mut self) -> bool {
         match self.flags.show_files {
             FilesStatusFlag::Commit(object_id) => {
                 // When viewing files in a commit cursor movement is constrained to only those
@@ -621,7 +621,7 @@ impl App {
                 // (perhaps from cancelling the rub) we need to potentially move the cursor back to
                 // the file list.
                 let Some(selection) = self.cursor.selected_line(&self.status_lines) else {
-                    return;
+                    return false;
                 };
 
                 if let Some(cli_id) = selection.data.cli_id()
@@ -629,13 +629,35 @@ impl App {
                     && *commit_id == object_id
                 {
                     // cursor is already within the file list
+                    true
                 } else {
                     self.cursor =
                         Cursor::select_first_file_in_commit(object_id, &self.status_lines)
                             .unwrap_or(self.cursor);
+                    true
                 }
             }
-            FilesStatusFlag::None | FilesStatusFlag::All => {}
+            FilesStatusFlag::None | FilesStatusFlag::All => false,
+        }
+    }
+
+    fn ensure_cursor_is_on_selectable_line(&mut self) {
+        let Some(line) = self.cursor.selected_line(&self.status_lines) else {
+            return;
+        };
+
+        if !is_selectable_in_mode(line, &self.mode, self.flags.show_files) {
+            if let Some(new_cursor) =
+                self.cursor
+                    .move_down(&self.status_lines, &self.mode, self.flags.show_files)
+            {
+                self.cursor = new_cursor;
+            } else if let Some(new_cursor) =
+                self.cursor
+                    .move_up(&self.status_lines, &self.mode, self.flags.show_files)
+            {
+                self.cursor = new_cursor;
+            }
         }
     }
 
@@ -653,14 +675,13 @@ impl App {
         messages.push(Message::Reload(None, ReloadCause::ViewOnly));
     }
 
-    fn handle_files_toggle_files_for_commit(
+    fn handle_files_toggle_files_for_selected_commit(
         &mut self,
         ctx: &mut Context,
         messages: &mut Vec<Message>,
     ) -> anyhow::Result<()> {
         if let Mode::Normal(normal_mode) = &*self.mode
-            && !normal_mode.marks.is_empty()
-            && normal_mode.marks.marked_commits()
+            && normal_mode.marks.as_commits().is_some()
         {
             match self.flags.show_files {
                 FilesStatusFlag::None => {
@@ -713,6 +734,36 @@ impl App {
         select_after_reload: Option<SelectAfterReload>,
         cause: ReloadCause,
     ) -> anyhow::Result<()> {
+        let close_empty_global_file_list_after_reload = matches!(
+            (&self.flags.show_files, &select_after_reload),
+            (FilesStatusFlag::All, Some(SelectAfterReload::Commit(_)))
+        );
+
+        if let Some(select_after_reload) = &select_after_reload {
+            match select_after_reload {
+                SelectAfterReload::FirstFileInCommit(commit_to_select) => {
+                    if let FilesStatusFlag::Commit(commit_shown) = self.flags.show_files
+                        && *commit_to_select != commit_shown
+                    {
+                        self.flags.show_files = FilesStatusFlag::Commit(*commit_to_select);
+                    }
+                }
+                SelectAfterReload::Commit(commit_to_select) => {
+                    if matches!(self.flags.show_files, FilesStatusFlag::Commit(_))
+                        && operations::commit_is_empty(ctx, *commit_to_select)?
+                    {
+                        self.flags.show_files = FilesStatusFlag::None;
+                        self.backstack.remove_show_file_list();
+                    }
+                }
+                SelectAfterReload::Branch(_)
+                | SelectAfterReload::Uncommitted
+                | SelectAfterReload::UncommittedFile { .. }
+                | SelectAfterReload::Stack(_)
+                | SelectAfterReload::CliId(_) => {}
+            }
+        }
+
         let new_lines = operations::reload_legacy(ctx, out, mode, self.flags, self.launch_options)?;
 
         self.cursor = if let Some(select_after_reload) = select_after_reload {
@@ -752,6 +803,19 @@ impl App {
             }
         }
         .unwrap_or_else(|| Cursor::new(&new_lines));
+
+        if close_empty_global_file_list_after_reload
+            && !new_lines.iter().any(|line| {
+                matches!(
+                    &line.data,
+                    StatusOutputLineData::File { cli_id }
+                        if matches!(&**cli_id, CliId::CommittedFile { .. })
+                )
+            })
+        {
+            self.flags.show_files = FilesStatusFlag::None;
+            self.backstack.remove_show_file_list();
+        }
 
         self.status_lines = new_lines;
 

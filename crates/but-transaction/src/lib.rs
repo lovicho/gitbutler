@@ -281,6 +281,28 @@ where
         })
     }
 
+    pub fn discard_changes_from_commit(
+        &mut self,
+        source: gix::ObjectId,
+        changes: Vec<DiffSpec>,
+    ) -> anyhow::Result<ObjectId> {
+        let context_lines = self.inner.context_lines;
+        self.rebase(|editor, commit_mappings, _| {
+            let but_workspace::commit::UncommitChangesOutcome {
+                rebase,
+                commit_selector,
+            } = but_workspace::commit::uncommit_changes(
+                editor,
+                commit_mappings.map(source),
+                changes,
+                context_lines,
+            )?;
+
+            let new_commit = rebase.lookup_pick(commit_selector)?;
+            Ok((new_commit, rebase))
+        })
+    }
+
     pub fn remove_reference(&mut self, ref_name: &FullNameRef) -> anyhow::Result<()> {
         self.rebase(|mut editor, _, _| {
             let selector = editor.select_reference(ref_name)?;
