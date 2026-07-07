@@ -490,7 +490,7 @@ impl CommitToNewBranchOperation {
             but_core::branch::unique_canned_refname(tx.repo())?
         };
 
-        tx.create_reference(branch_name.as_ref(), None, |_| StackId::generate(), None)?;
+        tx.create_reference(branch_name.as_ref(), None, |_| StackId::generate(), Some(0))?;
 
         let commit_create_result = tx.create_commit(
             RelativeTo::Reference(branch_name.clone()),

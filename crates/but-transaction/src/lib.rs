@@ -210,7 +210,7 @@ where
     db_tx: but_db::Transaction<'rebase>,
     pending_metadata_removals: Vec<FullName>,
     pending_metadata_updates: Vec<PendingMetadataUpdate>,
-    pending_created_independent_refs: Vec<FullName>,
+    pending_created_independent_refs: Vec<PendingCreatedIndependentRef>,
     pending_ref_changes: PendingRefChanges,
     // Commits given to `squash_commits`, `reword_commit`, etc are allowed to be the original
     // commits from live repo. This is used to map those to the rebased in-memory commits.
@@ -388,6 +388,7 @@ where
         order: impl Into<Option<usize>>,
     ) -> anyhow::Result<()> {
         let anchor = anchor.into();
+        let order = order.into();
         let creates_independent_branch = anchor.is_none();
         let previous = self
             .repo()
@@ -471,7 +472,10 @@ where
         if creates_independent_branch {
             self.inner
                 .pending_created_independent_refs
-                .push(ref_name.to_owned());
+                .push(PendingCreatedIndependentRef {
+                    name: ref_name.to_owned(),
+                    order,
+                });
         }
         self.inner
             .pending_ref_changes
@@ -811,6 +815,12 @@ struct EagerlyCreatedRef {
     previous: Option<gix::refs::Target>,
 }
 
+#[derive(Debug)]
+struct PendingCreatedIndependentRef {
+    name: FullName,
+    order: Option<usize>,
+}
+
 #[derive(Clone)]
 enum PendingMetadataUpdate {
     Workspace(RecordingMetadataHandle<ref_metadata::Workspace>),
@@ -951,7 +961,7 @@ pub trait TransactionOutcome: sealed::Sealed {
         db_tx: but_db::Transaction<'_>,
         pending_metadata_removals: Vec<FullName>,
         pending_metadata_updates: Vec<PendingMetadataUpdate>,
-        pending_created_independent_refs: Vec<FullName>,
+        pending_created_independent_refs: Vec<PendingCreatedIndependentRef>,
         dry_run: DryRun,
     ) -> anyhow::Result<Self::Outcome>;
 }
@@ -971,7 +981,7 @@ impl TransactionOutcome for () {
         db_tx: but_db::Transaction<'_>,
         pending_metadata_removals: Vec<FullName>,
         pending_metadata_updates: Vec<PendingMetadataUpdate>,
-        pending_created_independent_refs: Vec<FullName>,
+        pending_created_independent_refs: Vec<PendingCreatedIndependentRef>,
         dry_run: DryRun,
     ) -> anyhow::Result<Self::Outcome> {
         let ws = workspace_state_from_rebase(
@@ -1008,7 +1018,7 @@ impl<T> TransactionOutcome for Rollback<T> {
         _db_tx: but_db::Transaction<'_>,
         _pending_metadata_removals: Vec<FullName>,
         _pending_metadata_updates: Vec<PendingMetadataUpdate>,
-        _pending_created_independent_refs: Vec<FullName>,
+        _pending_created_independent_refs: Vec<PendingCreatedIndependentRef>,
         _dry_run: DryRun,
     ) -> anyhow::Result<Self::Outcome> {
         Ok(self.0)
@@ -1034,7 +1044,7 @@ impl<T> TransactionOutcome for Commit<T> {
         db_tx: but_db::Transaction<'_>,
         pending_metadata_removals: Vec<FullName>,
         pending_metadata_updates: Vec<PendingMetadataUpdate>,
-        pending_created_independent_refs: Vec<FullName>,
+        pending_created_independent_refs: Vec<PendingCreatedIndependentRef>,
         dry_run: DryRun,
     ) -> anyhow::Result<Self::Outcome> {
         let workspace = workspace_state_from_rebase(
@@ -1074,7 +1084,7 @@ impl<T, K> TransactionOutcome for DynamicOutcome<T, K> {
         db_tx: but_db::Transaction<'_>,
         pending_metadata_removals: Vec<FullName>,
         pending_metadata_updates: Vec<PendingMetadataUpdate>,
-        pending_created_independent_refs: Vec<FullName>,
+        pending_created_independent_refs: Vec<PendingCreatedIndependentRef>,
         dry_run: DryRun,
     ) -> anyhow::Result<Self::Outcome> {
         match self {
@@ -1102,7 +1112,7 @@ fn workspace_state_from_rebase<M: RefMetadata>(
     repo: &gix::Repository,
     pending_metadata_removals: Vec<FullName>,
     pending_metadata_updates: Vec<PendingMetadataUpdate>,
-    pending_created_independent_refs: Vec<FullName>,
+    pending_created_independent_refs: Vec<PendingCreatedIndependentRef>,
     dry_run: DryRun,
 ) -> anyhow::Result<WorkspaceState> {
     if dry_run.into() {
@@ -1113,17 +1123,20 @@ fn workspace_state_from_rebase<M: RefMetadata>(
     for branch in pending_created_independent_refs {
         if materialized
             .workspace
-            .find_segment_and_stack_by_refname(branch.as_ref())
+            .find_segment_and_stack_by_refname(branch.name.as_ref())
             .is_some()
         {
             continue;
         }
         let outcome = but_workspace::branch::apply(
-            branch.as_ref(),
+            branch.name.as_ref(),
             materialized.workspace.clone(),
             repo,
             materialized.meta,
-            Default::default(),
+            but_workspace::branch::apply::Options {
+                order: branch.order,
+                ..Default::default()
+            },
         )?;
         *materialized.workspace = outcome.workspace;
     }

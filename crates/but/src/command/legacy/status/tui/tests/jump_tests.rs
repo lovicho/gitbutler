@@ -101,3 +101,31 @@ fn restores_backstack_from_previous_mode() {
     tui.input_then_render("38")
         .assert_backstack_eq([BackstackEntry::LeaveNormalMode, BackstackEntry::Mark]);
 }
+
+#[test]
+fn highlights_exact_matches_when_file_list_is_open() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings(
+        "two-stacks-one-single-and-ready-to-mingle-one-double",
+    );
+    env.setup_metadata(&["A", "B"]);
+
+    let mut tui = test_tui(env);
+
+    tui.input_then_render((KeyModifiers::SHIFT, 'F'));
+    tui.input_then_render('/');
+    tui.input_then_render('9');
+    tui.input_then_render('4')
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/highlights_exact_matches_when_file_list_is_open_001.svg"
+        ]);
+
+    tui.input_then_render((KeyModifiers::CONTROL, 'n'))
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/highlights_exact_matches_when_file_list_is_open_002.svg"
+        ]);
+
+    tui.input_then_render((KeyModifiers::CONTROL, 'n'))
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/highlights_exact_matches_when_file_list_is_open_003.svg"
+        ]);
+}

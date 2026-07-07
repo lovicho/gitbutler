@@ -23,7 +23,7 @@ use crate::{
         },
         tui::app::{
             CommitMessageComposer, CommitMode, JumpMode, MoveMode, MoveSource, MoveStackMode,
-            StackMode,
+            StackMode, find_jump_match,
         },
     },
     theme::Theme,
@@ -571,6 +571,29 @@ fn render_status_list_item(
             .render_operation_source_marker(app, data, &mut line);
     }
 
+    // Check if the line is the line that will be selected if we confirm the current jump mode
+    // search. If so we highlight it so its clear where you'll land.
+    let line_is_jump_match = if let Mode::Jump(jump_mode) = &*app.mode {
+        find_jump_match(
+            app.cursor,
+            &app.status_lines,
+            jump_mode,
+            app.flags.show_files,
+        )
+        .and_then(|cursor_for_match| {
+            if app.cursor == cursor_for_match {
+                return None;
+            }
+            let current_line_id = data.cli_id()?;
+            let match_ = cursor_for_match.selected_line(&app.status_lines)?;
+            let id = match_.data.cli_id()?;
+            Some(id == current_line_id)
+        })
+        .unwrap_or(false)
+    } else {
+        false
+    };
+
     // ┊●   982b7d85c5 my commit
     //      ^^^^^^^^^^^^^^^^^^^^ render the main content
     let area_used_by_main_content = line.area_used_by(|line| {
@@ -587,7 +610,11 @@ fn render_status_list_item(
                 if line_has_copied_highlight {
                     line.extend(sha.iter().cloned().map(with_highlight));
                 } else if let Mode::Jump(jump_mode) = &*app.mode {
-                    line.extend(style_jump_mode_matches(sha, jump_mode));
+                    line.extend(style_jump_mode_matches(
+                        sha,
+                        jump_mode,
+                        is_selected || line_is_jump_match,
+                    ));
                 } else {
                     line.extend(sha);
                 }
@@ -618,7 +645,11 @@ fn render_status_list_item(
                 if line_has_copied_highlight {
                     line.extend(id);
                 } else if let Mode::Jump(jump_mode) = &*app.mode {
-                    line.extend(style_jump_mode_matches(id, jump_mode));
+                    line.extend(style_jump_mode_matches(
+                        id,
+                        jump_mode,
+                        is_selected || line_is_jump_match,
+                    ));
                 } else {
                     line.extend(id);
                 }
@@ -649,7 +680,11 @@ fn render_status_list_item(
                 if line_has_copied_highlight {
                     line.extend(id);
                 } else if let Mode::Jump(jump_mode) = &*app.mode {
-                    line.extend(style_jump_mode_matches(id, jump_mode));
+                    line.extend(style_jump_mode_matches(
+                        id,
+                        jump_mode,
+                        is_selected || line_is_jump_match,
+                    ));
                 } else {
                     line.extend(id);
                 }
@@ -670,7 +705,11 @@ fn render_status_list_item(
                 if line_has_copied_highlight {
                     line.extend(id.iter().cloned().map(with_highlight));
                 } else if let Mode::Jump(jump_mode) = &*app.mode {
-                    line.extend(style_jump_mode_matches(id, jump_mode));
+                    line.extend(style_jump_mode_matches(
+                        id,
+                        jump_mode,
+                        is_selected || line_is_jump_match,
+                    ));
                 } else {
                     line.extend(id);
                 }
@@ -1293,6 +1332,7 @@ fn cursor_at_end(textarea: &TextArea<'_>) -> bool {
 fn style_jump_mode_matches(
     content: &[Span<'static>],
     jump_mode: &JumpMode,
+    is_selected: bool,
 ) -> impl IntoIterator<Item = Span<'static>> {
     use itertools::Either;
 
@@ -1315,11 +1355,16 @@ fn style_jump_mode_matches(
         return Either::Left(content.iter().cloned());
     }
 
-    let next_char_style = Style::default().black().on_white();
+    let next_char_style = if is_selected {
+        Style::default().black().on_red()
+    } else {
+        Style::default().black().on_white()
+    };
+
     let mut styled_content = Vec::with_capacity(content.len() + 2);
     styled_content.extend(leading.iter().cloned());
     if query.len() >= first_non_whitespace_content.len() {
-        styled_content.push(first_non_whitespace.clone());
+        styled_content.push(first_non_whitespace.clone().style(next_char_style));
     } else {
         let (matching, rest_of_first) = first_non_whitespace_content.split_at(query.len());
         let next_char_len = rest_of_first

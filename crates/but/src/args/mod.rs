@@ -951,6 +951,11 @@ pub enum Subcommands {
     ///
     /// The GitButler TUI provides a visual experience similar to the GitButler GUI - right in your
     /// terminal. For the full workflow and key bindings, see <https://docs.gitbutler.com/gitbutler-tui>
+    ///
+    /// **Environment variables:**
+    ///
+    /// **BUT_THEME**  Sets the theme for but. Options: dark, light. [default: dark]
+    ///
     #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
     #[cfg(feature = "legacy")]
     Tui {

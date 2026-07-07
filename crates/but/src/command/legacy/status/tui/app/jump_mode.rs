@@ -6,7 +6,11 @@ use crate::{
     CliId,
     command::legacy::status::{
         FilesStatusFlag, StatusOutputLine,
-        tui::{App, Backstack, Message, Mode, NormalMode, cursor, render::ModeRender},
+        tui::{
+            App, Backstack, Message, Mode, NormalMode,
+            cursor::{self, Cursor},
+            render::ModeRender,
+        },
     },
 };
 
@@ -202,22 +206,8 @@ impl App {
             return;
         };
 
-        let new_cursor = self
-            .cursor
-            .selected_line(&self.status_lines)
-            .filter(|line| {
-                prefix_match(mode.query(), line, &mode.return_mode, self.flags.show_files)
-            })
-            .map(|_| self.cursor)
-            .or_else(|| {
-                self.status_lines
-                    .iter()
-                    .find(|line| {
-                        prefix_match(mode.query(), line, &mode.return_mode, self.flags.show_files)
-                    })
-                    .and_then(|line| line.data.cli_id())
-                    .and_then(|data| cursor::Cursor::restore(data, &self.status_lines))
-            });
+        let new_cursor =
+            find_jump_match(self.cursor, &self.status_lines, mode, self.flags.show_files);
 
         if let Some(new_cursor) = new_cursor {
             self.cursor = new_cursor;
@@ -257,4 +247,23 @@ impl App {
             self.cursor = new_cursor;
         }
     }
+}
+
+pub fn find_jump_match(
+    cursor: Cursor,
+    lines: &[StatusOutputLine],
+    mode: &JumpMode,
+    show_files: FilesStatusFlag,
+) -> Option<Cursor> {
+    cursor
+        .selected_line(lines)
+        .filter(|line| prefix_match(mode.query(), line, &mode.return_mode, show_files))
+        .map(|_| cursor)
+        .or_else(|| {
+            lines
+                .iter()
+                .find(|line| prefix_match(mode.query(), line, &mode.return_mode, show_files))
+                .and_then(|line| line.data.cli_id())
+                .and_then(|data| cursor::Cursor::restore(data, lines))
+        })
 }

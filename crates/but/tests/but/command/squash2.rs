@@ -309,6 +309,17 @@ fn squash_whole_branch_into_commit_on_other_branch() {
         .stdout_eq(snapbox::str![[r#"
 ╭┄zz [uncommitted] (no changes)
 ┊
+┊╭┄fi [add-file-branch]
+┊● e528488 author 2000-01-01 00:00:00 +0000
+┊│     add file
+┊│     e5:qs A file
+├╯
+┊
+┊╭┄ta [target-branch]
+┊● d1d6a19 author 2000-01-01 00:00:00 +0000 (no changes)
+┊│     new commit on new branch
+├╯
+┊
 ┊╭┄g0 [a-branch-1]
 ┊● f55169f author 2000-01-01 00:00:00 +0000
 ┊│     add three
@@ -319,17 +330,6 @@ fn squash_whole_branch_into_commit_on_other_branch() {
 ┊● ea345ba author 2000-01-01 00:00:00 +0000
 ┊│     add one
 ┊│     ea:kl A one
-├╯
-┊
-┊╭┄ta [target-branch]
-┊● d1d6a19 author 2000-01-01 00:00:00 +0000 (no changes)
-┊│     new commit on new branch
-├╯
-┊
-┊╭┄fi [add-file-branch]
-┊● e528488 author 2000-01-01 00:00:00 +0000
-┊│     add file
-┊│     e5:qs A file
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -390,6 +390,19 @@ fn squash_multiple_branches_into_commit_on_one_of_the_branch_sources() {
         .stdout_eq(snapbox::str![[r#"
 ╭┄zz [uncommitted] (no changes)
 ┊
+┊╭┄fi [add-file-branch]
+┊● e528488 author 2000-01-01 00:00:00 +0000
+┊│     add file
+┊│     e5:qs A file
+├╯
+┊
+┊╭┄ta [target-branch]
+┊● a489b93 author 2000-01-01 00:00:00 +0000 (no changes)
+┊│     random commit on target-branch
+┊● 561a8d8 author 2000-01-01 00:00:00 +0000 (no changes)
+┊│     target commit
+├╯
+┊
 ┊╭┄g0 [a-branch-1]
 ┊● f55169f author 2000-01-01 00:00:00 +0000
 ┊│     add three
@@ -400,19 +413,6 @@ fn squash_multiple_branches_into_commit_on_one_of_the_branch_sources() {
 ┊● ea345ba author 2000-01-01 00:00:00 +0000
 ┊│     add one
 ┊│     ea:kl A one
-├╯
-┊
-┊╭┄ta [target-branch]
-┊● a489b93 author 2000-01-01 00:00:00 +0000 (no changes)
-┊│     random commit on target-branch
-┊● 561a8d8 author 2000-01-01 00:00:00 +0000 (no changes)
-┊│     target commit
-├╯
-┊
-┊╭┄fi [add-file-branch]
-┊● e528488 author 2000-01-01 00:00:00 +0000
-┊│     add file
-┊│     e5:qs A file
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -729,18 +729,18 @@ fn cannot_squash_into_commits_on_unapplied_branches() {
         .stdout_eq(snapbox::str![[r#"
 ╭┄zz [uncommitted] (no changes)
 ┊
-┊╭┄ne [one]
-┊●   f63361f add two
-┊│     f6:tw A two
-┊●   ea345ba add one
-┊│     ea:kl A one
-├╯
-┊
 ┊╭┄se [second]
 ┊●   d15f721 add four
 ┊│     d1:qk A four
 ┊●   66a5286 add three
 ┊│     66:or A three
+├╯
+┊
+┊╭┄ne [one]
+┊●   f63361f add two
+┊│     f6:tw A two
+┊●   ea345ba add one
+┊│     ea:kl A one
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M

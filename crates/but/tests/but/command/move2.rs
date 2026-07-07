@@ -869,12 +869,12 @@ Moved 9ac4652 to new branch 'new-branch'
         .stdout_eq(snapbox::str![[r#"
 ╭┄zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
-┊●   fe12bcd add first
-├╯
-┊
 ┊╭┄ne [new-branch]
 ┊●   ce8b324 add second
+├╯
+┊
+┊╭┄g0 [A]
+┊●   fe12bcd add first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -920,12 +920,12 @@ Moved 9ac4652 to new branch 'a-branch-1'
         .stdout_eq(snapbox::str![[r#"
 ╭┄zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
-┊●   fe12bcd add first
-├╯
-┊
 ┊╭┄br [a-branch-1]
 ┊●   ce8b324 add second
+├╯
+┊
+┊╭┄g0 [A]
+┊●   fe12bcd add first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -1248,15 +1248,15 @@ Moved 1 changes from 9ac4652 to new commit 8e35f84 on new branch 'new-branch'
         .stdout_eq(snapbox::str![[r#"
 ╭┄zz [uncommitted] (no changes)
 ┊
+┊╭┄ne [new-branch]
+┊●   8e35f84 (no commit message)
+┊│     8e:wu A second
+├╯
+┊
 ┊╭┄g0 [A]
 ┊●   810e515 add second (no changes)
 ┊●   fe12bcd add first
 ┊│     fe:lz A first
-├╯
-┊
-┊╭┄ne [new-branch]
-┊●   8e35f84 (no commit message)
-┊│     8e:wu A second
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -1304,15 +1304,15 @@ Moved 1 changes from 9ac4652 to new commit 8e35f84 on new branch 'a-branch-1'
         .stdout_eq(snapbox::str![[r#"
 ╭┄zz [uncommitted] (no changes)
 ┊
+┊╭┄br [a-branch-1]
+┊●   8e35f84 (no commit message)
+┊│     8e:wu A second
+├╯
+┊
 ┊╭┄g0 [A]
 ┊●   810e515 add second (no changes)
 ┊●   fe12bcd add first
 ┊│     fe:lz A first
-├╯
-┊
-┊╭┄br [a-branch-1]
-┊●   8e35f84 (no commit message)
-┊│     8e:wu A second
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base

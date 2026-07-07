@@ -350,13 +350,13 @@ Hint: run `but help` for all commands
         .stdout_eq(snapbox::str![[r#"
 ╭┄zz [uncommitted] (no changes)
 ┊
+┊╭┄ot [other]
+┊●   ed433d3 add third
+├╯
+┊
 ┊╭┄fi [file]
 ┊●   49fc2f0 add second
 ┊●   5a6fc56 add first
-├╯
-┊
-┊╭┄ot [other]
-┊●   ed433d3 add third
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -377,14 +377,14 @@ Hint: run `but help` for all commands
         .stdout_eq(snapbox::str![[r#"
 ╭┄zz [uncommitted] (no changes)
 ┊
-┊╭┄fi [file]
-┊●   49fc2f0 add second
-┊●   5a6fc56 add first
-├╯
-┊
 ┊╭┄ot [other]
 ┊●   81bd527 add fourth
 ┊●   ed433d3 add third
+├╯
+┊
+┊╭┄fi [file]
+┊●   49fc2f0 add second
+┊●   5a6fc56 add first
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -409,12 +409,12 @@ fn create_commit_on_new_branch_with_canned_name() {
         .stdout_eq(snapbox::str![[r#"
 ╭┄zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
-┊●   9477ae7 add A
-├╯
-┊
 ┊╭┄br [a-branch-1]
 ┊●   633b765 add file.txt
+├╯
+┊
+┊╭┄g0 [A]
+┊●   9477ae7 add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1807,6 +1807,34 @@ qs:78 file│
 Error: Ambiguous uncommitted change 'qs:7', matches multiple items
 
 Hint: Use a longer ID to disambiguate
+
+"#]]);
+}
+
+#[test]
+fn new_branches_are_created_on_top() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    env.but("_commit2 --no-message -b").assert().success();
+
+    env.but("status")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted] (no changes)
+┊
+┊╭┄br [a-branch-1]
+┊●   7adb8e6 (no commit message) (no changes)
+├╯
+┊
+┊╭┄g0 [A]
+┊●   9477ae7 add A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
 
 "#]]);
 }
