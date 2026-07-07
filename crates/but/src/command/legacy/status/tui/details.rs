@@ -17,6 +17,7 @@ use ratatui::{
     layout::Rect,
     style::{Color, Stylize as _},
     text::Line,
+    widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState},
 };
 use syntect::{easy::HighlightLines, highlighting, parsing::SyntaxSet};
 
@@ -63,6 +64,7 @@ pub struct Details {
     syntax_theme: DebugAsType<OnDemand<highlighting::Theme>>,
     strings: Strings,
     selected_section: Cell<SelectedSection>,
+    select_first_section_when_available: Cell<bool>,
     sections: Vec<Section>,
     scroll: ScrollState,
     layout_cache: RefCell<LayoutCache>,
@@ -103,6 +105,7 @@ impl Details {
             syntax_theme: OnDemand::new(|| theme.load_syntax_highlighting_theme()).into(),
             strings: Default::default(),
             selected_section: Default::default(),
+            select_first_section_when_available: Default::default(),
             line_reader: Default::default(),
             scroll: Default::default(),
             layout_cache: Default::default(),
@@ -122,6 +125,15 @@ impl Details {
         }
     }
 
+    pub fn started_polling_thread_at(&self) -> Option<Instant> {
+        match &self.line_reader {
+            ChannelLineReader::Started { start, .. } => Some(*start),
+            ChannelLineReader::NotStarted
+            | ChannelLineReader::Finished
+            | ChannelLineReader::Failed => None,
+        }
+    }
+
     pub fn worker_is_busy(&self) -> bool {
         self.worker.is_busy()
     }
@@ -134,6 +146,14 @@ impl Details {
         self.reset_line_reader();
     }
 
+    pub fn clear_selection(&mut self) {
+        self.selection = None;
+        self.reset_line_reader();
+        self.clear_lines();
+        self.reset_scroll();
+        self.select_first_section_when_available.set(true);
+    }
+
     pub fn update(
         &mut self,
         ctx: &mut Context,
@@ -144,6 +164,7 @@ impl Details {
             self.clear_lines();
             self.reset_line_reader();
             self.reset_scroll();
+            self.clear_pending_first_section_selection();
             return Ok(false);
         }
 
@@ -151,6 +172,7 @@ impl Details {
             (None, None) => {
                 // no selection
                 self.reset_line_reader();
+                self.clear_pending_first_section_selection();
 
                 return Ok(false);
             }
@@ -167,6 +189,7 @@ impl Details {
                 self.reset_line_reader();
                 self.clear_lines();
                 self.reset_scroll();
+                self.clear_pending_first_section_selection();
 
                 return Ok(true);
             }
@@ -279,7 +302,7 @@ impl Details {
                 self.reset_line_reader();
                 self.clear_lines();
                 self.reset_scroll();
-                push_line(
+                let section_added = push_line(
                     &mut self.lines,
                     &mut self.sections,
                     DetailsLine::Text {
@@ -289,12 +312,18 @@ impl Details {
                         skip_when_copying_hunk: false,
                     },
                 );
+                if section_added {
+                    self.select_first_section_if_pending();
+                } else {
+                    self.clear_pending_first_section_selection();
+                }
                 Ok(true)
             }
             CliId::PathPrefix { .. } => {
                 self.reset_line_reader();
                 self.clear_lines();
                 self.reset_scroll();
+                self.clear_pending_first_section_selection();
                 Ok(true)
             }
         }
@@ -420,7 +449,16 @@ impl Details {
                 loop {
                     match rx.try_recv() {
                         Ok(RenderThreadMessage::Line(line)) => {
-                            push_line(&mut self.lines, &mut self.sections, line);
+                            let section_added =
+                                push_line(&mut self.lines, &mut self.sections, line);
+                            if section_added {
+                                select_first_section_if_pending(
+                                    &self.select_first_section_when_available,
+                                    &self.selected_section,
+                                    &self.scroll,
+                                    self.sections.is_empty(),
+                                );
+                            }
                         }
                         Ok(RenderThreadMessage::Finished) => {
                             let num_strings = self.strings.len();
@@ -435,6 +473,10 @@ impl Details {
                                 self.cache.insert(cache_key, self.lines.clone());
                             }
 
+                            if self.sections.is_empty() {
+                                self.select_first_section_when_available.set(false);
+                            }
+
                             self.line_reader = ChannelLineReader::Finished;
 
                             break Ok(true);
@@ -446,6 +488,7 @@ impl Details {
                             self.clear_lines();
                             self.line_reader = ChannelLineReader::Failed;
                             self.reset_scroll();
+                            self.select_first_section_when_available.set(false);
 
                             tracing::debug!("diff render thread failed");
 
@@ -458,6 +501,7 @@ impl Details {
                                     "diff render thread disconnected before completion"
                                 );
                                 self.line_reader = ChannelLineReader::Failed;
+                                self.select_first_section_when_available.set(false);
                                 break Ok(true);
                             }
                         },
@@ -495,8 +539,9 @@ impl Details {
         let mut layout_cache = self.layout_cache.borrow_mut();
         layout_cache.update(area.width, &self.lines);
 
-        let total_display_lines = layout_cache.total_display_lines();
         let viewport_height = area.height as usize;
+        let total_display_lines = layout_cache.total_display_lines();
+        let show_scrollbar = total_display_lines > viewport_height;
         let max_scroll_top = total_display_lines.saturating_sub(viewport_height);
 
         match self.scroll.take_pending() {
@@ -549,6 +594,38 @@ impl Details {
                 break;
             }
         }
+
+        // Draw the scrollbar over the content instead of reserving a column for it.
+        // Reserving a column changes the text width, so the layout cache would need
+        // to recompute wrapped line heights when the scrollbar appears, which is
+        // expensive for large diffs.
+        if show_scrollbar && max_scroll_top > 0 {
+            self.render_scrollbar(area, scroll_top, max_scroll_top, frame);
+        }
+    }
+
+    fn render_scrollbar(
+        &self,
+        area: Rect,
+        scroll_top: usize,
+        max_scroll_top: usize,
+        frame: &mut Frame,
+    ) {
+        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(None)
+            .end_symbol(None)
+            .thumb_symbol("█")
+            .track_symbol(None)
+            .style(self.theme.border);
+        let mut scrollbar_state =
+            ScrollbarState::new(max_scroll_top.saturating_add(1)).position(scroll_top);
+        let scrollbar_area = Rect {
+            x: area.right().saturating_sub(1),
+            y: area.y,
+            width: 1,
+            height: area.height,
+        };
+        frame.render_stateful_widget(scrollbar, scrollbar_area, &mut scrollbar_state);
     }
 
     #[allow(clippy::ptr_arg)]
@@ -750,7 +827,13 @@ impl Details {
         self.reset_scroll();
         self.line_reader = ChannelLineReader::Finished;
         for line in cached_lines {
-            push_line(&mut self.lines, &mut self.sections, line);
+            let section_added = push_line(&mut self.lines, &mut self.sections, line);
+            if section_added {
+                self.select_first_section_if_pending();
+            }
+        }
+        if self.sections.is_empty() {
+            self.clear_pending_first_section_selection();
         }
     }
 
@@ -763,6 +846,19 @@ impl Details {
     fn reset_line_reader(&mut self) {
         self.line_reader = Default::default();
         self.worker.clear_next_job();
+    }
+
+    fn select_first_section_if_pending(&self) {
+        select_first_section_if_pending(
+            &self.select_first_section_when_available,
+            &self.selected_section,
+            &self.scroll,
+            self.sections.is_empty(),
+        );
+    }
+
+    fn clear_pending_first_section_selection(&self) {
+        self.select_first_section_when_available.set(false);
     }
 
     fn update_selected_section_for_visible_range(
@@ -869,6 +965,21 @@ impl Details {
     }
 }
 
+fn select_first_section_if_pending(
+    select_first_section_when_available: &Cell<bool>,
+    selected_section: &Cell<SelectedSection>,
+    scroll: &ScrollState,
+    sections_is_empty: bool,
+) {
+    if !select_first_section_when_available.get() || sections_is_empty {
+        return;
+    }
+
+    selected_section.set(SelectedSection::Selected(0));
+    scroll.goto_top();
+    select_first_section_when_available.set(false);
+}
+
 struct ChannelLineWriter {
     tx: std::sync::mpsc::SyncSender<RenderThreadMessage>,
 }
@@ -906,31 +1017,34 @@ struct Section {
     last_line: usize,
 }
 
-fn push_line(lines: &mut Vec<DetailsLine>, sections: &mut Vec<Section>, line: DetailsLine) {
+/// Returns whether a new section was added.
+#[must_use]
+fn push_line(lines: &mut Vec<DetailsLine>, sections: &mut Vec<Section>, line: DetailsLine) -> bool {
     let line_index = lines.len();
-    extend_section_list(sections, line_index, &line);
+    let section_added = extend_section_list(sections, line_index, &line);
     lines.push(line);
+    section_added
 }
 
-fn extend_section_list(sections: &mut Vec<Section>, line_index: usize, line: &DetailsLine) {
+fn extend_section_list(sections: &mut Vec<Section>, line_index: usize, line: &DetailsLine) -> bool {
     let id = match line {
         DetailsLine::Text { id, .. } => {
             if let Some(id) = id {
                 *id
             } else {
-                return;
+                return false;
             }
         }
         DetailsLine::Code(line) => line.id,
         DetailsLine::TextToWrap { id, .. } => *id,
-        DetailsLine::SectionSeparator => return,
+        DetailsLine::SectionSeparator => return false,
     };
 
     if let Some(last) = sections.last_mut()
         && last.id == id
     {
         last.last_line = line_index;
-        return;
+        return false;
     }
 
     sections.push(Section {
@@ -938,6 +1052,8 @@ fn extend_section_list(sections: &mut Vec<Section>, line_index: usize, line: &De
         first_line: line_index,
         last_line: line_index,
     });
+
+    true
 }
 
 #[derive(Debug, Default)]
@@ -1023,26 +1139,28 @@ struct LayoutCache {
 
 impl LayoutCache {
     fn update(&mut self, width: u16, lines: &[DetailsLine]) {
-        if self.width != width || self.line_count > lines.len() {
-            self.rebuild(width, lines);
-            return;
-        }
+        count_allocations("update_cache", || {
+            if self.width != width || self.line_count > lines.len() {
+                self.rebuild(width, lines);
+                return;
+            }
 
-        if self.line_count == lines.len() {
-            return;
-        }
+            if self.line_count == lines.len() {
+                return;
+            }
 
-        if self.prefix_sum.is_empty() {
-            self.prefix_sum.push(0);
-        }
+            if self.prefix_sum.is_empty() {
+                self.prefix_sum.push(0);
+            }
 
-        for line in &lines[self.line_count..] {
-            let height = display_height(line, width);
-            self.heights.push(height);
-            let next = self.prefix_sum.last().copied().unwrap_or_default() + height;
-            self.prefix_sum.push(next);
-        }
-        self.line_count = lines.len();
+            for line in &lines[self.line_count..] {
+                let height = display_height(line, width);
+                self.heights.push(height);
+                let next = self.prefix_sum.last().copied().unwrap_or_default() + height;
+                self.prefix_sum.push(next);
+            }
+            self.line_count = lines.len();
+        });
     }
 
     fn rebuild(&mut self, width: u16, lines: &[DetailsLine]) {

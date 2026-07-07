@@ -1,4 +1,8 @@
-use std::{collections::HashMap, iter::once};
+use std::{
+    collections::HashMap,
+    iter::once,
+    time::{Duration, Instant},
+};
 
 use but_core::ref_metadata::StackId;
 use but_rebase::graph_rebase::mutate::InsertSide;
@@ -926,12 +930,27 @@ fn render_hot_bar(app: &App, area: Rect, frame: &mut Frame) {
     let mode_span = Span::raw(ModeDiscriminant::from(&*app.mode).hotbar_str())
         .mode_colors(&*app.mode, app.theme);
 
-    let layout = Layout::horizontal([
-        Constraint::Length(mode_span.width() as _),
-        Constraint::Length(1),
-        Constraint::Min(1),
-    ])
-    .split(area);
+    let loading_spinner_started_at = app
+        .details
+        .started_polling_thread_at()
+        .filter(|started_at| started_at.elapsed() > Duration::from_secs_f32(1.0));
+
+    let layout = if loading_spinner_started_at.is_some() {
+        Layout::horizontal([
+            Constraint::Length(mode_span.width() as _),
+            Constraint::Length(1),
+            Constraint::Min(1),
+            Constraint::Length(3),
+        ])
+        .split(area)
+    } else {
+        Layout::horizontal([
+            Constraint::Length(mode_span.width() as _),
+            Constraint::Length(1),
+            Constraint::Min(1),
+        ])
+        .split(area)
+    };
 
     frame.render_widget(mode_span, layout[0]);
 
@@ -940,6 +959,22 @@ fn render_hot_bar(app: &App, area: Rect, frame: &mut Frame) {
     app.mode
         .as_mode_render()
         .render_hot_bar_content(app, layout[2], frame);
+
+    if let Some(started_at) = loading_spinner_started_at {
+        let mut line = RenderSingleLineSpans::new(frame, layout[3]);
+        render_spinner(app, &mut line, started_at);
+    }
+}
+
+fn render_spinner(app: &App, line: &mut RenderSingleLineSpans<'_, '_>, started_at: Instant) {
+    const FRAME_DURATION: Duration = Duration::from_millis(80);
+
+    static STATES: &[&str] = &["⣾", "⣷", "⣯", "⣟", "⡿", "⢿", "⣽", "⣻"];
+    line.render(Span::raw(" "));
+    let state = STATES
+        [(started_at.elapsed().as_millis() / FRAME_DURATION.as_millis()) as usize % STATES.len()];
+    line.render(Span::raw(state).style(app.theme.hint));
+    line.render(Span::raw(" "));
 }
 
 const HOT_BAR_ITEM_SEPARATOR: &str = " • ";

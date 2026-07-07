@@ -819,6 +819,15 @@ impl App {
 
         self.status_lines = new_lines;
 
+        if self.is_details_visible {
+            match cause {
+                ReloadCause::Mutation | ReloadCause::Watcher | ReloadCause::Manual => {
+                    self.details.clear_selection();
+                }
+                ReloadCause::ViewOnly => {}
+            }
+        }
+
         match cause {
             ReloadCause::Watcher | ReloadCause::ViewOnly | ReloadCause::Manual => {}
             ReloadCause::Mutation => {

@@ -71,7 +71,6 @@ impl App {
                 full_screen: false, ..
             }) = &*self.mode
         {
-            self.restore_mode_before_details(messages);
             return;
         }
 

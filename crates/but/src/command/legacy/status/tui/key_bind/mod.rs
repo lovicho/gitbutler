@@ -1323,9 +1323,16 @@ impl KeyMatcher {
 
         let displays = codes
             .into_iter()
-            .map(|code| self.format_code(code))
+            .map(|code| format_key_code(code, self.modifiers.contains(KeyModifiers::SHIFT)))
             .collect::<Vec<_>>();
-        Cow::Owned(displays.join("/"))
+        let chord = displays.join("/");
+        let prefixes = self.modifier_prefixes();
+
+        Cow::Owned(if prefixes.is_empty() {
+            chord
+        } else {
+            format!("{}+{chord}", prefixes.join("+"))
+        })
     }
 
     /// Return the sort key used to produce a stable, user-facing display order.
@@ -1336,8 +1343,8 @@ impl KeyMatcher {
         }
     }
 
-    /// Format a single key code together with this matcher's modifiers.
-    fn format_code(&self, code: KeyCode) -> String {
+    /// Return modifier prefixes in the order used for chord display.
+    fn modifier_prefixes(&self) -> Vec<&'static str> {
         let mut prefixes = Vec::new();
         if self.modifiers.contains(KeyModifiers::CONTROL) {
             prefixes.push("ctrl");
@@ -1348,13 +1355,7 @@ impl KeyMatcher {
         if self.modifiers.contains(KeyModifiers::SHIFT) {
             prefixes.push("shift");
         }
-
-        let key = format_key_code(code, self.modifiers.contains(KeyModifiers::SHIFT));
-        if prefixes.is_empty() {
-            key
-        } else {
-            format!("{}+{key}", prefixes.join("+"))
-        }
+        prefixes
     }
 
     #[inline]

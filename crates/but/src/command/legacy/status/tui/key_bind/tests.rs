@@ -62,6 +62,30 @@ fn chord_display_for_alternate_codes() {
             .chord_display(),
         "esc/n"
     );
+    assert_eq!(
+        press()
+            .shift()
+            .code(KeyCode::Char('J'))
+            .alt_code(KeyCode::Down)
+            .chord_display(),
+        "shift+↓/j"
+    );
+    assert_eq!(
+        press()
+            .control()
+            .code(KeyCode::Char('j'))
+            .alt_code(KeyCode::Down)
+            .chord_display(),
+        "ctrl+↓/j"
+    );
+    assert_eq!(
+        press()
+            .alt()
+            .code(KeyCode::Char('n'))
+            .alt_code(KeyCode::Esc)
+            .chord_display(),
+        "alt+esc/n"
+    );
 }
 
 #[test]

@@ -1176,3 +1176,24 @@ fn jumping_up_down_non_normal_mode() {
     tui.input_then_render((KeyModifiers::CONTROL, 'u'))
         .assert_current_line_eq("╭┄<< source >> << noop >> zz [uncommitted]");
 }
+
+#[test]
+fn pressing_l_doesnt_unfocus_the_detail_view() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    let mut tui = test_tui(env);
+
+    // open and focus the detail view
+    tui.input_then_render('d');
+    tui.input_then_render('l')
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/pressing_l_doesnt_unfocus_the_detail_view_001.svg"
+        ]);
+
+    // pressing `l` again should do nothing since we're already focused on the detail view
+    tui.input_then_render('l')
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/pressing_l_doesnt_unfocus_the_detail_view_001.svg"
+        ]);
+}
