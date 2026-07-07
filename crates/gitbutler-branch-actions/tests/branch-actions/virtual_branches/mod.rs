@@ -104,8 +104,7 @@ impl TestRepo {
         let repo = self.open();
         let current_head = repo.head_id().expect("HEAD peels").detach();
         let target = oid.unwrap_or(current_head);
-        but_core::worktree::safe_checkout(
-            current_head,
+        but_core::worktree::safe_checkout_from_head(
             target,
             &repo,
             but_core::worktree::checkout::Options {
@@ -119,9 +118,7 @@ impl TestRepo {
 
     pub fn checkout_commit(&self, commit_oid: gix::ObjectId) {
         let repo = self.open();
-        let current_head = repo.head_id().expect("HEAD peels").detach();
-        but_core::worktree::safe_checkout(
-            current_head,
+        but_core::worktree::safe_checkout_from_head(
             commit_oid,
             &repo,
             but_core::worktree::checkout::Options {
@@ -151,8 +148,7 @@ impl TestRepo {
                 current_head
             }
         };
-        but_core::worktree::safe_checkout(
-            current_head,
+        but_core::worktree::safe_checkout_from_head(
             target,
             &repo,
             but_core::worktree::checkout::Options {
@@ -183,8 +179,7 @@ impl TestRepo {
             None,
         )
         .expect("failed to commit");
-        but_core::worktree::safe_checkout(
-            parent,
+        but_core::worktree::safe_checkout_from_head(
             commit_id,
             &repo,
             but_core::worktree::checkout::Options {

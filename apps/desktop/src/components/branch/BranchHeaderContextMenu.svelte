@@ -37,7 +37,6 @@
 	} from "@gitbutler/ui";
 
 	import { tick } from "svelte";
-	import type { AnchorPosition } from "$lib/stacks/stack";
 
 	type Props = {
 		projectId: string;
@@ -81,7 +80,7 @@
 	const baseBranchName = $derived(baseBranchNameQuery.response);
 	const [insertBlankCommitInBranch, commitInsertion] = stackService.insertBlankCommit.useMutation();
 	const [updateBranchNameMutation] = stackService.updateBranchName;
-	const [createRef, refCreation] = stackService.createReference;
+	const [createBranch, branchCreation] = stackService.branchCreate;
 
 	// Component is read-only when stackId is undefined
 	const isReadOnly = $derived(!stackId);
@@ -153,20 +152,17 @@
 		}
 	}
 
-	async function handleCreateNewRef(stackId: string, position: AnchorPosition) {
+	async function handleCreateNewRef(stackId: string, position: "above" | "below") {
 		if (!branchName) return;
-		const newName = await stackService.fetchNewBranchName(projectId);
-		await createRef({
+		const branchReference = `refs/heads/${branchName}`;
+		await createBranch({
 			projectId,
-			stackId,
-			request: {
-				newName,
-				anchor: {
-					type: "atSegment",
-					subject: {
-						short_name: branchName,
-						position,
-					},
+			newRef: null,
+			placement: {
+				type: "dependent",
+				subject: {
+					relativeTo: { type: "reference", subject: branchReference },
+					side: position,
 				},
 			},
 		});
@@ -209,12 +205,12 @@
 				disabled={!branchName}
 			/>
 		</ContextMenuSection>
-		{#if stackId && isOpenWorkspace}
+		{#if stackId}
 			<ContextMenuSection>
 				<ContextMenuItemSubmenu
 					label="Create branch"
 					icon="stack-plus"
-					disabled={isReadOnly || refCreation.current.isLoading}
+					disabled={isReadOnly || branchCreation.current.isLoading}
 				>
 					{#snippet submenu({ close: closeSubmenu })}
 						<ContextMenuSection>
@@ -223,7 +219,7 @@
 								testId={TestId.BranchHeaderContextMenu_AddDependentBranch}
 								disabled={isReadOnly}
 								onclick={async () => {
-									await handleCreateNewRef(stackId, "Above");
+									await handleCreateNewRef(stackId, "above");
 									closeSubmenu();
 									close();
 								}}
@@ -232,7 +228,7 @@
 								label="Create branch below"
 								disabled={isReadOnly}
 								onclick={async () => {
-									await handleCreateNewRef(stackId, "Below");
+									await handleCreateNewRef(stackId, "below");
 									closeSubmenu();
 									close();
 								}}

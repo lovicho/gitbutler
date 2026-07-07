@@ -1,14 +1,14 @@
-use std::borrow::Cow;
-
 use bstr::ByteSlice;
 use but_core::{
     RefMetadata,
     ref_metadata::{StackId, ValueInfo},
 };
 use but_graph::init::Options;
+use but_meta::BranchOrderMetadata;
 use but_testsupport::{graph_workspace, id_at, id_by_rev, visualize_commit_graph_all};
 use but_workspace::branch::create_reference::{Anchor, Position::*};
 use gix::refs::transaction::PreviousValue;
+use std::borrow::Cow;
 
 use crate::{
     ref_info::with_workspace_commit::utils::{
@@ -25,6 +25,10 @@ fn project_meta(meta: &impl RefMetadata) -> but_core::ref_metadata::ProjectMeta 
     )
     .map(|workspace| workspace.project_meta())
     .unwrap_or_default()
+}
+
+fn branch_order_meta(repo: &gix::Repository) -> anyhow::Result<BranchOrderMetadata> {
+    BranchOrderMetadata::from_paths(repo.path().join("virtual-branches.toml"), repo.path())
 }
 
 mod with_workspace {
@@ -1465,6 +1469,22 @@ mod with_workspace {
             repo.try_find_reference(new_ref)?.is_none(),
             "the reference isn't physically available"
         );
+
+        // A reference cannot be positioned relative to itself (managed workspace path).
+        let err = but_workspace::branch::create_reference(
+            r("refs/heads/A"),
+            Anchor::AtReference {
+                ref_name: Cow::Borrowed(r("refs/heads/A")),
+                position: Below,
+            },
+            &repo,
+            &ws,
+            &mut meta,
+            stack_id_for_name,
+            None,
+        )
+        .unwrap_err();
+        insta::assert_snapshot!(err.to_string(), @"Cannot position 'A' relative to itself");
         Ok(())
     }
 
@@ -1994,47 +2014,6 @@ fn errors() -> anyhow::Result<()> {
 }
 
 #[test]
-fn at_reference_requires_managed_workspace() -> anyhow::Result<()> {
-    let (repo, mut meta) =
-        named_read_only_in_memory_scenario("with-remotes-no-workspace", "remote")?;
-    let graph =
-        but_graph::Graph::from_head(&repo, &*meta, project_meta(&*meta), Options::limited())?;
-    let ws = graph.into_workspace()?;
-    insta::assert_snapshot!(graph_workspace(&ws), @"
-    ⌂:0:main[🌳] <> ✓! on c166d42
-    └── ≡:0:main[🌳] {1}
-        └── :0:main[🌳]
-    ");
-
-    let new_name = r("refs/heads/new");
-    let main_ref = r("refs/heads/main");
-    for position in [Above, Below] {
-        // Without workspace metadata there is no way to order two references
-        // on the same commit, so this refuses to do anything.
-        let err = but_workspace::branch::create_reference(
-            new_name,
-            Anchor::at_reference(main_ref, position),
-            &repo,
-            &ws,
-            &mut *meta,
-            stack_id_for_name,
-            None,
-        )
-        .unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            "Cannot position 'new' relative to reference 'main' without a managed workspace"
-        );
-        assert!(
-            repo.try_find_reference(new_name)?.is_none(),
-            "the reference isn't physically available"
-        );
-        assert!(meta.branch(new_name)?.is_default(), "no data was stored");
-    }
-    Ok(())
-}
-
-#[test]
 fn journey_with_commits() -> anyhow::Result<()> {
     let (_tmp, repo, mut meta) = named_writable_scenario("single-branch-with-3-commits")?;
     insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
@@ -2393,4 +2372,437 @@ fn journey_anon_workspace() -> anyhow::Result<()> {
 
 fn stack_id_for_name(rn: &gix::refs::FullNameRef) -> StackId {
     StackId::from_number_for_testing(rn.shorten().chars().map(|c| c as u128).sum())
+}
+
+/// [`Anchor::AtReference`] in an ad-hoc (single-branch) workspace, where the tip-to-base order of
+/// same-commit branches lives in the `branch_order` table rather than workspace metadata.
+mod ad_hoc_at_reference {
+    use super::*;
+    use but_workspace::branch::create_reference::Position;
+
+    /// A single-branch workspace checked out on `main` (3 commits) with a *writable* branch-order
+    /// backend, so `AtReference` placements can persist their order.
+    fn ad_hoc_workspace() -> anyhow::Result<(
+        tempfile::TempDir,
+        gix::Repository,
+        BranchOrderMetadata,
+        but_core::ref_metadata::ProjectMeta,
+        but_graph::Workspace,
+    )> {
+        let (tmp, repo, legacy_meta) = named_writable_scenario("single-branch-with-3-commits")?;
+        let project_meta = project_meta(&legacy_meta);
+        let meta = branch_order_meta(&repo)?;
+        let ws =
+            but_graph::Graph::from_head(&repo, &meta, project_meta.clone(), Options::limited())?
+                .into_workspace()?;
+        Ok((tmp, repo, meta, project_meta, ws))
+    }
+
+    /// Create `new_ref` positioned relative to `anchor_ref` and return the resulting workspace.
+    fn create(
+        repo: &gix::Repository,
+        ws: &but_graph::Workspace,
+        meta: &mut BranchOrderMetadata,
+        new_ref: &gix::refs::FullNameRef,
+        anchor_ref: &gix::refs::FullNameRef,
+        position: Position,
+    ) -> anyhow::Result<but_graph::Workspace> {
+        Ok(but_workspace::branch::create_reference(
+            new_ref,
+            Anchor::at_reference(anchor_ref, position),
+            repo,
+            ws,
+            meta,
+            stack_id_for_name,
+            None,
+        )?
+        .into_owned())
+    }
+
+    /// Assert the durable tip-to-base order recorded for the chain containing `anchor`.
+    fn assert_order(
+        meta: &BranchOrderMetadata,
+        anchor: &gix::refs::FullNameRef,
+        expected: &[&str],
+    ) {
+        let expected: Vec<gix::refs::FullName> =
+            expected.iter().copied().map(|s| r(s).to_owned()).collect();
+        assert_eq!(
+            meta.branch_stack_order(anchor).expect("order is readable"),
+            Some(expected),
+        );
+    }
+
+    #[test]
+    fn orders_local_branches_only() -> anyhow::Result<()> {
+        let (_tmp, repo, mut meta, _project_meta, ws) = ad_hoc_workspace()?;
+        insta::assert_snapshot!(graph_workspace(&ws), @"
+        ⌂:0:main[🌳] <> ✓! on 281da94
+        └── ≡:0:main[🌳] {1}
+            └── :0:main[🌳]
+        ");
+
+        let main_ref = r("refs/heads/main");
+        let main_id = repo.find_reference(main_ref)?.id();
+        let below_ref = r("refs/heads/new-below");
+        create(&repo, &ws, &mut meta, below_ref, main_ref, Below)?;
+        assert_order(
+            &meta,
+            main_ref,
+            &["refs/heads/main", "refs/heads/new-below"],
+        );
+        assert_eq!(repo.find_reference(below_ref)?.id(), main_id);
+
+        // A remote anchor carries no ad-hoc ordering, so it is rejected.
+        let remote_ref = r("refs/remotes/origin/main");
+        repo.reference(
+            remote_ref,
+            main_id,
+            PreviousValue::Any,
+            "test remote anchor",
+        )?;
+        let err = create(
+            &repo,
+            &ws,
+            &mut meta,
+            r("refs/heads/new-remote-anchor"),
+            remote_ref,
+            Above,
+        )
+        .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "Cannot position 'new-remote-anchor' relative to non-local reference 'origin/main' without a managed workspace"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn requires_branch_order_metadata() -> anyhow::Result<()> {
+        // A TOML-only backend can't persist order, so ad-hoc `AtReference` is refused up front.
+        let (_tmp, repo, mut meta) = named_writable_scenario("single-branch-with-3-commits")?;
+        let ws =
+            but_graph::Graph::from_head(&repo, &meta, project_meta(&meta), Options::limited())?
+                .into_workspace()?;
+
+        let new_ref = r("refs/heads/new");
+        let err = but_workspace::branch::create_reference(
+            new_ref,
+            Anchor::at_reference(r("refs/heads/main"), Above),
+            &repo,
+            &ws,
+            &mut meta,
+            stack_id_for_name,
+            None,
+        )
+        .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "Cannot position 'new' relative to local reference 'main' without branch order metadata"
+        );
+        assert!(
+            repo.try_find_reference(new_ref)?.is_none(),
+            "unsupported metadata must fail before creating the ref"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn below_checked_out_branch_is_projected() -> anyhow::Result<()> {
+        let (_tmp, repo, mut meta, project_meta, ws) = ad_hoc_workspace()?;
+
+        let bottom_ref = r("refs/heads/empty-bottom");
+        let main_ref = r("refs/heads/main");
+        create(&repo, &ws, &mut meta, bottom_ref, main_ref, Below)?;
+
+        let ws = but_graph::Graph::from_head(&repo, &meta, project_meta, Options::limited())?
+            .into_workspace()?;
+        insta::assert_snapshot!(graph_workspace(&ws), @"
+        ⌂:1:main[🌳] <> ✓! on 281da94
+        └── ≡:1:main[🌳] {1}
+            ├── :1:main[🌳]
+            └── 📙:0:empty-bottom
+                ├── ·281da94
+                ├── ·12995d7
+                └── ·3d57fc1
+        ");
+        assert!(repo.try_find_reference(bottom_ref)?.is_some());
+        assert_order(
+            &meta,
+            main_ref,
+            &["refs/heads/main", "refs/heads/empty-bottom"],
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn below_empty_branch_between_empty_branches() -> anyhow::Result<()> {
+        let (_tmp, repo, mut meta, project_meta, ws) = ad_hoc_workspace()?;
+
+        let middle_ref = r("refs/heads/empty-middle");
+        let inserted_ref = r("refs/heads/inserted-below-middle");
+        let bottom_ref = r("refs/heads/empty-bottom");
+        let main_ref = r("refs/heads/main");
+
+        let mut ws = ws;
+        for (ref_name, anchor_ref) in [
+            (bottom_ref, main_ref),
+            (middle_ref, main_ref),
+            (inserted_ref, middle_ref),
+        ] {
+            ws = create(&repo, &ws, &mut meta, ref_name, anchor_ref, Below)?;
+        }
+
+        assert_order(
+            &meta,
+            main_ref,
+            &[
+                "refs/heads/main",
+                "refs/heads/empty-middle",
+                "refs/heads/inserted-below-middle",
+                "refs/heads/empty-bottom",
+            ],
+        );
+
+        let ws = but_graph::Graph::from_head(&repo, &meta, project_meta, Options::limited())?
+            .into_workspace()?;
+        insta::assert_snapshot!(graph_workspace(&ws), @"
+        ⌂:1:main[🌳] <> ✓! on 281da94
+        └── ≡:1:main[🌳] {1}
+            ├── :1:main[🌳]
+            ├── 📙:2:empty-middle
+            ├── 📙:3:inserted-below-middle
+            └── 📙:0:empty-bottom
+                ├── ·281da94
+                ├── ·12995d7
+                └── ·3d57fc1
+        ");
+        Ok(())
+    }
+
+    #[test]
+    fn above_checked_out_branch_is_projected_as_new_tip() -> anyhow::Result<()> {
+        let (_tmp, repo, mut meta, _project_meta, ws) = ad_hoc_workspace()?;
+
+        let top_ref = r("refs/heads/empty-top");
+        let main_ref = r("refs/heads/main");
+        let ws = create(&repo, &ws, &mut meta, top_ref, main_ref, Above)?;
+
+        // Creating above the checked-out branch makes the new empty branch the projected tip.
+        // `create_reference` does not move `HEAD`; the caller checks the new tip out (see its docs).
+        insta::assert_snapshot!(graph_workspace(&ws), @"
+        ⌂:1:empty-top[🌳] <> ✓! on 281da94
+        └── ≡📙:1:empty-top[🌳] {1}
+            ├── 📙:1:empty-top[🌳]
+            └── :0:main
+                ├── ·281da94
+                ├── ·12995d7
+                └── ·3d57fc1
+        ");
+        assert_eq!(
+            ws.ref_name(),
+            Some(top_ref),
+            "the new tip is projected as the workspace entrypoint (as if checked out)"
+        );
+        assert!(repo.try_find_reference(top_ref)?.is_some());
+        assert_order(
+            &meta,
+            main_ref,
+            &["refs/heads/empty-top", "refs/heads/main"],
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn above_a_branch_over_the_entrypoint_is_rejected_without_a_checkout() -> anyhow::Result<()> {
+        let (_tmp, repo, mut meta, project_meta, ws) = ad_hoc_workspace()?;
+        let top_ref = r("refs/heads/empty-top");
+        let main_ref = r("refs/heads/main");
+
+        // Create the tip above `main`, but do NOT check it out - the real `HEAD` stays on `main`.
+        create(&repo, &ws, &mut meta, top_ref, main_ref, Above)?;
+
+        // Re-project from the real `HEAD` (`main`); `empty-top` now sits *above* the entrypoint and
+        // is not part of the projection. Anchoring a further branch above `empty-top` would also
+        // land above the entrypoint, so it can't be projected and is rejected. In practice the API
+        // checks the tip out first, which is what makes stacking above it work.
+        let ws = but_graph::Graph::from_head(&repo, &meta, project_meta, Options::limited())?
+            .into_workspace()?;
+        assert_eq!(ws.ref_name(), Some(main_ref));
+        let err = create(
+            &repo,
+            &ws,
+            &mut meta,
+            r("refs/heads/higher"),
+            top_ref,
+            Above,
+        )
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("cannot be created"),
+            "anchoring above a branch that sits above the entrypoint should be rejected: {err}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn order_survives_a_metadata_reload() -> anyhow::Result<()> {
+        let (_tmp, repo, mut meta, project_meta, ws) = ad_hoc_workspace()?;
+        let main_ref = r("refs/heads/main");
+        let middle_ref = r("refs/heads/empty-middle");
+        let bottom_ref = r("refs/heads/empty-bottom");
+
+        let ws = create(&repo, &ws, &mut meta, bottom_ref, main_ref, Below)?;
+        create(&repo, &ws, &mut meta, middle_ref, main_ref, Below)?;
+        let expected = [
+            "refs/heads/main",
+            "refs/heads/empty-middle",
+            "refs/heads/empty-bottom",
+        ];
+        assert_order(&meta, main_ref, &expected);
+
+        // Reopen the branch-order backend from disk: the durable order must survive a fresh handle.
+        drop(meta);
+        let meta = branch_order_meta(&repo)?;
+        assert_order(&meta, main_ref, &expected);
+
+        // ...and the workspace re-projects identically from the reloaded metadata.
+        let ws = but_graph::Graph::from_head(&repo, &meta, project_meta, Options::limited())?
+            .into_workspace()?;
+        insta::assert_snapshot!(graph_workspace(&ws), @"
+        ⌂:1:main[🌳] <> ✓! on 281da94
+        └── ≡:1:main[🌳] {1}
+            ├── :1:main[🌳]
+            ├── 📙:2:empty-middle
+            └── 📙:0:empty-bottom
+                ├── ·281da94
+                ├── ·12995d7
+                └── ·3d57fc1
+        ");
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_a_missing_anchor() -> anyhow::Result<()> {
+        let (_tmp, repo, mut meta, _project_meta, ws) = ad_hoc_workspace()?;
+        let new_ref = r("refs/heads/new");
+        let missing_anchor = r("refs/heads/does-not-exist");
+
+        let err = create(&repo, &ws, &mut meta, new_ref, missing_anchor, Above).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("the anchor reference does not exist"),
+            "a non-existent anchor must be rejected with a clear precondition error: {err}"
+        );
+        assert!(
+            repo.try_find_reference(new_ref)?.is_none(),
+            "no ref should be created for a missing anchor"
+        );
+        assert_eq!(meta.branch_stack_order(missing_anchor)?, None);
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_positioning_a_reference_relative_to_itself() -> anyhow::Result<()> {
+        let (_tmp, repo, mut meta, _project_meta, ws) = ad_hoc_workspace()?;
+        let main_ref = r("refs/heads/main");
+
+        // Positioning a ref relative to itself must be a clean validation error, not a panic.
+        let err = create(&repo, &ws, &mut meta, main_ref, main_ref, Above).unwrap_err();
+        assert!(
+            err.to_string().contains("relative to itself"),
+            "self-referential placement must be rejected: {err}"
+        );
+        assert_eq!(meta.branch_stack_order(main_ref)?, None);
+        Ok(())
+    }
+
+    #[test]
+    fn reusing_an_existing_ref_for_a_different_commit_fails_without_mutation() -> anyhow::Result<()>
+    {
+        let (_tmp, repo, mut meta, _project_meta, ws) = ad_hoc_workspace()?;
+        let main_ref = r("refs/heads/main");
+
+        // `existing` already points at an older commit than `main`'s tip.
+        let existing_ref = r("refs/heads/existing");
+        let older = id_by_rev(&repo, "main~1").detach();
+        repo.reference(existing_ref, older, PreviousValue::Any, "pre-existing ref")?;
+
+        assert!(
+            create(&repo, &ws, &mut meta, existing_ref, main_ref, Above).is_err(),
+            "reusing an existing ref that points at a different commit must be rejected"
+        );
+        // The failure must be atomic: the ref is untouched and no order was persisted.
+        assert_eq!(repo.find_reference(existing_ref)?.id().detach(), older);
+        assert_eq!(meta.branch_stack_order(main_ref)?, None);
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_a_name_colliding_with_an_existing_branch() -> anyhow::Result<()> {
+        let (_tmp, repo, mut meta, _project_meta, ws) = ad_hoc_workspace()?;
+        let main_ref = r("refs/heads/main");
+
+        // `refs/heads/main` exists as a file, so `refs/heads/main/child` cannot be created.
+        let colliding = r("refs/heads/main/child");
+        let err = create(&repo, &ws, &mut meta, colliding, main_ref, Above).unwrap_err();
+        assert!(
+            err.to_string().contains("collides with existing branch"),
+            "a name colliding with an existing branch should be reported clearly: {err}"
+        );
+        assert_eq!(meta.branch_stack_order(main_ref)?, None);
+        Ok(())
+    }
+
+    #[test]
+    fn interleaved_insertions_keep_a_consistent_order() -> anyhow::Result<()> {
+        let (_tmp, repo, mut meta, project_meta, ws) = ad_hoc_workspace()?;
+        let main_ref = r("refs/heads/main");
+        let upper = r("refs/heads/upper");
+        let middle = r("refs/heads/middle");
+        let lower = r("refs/heads/lower");
+        let bottom = r("refs/heads/bottom");
+        let crown = r("refs/heads/crown");
+
+        // Build a taller stack downward from the checked-out branch, inserting below different
+        // anchors to exercise the insertion-index arithmetic beyond the two-branch cases.
+        let mut ws = ws;
+        for (new_ref, anchor_ref) in [
+            (bottom, main_ref), // [main, bottom]
+            (middle, main_ref), // [main, middle, bottom]
+            (upper, main_ref),  // [main, upper, middle, bottom]
+            (lower, middle),    // [main, upper, middle, lower, bottom]
+        ] {
+            ws = create(&repo, &ws, &mut meta, new_ref, anchor_ref, Below)?;
+        }
+        assert_order(
+            &meta,
+            main_ref,
+            &[
+                "refs/heads/main",
+                "refs/heads/upper",
+                "refs/heads/middle",
+                "refs/heads/lower",
+                "refs/heads/bottom",
+            ],
+        );
+
+        // Mix in an `Above` insertion: a new tip over the (still checked-out) `main`.
+        let ws = but_graph::Graph::from_head(&repo, &meta, project_meta, Options::limited())?
+            .into_workspace()?;
+        create(&repo, &ws, &mut meta, crown, main_ref, Above)?;
+        assert_order(
+            &meta,
+            main_ref,
+            &[
+                "refs/heads/crown",
+                "refs/heads/main",
+                "refs/heads/upper",
+                "refs/heads/middle",
+                "refs/heads/lower",
+                "refs/heads/bottom",
+            ],
+        );
+        Ok(())
+    }
 }

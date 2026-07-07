@@ -237,6 +237,12 @@ pub trait RefMetadata {
     /// Return the ordered local branch refs in the same stack as `ref_name`, from tip to base.
     ///
     /// Implementations that don't persist branch stack order can return `Ok(None)`.
+    ///
+    /// This is best-effort: the returned refs may include entries for branches that no longer
+    /// exist if pruning hasn't run since they were deleted (see
+    /// [`Self::remove_missing_branch_stack_order_references`]). Callers must treat the result as a
+    /// hint and validate each ref against the repository, ignoring any that don't resolve, rather
+    /// than assuming every entry is live.
     fn branch_stack_order(
         &self,
         _ref_name: &gix::refs::FullNameRef,

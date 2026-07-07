@@ -362,7 +362,6 @@ pub(crate) mod function {
             Some(ref_to_switch_to) => {
                 // The rebuilt workspace can be discarded entirely, switching to another branch.
                 safe_checkout_ref_to_checkout(
-                    &ws,
                     repo,
                     &ref_to_switch_to,
                     but_core::worktree::checkout::Options {
@@ -471,13 +470,6 @@ pub(crate) mod function {
         disposition: WorkspaceDisposition,
         excluded_anonymous_tip_id: Option<gix::ObjectId>,
     ) -> anyhow::Result<WorkspaceRefUpdateAfterUnapply> {
-        let prev_head_id = ws
-            .graph
-            .entrypoint()?
-            .commit()
-            .context("BUG: unborn was skipped, why no entrypoint")?
-            .id;
-
         let future_workspace_tips = future_workspace_tips(ws_md, ws, excluded_anonymous_tip_id)?;
         let remaining_tip_count = future_workspace_tips.len();
         let keep_workspace_commit = match disposition {
@@ -494,7 +486,7 @@ pub(crate) mod function {
         if !keep_workspace_commit {
             let new_head_id =
                 commit_to_point_workspace_ref_to_after_unapply(ws, &future_workspace_tips)?;
-            checkout_and_update_workspace_ref(repo, prev_head_id, new_head_id, workspace_ref_name)?;
+            checkout_and_update_workspace_ref(repo, new_head_id, workspace_ref_name)?;
             return Ok(WorkspaceRefUpdateAfterUnapply {
                 entrypoint_id: new_head_id,
                 workspace_merge: None,
@@ -510,7 +502,7 @@ pub(crate) mod function {
             storage.persist(repo)?;
             drop(in_memory_repo);
         }
-        checkout_and_update_workspace_ref(repo, prev_head_id, new_head_id, workspace_ref_name)?;
+        checkout_and_update_workspace_ref(repo, new_head_id, workspace_ref_name)?;
         Ok(WorkspaceRefUpdateAfterUnapply {
             entrypoint_id: new_head_id,
             workspace_merge: merge.workspace_merge,
@@ -580,7 +572,6 @@ pub(crate) mod function {
 
         let ref_to_checkout = ref_to_checkout_after_workspace_unapply(ws)?;
         safe_checkout_ref_to_checkout(
-            ws,
             repo,
             &ref_to_checkout,
             but_core::worktree::checkout::Options {
@@ -750,14 +741,13 @@ pub(crate) mod function {
     /// is conflicted.
     fn safe_checkout(
         repo: &gix::Repository,
-        prev_head_id: gix::ObjectId,
         new_head_id: gix::ObjectId,
         options: but_core::worktree::checkout::Options,
     ) -> anyhow::Result<but_core::worktree::checkout::Outcome> {
         if but_core::Commit::from_id(new_head_id.attach(repo))?.is_conflicted() {
             bail!("Cannot unapply branch by checking out conflicted commit {new_head_id}");
         }
-        but_core::worktree::safe_checkout(prev_head_id, new_head_id, repo, options)
+        but_core::worktree::safe_checkout_from_head(new_head_id, repo, options)
     }
 
     /// Check out `ref_to_checkout` using the workspace traversal entrypoint as the
@@ -772,7 +762,6 @@ pub(crate) mod function {
     /// remain responsible for any subsequent `HEAD`, reference, metadata, and
     /// projection updates.
     fn safe_checkout_ref_to_checkout(
-        ws: &but_graph::Workspace,
         repo: &gix::Repository,
         ref_to_checkout: &RefToCheckout,
         options: but_core::worktree::checkout::Options,
@@ -783,13 +772,7 @@ pub(crate) mod function {
                 ref_to_checkout.ref_name.shorten()
             );
         }
-        let prev_head_id = ws
-            .graph
-            .entrypoint()?
-            .commit()
-            .context("BUG: unborn was skipped, why no entrypoint")?
-            .id;
-        safe_checkout(repo, prev_head_id, ref_to_checkout.commit_id, options)
+        safe_checkout(repo, ref_to_checkout.commit_id, options)
     }
 
     /// Return the commit the workspace ref should point to when no workspace merge commit remains.
@@ -815,13 +798,11 @@ pub(crate) mod function {
     /// ref, so the checkout skips its own head update and this function updates only the ref target.
     fn checkout_and_update_workspace_ref(
         repo: &gix::Repository,
-        prev_head_id: gix::ObjectId,
         new_head_id: gix::ObjectId,
         workspace_ref_name: &FullNameRef,
     ) -> anyhow::Result<()> {
         safe_checkout(
             repo,
-            prev_head_id,
             new_head_id,
             but_core::worktree::checkout::Options {
                 skip_head_update: true,

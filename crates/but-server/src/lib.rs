@@ -549,6 +549,14 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
         .route("/apply", but_post(but_api::branch::apply_cmd))
         .route("/review_apply", but_post(legacy::forge::review_apply_cmd))
         .route(
+            "/branch_create",
+            but_post(but_api::branch::branch_create_cmd),
+        )
+        .route(
+            "/branch_remove",
+            but_post(but_api::branch::branch_remove_cmd),
+        )
+        .route(
             "/get_initial_branch_integration",
             but_post(but_api::branch::get_initial_branch_integration_cmd),
         )
@@ -897,6 +905,10 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
             but_post(commit::uncommit::commit_uncommit_changes_cmd),
         )
         .route(
+            "/commit_uncommit_changes_from_commits",
+            but_post(commit::uncommit::commit_uncommit_changes_from_commits_cmd),
+        )
+        .route(
             "/commit_uncommit",
             but_post(commit::uncommit::commit_uncommit_cmd),
         )
@@ -1170,6 +1182,10 @@ async fn handle_command(
             projects::set_project_active(&broadcaster, &extra, app_settings_sync, request.params)
                 .await
         }
+        "branch_create" => deserialize_json(request.params)
+            .and_then(|params| but_api::branch::branch_create_cmd(params).map(|r| json!(r))),
+        "branch_remove" => deserialize_json(request.params)
+            .and_then(|params| but_api::branch::branch_remove_cmd(params).map(|r| json!(r))),
         // Async virtual branches commands (not yet migrated due to different pattern)
         "upstream_integration_statuses" => {
             let params = deserialize_json(request.params);

@@ -765,7 +765,10 @@ impl Context {
 
     fn workspace_from_head(&self) -> anyhow::Result<but_graph::Workspace> {
         let repo = self.repo.get()?;
-        let meta = self.meta_inner_read_only()?;
+        let meta = but_meta::BranchOrderMetadata::from_paths_read_only(
+            self.project_data_dir().join("virtual_branches.toml"),
+            self.project_data_dir(),
+        )?;
         let graph = but_graph::Graph::from_head(
             &repo,
             &meta,
@@ -852,16 +855,23 @@ impl Context {
         Ok(())
     }
 
-    /// Return a wrapper for metadata that only supports read-only access when presented with the project wide permission
-    /// to read data.
-    /// This is helping to prevent races with mutable instances.
+    /// Return a read/write metadata handle for the project, backed by `virtual_branches.toml` and
+    /// the branch-order database.
+    ///
+    /// This is a plain read/write accessor and intentionally does *not* prune stale
+    /// branch-order entries: reading branch stack order is best-effort and may return refs for
+    /// branches that no longer exist (consumers already validate each ref against the repository
+    /// and ignore the ones that don't resolve). Pruning happens out-of-band on fetch via
+    /// [`RefMetadata::remove_missing_branch_stack_order_references`](but_core::RefMetadata::remove_missing_branch_stack_order_references);
+    /// see `prune_missing_branch_stack_order` in the API layer.
     // TODO(ctx): remove method entirely as we don't need it anymore with a DB
     //            based implementation as long as the instances starts a transaction to isolate
     //            reads. For a correct implementation, this would also have to hold on to
     //            `_read_only`.
     pub fn meta(&self) -> anyhow::Result<impl but_core::RefMetadata + 'static> {
-        but_meta::VirtualBranchesTomlMetadata::from_path(
+        but_meta::BranchOrderMetadata::from_paths(
             self.project_data_dir().join("virtual_branches.toml"),
+            self.project_data_dir(),
         )
     }
 

@@ -277,11 +277,7 @@ pub fn apply(
             .map(|commit| commit.id)
             .context("Workspace must point to a commit to check out")?;
         let ws_ref_name = ws.ref_name().map(|rn| rn.to_owned());
-        let current_head_commit = ws.graph.entrypoint()?.commit().context(
-            "The entrypoint must have a commit - it's equal to HEAD, and we skipped unborn earlier",
-        )?;
-        but_core::worktree::safe_checkout(
-            current_head_commit.id,
+        but_core::worktree::safe_checkout_from_head(
             commit_to_checkout,
             repo,
             but_core::worktree::checkout::Options {
@@ -608,10 +604,6 @@ pub fn apply(
         });
     }
 
-    let prev_head_id = repo
-        .head_id()
-        .context("BUG: we assume HEAD is born here")?
-        .detach();
     let mut new_head_id = merge_result.workspace_commit_id;
     let mut conflicting_stacks =
         correlate_conflicting_stacks(&ws_md, &merge_result.conflicting_stacks);
@@ -761,8 +753,7 @@ pub fn apply(
         storage.persist(repo)?;
         drop(in_memory_repo);
     }
-    but_core::worktree::safe_checkout(
-        prev_head_id,
+    but_core::worktree::safe_checkout_from_head(
         new_head_id,
         repo,
         but_core::worktree::checkout::Options {

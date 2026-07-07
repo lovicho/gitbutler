@@ -124,10 +124,8 @@ pub fn update_uncommitted_changes_with_tree(
         )?;
     } else {
         let gix_repo = ctx.clone_repo_for_merging()?;
-        let old_tree_id = merge_workspace(&gix_repo, &old)?;
         let new_tree_id = merge_workspace(&gix_repo, &new)?;
-        but_core::worktree::safe_checkout(
-            old_tree_id,
+        but_core::worktree::safe_checkout_from_head(
             new_tree_id,
             &gix_repo,
             but_core::worktree::checkout::Options::default(),

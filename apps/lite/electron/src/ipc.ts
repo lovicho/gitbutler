@@ -59,6 +59,7 @@ import type {
 	AskpassPromptEvent,
 	MaybeLossyFullNameRef,
 } from "@gitbutler/but-sdk";
+import type { GUISettings } from "./settings.js";
 
 export interface AbsorbParams {
 	projectId: string;
@@ -486,6 +487,8 @@ export interface LiteElectronApi {
 	watcherSubscribe: (projectId: string, callback: (event: WatcherEvent) => void) => Promise<string>;
 	watcherUnsubscribe: (subscriptionId: string) => Promise<boolean>;
 	watcherStopAll: () => Promise<number>;
+	readGUISettings: () => Promise<GUISettings>;
+	writeGUISettings: (settings: GUISettings) => Promise<void>;
 	platform: string;
 }
 
@@ -562,4 +565,6 @@ export const liteIpcChannels = {
 	watcherSubscribe: "workspace:watcher-subscribe",
 	watcherUnsubscribe: "workspace:watcher-unsubscribe",
 	watcherStopAll: "workspace:watcher-stop-all",
+	readGUISettings: "lite:gui-settings:read",
+	writeGUISettings: "lite:gui-settings:write",
 } as const;

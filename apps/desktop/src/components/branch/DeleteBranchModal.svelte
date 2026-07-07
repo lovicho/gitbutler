@@ -11,9 +11,9 @@
 	import { inject } from "@gitbutler/core/context";
 	import { Button, Modal, TestId } from "@gitbutler/ui";
 
-	const { projectId, stackId, branchName }: DeleteBranchModalProps = $props();
+	const { projectId, branchName }: DeleteBranchModalProps = $props();
 	const stackService = inject(STACK_SERVICE);
-	const [removeBranch, branchRemovalOp] = stackService.removeBranch;
+	const [removeBranch, branchRemovalOp] = stackService.branchRemove;
 
 	let modal = $state<Modal>();
 
@@ -28,10 +28,10 @@
 	width="small"
 	title="Delete branch"
 	onSubmit={async (close) => {
+		const refName = [...new TextEncoder().encode(`refs/heads/${branchName}`)];
 		await removeBranch({
 			projectId,
-			stackId,
-			branchName,
+			refName,
 		});
 		close();
 	}}

@@ -139,8 +139,7 @@ fn go_back_to_integration(ctx: &Context, perm: &RepoShared) -> Result<BaseBranch
             but_workspace::legacy::remerged_workspace_commit_v2(ctx)?;
         let tree_to_checkout_to_avoid_ref_update =
             repo.find_commit(workspace_commit_to_checkout)?.tree_id()?;
-        but_core::worktree::safe_checkout(
-            repo.head_id()?.detach(),
+        but_core::worktree::safe_checkout_from_head(
             tree_to_checkout_to_avoid_ref_update.detach(),
             &repo,
             but_core::worktree::checkout::Options {

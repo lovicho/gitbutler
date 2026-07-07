@@ -1,5 +1,6 @@
 use crate::WorkspaceState;
 use but_core::{DiffSpec, tree::create_tree::RejectionReason};
+use serde::{Deserialize, Serialize};
 
 /// Outcome after creating a commit.
 pub struct CommitCreateResult {
@@ -15,6 +16,43 @@ pub struct CommitCreateResult {
 pub struct MoveChangesResult {
     /// Workspace state after moving changes.
     pub workspace: WorkspaceState,
+}
+
+/// A source entry for uncommitting changes from a commit.
+///
+/// Multiple entries may target the same commit; the backend groups them by
+/// commit id before removing the changes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "export-schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct UncommitChangesSource {
+    /// The commit to remove `changes` from.
+    #[serde(with = "but_serde::object_id")]
+    #[cfg_attr(feature = "export-schema", schemars(with = "String"))]
+    pub commit_id: gix::ObjectId,
+    /// The changes to remove from the commit.
+    pub changes: Vec<DiffSpec>,
+}
+
+#[cfg(feature = "export-schema")]
+but_schemars::register_sdk_type!(UncommitChangesSource);
+
+/// A grouped source that could not be uncommitted.
+pub struct UncommitChangesFailure {
+    /// The commit whose changes failed to uncommit.
+    pub commit_id: gix::ObjectId,
+    /// All changes requested for this commit.
+    pub changes: Vec<DiffSpec>,
+    /// Human-readable failure reason.
+    pub error: String,
+}
+
+/// Outcome after uncommitting changes from multiple commits.
+pub struct UncommitChangesFromCommitsResult {
+    /// Workspace state after uncommitting successful sources.
+    pub workspace: WorkspaceState,
+    /// Sources that could not be uncommitted.
+    pub failures: Vec<UncommitChangesFailure>,
 }
 
 /// Outcome after rewording a commit.

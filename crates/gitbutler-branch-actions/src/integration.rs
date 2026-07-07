@@ -174,9 +174,8 @@ pub fn update_workspace_commit_with_vb_state(
         None,
     )?;
 
-    let checkout_res = if checkout_new_worktree && let Some(prev_head_id) = prev_head_id {
-        let res = but_core::worktree::safe_checkout(
-            prev_head_id.to_gix(),
+    let checkout_res = if checkout_new_worktree && prev_head_id.is_some() {
+        let res = but_core::worktree::safe_checkout_from_head(
             final_commit,
             &gix_repo,
             but_core::worktree::checkout::Options {

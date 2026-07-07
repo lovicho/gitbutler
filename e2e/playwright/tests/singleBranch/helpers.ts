@@ -1,6 +1,6 @@
 import { openWorkspace } from "../../src/setup.ts";
 import { clickByTestId, getByTestId, waitForTestId } from "../../src/util.ts";
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 import type { GitButler } from "../../src/setup.ts";
 
 export const SINGLE_BRANCH_NAME = "single-branch-fixture";
@@ -30,4 +30,16 @@ export async function applyBranchFromBranchesView(page: Page, branchName: string
 
 	await clickByTestId(page, "branches-view-apply-branch-button");
 	await waitForTestId(page, "workspace-view");
+}
+
+export function branchHeader(page: Page, branchName: string): Locator {
+	return page.locator(`[data-testid="branch-header"][data-testid-branch-header="${branchName}"]`);
+}
+
+export async function createDependentBranch(page: Page, branchName: string): Promise<void> {
+	await clickByTestId(page, "branch-header-add-dependent-branch-button");
+	const modal = await waitForTestId(page, "branch-header-add-dependent-branch-modal");
+	await modal.locator("input").fill(branchName);
+	await clickByTestId(page, "branch-header-add-dependent-branch-modal-action-button");
+	await expect(modal).toBeHidden();
 }

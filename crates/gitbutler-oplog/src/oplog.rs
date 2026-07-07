@@ -649,9 +649,6 @@ fn restore_snapshot(
 
     let before_restore_snapshot_tree_id =
         prepare_snapshot(ctx, exclusive_access.read_permission())?;
-    let before_restore_snapshot_workdir_tree_id =
-        get_v3_workdir_tree(repo.find_tree(before_restore_snapshot_tree_id)?)?
-            .context("Could not get workdir tree of snapshot created before the restore")?;
     let snapshot_commit = repo.find_commit(snapshot_commit_id)?;
 
     let snapshot_tree = snapshot_commit.tree()?;
@@ -733,8 +730,7 @@ fn restore_snapshot(
     // Check out the snapshot's worktree while HEAD still points at the pre-restore commit:
     // safe_checkout diffs from `before_restore_snapshot_workdir_tree_id`, so
     // the workspace ref is repointed only afterwards (below).
-    but_core::worktree::safe_checkout(
-        before_restore_snapshot_workdir_tree_id,
+    but_core::worktree::safe_checkout_from_head(
         workdir_tree_id,
         &gix_repo,
         but_core::worktree::checkout::Options::default(),

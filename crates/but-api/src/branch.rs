@@ -5,15 +5,16 @@ use anyhow::{Context as _, bail};
 use bstr::ByteSlice;
 use but_api_macros::but_api;
 use but_core::{
-    DryRun, WORKSPACE_REF_NAME,
+    DryRun, RefMetadata, WORKSPACE_REF_NAME,
     branch::unique_canned_refname,
     ref_metadata::{ProjectMeta, StackId},
     sync::RepoExclusive,
     ui::TreeChanges,
     update_head_reference,
-    worktree::{checkout, safe_checkout},
+    worktree::{checkout, safe_checkout_from_head},
 };
 use but_ctx::Context;
+use but_error::bail_precondition;
 use but_oplog::legacy::{OperationKind, SnapshotDetails, Trailer};
 use but_rebase::graph_rebase::{Editor, SuccessfulRebase, mutate::InsertSide};
 use but_workspace::branch::{
@@ -36,6 +37,13 @@ pub struct BranchCreateResult {
     pub workspace: WorkspaceState,
     /// The name of the crated reference
     pub new_ref: gix::refs::FullName,
+}
+
+/// Outcome after removing a branch.
+#[derive(Debug)]
+pub struct BranchRemoveResult {
+    /// Workspace state after removing the branch.
+    pub workspace: WorkspaceState,
 }
 
 /// Outcome after integrating a branch with an interactive integration plan.
@@ -128,6 +136,7 @@ pub mod json {
     use crate::branch::{
         BranchCheckoutResult as InternalBranchCheckoutResult,
         BranchCreateResult as InternalBranchCreateResult,
+        BranchRemoveResult as InternalBranchRemoveResult,
         IntegrateBranchResult as InternalIntegrateBranchResult,
         MoveBranchResult as InternalMoveBranchResult,
     };
@@ -245,6 +254,27 @@ pub mod json {
             Ok(Self {
                 workspace: value.workspace.try_into()?,
                 new_ref: value.new_ref.into(),
+            })
+        }
+    }
+
+    /// JSON transport type for removing a branch.
+    #[derive(Debug, Serialize)]
+    #[cfg_attr(feature = "export-schema", derive(schemars::JsonSchema))]
+    #[serde(rename_all = "camelCase")]
+    pub struct BranchRemoveResult {
+        /// Workspace state after removing the branch.
+        pub workspace: crate::json::WorkspaceState,
+    }
+    #[cfg(feature = "export-schema")]
+    but_schemars::register_sdk_type!(BranchRemoveResult);
+
+    impl TryFrom<InternalBranchRemoveResult> for BranchRemoveResult {
+        type Error = anyhow::Error;
+
+        fn try_from(value: InternalBranchRemoveResult) -> Result<Self, Self::Error> {
+            Ok(Self {
+                workspace: value.workspace.try_into()?,
             })
         }
     }
@@ -712,8 +742,10 @@ pub fn apply_with_perm(
 /// Creates a new branch named `new_ref` at `placement`.
 ///
 /// This acquires exclusive worktree access from `ctx`, creates the branch,
-/// and records an oplog snapshot on success. For lower-level implementation
-/// details, see [`but_workspace::branch::create_reference()`].
+/// records an oplog snapshot on success, and in ad-hoc/single-branch mode
+/// checks out the new branch when it was created directly above the currently
+/// checked-out local branch. For lower-level implementation details, see
+/// [`but_workspace::branch::create_reference()`].
 #[but_api(napi, try_from = json::BranchCreateResult)]
 #[instrument(err(Debug))]
 pub fn branch_create(
@@ -730,8 +762,11 @@ pub fn branch_create(
 ///
 /// It prepares a best-effort create-branch oplog snapshot, creates the
 /// reference along with its workspace metadata, and commits the snapshot only
-/// if the creation succeeds. The returned [`BranchCreateResult`] contains the
-/// post-operation workspace view. For lower-level implementation details, see
+/// if the creation succeeds. In ad-hoc/single-branch mode, if the placement is
+/// `Above` the exact symbolic `HEAD` branch, this also checks out the newly
+/// created branch after metadata has been persisted. The returned
+/// [`BranchCreateResult`] contains the post-operation workspace view. For
+/// lower-level implementation details, see
 /// [`but_workspace::branch::create_reference()`].
 pub fn branch_create_with_perm(
     ctx: &mut but_ctx::Context,
@@ -764,6 +799,16 @@ pub fn branch_create_with_perm(
         }
     };
 
+    let checkout_anchor_ref = match &anchor {
+        Some(Anchor::AtReference { ref_name, position })
+            if matches!(position, Position::Above)
+                && ref_name.category() == Some(gix::refs::Category::LocalBranch) =>
+        {
+            Some(ref_name.as_ref().to_owned())
+        }
+        _ => None,
+    };
+
     let new_ref = if let Some(new_ref) = new_ref {
         new_ref
     } else {
@@ -781,6 +826,13 @@ pub fn branch_create_with_perm(
 
     let mut meta = ctx.meta()?;
     let (repo, mut ws, _db) = ctx.workspace_mut_and_db_with_perm(perm)?;
+    let checkout_after_create = checkout_anchor_ref.as_ref().is_some_and(|anchor_ref| {
+        repo.head_name()
+            .ok()
+            .flatten()
+            .as_ref()
+            .is_some_and(|head_ref| head_ref.as_ref() == anchor_ref.as_ref())
+    });
     let new_ws = but_workspace::branch::create_reference(
         new_ref.as_ref(),
         anchor,
@@ -796,13 +848,168 @@ pub fn branch_create_with_perm(
 
     let workspace = WorkspaceState::from_workspace(&new_ws, &mut meta, &repo, BTreeMap::new())?;
     *ws = new_ws.into_owned();
+    drop(ws);
+    drop(repo);
+    drop(_db);
+    drop(meta);
+    if checkout_after_create {
+        let checkout = branch_checkout_with_perm(ctx, new_ref.clone(), perm)?;
+        return Ok(BranchCreateResult {
+            workspace: checkout.workspace,
+            new_ref,
+        });
+    }
     Ok(BranchCreateResult { workspace, new_ref })
+}
+
+/// Removes the local branch `ref_name` from the workspace, deleting its git
+/// reference along with its metadata (including its `branch_order` entry).
+///
+/// This acquires exclusive worktree access from `ctx`, records an oplog snapshot
+/// on success, and returns the post-operation workspace view. In an
+/// ad-hoc/single-branch workspace it can also remove the currently checked-out
+/// reference: when that reference owns no commits and has another named
+/// reference underneath it, `HEAD` is first moved onto the reference below (the
+/// reverse of creating an empty branch above the checked-out one). For
+/// lower-level implementation details, see
+/// [`but_workspace::branch::remove_reference()`].
+#[but_api(napi, try_from = json::BranchRemoveResult)]
+#[instrument(err(Debug))]
+pub fn branch_remove(
+    ctx: &mut but_ctx::Context,
+    #[but_api(crate::json::FullNameBytes)] ref_name: gix::refs::FullName,
+) -> anyhow::Result<BranchRemoveResult> {
+    let mut guard = ctx.exclusive_worktree_access();
+    branch_remove_with_perm(ctx, ref_name, guard.write_permission())
+}
+
+/// Remove the local branch `ref_name` under caller-held exclusive repository
+/// access and record an oplog snapshot on success.
+///
+/// See [`branch_remove()`] for the checked-out-reference behaviour and
+/// [`but_workspace::branch::remove_reference()`] for the lower-level deletion.
+pub fn branch_remove_with_perm(
+    ctx: &mut but_ctx::Context,
+    ref_name: gix::refs::FullName,
+    perm: &mut RepoExclusive,
+) -> anyhow::Result<BranchRemoveResult> {
+    let maybe_oplog_entry = but_oplog::UnmaterializedOplogSnapshot::from_details_with_perm(
+        ctx,
+        SnapshotDetails::new(OperationKind::DeleteBranch)
+            .with_trailers([Trailer::Name(ref_name.to_string())]),
+        perm.read_permission(),
+        DryRun::No,
+    );
+
+    // Decide whether we must move `HEAD` off `ref_name` before deleting it. In an
+    // ad-hoc workspace the checked-out reference is the projection tip; we only
+    // allow removing it when it owns no commits and has another named reference
+    // underneath to land `HEAD` on. This reverses the "create an empty branch
+    // above the checked-out reference" flow. We look at the projection rather
+    // than the branch-order metadata on purpose: the metadata is best-effort and
+    // may drift, whereas the projection reflects the real segments.
+    let move_head_to = {
+        let (repo, ws, _db) = ctx.workspace_mut_and_db_with_perm(perm)?;
+        let is_checked_out = repo
+            .head_name()
+            .ok()
+            .flatten()
+            .is_some_and(|head| head.as_ref() == ref_name.as_ref());
+        if is_checked_out {
+            let (stack, _segment) = ws
+                .find_segment_and_stack_by_refname(ref_name.as_ref())
+                .context("the checked-out branch is not part of the workspace")?;
+            let idx = stack
+                .segments
+                .iter()
+                .position(|s| s.ref_name() == Some(ref_name.as_ref()))
+                .expect("segment we just matched by ref name");
+            let is_empty = stack.segments[idx].commits.is_empty();
+            let below = stack.segments[idx + 1..]
+                .iter()
+                .find_map(|s| s.ref_name().map(|r| r.to_owned()));
+            match (is_empty, below) {
+                (true, Some(below)) => Some(below),
+                (true, None) => bail_precondition!(
+                    "Cannot remove '{}': it is the only branch in the workspace",
+                    ref_name.shorten()
+                ),
+                (false, _) => bail_precondition!(
+                    "Cannot remove the checked-out branch '{}' because it contains commits",
+                    ref_name.shorten()
+                ),
+            }
+        } else {
+            None
+        }
+    };
+
+    let changed = if let Some(below) = move_head_to {
+        // Land `HEAD` on the reference underneath, then delete the now-detached
+        // tip and its metadata directly: after the checkout the tip sits above
+        // the entrypoint and is no longer part of the downward projection, so
+        // `remove_reference` would not find it there.
+        branch_checkout_with_perm(ctx, below, perm)?;
+
+        let mut meta = ctx.meta()?;
+        let (repo, mut ws, _db) = ctx.workspace_mut_and_db_with_perm(perm)?;
+        let deleted_ref = if let Some(reference) = repo.try_find_reference(ref_name.as_ref())? {
+            let safe_delete = but_core::branch::SafeDelete::new(&repo)?;
+            let out = safe_delete.delete_reference(&reference)?;
+            if let Some(paths) = out.checked_out_in_worktree_dirs {
+                bail_precondition!(
+                    "Refusing to delete a branch that is checked out. Worktrees are: {paths:?}"
+                );
+            }
+            true
+        } else {
+            false
+        };
+        let deleted_meta = meta.remove(ref_name.as_ref())?;
+        if deleted_ref || deleted_meta {
+            let new_ws = ws
+                .graph
+                .redo_traversal_with_overlay(&repo, &meta, Default::default())?
+                .into_workspace()?;
+            *ws = new_ws;
+            true
+        } else {
+            false
+        }
+    } else {
+        let mut meta = ctx.meta()?;
+        let (repo, mut ws, _db) = ctx.workspace_mut_and_db_with_perm(perm)?;
+        let new_ws = but_workspace::branch::remove_reference(
+            ref_name.as_ref(),
+            &repo,
+            &ws,
+            &mut meta,
+            but_workspace::branch::remove_reference::Options {
+                avoid_anonymous_stacks: true,
+                keep_metadata: false,
+            },
+        )?;
+        let changed = new_ws.is_some();
+        if let Some(new_ws) = new_ws {
+            *ws = new_ws;
+        }
+        changed
+    };
+
+    if changed && let Some(snapshot) = maybe_oplog_entry {
+        snapshot.commit(ctx, perm).ok();
+    }
+
+    let mut meta = ctx.meta()?;
+    let (repo, ws, _db) = ctx.workspace_mut_and_db_with_perm(perm)?;
+    let workspace = WorkspaceState::from_workspace(&ws, &mut meta, &repo, BTreeMap::new())?;
+    Ok(BranchRemoveResult { workspace })
 }
 
 /// Checks out an existing local branch and returns the resulting workspace state.
 ///
 /// This acquires exclusive worktree access from `ctx`, updates the worktree and
-/// index through [`but_core::worktree::safe_checkout()`], then points `HEAD`
+/// index through [`but_core::worktree::safe_checkout_from_head()`], then points `HEAD`
 /// symbolically at `branch`. The branch must be an existing full local branch
 /// name under `refs/heads/`.
 #[but_api(napi, try_from = json::BranchCheckoutResult)]
@@ -929,8 +1136,7 @@ fn checkout_ref_with_perm(
             )
         })?;
 
-        safe_checkout(
-            current_head,
+        safe_checkout_from_head(
             target,
             &repo,
             checkout::Options {
@@ -1219,7 +1425,8 @@ fn branch_workspace_from_rebase<M: but_core::RefMetadata>(
 mod tests {
     use std::path::Path;
 
-    use but_core::ref_metadata::ProjectMeta;
+    use but_core::{RefMetadata, ref_metadata::ProjectMeta};
+    use but_rebase::graph_rebase::mutate::InsertSide;
     use but_testsupport::{CommandExt, git_at_dir, open_repo};
 
     fn repo_with_feature_branch() -> anyhow::Result<(gix::Repository, tempfile::TempDir)> {
@@ -1376,6 +1583,179 @@ mod tests {
             }),
             "checked out branch '{expected}' appears in the graph workspace"
         );
+    }
+
+    #[test]
+    fn branch_create_above_checked_out_ref_checks_out_new_ref_in_ad_hoc_workspace()
+    -> anyhow::Result<()> {
+        let (repo, _tmp) = repo_with_feature_branch()?;
+        let mut ctx = but_ctx::Context::from_repo_for_testing(repo)?.with_memory_app_cache();
+        let new_ref = gix::refs::FullName::try_from("refs/heads/top")?;
+        let anchor_ref = gix::refs::FullName::try_from("refs/heads/main")?;
+
+        let result = super::branch_create(
+            &mut ctx,
+            Some(new_ref.clone()),
+            super::json::BranchCreatePlacement::Dependent {
+                relative_to: crate::commit::json::RelativeTo::Reference(anchor_ref.clone()),
+                side: InsertSide::Above,
+            },
+        )?;
+
+        let repo = ctx.repo.get()?;
+        let head_name = repo
+            .head_name()?
+            .expect("creating above checked-out branch checks out the new ref");
+        assert_eq!(head_name.as_ref(), new_ref.as_ref());
+        assert_workspace_ref(&result.workspace, "refs/heads/top");
+
+        let order = ctx
+            .meta()?
+            .branch_stack_order(anchor_ref.as_ref())?
+            .expect("ad-hoc branch creation above a local ref persists branch order");
+        assert_eq!(order, vec![new_ref, anchor_ref]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn branch_create_below_checked_out_ref_keeps_head_in_ad_hoc_workspace() -> anyhow::Result<()> {
+        let (repo, _tmp) = repo_with_feature_branch()?;
+        let mut ctx = but_ctx::Context::from_repo_for_testing(repo)?.with_memory_app_cache();
+        let new_ref = gix::refs::FullName::try_from("refs/heads/bottom")?;
+        let anchor_ref = gix::refs::FullName::try_from("refs/heads/main")?;
+
+        let result = super::branch_create(
+            &mut ctx,
+            Some(new_ref.clone()),
+            super::json::BranchCreatePlacement::Dependent {
+                relative_to: crate::commit::json::RelativeTo::Reference(anchor_ref.clone()),
+                side: InsertSide::Below,
+            },
+        )?;
+
+        // Creating below the checked-out branch checks nothing out: HEAD stays on the anchor.
+        let repo = ctx.repo.get()?;
+        let head_name = repo
+            .head_name()?
+            .expect("HEAD remains symbolic after create-below");
+        assert_eq!(head_name.as_ref(), anchor_ref.as_ref());
+        assert_workspace_ref(&result.workspace, "refs/heads/main");
+        assert!(repo.try_find_reference(new_ref.as_ref())?.is_some());
+
+        let order = ctx
+            .meta()?
+            .branch_stack_order(anchor_ref.as_ref())?
+            .expect("ad-hoc branch creation below a local ref persists branch order");
+        assert_eq!(order, vec![anchor_ref, new_ref]);
+
+        Ok(())
+    }
+
+    /// Create `new_ref` as an empty branch directly above `anchor`, mirroring
+    /// the ad-hoc "create dependent branch above" flow (which also checks the
+    /// new branch out).
+    fn create_empty_branch_above(
+        ctx: &mut but_ctx::Context,
+        new_ref: &gix::refs::FullName,
+        anchor: &gix::refs::FullName,
+    ) -> anyhow::Result<()> {
+        super::branch_create(
+            ctx,
+            Some(new_ref.clone()),
+            super::json::BranchCreatePlacement::Dependent {
+                relative_to: crate::commit::json::RelativeTo::Reference(anchor.clone()),
+                side: InsertSide::Above,
+            },
+        )?;
+        Ok(())
+    }
+
+    #[test]
+    fn branch_remove_deletes_middle_empty_branch_and_keeps_head() -> anyhow::Result<()> {
+        let (repo, _tmp) = repo_with_feature_branch()?;
+        let mut ctx = but_ctx::Context::from_repo_for_testing(repo)?.with_memory_app_cache();
+        let main = gix::refs::FullName::try_from("refs/heads/main")?;
+        let middle = gix::refs::FullName::try_from("refs/heads/middle")?;
+        let tip = gix::refs::FullName::try_from("refs/heads/tip")?;
+
+        // Stack two empty branches above the checked-out `main`: [tip, middle, main].
+        create_empty_branch_above(&mut ctx, &middle, &main)?;
+        create_empty_branch_above(&mut ctx, &tip, &middle)?;
+
+        super::branch_remove(&mut ctx, middle.clone())?;
+
+        let repo = ctx.repo.get()?;
+        // Removing a branch that isn't checked out leaves HEAD on the tip.
+        assert_eq!(
+            repo.head_name()?.expect("HEAD is symbolic").as_ref(),
+            tip.as_ref()
+        );
+        assert!(repo.try_find_reference(middle.as_ref())?.is_none());
+        // The order relinks the tip straight onto the base.
+        let order = ctx
+            .meta()?
+            .branch_stack_order(tip.as_ref())?
+            .expect("branch order still persisted");
+        assert_eq!(order, vec![tip, main]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn branch_remove_checked_out_empty_tip_moves_head_to_ref_below() -> anyhow::Result<()> {
+        let (repo, _tmp) = repo_with_feature_branch()?;
+        let mut ctx = but_ctx::Context::from_repo_for_testing(repo)?.with_memory_app_cache();
+        let main = gix::refs::FullName::try_from("refs/heads/main")?;
+        let middle = gix::refs::FullName::try_from("refs/heads/middle")?;
+        let tip = gix::refs::FullName::try_from("refs/heads/tip")?;
+
+        // [tip, middle, main] with HEAD on the empty `tip`.
+        create_empty_branch_above(&mut ctx, &middle, &main)?;
+        create_empty_branch_above(&mut ctx, &tip, &middle)?;
+
+        let result = super::branch_remove(&mut ctx, tip.clone())?;
+
+        let repo = ctx.repo.get()?;
+        // HEAD lands on the reference that was directly underneath the removed tip.
+        assert_eq!(
+            repo.head_name()?.expect("HEAD is symbolic").as_ref(),
+            middle.as_ref()
+        );
+        assert!(repo.try_find_reference(tip.as_ref())?.is_none());
+        assert_workspace_ref(&result.workspace, "refs/heads/middle");
+
+        let order = ctx
+            .meta()?
+            .branch_stack_order(middle.as_ref())?
+            .expect("branch order still persisted");
+        assert_eq!(order, vec![middle, main]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn branch_remove_rejects_checked_out_branch_with_commits() -> anyhow::Result<()> {
+        let (repo, _tmp) = repo_with_feature_branch()?;
+        let mut ctx = but_ctx::Context::from_repo_for_testing(repo)?.with_memory_app_cache();
+        let main = gix::refs::FullName::try_from("refs/heads/main")?;
+
+        let err = super::branch_remove(&mut ctx, main.clone())
+            .expect_err("cannot delete the checked-out branch that owns commits");
+        assert!(
+            err.to_string().contains("contains commits"),
+            "unexpected error: {err}"
+        );
+
+        // Nothing was removed.
+        let repo = ctx.repo.get()?;
+        assert!(repo.try_find_reference(main.as_ref())?.is_some());
+        assert_eq!(
+            repo.head_name()?.expect("HEAD is symbolic").as_ref(),
+            main.as_ref()
+        );
+
+        Ok(())
     }
 
     #[test]

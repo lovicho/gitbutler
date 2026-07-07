@@ -10,7 +10,7 @@ use crate::projection::{
     project_pr,
 };
 use crate::transcript::TranscriptBatch;
-use but_core::worktree::safe_checkout;
+use but_core::worktree::safe_checkout_from_head;
 use git_meta_lib::{MetaEdit, MetaValue, Session, Target};
 use gix::object::tree::EntryKind;
 use std::{fs, path::Path};
@@ -65,10 +65,6 @@ fn set_agentlog_share_default(repo: &Path, value: bool) {
 fn commit_file(repo: &Path, path: &str, body: &str) {
     let repo = but_testsupport::open_repo(repo).expect("open gitoxide test repo");
     let parent = repo.head_commit().ok();
-    let current_tree_id = parent
-        .as_ref()
-        .map(|commit| commit.tree_id().expect("head commit tree").detach())
-        .unwrap_or(repo.empty_tree().id);
     let mut editor = parent
         .as_ref()
         .map(|commit| commit.tree().expect("head commit tree").edit())
@@ -88,8 +84,7 @@ fn commit_file(repo: &Path, path: &str, body: &str) {
     let commit = repo
         .new_commit("test commit", tree_id, parents)
         .expect("write test commit");
-    safe_checkout(current_tree_id, commit.id, &repo, Default::default())
-        .expect("checkout test commit");
+    safe_checkout_from_head(commit.id, &repo, Default::default()).expect("checkout test commit");
 }
 
 fn write_transcript(repo: &Path, body: &str) -> std::path::PathBuf {

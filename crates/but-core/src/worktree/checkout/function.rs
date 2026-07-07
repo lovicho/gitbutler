@@ -13,25 +13,8 @@ use crate::update_head_reference;
 
 use super::{Options, Outcome, utils::merge_worktree_changes_into_destination_or_keep_snapshot};
 
-/// Like [`safe_checkout()`], but the current tree will always be fetched from
-pub fn safe_checkout_from_head(
-    new_head_id: gix::ObjectId,
-    repo: &gix::Repository,
-    opts: Options,
-) -> anyhow::Result<Outcome> {
-    safe_checkout(
-        repo.head_tree_id_or_empty()?.detach(),
-        new_head_id,
-        repo,
-        opts,
-    )
-}
-/// Given the `current_head_id^{tree}` for the tree that matches what `HEAD` points to, perform all file operations necessary
-/// to turn the *worktree* of `repo` into `new_head_id^{tree}`. Note that the current *worktree* is assumed to be at the state of
-/// `current_head_id` along with arbitrary uncommitted user changes.
-///
-/// Note that we don't care if the worktree actually matches the `new_head_id^{tree}`, we only care about the operations from
-/// `current_head_id^{tree}` to be performed, and if there are none, we will do nothing.
+/// Perform all file operations necessary to turn the *worktree* of `repo` into
+/// `new_head_id^{tree}`.
 ///
 /// If `new_head_id` is a *commit*, we will also set `HEAD` (or the ref it points to if symbolic) to the `new_head_id`.
 /// We will also update the `.git/index` to match the `new_head_id^{tree}`.
@@ -46,8 +29,7 @@ pub fn safe_checkout_from_head(
 /// If this changes, then the source sid of a rename could also cause conflicts, maybe? It's a bit unclear what it would mean
 /// in practice, but I guess that we bring deleted files back instead of conflicting.
 #[instrument(skip(repo), err(Debug))]
-pub fn safe_checkout(
-    current_head_id: gix::ObjectId,
+pub fn safe_checkout_from_head(
     new_head_id: gix::ObjectId,
     repo: &gix::Repository,
     Options {
@@ -56,6 +38,7 @@ pub fn safe_checkout(
         allow_conflicted_commit_checkout,
     }: Options,
 ) -> anyhow::Result<Outcome> {
+    let current_head_id = repo.head_tree_id_or_empty()?.detach();
     let source_tree = current_head_id.attach(repo).object()?.peel_to_tree()?;
     let new_object = new_head_id.attach(repo).object()?;
     if !allow_conflicted_commit_checkout

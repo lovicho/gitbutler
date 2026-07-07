@@ -29,6 +29,16 @@ case "$scenario" in
     git commit -m "fully-integrated: second commit"
     git checkout master
     ;;
+  empty-top-over-integrated)
+    git checkout -b integrated-branch-under-empty-top
+    echo "integrated lower commit 1" > integrated_under_empty_top_first.txt
+    git add integrated_under_empty_top_first.txt
+    git commit -m "integrated-under-empty-top: first commit"
+    echo "integrated lower commit 2" > integrated_under_empty_top_second.txt
+    git add integrated_under_empty_top_second.txt
+    git commit -m "integrated-under-empty-top: second commit"
+    git checkout master
+    ;;
   partial-stack)
     git checkout -b partial-stack-base
     echo "partial stack base" > partial_stack_base.txt
@@ -71,6 +81,10 @@ case "$scenario" in
   fully-integrated)
     "$BUT" apply fully-integrated-branch
     git checkout fully-integrated-branch
+    ;;
+  empty-top-over-integrated)
+    "$BUT" apply integrated-branch-under-empty-top
+    git checkout integrated-branch-under-empty-top
     ;;
   partial-stack)
     "$BUT" apply partial-stack-base

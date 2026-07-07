@@ -3,6 +3,7 @@ import { SuspenseQuery } from "@suspensive/react-query";
 import {
 	useMergeReview,
 	usePublishReview,
+	useSaveGUISettings,
 	useSetReviewAutoMerge,
 	useSetReviewDraftiness,
 	useUpdateReview,
@@ -12,6 +13,7 @@ import {
 	branchDiffQueryOptions,
 	changesInWorktreeQueryOptions,
 	commitDetailsWithLineStatsQueryOptions,
+	getGUISettingsQueryOptions,
 	getReviewMergeStatusQueryOptions,
 	headInfoQueryOptions,
 	listReviewsQueryOptions,
@@ -34,12 +36,7 @@ import {
 import {
 	projectActions,
 	selectProjectDetailsFullWindow,
-	selectProjectDiffBackgrounds,
-	selectProjectDiffOverflow,
 	selectProjectFilesVisible,
-	selectProjectPreferredDiffStyle,
-	type DiffOverflow,
-	type DiffStyle,
 } from "#ui/projects/state.ts";
 import { getButtonClassName } from "#ui/components/Button.tsx";
 import { Icon } from "#ui/components/Icon.tsx";
@@ -112,12 +109,21 @@ import { useFileMenuItems } from "#ui/routes/project/$id/workspace/useFileMenuIt
 import { useMergedRefs } from "@base-ui/utils/useMergedRefs";
 import { getHeadInfoIndex } from "#ui/api/ref-info.ts";
 import { Checkbox } from "#ui/components/Checkbox.tsx";
+import { GUISettings } from "#electron/settings.ts";
 
 type BranchTab = "diff" | "pr";
 
 // This must be unique as to not collide with other IDs, and stable because it's
 // stored in local storage.
 type PanelId = "files-panel" | "diff-panel";
+
+type DiffConfig = Required<Pick<GUISettings, "diffBackground" | "diffOverflow" | "diffStyle">>;
+
+const diffDefaults: DiffConfig = {
+	diffBackground: true,
+	diffOverflow: "scroll",
+	diffStyle: "split",
+};
 
 const codeViewItemId = ({ changesetKey, path }: { changesetKey: string; path: string }): string =>
 	`${changesetKey}:${path}`;
@@ -304,9 +310,9 @@ const DiffContents: FC<{
 	changesetKey: string;
 	projectId: string;
 	diffView: DiffView;
-	diffBackgrounds: boolean;
-	diffOverflow: DiffOverflow;
-	diffStyle: DiffStyle;
+	diffBackgrounds?: GUISettings["diffBackground"];
+	diffOverflow?: GUISettings["diffOverflow"];
+	diffStyle?: GUISettings["diffStyle"];
 	viewerRef: RefObject<CodeViewHandle<undefined> | null>;
 	didScrollToViaFileRef: RefObject<boolean>;
 }> = ({
@@ -489,9 +495,9 @@ const DiffContents: FC<{
 			selectedLines={selectedRange}
 			onSelectedLinesChange={handleLinesSelected}
 			options={{
-				diffStyle,
-				disableBackground: !diffBackgrounds,
-				overflow: diffOverflow,
+				diffStyle: diffStyle ?? diffDefaults.diffStyle,
+				disableBackground: !(diffBackgrounds ?? diffDefaults.diffBackground),
+				overflow: diffOverflow ?? diffDefaults.diffOverflow,
 				themeType: "system",
 				stickyHeaders: true,
 				enableLineSelection: true,
@@ -733,9 +739,11 @@ const FilesToggle: FC<
 const DiffOverflowToggle: FC<
 	Omit<ComponentProps<typeof Toggle>, "aria-label" | "pressed" | "onPressedChange">
 > = (toggleProps) => {
-	const { id: projectId } = useParams({ from: "/project/$id/workspace" });
-	const dispatch = useAppDispatch();
-	const diffOverflow = useAppSelector((state) => selectProjectDiffOverflow(state, projectId));
+	const { data: diffOverflow } = useQuery({
+		...getGUISettingsQueryOptions(),
+		select: (cfg) => cfg.diffOverflow,
+	});
+	const saveGUISettings = useSaveGUISettings();
 
 	return (
 		<Tooltip.Root>
@@ -744,14 +752,9 @@ const DiffOverflowToggle: FC<
 					<Toggle
 						{...toggleProps}
 						aria-label="Toggle line wrapping"
-						pressed={diffOverflow === "wrap"}
+						pressed={(diffOverflow ?? diffDefaults.diffOverflow) === "wrap"}
 						onPressedChange={(pressed) =>
-							dispatch(
-								projectActions.setDiffOverflow({
-									projectId,
-									diffOverflow: pressed ? "wrap" : "scroll",
-								}),
-							)
+							saveGUISettings.mutate({ diffOverflow: pressed ? "wrap" : "scroll" })
 						}
 					/>
 				}
@@ -768,9 +771,11 @@ const DiffOverflowToggle: FC<
 const DiffBackgroundsToggle: FC<
 	Omit<ComponentProps<typeof Toggle>, "aria-label" | "pressed" | "onPressedChange">
 > = (toggleProps) => {
-	const { id: projectId } = useParams({ from: "/project/$id/workspace" });
-	const dispatch = useAppDispatch();
-	const diffBackgrounds = useAppSelector((state) => selectProjectDiffBackgrounds(state, projectId));
+	const { data: diffBackgrounds } = useQuery({
+		...getGUISettingsQueryOptions(),
+		select: (cfg) => cfg.diffBackground,
+	});
+	const saveGUISettings = useSaveGUISettings();
 
 	return (
 		<Tooltip.Root>
@@ -779,10 +784,8 @@ const DiffBackgroundsToggle: FC<
 					<Toggle
 						{...toggleProps}
 						aria-label="Toggle diff backgrounds"
-						pressed={diffBackgrounds}
-						onPressedChange={(enabled) =>
-							dispatch(projectActions.setDiffBackgrounds({ projectId, enabled }))
-						}
+						pressed={diffBackgrounds ?? diffDefaults.diffBackground}
+						onPressedChange={(enabled) => saveGUISettings.mutate({ diffBackground: enabled })}
 					/>
 				}
 			/>
@@ -796,13 +799,16 @@ const DiffBackgroundsToggle: FC<
 };
 
 const DiffStyleToggleGroup: FC<
-	Omit<ToggleGroup.Props<DiffStyle>, "aria-label" | "value" | "onValueChange">
+	Omit<
+		ToggleGroup.Props<NonNullable<GUISettings["diffStyle"]>>,
+		"aria-label" | "value" | "onValueChange"
+	>
 > = (toggleGroupProps) => {
-	const { id: projectId } = useParams({ from: "/project/$id/workspace" });
-	const dispatch = useAppDispatch();
-	const preferredDiffStyle = useAppSelector((state) =>
-		selectProjectPreferredDiffStyle(state, projectId),
-	);
+	const { data: diffStyle } = useQuery({
+		...getGUISettingsQueryOptions(),
+		select: (cfg) => cfg.diffStyle,
+	});
+	const saveGUISettings = useSaveGUISettings();
 
 	return (
 		<Tooltip.Root>
@@ -811,11 +817,12 @@ const DiffStyleToggleGroup: FC<
 					<ToggleGroup
 						{...toggleGroupProps}
 						aria-label={diffHotkeys.toggleDiffStyle.meta.name}
-						value={[preferredDiffStyle]}
-						onValueChange={(value: Array<DiffStyle>) => {
+						value={[diffStyle ?? diffDefaults.diffStyle]}
+						onValueChange={(value: Array<NonNullable<GUISettings["diffStyle"]>>) => {
 							const head = value[0];
 							if (head === undefined) return;
-							dispatch(projectActions.setPreferredDiffStyle({ projectId, diffStyle: head }));
+
+							saveGUISettings.mutate({ diffStyle: head });
 						}}
 					/>
 				}
@@ -953,20 +960,28 @@ const Diff: FC<{
 		});
 	};
 
-	const preferredDiffStyle = useAppSelector((state) =>
-		selectProjectPreferredDiffStyle(state, projectId),
-	);
-	const diffOverflow = useAppSelector((state) => selectProjectDiffOverflow(state, projectId));
-	const diffBackgrounds = useAppSelector((state) => selectProjectDiffBackgrounds(state, projectId));
+	const { data: diffSettings } = useQuery({
+		...getGUISettingsQueryOptions(),
+		select: (cfg) => ({
+			diffBackground: cfg.diffBackground,
+			diffOverflow: cfg.diffOverflow,
+			diffStyle: cfg.diffStyle,
+		}),
+	});
+
+	const saveGUISettings = useSaveGUISettings();
+
 	const diffContentsEl = useRef<HTMLElement | null>(null);
 	const [canUseSplitDiff, setCanUseSplitDiff] = useState<boolean | undefined>();
-
-	const toggleDiffStyle = () => dispatch(projectActions.togglePreferredDiffStyle({ projectId }));
 
 	useHotkeys([
 		{
 			hotkey: diffHotkeys.toggleDiffStyle.hotkey,
-			callback: toggleDiffStyle,
+			callback: () =>
+				saveGUISettings.mutate({
+					diffStyle:
+						(diffSettings?.diffStyle ?? diffDefaults.diffStyle) === "split" ? "unified" : "split",
+				}),
 			options: {
 				conflictBehavior: "allow",
 				enabled: canUseSplitDiff,
@@ -1024,13 +1039,13 @@ const Diff: FC<{
 						<DiffStyleToggleGroup render={<ToggleGroupStyles />}>
 							<Toolbar.Button
 								render={<Toggle render={<ToggleStyles />} />}
-								value={"split" satisfies DiffStyle}
+								value={"split" satisfies GUISettings["diffStyle"]}
 							>
 								Split
 							</Toolbar.Button>
 							<Toolbar.Button
 								render={<Toggle render={<ToggleStyles />} />}
-								value={"unified" satisfies DiffStyle}
+								value={"unified" satisfies GUISettings["diffStyle"]}
 							>
 								Unified
 							</Toolbar.Button>
@@ -1083,9 +1098,9 @@ const Diff: FC<{
 							changesetKey={changesetKey}
 							projectId={projectId}
 							diffView={diffView}
-							diffBackgrounds={diffBackgrounds}
-							diffOverflow={diffOverflow}
-							diffStyle={canUseSplitDiff ? preferredDiffStyle : "unified"}
+							diffBackgrounds={diffSettings?.diffBackground}
+							diffOverflow={diffSettings?.diffOverflow}
+							diffStyle={canUseSplitDiff ? diffSettings?.diffStyle : "unified"}
 							selectionScopeRef={selectionScopeRef}
 							viewerRef={viewerRef}
 							didScrollToViaFileRef={didScrollToViaFileRef}
@@ -1221,12 +1236,16 @@ const PullRequestPrimaryAction: FC<{
 		enabled: !isDraft,
 	});
 
+	const updateReview = useUpdateReview();
 	const mergeReview = useMergeReview();
 	const setReviewDraftiness = useSetReviewDraftiness();
 	const setReviewAutoMerge = useSetReviewAutoMerge();
 
 	const isAnyPending =
-		mergeReview.isPending || setReviewDraftiness.isPending || setReviewAutoMerge.isPending;
+		updateReview.isPending ||
+		mergeReview.isPending ||
+		setReviewDraftiness.isPending ||
+		setReviewAutoMerge.isPending;
 
 	return (
 		<div className={styles.prActions}>
@@ -1238,6 +1257,25 @@ const PullRequestPrimaryAction: FC<{
 			>
 				{setReviewDraftiness.isPending && <Icon name="spinner" />}
 				{isDraft ? "Mark as Ready" : "Convert to draft"}
+			</button>
+
+			<button
+				className={getButtonClassName({ variant: "danger" })}
+				disabled={isAnyPending}
+				onClick={() =>
+					updateReview.mutate({
+						projectId,
+						reviewId,
+						state: "closed",
+						title: null,
+						body: null,
+						targetBase: null,
+					})
+				}
+				type="button"
+			>
+				{updateReview.isPending && <Icon name="spinner" />}
+				Close
 			</button>
 
 			{!isDraft && (
@@ -1333,8 +1371,8 @@ export const Details: FC<
 									cacheConfig: "noCache",
 								})}
 							>
-								{({ data: { reviewsBySourceBranch } }) => {
-									const review = reviewsBySourceBranch.get(
+								{({ data }) => {
+									const review = data?.reviewsBySourceBranch.get(
 										// https://linear.app/gitbutler/issue/GB-1226/unify-branch-identifiers
 										decodeBytes(outlineSelection.branchRef).replace(/^refs\/heads\//, ""),
 									);
@@ -1442,7 +1480,7 @@ export const Details: FC<
 											cacheConfig: "noCache",
 										})}
 									>
-										{({ data: { reviewsBySourceBranch } }) => {
+										{({ data }) => {
 											// Use push status of segment, not branch details; something about remote
 											// tracking refs.
 											const branchCtx = headInfoIndex?.branchContextByRefBytes(branchRef);
@@ -1457,7 +1495,7 @@ export const Details: FC<
 
 											const review =
 												sourceBranch !== undefined
-													? reviewsBySourceBranch.get(sourceBranch)
+													? data?.reviewsBySourceBranch.get(sourceBranch)
 													: undefined;
 
 											return (

@@ -5,6 +5,7 @@ import {
 	getReviewMergeStatusQueryOptions,
 	getReviewQueryOptions,
 	headInfoQueryOptions,
+	getGUISettingsQueryOptions,
 	type QueryKey,
 } from "#ui/api/queries.ts";
 import { shortCommitId } from "#ui/commit.ts";
@@ -26,7 +27,8 @@ import {
 } from "@gitbutler/but-sdk";
 import { type QueryClient, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Match } from "effect";
-import { OpenInEditorParams } from "#electron/ipc.ts";
+import type { OpenInEditorParams } from "#electron/ipc.ts";
+import type { GUISettings } from "#electron/settings.ts";
 
 // oxlint-disable-next-line typescript/no-explicit-any
 type PromiseReturnType<T> = T extends (...args: Array<any>) => Promise<infer U> ? U : never;
@@ -856,6 +858,42 @@ export const useUpdateBranchName = ({
 				type: "error",
 				title: "Failed to rename branch",
 				description: errorMessageForToast(error),
+				priority: "high",
+			});
+		},
+	});
+};
+
+/**
+ * Save GUI settings mutation with partial keys. Settings are spread (shallow).
+ */
+export const useSaveGUISettings = () => {
+	const toastManager = Toast.useToastManager();
+
+	return useMutation({
+		scope: { id: "gui-settings" },
+		mutationFn: async (cfg: Partial<GUISettings>, ctx) => {
+			// In practice we should always have some cached data at this point.
+			const prev = await ctx.client.ensureQueryData(getGUISettingsQueryOptions());
+			const next: GUISettings = {
+				...prev,
+				...cfg,
+			};
+
+			// Update the cache immediately for UX, and keep it updated even if writing fails so that the
+			// app is usable. We shan't bother invalidating the query.
+			ctx.client.setQueryData(getGUISettingsQueryOptions().queryKey, next);
+
+			return await window.lite.writeGUISettings(next);
+		},
+		onError: async (err) => {
+			// oxlint-disable-next-line no-console
+			console.error(err);
+
+			toastManager.add({
+				type: "error",
+				title: "Failed to save settings",
+				description: errorMessageForToast(err),
 				priority: "high",
 			});
 		},

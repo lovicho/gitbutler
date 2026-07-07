@@ -104,6 +104,9 @@
 	{#each segments as segment, i}
 		{@const ctx = segmentContext(segments, i, stackPrecomputed)}
 		{@const branchName = segment.refName?.displayName}
+		{@const branchReference = segment.refName
+			? new TextDecoder().decode(new Uint8Array(segment.refName.fullNameBytes))
+			: undefined}
 		{@const branchLabel = branchName ?? "Unnamed segment"}
 		{@const remoteTrackingBranch = segment.remoteTrackingRefName
 			? new TextDecoder().decode(new Uint8Array(segment.remoteTrackingRefName.fullNameBytes))
@@ -201,6 +204,7 @@
 			{#if first && branchName}
 				<Button
 					icon="stack-plus"
+					testId={TestId.BranchHeaderAddDependentBranchButton}
 					size="tag"
 					kind="outline"
 					tooltip={controller.isReadOnly ? "Read-only mode" : "Create new branch"}
@@ -208,6 +212,7 @@
 						addDependentBranchModalContext = {
 							projectId,
 							stackId: ensureValue(stackId),
+							branchReference: ensureValue(branchReference),
 						};
 
 						await tick();

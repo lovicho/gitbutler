@@ -1,5 +1,8 @@
 import {
 	applyBranchFromBranchesView,
+	branchHeader,
+	createDependentBranch,
+	expectCurrentBranchChip,
 	openSingleBranchWorkspace,
 	setupSingleBranchProject,
 	SINGLE_BRANCH_NAME,
@@ -27,9 +30,10 @@ import {
 	dragAndDropByLocator,
 	getByTestId,
 	stack,
+	waitForTestId,
 } from "../../src/util.ts";
-import { expect } from "@playwright/test";
-import { execFileSync } from "child_process";
+import { expect, type Page } from "@playwright/test";
+import { execFileSync } from "node:child_process";
 
 test.use({
 	gitbutlerOptions: {
@@ -78,6 +82,219 @@ test("can commit new changes on the checked-out branch", async ({ page, gitbutle
 	);
 });
 
+test("can create an empty dependent branch above the checked-out branch and commit to it", async ({
+	page,
+	gitbutler,
+}) => {
+	const localClone = await setupSingleBranchProject(gitbutler, page);
+	const topBranch = "single-branch-dependent-top";
+	const bottomTip = git(localClone, ["rev-parse", SINGLE_BRANCH_NAME]);
+
+	await createDependentBranch(page, topBranch);
+
+	await assertBranch(topBranch, localClone);
+	await expectCurrentBranchChip(page, topBranch);
+	await expect(getByTestId(page, "branch-card")).toHaveCount(2);
+	await expect(getByTestId(page, "branch-card").filter({ hasText: topBranch })).toBeVisible();
+	await expect(
+		getByTestId(page, "branch-card").filter({ hasText: SINGLE_BRANCH_NAME }),
+	).toBeVisible();
+	expect(git(localClone, ["rev-parse", topBranch])).toBe(bottomTip);
+
+	const fileName = "dependent_top_file.txt";
+	const fileContent = "new top branch content\n";
+	writeToFile(gitbutler.pathInWorkdir("local-clone", fileName), fileContent);
+
+	await expect(getByTestId(page, "file-list-item").filter({ hasText: fileName })).toBeVisible();
+	await clickByTestId(page, "start-commit-button");
+
+	const title = "dependent-top: commit from e2e";
+	await updateCommitMessage(page, title, "");
+	await clickByTestId(page, "commit-drawer-action-button");
+
+	await expect(commitRow(page, title)).toBeVisible();
+	await assertBranch(topBranch, localClone);
+	await assertCleanWorktree(localClone);
+	expect(git(localClone, ["rev-parse", `${topBranch}^`])).toBe(bottomTip);
+	expect(git(localClone, ["rev-parse", SINGLE_BRANCH_NAME])).toBe(bottomTip);
+	await assertCommitSubjects(
+		[
+			title,
+			"single-branch: add file",
+			"single-branch: second commit",
+			"single-branch: first commit",
+		],
+		localClone,
+	);
+});
+
+test("can create an empty branch below another empty branch between empty branches", async ({
+	page,
+	gitbutler,
+}) => {
+	const localClone = await setupSingleBranchProject(gitbutler, page);
+
+	await createDependentBranch(page, "empty-top");
+	const emptyMiddle = await createGeneratedBranch(page, localClone, "empty-top", "below");
+	const emptyBottom = await createGeneratedBranch(page, localClone, emptyMiddle, "below");
+	const insertedBelowMiddle = await createGeneratedBranch(page, localClone, emptyMiddle, "below");
+
+	await expectBranchHeaderOrder(page, [
+		"empty-top",
+		emptyMiddle,
+		insertedBelowMiddle,
+		emptyBottom,
+		SINGLE_BRANCH_NAME,
+	]);
+	await assertBranch("empty-top", localClone);
+	for (const branchName of ["empty-top", emptyMiddle, insertedBelowMiddle, emptyBottom]) {
+		expect(git(localClone, ["rev-parse", branchName])).toBe(
+			git(localClone, ["rev-parse", SINGLE_BRANCH_NAME]),
+		);
+	}
+});
+
+test("can create a dependent branch above the checked-out branch via the context menu", async ({
+	page,
+	gitbutler,
+}) => {
+	const localClone = await setupSingleBranchProject(gitbutler, page);
+	const baseTip = git(localClone, ["rev-parse", SINGLE_BRANCH_NAME]);
+
+	const above = await createGeneratedBranch(page, localClone, SINGLE_BRANCH_NAME, "above");
+
+	// Creating above the checked-out branch checks the new empty tip out.
+	await expectBranchHeaderOrder(page, [above, SINGLE_BRANCH_NAME]);
+	await expectCurrentBranchChip(page, above);
+	await assertBranch(above, localClone);
+	expect(git(localClone, ["rev-parse", above])).toBe(baseTip);
+});
+
+test("can create a dependent branch below the checked-out branch via the context menu", async ({
+	page,
+	gitbutler,
+}) => {
+	const localClone = await setupSingleBranchProject(gitbutler, page);
+	const baseTip = git(localClone, ["rev-parse", SINGLE_BRANCH_NAME]);
+
+	const below = await createGeneratedBranch(page, localClone, SINGLE_BRANCH_NAME, "below");
+
+	// Creating below the checked-out branch leaves HEAD where it is.
+	await expectBranchHeaderOrder(page, [SINGLE_BRANCH_NAME, below]);
+	await expectCurrentBranchChip(page, SINGLE_BRANCH_NAME);
+	await assertBranch(SINGLE_BRANCH_NAME, localClone);
+	expect(git(localClone, ["rev-parse", below])).toBe(baseTip);
+});
+
+test("persists the ad-hoc branch order across a workspace reload", async ({ page, gitbutler }) => {
+	const localClone = await setupSingleBranchProject(gitbutler, page);
+
+	// Build an ordered stack of empty branches; each is created above the current tip.
+	await createDependentBranch(page, "empty-lower");
+	await createDependentBranch(page, "empty-top");
+	const expectedOrder = ["empty-top", "empty-lower", SINGLE_BRANCH_NAME];
+
+	await expectBranchHeaderOrder(page, expectedOrder);
+	await expectCurrentBranchChip(page, "empty-top");
+
+	// Reload the app from scratch: the workspace must be rebuilt from the persisted branch-order
+	// metadata on disk, not from any in-memory state.
+	await openSingleBranchWorkspace(page);
+
+	await expectBranchHeaderOrder(page, expectedOrder);
+	await expect(getByTestId(page, "branch-card")).toHaveCount(3);
+	await expectCurrentBranchChip(page, "empty-top");
+	for (const branchName of expectedOrder) {
+		expect(localBranches(localClone)).toContain(branchName);
+	}
+});
+
+test("surfaces an error and creates nothing when a dependent branch name collides", async ({
+	page,
+	gitbutler,
+}) => {
+	const localClone = await setupSingleBranchProject(gitbutler, page);
+	const branchesBefore = localBranches(localClone);
+
+	// `single-branch-fixture` exists as a branch, so `single-branch-fixture/child` collides with it
+	// and cannot be created. The name is valid client-side, so it reaches the backend and fails.
+	await clickByTestId(page, "branch-header-add-dependent-branch-button");
+	const modal = await waitForTestId(page, "branch-header-add-dependent-branch-modal");
+	await modal.locator("input").fill(`${SINGLE_BRANCH_NAME}/child`);
+	await clickByTestId(page, "branch-header-add-dependent-branch-modal-action-button");
+
+	// The failure is surfaced as an error toast.
+	await expect(
+		page.getByTestId("toast-info-message").filter({ hasText: /error|collides|cannot/i }),
+	).toBeVisible();
+
+	// And nothing is left behind: no new branch on disk, and the stack is unchanged.
+	await expect(getByTestId(page, "branch-card")).toHaveCount(1);
+	await expectCurrentBranchChip(page, SINGLE_BRANCH_NAME);
+	expect(localBranches(localClone)).toEqual(branchesBefore);
+});
+
+test("can remove the checked-out empty branch from the top of a two-branch stack", async ({
+	page,
+	gitbutler,
+}) => {
+	const localClone = await setupSingleBranchProject(gitbutler, page);
+
+	// `empty-top` is created above the base and becomes the checked-out tip.
+	await createDependentBranch(page, "empty-top");
+	const emptyBottom = await createGeneratedBranch(page, localClone, "empty-top", "below");
+	await expectCurrentBranchChip(page, "empty-top");
+
+	await deleteBranchFromHeader(page, "empty-top");
+
+	// Removing the checked-out empty tip lands HEAD on the branch directly below it.
+	await expect(branchHeader(page, "empty-top")).toBeHidden();
+	await expectCurrentBranchChip(page, emptyBottom);
+	await assertBranch(emptyBottom, localClone);
+	await expectBranchHeaderOrder(page, [emptyBottom, SINGLE_BRANCH_NAME]);
+	expect(localBranches(localClone)).not.toContain("empty-top");
+});
+
+test("can remove an empty branch from the middle of a three-branch stack", async ({
+	page,
+	gitbutler,
+}) => {
+	const localClone = await setupSingleBranchProject(gitbutler, page);
+
+	await createDependentBranch(page, "empty-top");
+	const emptyMiddle = await createGeneratedBranch(page, localClone, "empty-top", "below");
+	const emptyBottom = await createGeneratedBranch(page, localClone, emptyMiddle, "below");
+	await expectCurrentBranchChip(page, "empty-top");
+
+	await deleteBranchFromHeader(page, emptyMiddle);
+
+	// Removing a branch that isn't checked out relinks the order and leaves HEAD on the tip.
+	await expect(branchHeader(page, emptyMiddle)).toBeHidden();
+	await expectCurrentBranchChip(page, "empty-top");
+	await assertBranch("empty-top", localClone);
+	await expectBranchHeaderOrder(page, ["empty-top", emptyBottom, SINGLE_BRANCH_NAME]);
+	expect(localBranches(localClone)).not.toContain(emptyMiddle);
+});
+
+test("can remove an empty branch from the bottom of a two-branch stack", async ({
+	page,
+	gitbutler,
+}) => {
+	const localClone = await setupSingleBranchProject(gitbutler, page);
+
+	await createDependentBranch(page, "empty-top");
+	const emptyBottom = await createGeneratedBranch(page, localClone, "empty-top", "below");
+	await expectCurrentBranchChip(page, "empty-top");
+
+	await deleteBranchFromHeader(page, emptyBottom);
+
+	await expect(branchHeader(page, emptyBottom)).toBeHidden();
+	await expectCurrentBranchChip(page, "empty-top");
+	await assertBranch("empty-top", localClone);
+	await expectBranchHeaderOrder(page, ["empty-top", SINGLE_BRANCH_NAME]);
+	expect(localBranches(localClone)).not.toContain(emptyBottom);
+});
+
 test("can edit a commit message on the checked-out branch", async ({ page, gitbutler }) => {
 	const localClone = await setupSingleBranchProject(gitbutler, page);
 
@@ -100,6 +317,72 @@ test("can edit a commit message on the checked-out branch", async ({ page, gitbu
 		localClone,
 	);
 });
+
+function git(pathToRepo: string, args: string[]): string {
+	return execFileSync("git", args, {
+		cwd: pathToRepo,
+		encoding: "utf8",
+	}).trim();
+}
+
+function localBranches(pathToRepo: string): string[] {
+	return git(pathToRepo, ["for-each-ref", "--format=%(refname:short)", "refs/heads"])
+		.split("\n")
+		.filter(Boolean);
+}
+
+async function createGeneratedBranch(
+	page: Page,
+	localClone: string,
+	anchorBranchName: string,
+	side: "above" | "below",
+): Promise<string> {
+	const before = new Set(localBranches(localClone));
+	await branchHeader(page, anchorBranchName).click({ button: "right" });
+	await waitForTestId(page, "branch-header-context-menu");
+	await page.getByRole("menuitem", { name: "Create branch" }).click();
+	await page.getByRole("button", { name: `Create branch ${side}` }).click();
+
+	await expect
+		.poll(
+			() => {
+				return localBranches(localClone).filter((name) => !before.has(name)).length;
+			},
+			{
+				message: `Expected one generated branch to be created ${side} ${anchorBranchName}`,
+				intervals: [100, 200, 500, 1000],
+			},
+		)
+		.toBe(1);
+	const branchName = localBranches(localClone).find((name) => !before.has(name))!;
+	await expect(branchHeader(page, branchName)).toBeVisible();
+	return branchName;
+}
+
+async function deleteBranchFromHeader(page: Page, branchName: string): Promise<void> {
+	await branchHeader(page, branchName).click({ button: "right" });
+	await clickByTestId(page, "branch-header-context-menu-delete");
+	const modal = await waitForTestId(page, "branch-header-delete-modal");
+	await clickByTestId(page, "branch-header-delete-modal-action-button");
+	await expect(modal).toBeHidden();
+}
+
+async function expectBranchHeaderOrder(page: Page, expectedBranchNames: string[]): Promise<void> {
+	await expect
+		.poll(
+			async () =>
+				await page
+					.locator('[data-testid="branch-header"]')
+					.evaluateAll((headers) =>
+						headers.map((header) => header.getAttribute("data-testid-branch-header")),
+					),
+			{
+				message: `Expected branch header order ${JSON.stringify(expectedBranchNames)}`,
+				intervals: [100, 200, 500, 1000],
+			},
+		)
+		.toEqual(expectedBranchNames);
+}
 
 test("can amend file changes into an existing commit", async ({ page, gitbutler }) => {
 	const localClone = await setupSingleBranchProject(gitbutler, page);
@@ -236,10 +519,3 @@ test("rebuilds managed workspace around checked-out and applied branches", async
 	expect(git(localClone, ["rev-parse", "A"])).toBe(aTipBeforeApply);
 	await assertCleanWorktree(localClone);
 });
-
-function git(pathToRepo: string, args: string[]): string {
-	return execFileSync("git", args, {
-		cwd: pathToRepo,
-		encoding: "utf8",
-	}).trim();
-}

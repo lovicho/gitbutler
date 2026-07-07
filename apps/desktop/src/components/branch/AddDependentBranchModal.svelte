@@ -2,6 +2,7 @@
 	export type AddDependentBranchModalProps = {
 		projectId: string;
 		stackId: string;
+		branchReference: string;
 	};
 </script>
 
@@ -11,10 +12,10 @@
 	import { inject } from "@gitbutler/core/context";
 	import { Button, Modal, TestId } from "@gitbutler/ui";
 
-	const { projectId, stackId }: AddDependentBranchModalProps = $props();
+	const { projectId, branchReference }: AddDependentBranchModalProps = $props();
 
 	const stackService = inject(STACK_SERVICE);
-	const [createNewBranch, branchCreation] = stackService.newBranch;
+	const [createBranch, branchCreation] = stackService.branchCreate;
 
 	let modal = $state<Modal>();
 	let branchName = $state<string>();
@@ -24,12 +25,16 @@
 	async function handleAddDependentBranch(close: () => void) {
 		if (!normalizedRefName) return;
 
-		await createNewBranch({
+		const newRef = `refs/heads/${normalizedRefName}`;
+		await createBranch({
 			projectId,
-			stackId,
-			request: {
-				targetPatch: undefined,
-				name: normalizedRefName,
+			newRef,
+			placement: {
+				type: "dependent",
+				subject: {
+					relativeTo: { type: "reference", subject: branchReference },
+					side: "above",
+				},
 			},
 		});
 

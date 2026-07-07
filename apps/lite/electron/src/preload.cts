@@ -39,6 +39,7 @@ import type {
 	ReviewMergeStatus,
 	ReviewTemplateInfo,
 } from "@gitbutler/but-sdk";
+import type { GUISettings } from "./settings";
 
 /**
  * The map of subscription IDs to channels and callbacks.
@@ -265,6 +266,9 @@ const api: LiteElectronApi = {
 		watcherListenerBySubscription.clear();
 		return ipcRenderer.invoke("workspace:watcher-stop-all") as Promise<number>;
 	},
+	readGUISettings: () => ipcRenderer.invoke("lite:gui-settings:read") as Promise<GUISettings>,
+	writeGUISettings: (settings: GUISettings) =>
+		ipcRenderer.invoke("lite:gui-settings:write", settings) as Promise<void>,
 	platform: process.platform,
 };
 

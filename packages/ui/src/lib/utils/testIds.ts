@@ -7,6 +7,7 @@ export enum TestId {
 	BranchHeader = "branch-header",
 	BranchHeaderContextMenu = "branch-header-context-menu",
 	BranchHeaderContextMenu_AddDependentBranch = "branch-header-context-menu-add-dependent-branch",
+	BranchHeaderAddDependentBranchButton = "branch-header-add-dependent-branch-button",
 	BranchHeaderContextMenu_OpenInBrowser = "branch-header-context-menu-open-in-browser",
 	BranchHeaderContextMenu_CopyBranchName = "branch-header-context-menu-copy-branch-name",
 	BranchHeaderContextMenu_AddRemoveDescription = "branch-header-context-menu-add-remove-description",

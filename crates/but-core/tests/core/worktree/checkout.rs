@@ -1,5 +1,5 @@
 use bstr::ByteSlice;
-use but_core::worktree::{checkout, safe_checkout};
+use but_core::worktree::{checkout, safe_checkout_from_head};
 use but_testsupport::{
     CommandExt, git_at_dir, git_status, open_repo, read_only_in_memory_scenario,
     visualize_commit_graph_all, visualize_disk_tree_skip_dot_git, visualize_index,
@@ -18,7 +18,7 @@ fn update_unborn_head() -> anyhow::Result<()> {
     let empty_tree = repo.empty_tree().id;
     let head_commit = repo.new_commit("init", empty_tree, None::<gix::ObjectId>)?;
 
-    let out = safe_checkout(empty_tree, head_commit.id, &repo, Default::default())?;
+    let out = safe_checkout_from_head(head_commit.id, &repo, Default::default())?;
     insta::assert_debug_snapshot!(out, @r#"
     Outcome {
         snapshot_tree: None,
@@ -52,9 +52,8 @@ fn no_op_trees_never_touch_worktree() -> anyhow::Result<()> {
     ");
 
     let a_commit = repo.head_commit()?;
-    let a_tree = a_commit.tree_id()?.detach();
 
-    let out = safe_checkout(a_tree, a_commit.id, &repo, Default::default())?;
+    let out = safe_checkout_from_head(a_commit.id, &repo, Default::default())?;
     insta::assert_debug_snapshot!(out, @r#"
     Outcome {
         snapshot_tree: None,
@@ -85,18 +84,16 @@ fn no_op_trees_never_touch_worktree() -> anyhow::Result<()> {
 #[test]
 fn conflicted_commits_cannot_be_checked_out() -> anyhow::Result<()> {
     let repo = crate::commit::conflict_repo("normal-and-artificial")?;
-    let normal = repo.rev_parse_single("normal")?.detach();
     let conflicted = repo.rev_parse_single("conflicted")?.detach();
 
-    let err = safe_checkout(normal, conflicted, &repo, Default::default())
+    let err = safe_checkout_from_head(conflicted, &repo, Default::default())
         .expect_err("safe_checkout must reject GitButler-conflicted commits");
     assert_eq!(
         err.to_string(),
         "Refusing to check out conflicted commit 84503317a1e1464381fcff65ece14bc1f4315b7c",
     );
 
-    safe_checkout(
-        repo.head_id()?.detach(),
+    safe_checkout_from_head(
         conflicted,
         &repo,
         checkout::Options {
@@ -127,7 +124,7 @@ fn pure_deletion_checkout_does_not_restore_unrelated_worktree_deletions() -> any
     120000:c4c364c link
     ");
 
-    let (head_commit, new_commit) = build_commit(
+    let new_commit = build_commit(
         &repo,
         |tree| {
             tree.remove("executable")?;
@@ -136,7 +133,7 @@ fn pure_deletion_checkout_does_not_restore_unrelated_worktree_deletions() -> any
         "delete executable",
     )?;
 
-    let out = safe_checkout(head_commit.id, new_commit.id, &repo, Default::default())?;
+    let out = safe_checkout_from_head(new_commit.id, &repo, Default::default())?;
     insta::assert_debug_snapshot!(out, @r#"
     Outcome {
         snapshot_tree: None,
@@ -171,17 +168,12 @@ fn pure_deletion_checkout_keeps_non_intersecting_worktree_deletion() -> anyhow::
     editor.upsert("c.txt", EntryKind::Blob, blob_id)?;
     let initial_tree_id = editor.write()?.detach();
     let initial_commit = repo.new_commit("init", initial_tree_id, None::<gix::ObjectId>)?;
-    safe_checkout(
-        repo.empty_tree().id,
-        initial_commit.id,
-        &repo,
-        Default::default(),
-    )?;
+    safe_checkout_from_head(initial_commit.id, &repo, Default::default())?;
 
     std::fs::remove_file(repo.workdir_path("b.txt").expect("non-bare repository"))?;
     insta::assert_snapshot!(git_status(&repo)?, @" D b.txt");
 
-    let (head_commit, new_commit) = build_commit(
+    let new_commit = build_commit(
         &repo,
         |tree| {
             tree.remove("a.txt")?;
@@ -189,7 +181,7 @@ fn pure_deletion_checkout_keeps_non_intersecting_worktree_deletion() -> anyhow::
         },
         "delete a.txt",
     )?;
-    let out = safe_checkout(head_commit.id, new_commit.id, &repo, Default::default())?;
+    let out = safe_checkout_from_head(new_commit.id, &repo, Default::default())?;
     assert!(out.snapshot_tree.is_none());
     assert_eq!(out.num_deleted_files, 1);
     assert_eq!(out.num_added_or_updated_files, 0);
@@ -230,12 +222,7 @@ fn pure_deletion_checkout_keeps_empty_worktree_root() -> anyhow::Result<()> {
     editor.upsert("nested/only.txt", EntryKind::Blob, blob_id)?;
     let initial_tree_id = editor.write()?.detach();
     let initial_commit = repo.new_commit("init", initial_tree_id, None::<gix::ObjectId>)?;
-    safe_checkout(
-        repo.empty_tree().id,
-        initial_commit.id,
-        &repo,
-        Default::default(),
-    )?;
+    safe_checkout_from_head(initial_commit.id, &repo, Default::default())?;
 
     insta::assert_snapshot!(visualize_disk_tree_skip_dot_git(&worktree)?, @r"
     .
@@ -243,7 +230,7 @@ fn pure_deletion_checkout_keeps_empty_worktree_root() -> anyhow::Result<()> {
         └── only.txt:100644
     ");
 
-    let (head_commit, new_commit) = build_commit(
+    let new_commit = build_commit(
         &repo,
         |tree| {
             tree.remove("nested/only.txt")?;
@@ -251,7 +238,7 @@ fn pure_deletion_checkout_keeps_empty_worktree_root() -> anyhow::Result<()> {
         },
         "delete only file",
     )?;
-    let out = safe_checkout(head_commit.id, new_commit.id, &repo, Default::default())?;
+    let out = safe_checkout_from_head(new_commit.id, &repo, Default::default())?;
     assert_eq!(out.num_deleted_files, 1);
     assert_eq!(out.num_added_or_updated_files, 0);
     assert!(
@@ -281,7 +268,7 @@ fn worktree_and_index_deletions_are_ignored_in_snapshots() -> anyhow::Result<()>
     ");
 
     // Turn deleted files into directory - these won't conflict no matter what they were in the index.
-    let (head_commit, new_commit) = build_commit(
+    let new_commit = build_commit(
         &repo,
         |tree| {
             let empty_blob = repo.empty_blob();
@@ -295,7 +282,7 @@ fn worktree_and_index_deletions_are_ignored_in_snapshots() -> anyhow::Result<()>
         "turn changed file into a directory",
     )?;
 
-    let out = safe_checkout(head_commit.id, new_commit.id, &repo, Default::default())?;
+    let out = safe_checkout_from_head(new_commit.id, &repo, Default::default())?;
     insta::assert_debug_snapshot!(out, @r#"
     Outcome {
         snapshot_tree: None,
@@ -347,7 +334,7 @@ fn worktree_changes_do_not_cause_conflict_markers_but_fail() -> anyhow::Result<(
     insta::assert_debug_snapshot!(actual, @r#""1\n2\n3\n4\n5\n6-7\n8\n9\nten\neleven\n12\n20\n21\n22\n15\n16\n""#);
 
     // In the target tree, make a surgical edit (one changed line) so the changes should still apply cleany
-    let (head_commit, new_commit) = build_commit(
+    let new_commit = build_commit(
         &repo,
         |tree| {
             let blob_id = repo.write_blob(
@@ -374,7 +361,7 @@ this will cause a conflict
         "edited 'file' (add single line)",
     )?;
 
-    let err = safe_checkout(head_commit.id, new_commit.id, &repo, Default::default()).unwrap_err();
+    let err = safe_checkout_from_head(new_commit.id, &repo, Default::default()).unwrap_err();
     assert_eq!(
         err.to_string(),
         "Uncommitted files would be overwritten by checkout: \"file\"",
@@ -441,7 +428,7 @@ fn worktree_snapshot_reapplies_with_hunk_granularity() -> anyhow::Result<()> {
     ");
 
     // In the target tree, make a surgical edit (one changed line) so the changes should still apply cleany
-    let (head_commit, new_commit) = build_commit(
+    let new_commit = build_commit(
         &repo,
         |tree| {
             let blob_id = repo.write_blob(
@@ -468,7 +455,7 @@ inserted in new tree
         "edited 'file' (add single line)",
     )?;
 
-    let out = safe_checkout(head_commit.id, new_commit.id, &repo, Default::default())
+    let out = safe_checkout_from_head(new_commit.id, &repo, Default::default())
         .expect("no error as we keep the snapshot for later");
     // File is still changed, after all we re-applied the worktree changes.
     let actual = std::fs::read_to_string(&file_path)?;
@@ -550,7 +537,7 @@ fn worktree_snapshot_of_legacy_crlf_blob_merges_cleanly_with_independent_target_
         "the worktree edit must be visible before checkout"
     );
 
-    let (head_commit, new_commit) = build_commit(
+    let new_commit = build_commit(
         &repo,
         |tree| {
             // This commit also has the right line endings (CRLF)
@@ -564,7 +551,7 @@ fn worktree_snapshot_of_legacy_crlf_blob_merges_cleanly_with_independent_target_
     // A lot happens here, but the significant part is that the overlapping worktree changes are cherry-picked
     // onto the `new_commit` to be transferred by merge. That snapshot now normalizes line endings correctly,
     // so the independent edits merge cleanly instead of being treated as a whole-file conflict.
-    let out = safe_checkout(head_commit.id, new_commit.id, &repo, Default::default())?;
+    let out = safe_checkout_from_head(new_commit.id, &repo, Default::default())?;
     insta::assert_debug_snapshot!(out, @r#"
     Outcome {
         snapshot_tree: Some(
@@ -612,7 +599,7 @@ fn checkout_handles_directory_and_file_replacements() -> anyhow::Result<()> {
     insta::assert_snapshot!(git_status(&repo)?, @"");
 
     // Turn file into directory
-    let (head_commit, new_commit) = build_commit(
+    let new_commit = build_commit(
         &repo,
         |tree| {
             let empty_blob = repo.empty_blob();
@@ -623,7 +610,7 @@ fn checkout_handles_directory_and_file_replacements() -> anyhow::Result<()> {
         },
         "turn file into a directory",
     )?;
-    let out = safe_checkout(head_commit.id, new_commit.id, &repo, Default::default())?;
+    let out = safe_checkout_from_head(new_commit.id, &repo, Default::default())?;
     insta::assert_debug_snapshot!(out, @r#"
     Outcome {
         snapshot_tree: None,
@@ -649,7 +636,7 @@ fn checkout_handles_directory_and_file_replacements() -> anyhow::Result<()> {
     ");
     insta::assert_snapshot!(git_status(&repo)?, @"");
 
-    let (head_commit, new_commit) = build_commit(
+    let new_commit = build_commit(
         &repo,
         |tree| {
             let empty_blob = repo.empty_blob();
@@ -658,7 +645,7 @@ fn checkout_handles_directory_and_file_replacements() -> anyhow::Result<()> {
         },
         "turn a directory back into a file",
     )?;
-    let out = safe_checkout(head_commit.id, new_commit.id, &repo, Default::default())?;
+    let out = safe_checkout_from_head(new_commit.id, &repo, Default::default())?;
     insta::assert_debug_snapshot!(out, @r#"
     Outcome {
         snapshot_tree: None,
@@ -702,7 +689,7 @@ fn unrelated_additions_do_not_affect_worktree_changes() -> anyhow::Result<()> {
     ?? link-renamed
     ");
 
-    let (head_commit, new_commit) = build_commit(
+    let new_commit = build_commit(
         &repo,
         |tree| {
             tree.upsert("unrelated", EntryKind::Blob, repo.empty_blob().id)?;
@@ -710,7 +697,7 @@ fn unrelated_additions_do_not_affect_worktree_changes() -> anyhow::Result<()> {
         },
         "add unrelated file",
     )?;
-    let out = safe_checkout(head_commit.id, new_commit.id, &repo, Default::default())?;
+    let out = safe_checkout_from_head(new_commit.id, &repo, Default::default())?;
     insta::assert_debug_snapshot!(out, @r#"
     Outcome {
         snapshot_tree: None,
@@ -754,7 +741,7 @@ fn partial_commit_with_adjacent_lines_conflicts_on_checkout() -> anyhow::Result<
     assert_eq!(worktree_content, "line1\nadded-a\nadded-b\nline2\nline3\n");
 
     // Simulate a partial commit: the new tree has only one of the two added lines.
-    let (head_commit, new_commit) = build_commit(
+    let new_commit = build_commit(
         &repo,
         |tree| {
             let blob_id = repo.write_blob(b"line1\nadded-a\nline2\nline3\n")?;
@@ -768,7 +755,7 @@ fn partial_commit_with_adjacent_lines_conflicts_on_checkout() -> anyhow::Result<
     // (added-a) because both add at the same position. Without a merge-base
     // override that includes the consumed changes, the 3-way merge treats this
     // as a conflict.
-    let err = safe_checkout(head_commit.id, new_commit.id, &repo, Default::default()).unwrap_err();
+    let err = safe_checkout_from_head(new_commit.id, &repo, Default::default()).unwrap_err();
     assert!(
         err.to_string()
             .contains("Uncommitted files would be overwritten"),
@@ -789,7 +776,7 @@ fn partial_commit_with_deletion_plus_insertion_conflicts_on_checkout() -> anyhow
     );
 
     // Commit only the deletion of old-line, not the insertion of new-line.
-    let (head_commit, new_commit) = build_commit(
+    let new_commit = build_commit(
         &repo,
         |tree| {
             let blob_id = repo.write_blob(b"line1\nline3\n")?;
@@ -802,7 +789,7 @@ fn partial_commit_with_deletion_plus_insertion_conflicts_on_checkout() -> anyhow
     // The three-way merge sees ours deleting old-line and theirs replacing it
     // with new-line — both modify the same region. Same class of bug as the
     // adjacent-line case: commit_create avoids this by skipping checkout entirely.
-    let err = safe_checkout(head_commit.id, new_commit.id, &repo, Default::default()).unwrap_err();
+    let err = safe_checkout_from_head(new_commit.id, &repo, Default::default()).unwrap_err();
     assert!(
         err.to_string()
             .contains("Uncommitted files would be overwritten"),

@@ -829,6 +829,11 @@ pub fn fetch_from_remotes(ctx: &Context, action: Option<String>) -> Result<BaseB
     let mut meta = ctx.legacy_meta()?;
     meta.garbage_collect(&*ctx.repo.get()?, &project_meta)?;
 
+    // Fetch is our out-of-band pruning point for ad-hoc branch-order metadata: reads are
+    // best-effort and never prune (see `Context::meta`), so we reconcile the DB against the
+    // current set of local refs here, alongside the legacy metadata garbage collection.
+    prune_missing_branch_stack_order(ctx)?;
+
     // Updates the project controller with the last fetched timestamp
     //
     // TODO: This cross dependency likely indicates that last_fetched is stored in the wrong place - value is coupled with virtual branches state
@@ -846,6 +851,27 @@ pub fn fetch_from_remotes(ctx: &Context, action: Option<String>) -> Result<BaseB
     let base_branch =
         gitbutler_branch_actions::base::get_base_branch_data(ctx, guard.read_permission())?;
     Ok(base_branch)
+}
+
+/// Reconcile ad-hoc branch-order metadata against the current set of local branch refs,
+/// dropping entries for branches that no longer exist.
+///
+/// Reads of branch stack order are best-effort and never prune (see [`Context::meta`]); this is
+/// the out-of-band cleanup that keeps the metadata from accumulating stale entries. It runs on
+/// fetch for now — local-only workflows that never fetch won't be pruned until we let mutations
+/// clean up after themselves.
+fn prune_missing_branch_stack_order(ctx: &Context) -> Result<()> {
+    let local_branch_refs = {
+        let repo = ctx.repo.get()?;
+        repo.references()?
+            .prefixed("refs/heads/")?
+            .filter_map(std::result::Result::ok)
+            .map(|reference| reference.name().to_owned())
+            .collect::<Vec<_>>()
+    };
+    let mut meta = ctx.meta()?;
+    meta.remove_missing_branch_stack_order_references(&local_branch_refs)?;
+    Ok(())
 }
 
 /// Compute upstream integration statuses, optionally scoped to `target_commit_id`.

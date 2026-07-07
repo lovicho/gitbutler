@@ -1,4 +1,4 @@
-/// Options for use in [super::safe_checkout()].
+/// Options for use in [super::safe_checkout_from_head()].
 #[derive(Default, Debug, Clone)]
 pub struct Options {
     /// If `true`, do not change `HEAD` to the new commit.
@@ -20,7 +20,7 @@ pub struct Options {
     pub allow_conflicted_commit_checkout: bool,
 }
 
-/// The successful outcome of [super::safe_checkout()] operation.
+/// The successful outcome of [super::safe_checkout_from_head()] operation.
 #[derive(Clone)]
 pub struct Outcome {
     /// The tree of the snapshot which stores the worktree changes that have been overwritten as part of the checkout,

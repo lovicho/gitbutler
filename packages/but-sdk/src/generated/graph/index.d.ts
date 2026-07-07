@@ -52,7 +52,7 @@ export declare function assignHunk(projectId: string, assignments: Array<HunkAss
  * Checks out an existing local branch and returns the resulting workspace state.
  *
  * This acquires exclusive worktree access from `ctx`, updates the worktree and
- * index through [`but_core::worktree::safe_checkout()`], then points `HEAD`
+ * index through [`but_core::worktree::safe_checkout_from_head()`], then points `HEAD`
  * symbolically at `branch`. The branch must be an existing full local branch
  * name under `refs/heads/`.
  */
@@ -72,8 +72,10 @@ export declare function branchCheckoutNew(projectId: string, name: string | null
  * Creates a new branch named `new_ref` at `placement`.
  *
  * This acquires exclusive worktree access from `ctx`, creates the branch,
- * and records an oplog snapshot on success. For lower-level implementation
- * details, see [`but_workspace::branch::create_reference()`].
+ * records an oplog snapshot on success, and in ad-hoc/single-branch mode
+ * checks out the new branch when it was created directly above the currently
+ * checked-out local branch. For lower-level implementation details, see
+ * [`but_workspace::branch::create_reference()`].
  */
 export declare function branchCreate(projectId: string, newRef: MaybeLossyFullNameRef, placement: BranchCreatePlacement): Promise<BranchCreateResult>
 
@@ -101,6 +103,21 @@ export declare function branchDiff(projectId: string, branch: string): Promise<T
  * workspace state for what to report.
  */
 export declare function branchLand(projectId: string, branch: string, noFf: boolean): Promise<BranchLandResult>
+
+/**
+ * Removes the local branch `ref_name` from the workspace, deleting its git
+ * reference along with its metadata (including its `branch_order` entry).
+ *
+ * This acquires exclusive worktree access from `ctx`, records an oplog snapshot
+ * on success, and returns the post-operation workspace view. In an
+ * ad-hoc/single-branch workspace it can also remove the currently checked-out
+ * reference: when that reference owns no commits and has another named
+ * reference underneath it, `HEAD` is first moved onto the reference below (the
+ * reverse of creating an empty branch above the checked-out one). For
+ * lower-level implementation details, see
+ * [`but_workspace::branch::remove_reference()`].
+ */
+export declare function branchRemove(projectId: string, refName: FullNameBytes): Promise<BranchRemoveResult>
 
 /** See [`changes_in_worktree_with_perm()`]. */
 export declare function changesInWorktree(projectId: string): Promise<WorktreeChanges>
@@ -257,6 +274,12 @@ export declare function commitUncommit(projectId: string, subjectCommitIds: Arra
  * [`commit_uncommit_changes_with_perm()`] for details.
  */
 export declare function commitUncommitChanges(projectId: string, commitId: string, changes: Array<DiffSpec>, assignTo: string | null, dryRun: boolean): Promise<MoveChangesResult>
+
+/**
+ * Uncommit specific changes from multiple commits and record an oplog
+ * snapshot on success.
+ */
+export declare function commitUncommitChangesFromCommits(projectId: string, sources: Array<UncommitChangesSource>, assignTo: string | null, dryRun: boolean): Promise<UncommitChangesFromCommitsResult>
 
 /**
  * Discard all worktree changes that match the specs in `worktree_changes`.
@@ -1050,6 +1073,12 @@ export type BranchReference = {
   fullNameBytes: Array<number>;
   /** The short version of `full_name_bytes` for display. */
   displayName: string;
+};
+
+/** JSON transport type for removing a branch. */
+export type BranchRemoveResult = {
+  /** Workspace state after removing the branch. */
+  workspace: WorkspaceState;
 };
 
 export type BranchStatus = {
@@ -2724,6 +2753,37 @@ export type UiSettings = {
    * New code should use `appUpdatesCheckIntervalSec` instead, which will control update checks for both CLI and GUI.
    */
   checkForUpdatesIntervalInSeconds: number;
+};
+
+/** A grouped source that could not be uncommitted. */
+export type UncommitChangesFailure = {
+  /** The commit whose changes failed to uncommit. */
+  commitId: string;
+  /** All changes requested for this commit. */
+  changes: Array<DiffSpec>;
+  /** Human-readable failure reason. */
+  error: string;
+};
+
+/** JSON transport type for uncommitting changes from multiple commits. */
+export type UncommitChangesFromCommitsResult = {
+  /** Workspace state after uncommitting successful sources. */
+  workspace: WorkspaceState;
+  /** Sources that could not be uncommitted. */
+  failures: Array<UncommitChangesFailure>;
+};
+
+/**
+ * A source entry for uncommitting changes from a commit.
+ *
+ * Multiple entries may target the same commit; the backend groups them by
+ * commit id before removing the changes.
+ */
+export type UncommitChangesSource = {
+  /** The commit to remove `changes` from. */
+  commitId: string;
+  /** The changes to remove from the commit. */
+  changes: Array<DiffSpec>;
 };
 
 /** JSON transport type for uncommitting one or more commits. */

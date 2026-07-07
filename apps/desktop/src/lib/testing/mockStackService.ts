@@ -111,7 +111,7 @@ export function getStackServiceMock() {
 		reactive(() => mockReduxFulfilled({})),
 	];
 	StackServiceMock.prototype.updateBranchName = [vi.fn(), reactive(() => mockReduxFulfilled({}))];
-	StackServiceMock.prototype.removeBranch = [vi.fn(), reactive(() => mockReduxFulfilled({}))];
+	StackServiceMock.prototype.branchRemove = [vi.fn(), reactive(() => mockReduxFulfilled({}))];
 	StackServiceMock.prototype.updateBranchDescription = [
 		vi.fn(),
 		reactive(() => mockReduxFulfilled({})),
