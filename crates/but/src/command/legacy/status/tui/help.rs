@@ -272,7 +272,7 @@ struct HelpItem {
     long_description: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum HelpMessage {
     Close,
     ScrollUp(usize),

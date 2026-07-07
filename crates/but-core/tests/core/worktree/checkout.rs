@@ -21,7 +21,6 @@ fn update_unborn_head() -> anyhow::Result<()> {
     let out = safe_checkout_from_head(head_commit.id, &repo, Default::default())?;
     insta::assert_debug_snapshot!(out, @r#"
     Outcome {
-        snapshot_tree: None,
         num_deleted_files: 0,
         num_added_or_updated_files: 0,
         head_update: "Update refs/heads/main to Some(Object(Sha1(31ec8eacfba4051fd673e4fe23c775e87896a463)))",
@@ -56,7 +55,6 @@ fn no_op_trees_never_touch_worktree() -> anyhow::Result<()> {
     let out = safe_checkout_from_head(a_commit.id, &repo, Default::default())?;
     insta::assert_debug_snapshot!(out, @r#"
     Outcome {
-        snapshot_tree: None,
         num_deleted_files: 0,
         num_added_or_updated_files: 0,
         head_update: "None",
@@ -136,7 +134,6 @@ fn pure_deletion_checkout_does_not_restore_unrelated_worktree_deletions() -> any
     let out = safe_checkout_from_head(new_commit.id, &repo, Default::default())?;
     insta::assert_debug_snapshot!(out, @r#"
     Outcome {
-        snapshot_tree: None,
         num_deleted_files: 1,
         num_added_or_updated_files: 0,
         head_update: "Update refs/heads/main to Some(Object(Sha1(5eedd314adfb480212989a303c7651717062a9b2)))",
@@ -182,7 +179,6 @@ fn pure_deletion_checkout_keeps_non_intersecting_worktree_deletion() -> anyhow::
         "delete a.txt",
     )?;
     let out = safe_checkout_from_head(new_commit.id, &repo, Default::default())?;
-    assert!(out.snapshot_tree.is_none());
     assert_eq!(out.num_deleted_files, 1);
     assert_eq!(out.num_added_or_updated_files, 0);
     assert!(out.head_update.is_some());
@@ -285,7 +281,6 @@ fn worktree_and_index_deletions_are_ignored_in_snapshots() -> anyhow::Result<()>
     let out = safe_checkout_from_head(new_commit.id, &repo, Default::default())?;
     insta::assert_debug_snapshot!(out, @r#"
     Outcome {
-        snapshot_tree: None,
         num_deleted_files: 1,
         num_added_or_updated_files: 1,
         head_update: "Update refs/heads/main to Some(Object(Sha1(24f802a1250d2f84e1f49094e3b8bb1e5c0d29ad)))",
@@ -481,9 +476,6 @@ inserted in new tree
 
     insta::assert_debug_snapshot!(out, @r#"
     Outcome {
-        snapshot_tree: Some(
-            Sha1(76de10879a78339980d6a33ecfd6f2f711960106),
-        ),
         num_deleted_files: 0,
         num_added_or_updated_files: 1,
         head_update: "Update refs/heads/main to Some(Object(Sha1(89b113aeae66a3cb1116bb23a195422edbd6af27)))",
@@ -554,9 +546,6 @@ fn worktree_snapshot_of_legacy_crlf_blob_merges_cleanly_with_independent_target_
     let out = safe_checkout_from_head(new_commit.id, &repo, Default::default())?;
     insta::assert_debug_snapshot!(out, @r#"
     Outcome {
-        snapshot_tree: Some(
-            Sha1(77d39e5c3dae5dde723f5be3c45e3525ef424447),
-        ),
         num_deleted_files: 0,
         num_added_or_updated_files: 1,
         head_update: "Update refs/heads/main to Some(Object(Sha1(a530b145a2513ba5b2a4418bbb74920d3967f8fb)))",
@@ -613,7 +602,6 @@ fn checkout_handles_directory_and_file_replacements() -> anyhow::Result<()> {
     let out = safe_checkout_from_head(new_commit.id, &repo, Default::default())?;
     insta::assert_debug_snapshot!(out, @r#"
     Outcome {
-        snapshot_tree: None,
         num_deleted_files: 1,
         num_added_or_updated_files: 3,
         head_update: "Update refs/heads/merge to Some(Object(Sha1(df178e3012ac0862407185ae7dd8d634a6cde677)))",
@@ -648,7 +636,6 @@ fn checkout_handles_directory_and_file_replacements() -> anyhow::Result<()> {
     let out = safe_checkout_from_head(new_commit.id, &repo, Default::default())?;
     insta::assert_debug_snapshot!(out, @r#"
     Outcome {
-        snapshot_tree: None,
         num_deleted_files: 3,
         num_added_or_updated_files: 1,
         head_update: "Update refs/heads/merge to Some(Object(Sha1(94cc54fa25411ad51e319a9895d031d8da97b7ab)))",
@@ -700,7 +687,6 @@ fn unrelated_additions_do_not_affect_worktree_changes() -> anyhow::Result<()> {
     let out = safe_checkout_from_head(new_commit.id, &repo, Default::default())?;
     insta::assert_debug_snapshot!(out, @r#"
     Outcome {
-        snapshot_tree: None,
         num_deleted_files: 0,
         num_added_or_updated_files: 1,
         head_update: "Update refs/heads/main to Some(Object(Sha1(7add6cadcf636e5b3a6c15c75e82abbec97d6eef)))",

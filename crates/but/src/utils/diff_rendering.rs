@@ -77,17 +77,29 @@ impl IdGen<'_> {
 pub trait DiffLineWriter {
     fn write(&mut self, line: DetailsLine) -> anyhow::Result<()>;
 
-    fn write_selectable_text(&mut self, id: SectionId, line: Line<'static>) -> anyhow::Result<()> {
+    fn write_selectable_text(
+        &mut self,
+        id: SectionId,
+        cli_id: Option<Arc<CliId>>,
+        line: Line<'static>,
+    ) -> anyhow::Result<()> {
         self.write(DetailsLine::Text {
             id: Some(id),
+            cli_id,
             line,
             skip_when_copying_hunk: false,
         })
     }
 
-    fn write_hunk_header(&mut self, id: SectionId, line: Line<'static>) -> anyhow::Result<()> {
+    fn write_hunk_header(
+        &mut self,
+        id: SectionId,
+        cli_id: Option<Arc<CliId>>,
+        line: Line<'static>,
+    ) -> anyhow::Result<()> {
         self.write(DetailsLine::Text {
             id: Some(id),
+            cli_id,
             line,
             skip_when_copying_hunk: true,
         })
@@ -97,13 +109,18 @@ pub trait DiffLineWriter {
     fn write_non_selectable_text(&mut self, line: Line<'static>) -> anyhow::Result<()> {
         self.write(DetailsLine::Text {
             id: None,
+            cli_id: None,
             line,
             skip_when_copying_hunk: false,
         })
     }
 
-    fn write_empty_line(&mut self, id: SectionId) -> anyhow::Result<()> {
-        self.write_selectable_text(id, " ".into())
+    fn write_empty_line(
+        &mut self,
+        id: SectionId,
+        cli_id: Option<Arc<CliId>>,
+    ) -> anyhow::Result<()> {
+        self.write_selectable_text(id, cli_id, " ".into())
     }
 
     fn write_section_separator(&mut self) -> anyhow::Result<()> {
@@ -117,6 +134,7 @@ pub trait DiffLineWriter {
     fn write_code(
         &mut self,
         id: SectionId,
+        cli_id: Option<Arc<CliId>>,
         line_numbers: CodeLineNumbers,
         line_start_end: (usize, usize),
         diff: Arc<BString>,
@@ -124,7 +142,8 @@ pub trait DiffLineWriter {
     ) -> anyhow::Result<()> {
         self.write(DetailsLine::Code(DetailsCodeLine {
             id,
-            highlighted_line: RefCell::new(None),
+            cli_id,
+            syntax_highlighted_line: RefCell::new(None),
             line_numbers,
             line_start_end,
             diff,
@@ -204,7 +223,9 @@ pub enum DetailsLine {
     Text {
         /// None if this line cannot be selected
         id: Option<SectionId>,
+        cli_id: Option<Arc<CliId>>,
         line: Line<'static>,
+        /// Exclude this UI-only text from the clipboard when copying the current hunk
         skip_when_copying_hunk: bool,
     },
     TextToWrap {
@@ -218,6 +239,7 @@ pub enum DetailsLine {
 #[derive(Debug, Clone)]
 pub struct DetailsCodeLine {
     pub id: SectionId,
+    pub cli_id: Option<Arc<CliId>>,
     pub line_numbers: CodeLineNumbers,
     // indexes into `diff` where the line starts and ends, including any line terminators
     pub line_start_end: (usize, usize),
@@ -229,7 +251,7 @@ pub struct DetailsCodeLine {
     // HACK: only when drawing this line to the screen do we syntax highlight it and cache the
     // result directly here. We dont have a mutable reference in `Details::render` so have to
     // cheat with a `RefCell`.
-    pub highlighted_line: RefCell<Option<Line<'static>>>,
+    pub syntax_highlighted_line: RefCell<Option<Line<'static>>>,
 }
 
 impl DetailsCodeLine {
@@ -240,14 +262,14 @@ impl DetailsCodeLine {
         theme: &'static Theme,
         strings: &mut SharedStrings,
     ) {
-        if self.highlighted_line.borrow().is_some() {
+        if self.syntax_highlighted_line.borrow().is_some() {
             return;
         }
 
         self.with_line_from_diff(|line| {
             let bg = self.line_numbers.kind.bg(theme);
             let line_numbers = self.line_numbers.spans(strings, theme);
-            *self.highlighted_line.borrow_mut() =
+            *self.syntax_highlighted_line.borrow_mut() =
                 Some(Line::from_iter(line_numbers.into_iter().chain(
                     syntax_highlight(line, bg, highlight_lines, syntax_set),
                 )));
@@ -411,6 +433,7 @@ pub fn render_commit(
     if !options.skip_commit_header {
         out.write_selectable_text(
             header_id,
+            None,
             Line::from_iter([
                 Span::raw(format!("{:<11}", "Commit ID:")),
                 Span::styled(commit.to_hex().to_string(), theme.commit_id),
@@ -418,6 +441,7 @@ pub fn render_commit(
         )?;
         out.write_selectable_text(
             header_id,
+            None,
             Line::from_iter([
                 Span::raw(format!("{:<11}", "Change ID:")),
                 Span::styled(
@@ -428,6 +452,7 @@ pub fn render_commit(
         )?;
         out.write_selectable_text(
             header_id,
+            None,
             Line::from_iter(
                 once(Span::raw(format!("{:<11}", "Author:")))
                     .chain(render_signature(&commit_details.commit.author, theme)),
@@ -435,24 +460,26 @@ pub fn render_commit(
         )?;
         out.write_selectable_text(
             header_id,
+            None,
             Line::from_iter(
                 once(Span::raw(format!("{:<11}", "Committer:")))
                     .chain(render_signature(&commit_details.commit.committer, theme)),
             ),
         )?;
 
-        out.write_empty_line(header_id)?;
+        out.write_empty_line(header_id, None)?;
 
         let message = commit_details.commit.message.to_string();
         if message.is_empty() {
             out.write_selectable_text(
                 header_id,
+                None,
                 Line::from("(no commit message)").style(theme.hint),
             )?;
         } else {
             out.write_text_to_wrap(header_id, message)?;
         }
-        out.write_empty_line(header_id)?;
+        out.write_empty_line(header_id, None)?;
     }
 
     let tree_changes = commit_details
@@ -466,7 +493,7 @@ pub fn render_commit(
     if !options.skip_line_stats {
         let mut line_stats = LineStats::default();
         compute_line_stats_from_tree_changes(&tree_changes, &mut line_stats);
-        out.write_selectable_text(header_id, render_line_stats(line_stats))?;
+        out.write_selectable_text(header_id, None, render_line_stats(line_stats))?;
         out.write_section_separator()?;
     }
 
@@ -492,7 +519,11 @@ pub fn render_branch(
     if !options.skip_line_stats {
         let mut line_stats = LineStats::default();
         compute_line_stats_from_tree_changes(&tree_changes, &mut line_stats);
-        out.write_selectable_text(id_gen.new_id("line_stats"), render_line_stats(line_stats))?;
+        out.write_selectable_text(
+            id_gen.new_id("line_stats"),
+            None,
+            render_line_stats(line_stats),
+        )?;
         out.write_section_separator()?;
     }
 
@@ -520,24 +551,25 @@ pub fn render_uncommitted(
         let line_stats = render_line_stats(compute_line_stats_from_uncommitted_hunks(
             &uncommitted_hunks,
         ));
-        out.write_selectable_text(id_gen.new_id("line_stats"), line_stats)?;
+        out.write_selectable_text(id_gen.new_id("line_stats"), None, line_stats)?;
         out.write_section_separator()?;
     }
 
-    for (pos, (raw_id, _cli_id, UncommittedHunk { hunk_assignment })) in
+    for (pos, (raw_id, cli_id, UncommittedHunk { hunk_assignment })) in
         uncommitted_hunks.into_iter().with_position()
     {
         let id = id_gen.new_id(raw_id);
 
         render_hunk_path_header(
             id,
+            Some(Arc::clone(&cli_id)),
             hunk_assignment.path_bytes.as_ref(),
             Some(ShortIdOrTreeStatus::ShortId(raw_id)),
             out,
             theme,
         )?;
 
-        render_hunk_assignment(id, hunk_assignment, theme, out)?;
+        render_hunk_assignment(id, Some(Arc::clone(&cli_id)), hunk_assignment, theme, out)?;
 
         if pos.needs_padding_below() {
             out.write_section_separator()?;
@@ -568,24 +600,25 @@ pub fn render_uncommitted_hunk(
         let line_stats = render_line_stats(compute_line_stats_from_uncommitted_hunks(
             &uncommitted_hunks,
         ));
-        out.write_selectable_text(id_gen.new_id("line_stats"), line_stats)?;
+        out.write_selectable_text(id_gen.new_id("line_stats"), None, line_stats)?;
         out.write_section_separator()?;
     }
 
-    for (pos, (raw_id, _cli_id, UncommittedHunk { hunk_assignment })) in
+    for (pos, (raw_id, cli_id, UncommittedHunk { hunk_assignment })) in
         uncommitted_hunks.into_iter().with_position()
     {
         let id = id_gen.new_id(raw_id);
 
         render_hunk_path_header(
             id,
+            Some(Arc::clone(&cli_id)),
             hunk_assignment.path_bytes.as_ref(),
             Some(ShortIdOrTreeStatus::ShortId(raw_id)),
             out,
             theme,
         )?;
 
-        render_hunk_assignment(id, hunk_assignment, theme, out)?;
+        render_hunk_assignment(id, Some(Arc::clone(&cli_id)), hunk_assignment, theme, out)?;
 
         if pos.needs_padding_below() {
             out.write_section_separator()?;
@@ -624,7 +657,11 @@ pub fn render_committed_file(
     if !options.skip_line_stats {
         let mut line_stats = LineStats::default();
         compute_line_stats_from_tree_changes(&tree_changes, &mut line_stats);
-        out.write_selectable_text(id_gen.new_id("line_stats"), render_line_stats(line_stats))?;
+        out.write_selectable_text(
+            id_gen.new_id("line_stats"),
+            None,
+            render_line_stats(line_stats),
+        )?;
         out.write_section_separator()?;
     }
 
@@ -650,6 +687,7 @@ fn tree_changes_with_patches(
 
 fn render_hunk_assignment(
     id: SectionId,
+    cli_id: Option<Arc<CliId>>,
     hunk_assignment: &HunkAssignment,
     theme: &'static Theme,
     out: &mut dyn DiffLineWriter,
@@ -670,6 +708,7 @@ fn render_hunk_assignment(
 
             render_unified_patch(
                 id,
+                cli_id.as_ref().map(Arc::clone),
                 &path,
                 hunk,
                 is_result_of_binary_to_text_conversion,
@@ -677,11 +716,16 @@ fn render_hunk_assignment(
                 out,
             )?;
         } else {
-            out.write_selectable_text(id, "No diff available".into())?;
+            out.write_selectable_text(
+                id,
+                cli_id.as_ref().map(Arc::clone),
+                "No diff available".into(),
+            )?;
         }
     } else {
         out.write_selectable_text(
             id,
+            cli_id.as_ref().map(Arc::clone),
             "No diff available - file is either empty, binary, or too large".into(),
         )?;
     }
@@ -738,6 +782,7 @@ fn render_tree_changes(
                     if std::mem::take(&mut first_hunk) {
                         render_hunk_path_header(
                             hunk_id,
+                            None,
                             tree_change.path.as_ref(),
                             Some(ShortIdOrTreeStatus::TreeStatus(&tree_change.status)),
                             out,
@@ -747,6 +792,7 @@ fn render_tree_changes(
 
                     render_unified_patch(
                         hunk_id,
+                        None,
                         &path,
                         hunk,
                         is_result_of_binary_to_text_conversion,
@@ -764,13 +810,18 @@ fn render_tree_changes(
 
                 render_hunk_path_header(
                     patch_id,
+                    None,
                     tree_change.path.as_ref(),
                     Some(ShortIdOrTreeStatus::TreeStatus(&tree_change.status)),
                     out,
                     theme,
                 )?;
 
-                out.write_selectable_text(patch_id, "Binary file - no diff available".into())?;
+                out.write_selectable_text(
+                    patch_id,
+                    None,
+                    "Binary file - no diff available".into(),
+                )?;
 
                 if tree_change_pos.needs_padding_below() {
                     out.write_section_separator()?;
@@ -781,6 +832,7 @@ fn render_tree_changes(
 
                 render_hunk_path_header(
                     patch_id,
+                    None,
                     tree_change.path.as_ref(),
                     Some(ShortIdOrTreeStatus::TreeStatus(&tree_change.status)),
                     out,
@@ -789,6 +841,7 @@ fn render_tree_changes(
 
                 out.write_selectable_text(
                     patch_id,
+                    None,
                     format!("File too large ({size_in_bytes} bytes) - no diff available").into(),
                 )?;
 
@@ -828,6 +881,7 @@ enum ShortIdOrTreeStatus<'a> {
 
 fn render_hunk_path_header(
     id: SectionId,
+    cli_id: Option<Arc<CliId>>,
     path: &BStr,
     status: Option<ShortIdOrTreeStatus<'_>>,
     out: &mut dyn DiffLineWriter,
@@ -848,7 +902,7 @@ fn render_hunk_path_header(
             )
             .chain([Span::raw(path)]),
     );
-    bordered_line_top_right_bottom(id, path_line, out, theme)?;
+    bordered_line_top_right_bottom(id, cli_id, path_line, out, theme)?;
     Ok(())
 }
 
@@ -863,6 +917,7 @@ fn change_status(status: &TreeStatus, theme: &'static Theme) -> Span<'static> {
 
 fn bordered_line_top_right_bottom(
     id: SectionId,
+    cli_id: Option<Arc<CliId>>,
     mut text: Line<'static>,
     out: &mut dyn DiffLineWriter,
     theme: &'static Theme,
@@ -871,27 +926,30 @@ fn bordered_line_top_right_bottom(
 
     out.write_hunk_header(
         id,
+        cli_id.as_ref().map(Arc::clone),
         Line::from_iter(repeat_n("─", width_including_padding).chain(once("╮")))
             .style(theme.border),
     )?;
 
     text.spans
         .extend([Span::raw(" "), Span::styled("│", theme.border)]);
-    out.write_hunk_header(id, text)?;
+    out.write_hunk_header(id, cli_id.as_ref().map(Arc::clone), text)?;
 
     out.write_hunk_header(
         id,
+        cli_id.as_ref().map(Arc::clone),
         Line::from_iter(repeat_n("─", width_including_padding).chain(once("╯")))
             .style(theme.border),
     )?;
 
-    out.write_hunk_header(id, " ".into())?;
+    out.write_hunk_header(id, cli_id.as_ref().map(Arc::clone), " ".into())?;
 
     Ok(())
 }
 
 fn render_unified_patch(
     id: SectionId,
+    cli_id: Option<Arc<CliId>>,
     path: &Arc<BString>,
     hunk: DiffHunk,
     is_result_of_binary_to_text_conversion: bool,
@@ -907,17 +965,23 @@ fn render_unified_patch(
     } = hunk;
 
     if is_result_of_binary_to_text_conversion {
-        out.write_selectable_text(id, "(diff generated from binary-to-text conversion)".into())?;
+        out.write_selectable_text(
+            id,
+            cli_id.as_ref().map(Arc::clone),
+            "(diff generated from binary-to-text conversion)".into(),
+        )?;
     }
 
     if let Some(headers) = diff.lines().next() {
         out.write_selectable_text(
             id,
+            cli_id.as_ref().map(Arc::clone),
             Span::styled(headers.to_str_lossy().to_string(), theme.hint).into(),
         )?;
 
         out.write_hunk_header(
             id,
+            cli_id.as_ref().map(Arc::clone),
             Line::from_iter(repeat_n("─", headers.to_str_lossy().width())).style(theme.border),
         )?;
     }
@@ -979,6 +1043,7 @@ fn render_unified_patch(
 
         out.write_code(
             id,
+            cli_id.as_ref().map(Arc::clone),
             line_numbers,
             line_start_end,
             Arc::clone(&diff),

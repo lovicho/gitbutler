@@ -248,8 +248,8 @@ impl Cursor {
         }
 
         for line in lines.iter().take(self.0 + 1).rev() {
-            if let StatusOutputLineData::Branch { cli_id } = &line.data {
-                return Some(SelectAfterReload::CliId(Arc::clone(cli_id)));
+            if let StatusOutputLineData::Branch { cli_id, .. } = &line.data {
+                return Some(SelectAfterReload::CliId(Box::new((**cli_id).clone())));
             }
 
             if is_discard_commit_boundary(line) {
@@ -392,7 +392,7 @@ impl Cursor {
         self.move_up(lines, mode, show_files)
             .and_then(|cursor| cursor.selected_line(lines))
             .and_then(|line| line.data.cli_id().cloned())
-            .map(SelectAfterReload::CliId)
+            .map(|cli_id| SelectAfterReload::CliId(Box::new((*cli_id).clone())))
             .unwrap_or(SelectAfterReload::Uncommitted)
     }
 
@@ -647,7 +647,7 @@ fn select_after_reload_for_cli_id(cli_id: &Arc<CliId>) -> SelectAfterReload {
         | CliId::UncommittedHunkOrFile(..)
         | CliId::PathPrefix { .. }
         | CliId::Branch { .. }
-        | CliId::Stack { .. } => SelectAfterReload::CliId(Arc::clone(cli_id)),
+        | CliId::Stack { .. } => SelectAfterReload::CliId(Box::new((**cli_id).clone())),
     }
 }
 

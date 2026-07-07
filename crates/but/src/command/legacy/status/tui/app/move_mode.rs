@@ -149,7 +149,7 @@ impl TryFrom<CliId> for MoveSource {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum MoveMessage {
     Start,
     ToggleInsertSide,
@@ -186,7 +186,7 @@ impl App {
             }
         } else {
             match &selection.data {
-                StatusOutputLineData::Branch { cli_id }
+                StatusOutputLineData::Branch { cli_id, .. }
                 | StatusOutputLineData::Commit { cli_id, .. } => {
                     let Ok(source) = MoveSource::try_from(Arc::unwrap_or_clone(Arc::clone(cli_id)))
                     else {
@@ -261,7 +261,7 @@ impl App {
         }
 
         let target = match &selection.data {
-            StatusOutputLineData::Branch { cli_id } => {
+            StatusOutputLineData::Branch { cli_id, .. } => {
                 if let CliId::Branch { name, .. } = &**cli_id {
                     MoveTarget::Branch { name }
                 } else {

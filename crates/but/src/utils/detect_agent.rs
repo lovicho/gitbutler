@@ -23,6 +23,14 @@ pub enum Agent {
     Antigravity,
     Replit,
     V0,
+    Crush,
+    PulumiNeo,
+    Goose,
+    Amp,
+    Cline,
+    RooCode,
+    Trae,
+    TabnineCli,
     Unknown,
 }
 
@@ -43,6 +51,14 @@ impl Agent {
             Self::Antigravity => "antigravity",
             Self::Replit => "replit",
             Self::V0 => "v0",
+            Self::Crush => "crush",
+            Self::PulumiNeo => "pulumi-neo",
+            Self::Goose => "goose",
+            Self::Amp => "amp",
+            Self::Cline => "cline",
+            Self::RooCode => "roo-code",
+            Self::Trae => "trae",
+            Self::TabnineCli => "tabnine-cli",
             Self::Unknown => "unknown",
         }
     }
@@ -57,8 +73,9 @@ impl std::fmt::Display for Agent {
 /// Detect the current AI coding agent from environment variables.
 ///
 /// Returns `None` when the CLI appears to be invoked by a human.
-/// Checks the generic `AI_AGENT` variable first, then falls back to
-/// tool-specific variables in priority order.
+/// Checks the generic `AI_AGENT` variable first, then tool-specific
+/// variables in priority order, and finally the generic `AGENT` variable
+/// as a last-resort fallback.
 pub fn detect() -> Option<Agent> {
     detect_with(|key| env::var_os(key))
 }
@@ -69,7 +86,7 @@ fn detect_with(lookup: impl Fn(&str) -> Option<OsString>) -> Option<Agent> {
     let is_value =
         |var: &str, expected: &str| lookup(var).is_some_and(|v| v.to_str() == Some(expected));
 
-    // Generic AI_AGENT standard (see https://github.com/anthropics/agent-env).
+    // Generic `AI_AGENT` convention (as documented by `@vercel/detect-agent`).
     if let Some(agent) = parse_ai_agent_var(&lookup) {
         return Some(agent);
     }
@@ -112,37 +129,108 @@ fn detect_with(lookup: impl Fn(&str) -> Option<OsString>) -> Option<Agent> {
     if is_set("REPL_ID") {
         return Some(Agent::Replit);
     }
+    // Agents that set neither `AI_AGENT` nor `AGENT`, only a private marker.
+    // These markers are per-mode: Cline sets `CLINE_ACTIVE` from its VS Code
+    // extension (not its CLI); Roo Code sets `ROO_CLI_RUNTIME` from its headless
+    // CLI and `ROO_ACTIVE` from its extension. Presence is enough to identify
+    // the agent when it is set.
+    if is_set("CLINE_ACTIVE") {
+        return Some(Agent::Cline);
+    }
+    if is_set("ROO_CLI_RUNTIME") || is_set("ROO_ACTIVE") {
+        return Some(Agent::RooCode);
+    }
+    if is_set("TRAE_AI_SHELL_ID") {
+        return Some(Agent::Trae);
+    }
+    if is_set("TABNINE_CLI") {
+        return Some(Agent::TabnineCli);
+    }
+
+    // Shorter `AGENT` convention (Goose, Amp, Crush, Codex), checked last: it is
+    // a generic variable name and can be stale or inherited from a parent shell,
+    // so a fresh tool-specific marker above should win over it.
+    if let Some(agent) = parse_agent_var(&lookup) {
+        return Some(agent);
+    }
 
     None
 }
 
 /// Parse the generic `AI_AGENT` env var into an agent detection.
+///
+/// A non-empty value we don't recognize still resolves to `Agent::Unknown`:
+/// setting `AI_AGENT` is an explicit "an agent is driving this" signal, so we
+/// keep it even when we can't name the agent.
 fn parse_ai_agent_var(lookup: &impl Fn(&str) -> Option<OsString>) -> Option<Agent> {
-    let val = lookup("AI_AGENT")?;
-    let val = val.to_string_lossy();
-    let val = val.trim().to_ascii_lowercase().replace('_', "-");
+    let val = normalize_agent_value(&lookup("AI_AGENT")?.to_string_lossy());
     if val.is_empty() {
         return None;
     }
+    Some(match_agent_name(&val).unwrap_or(Agent::Unknown))
+}
 
-    match val.as_str() {
-        "claude" | "claude-code" => Some(Agent::ClaudeCode),
-        "cowork" | "claude-code-cowork" => Some(Agent::ClaudeCodeCowork),
-        "cursor" => Some(Agent::Cursor),
-        "cursor-cli" => Some(Agent::CursorCli),
+/// Parse the shorter `AGENT` convention (distinct from `AI_AGENT`), adopted by
+/// Goose (`AGENT=goose`), Amp (`AGENT=amp`), Crush (`AGENT=crush`), and Codex.
+///
+/// `AGENT` is a generic variable name, so only a strict allowlist of known
+/// values counts as an agent signal — anything else is ignored (returns `None`)
+/// rather than reported as `Agent::Unknown`, to avoid false positives.
+fn parse_agent_var(lookup: &impl Fn(&str) -> Option<OsString>) -> Option<Agent> {
+    match normalize_agent_value(&lookup("AGENT")?.to_string_lossy()).as_str() {
+        "goose" => Some(Agent::Goose),
+        "amp" => Some(Agent::Amp),
+        "crush" => Some(Agent::Crush),
         "codex" => Some(Agent::Codex),
-        "devin" => Some(Agent::Devin),
-        "gemini" | "gemini-cli" => Some(Agent::GeminiCli),
-        "copilot" | "github-copilot" | "github-copilot-cli" | "github-copilot-vscode-agent" => {
-            Some(Agent::GitHubCopilot)
-        }
-        "opencode" => Some(Agent::OpenCode),
-        "augment" | "augment-cli" => Some(Agent::Augment),
-        "antigravity" => Some(Agent::Antigravity),
-        "replit" => Some(Agent::Replit),
-        "v0" => Some(Agent::V0),
-        _ => Some(Agent::Unknown),
+        _ => None,
     }
+}
+
+/// Map a recognized agent identifier to an [`Agent`], or `None` if unknown.
+fn match_agent_name(val: &str) -> Option<Agent> {
+    Some(match val {
+        "claude" | "claude-code" => Agent::ClaudeCode,
+        "cowork" | "claude-code-cowork" => Agent::ClaudeCodeCowork,
+        "cursor" => Agent::Cursor,
+        "cursor-cli" => Agent::CursorCli,
+        "codex" => Agent::Codex,
+        "devin" => Agent::Devin,
+        "gemini" | "gemini-cli" => Agent::GeminiCli,
+        "copilot" | "github-copilot" | "github-copilot-cli" | "github-copilot-vscode-agent" => {
+            Agent::GitHubCopilot
+        }
+        "opencode" => Agent::OpenCode,
+        "augment" | "augment-cli" => Agent::Augment,
+        "antigravity" => Agent::Antigravity,
+        "replit" => Agent::Replit,
+        "v0" => Agent::V0,
+        "crush" => Agent::Crush,
+        "neo" | "pulumi-neo" => Agent::PulumiNeo,
+        "goose" => Agent::Goose,
+        "amp" => Agent::Amp,
+        "cline" => Agent::Cline,
+        "roo-code" => Agent::RooCode,
+        "trae" => Agent::Trae,
+        "tabnine-cli" => Agent::TabnineCli,
+        _ => return None,
+    })
+}
+
+/// Normalize an agent identifier so casing and separator drift still match a
+/// canonical name. Trims, drops any `@version` suffix (the `AI_AGENT` naming
+/// convention allows e.g. `claude-code@1`), lowercases, and collapses runs of
+/// `_`, `-`, and whitespace into a single `-` (so `Claude_Code`, `claude code`,
+/// and `claude-code@2` all resolve to `claude-code`).
+fn normalize_agent_value(raw: &str) -> String {
+    raw.trim()
+        .split('@')
+        .next()
+        .unwrap_or_default()
+        .to_ascii_lowercase()
+        .split(|c: char| c == '_' || c == '-' || c.is_whitespace())
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
 }
 
 #[cfg(test)]
@@ -360,6 +448,139 @@ mod tests {
     }
 
     #[test]
+    fn ai_agent_strips_version_suffix() {
+        // The AI_AGENT naming convention allows a `@version` suffix
+        // (e.g. `devin@1`, `custom-agent@2.0`); it must not defeat detection.
+        for (value, expected) in [
+            ("claude-code@1", Agent::ClaudeCode),
+            ("devin@1", Agent::Devin),
+            ("cursor-cli@2.0", Agent::CursorCli),
+            ("gemini-cli@0.1.2", Agent::GeminiCli),
+        ] {
+            assert_eq!(
+                detect_with(env_from(&[("AI_AGENT", value)])),
+                Some(expected),
+                "AI_AGENT={value} should strip the version and resolve to {}",
+                expected.name(),
+            );
+        }
+    }
+
+    #[test]
+    fn ai_agent_is_lenient_about_separators() {
+        for value in ["claude code", "claude--code", "  Claude-Code  "] {
+            assert_eq!(
+                detect_with(env_from(&[("AI_AGENT", value)])),
+                Some(Agent::ClaudeCode),
+                "AI_AGENT={value:?} should normalize to claude-code",
+            );
+        }
+    }
+
+    #[test]
+    fn detect_crush() {
+        assert_eq!(
+            detect_with(env_from(&[("AI_AGENT", "crush")])),
+            Some(Agent::Crush),
+        );
+    }
+
+    #[test]
+    fn detect_pulumi_neo() {
+        assert_eq!(
+            detect_with(env_from(&[("AI_AGENT", "neo")])),
+            Some(Agent::PulumiNeo),
+        );
+    }
+
+    #[test]
+    fn detect_goose_via_agent_var() {
+        assert_eq!(
+            detect_with(env_from(&[("AGENT", "goose")])),
+            Some(Agent::Goose),
+        );
+    }
+
+    #[test]
+    fn detect_amp_via_agent_var() {
+        assert_eq!(detect_with(env_from(&[("AGENT", "amp")])), Some(Agent::Amp));
+    }
+
+    #[test]
+    fn agent_var_is_normalized() {
+        // The `AGENT` value goes through the same normalization as `AI_AGENT`.
+        for value in ["Goose", "GOOSE", "goose@1", "  goose  "] {
+            assert_eq!(
+                detect_with(env_from(&[("AGENT", value)])),
+                Some(Agent::Goose),
+                "AGENT={value:?} should normalize to goose",
+            );
+        }
+    }
+
+    #[test]
+    fn agent_var_only_matches_known_values() {
+        // `AGENT` is generic, so an unrecognized value must not be treated as
+        // an agent (unlike `AI_AGENT`, which falls back to `Unknown`).
+        assert_eq!(detect_with(env_from(&[("AGENT", "smith")])), None);
+        assert_eq!(detect_with(env_from(&[("AGENT", "")])), None);
+    }
+
+    #[test]
+    fn ai_agent_wins_over_agent_var() {
+        assert_eq!(
+            detect_with(env_from(&[("AI_AGENT", "codex"), ("AGENT", "goose")])),
+            Some(Agent::Codex),
+        );
+    }
+
+    #[test]
+    fn tool_specific_marker_wins_over_stale_agent_var() {
+        // A generic `AGENT` can be inherited from a parent shell; a fresh
+        // tool-specific marker must still identify the real driver.
+        assert_eq!(
+            detect_with(env_from(&[("CODEX_THREAD_ID", "t1"), ("AGENT", "goose")])),
+            Some(Agent::Codex),
+        );
+    }
+
+    #[test]
+    fn detect_cline() {
+        assert_eq!(
+            detect_with(env_from(&[("CLINE_ACTIVE", "true")])),
+            Some(Agent::Cline),
+        );
+    }
+
+    #[test]
+    fn detect_roo_code() {
+        assert_eq!(
+            detect_with(env_from(&[("ROO_CLI_RUNTIME", "1")])),
+            Some(Agent::RooCode),
+        );
+        assert_eq!(
+            detect_with(env_from(&[("ROO_ACTIVE", "true")])),
+            Some(Agent::RooCode),
+        );
+    }
+
+    #[test]
+    fn detect_trae() {
+        assert_eq!(
+            detect_with(env_from(&[("TRAE_AI_SHELL_ID", "abc123")])),
+            Some(Agent::Trae),
+        );
+    }
+
+    #[test]
+    fn detect_tabnine_cli() {
+        assert_eq!(
+            detect_with(env_from(&[("TABNINE_CLI", "1")])),
+            Some(Agent::TabnineCli),
+        );
+    }
+
+    #[test]
     fn agent_name_roundtrip() {
         let agents = [
             Agent::ClaudeCode,
@@ -375,6 +596,14 @@ mod tests {
             Agent::Antigravity,
             Agent::Replit,
             Agent::V0,
+            Agent::Crush,
+            Agent::PulumiNeo,
+            Agent::Goose,
+            Agent::Amp,
+            Agent::Cline,
+            Agent::RooCode,
+            Agent::Trae,
+            Agent::TabnineCli,
             Agent::Unknown,
         ];
         for agent in agents {

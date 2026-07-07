@@ -11,23 +11,23 @@ fn unapply_stack() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render('j');
-    tui.input_then_render('b');
+    tui.input('j');
+    tui.input('b');
 
-    tui.input_then_render((KeyModifiers::SHIFT, 'G'));
-    tui.input_then_render('b');
+    tui.input((KeyModifiers::SHIFT, 'G'));
+    tui.input('b');
 
-    tui.input_then_render('g')
+    tui.input('g')
         .assert_rendered_term_svg_eq(file!["snapshots/unapply_stack_001.svg"]);
 
-    tui.input_then_render('s')
+    tui.input('s')
         .assert_rendered_term_svg_eq(file!["snapshots/unapply_stack_002.svg"]);
 
-    tui.input_then_render('j')
+    tui.input('j')
         .assert_rendered_term_svg_eq(file!["snapshots/unapply_stack_003.svg"]);
 
-    tui.input_then_render('k');
-    tui.input_then_render('u')
+    tui.input('k');
+    tui.input('u')
         .assert_rendered_term_svg_eq(file!["snapshots/unapply_stack_004.svg"]);
 }
 
@@ -38,9 +38,9 @@ fn enter_stack_mode_from_commits() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render('j');
-    tui.input_then_render('j');
-    tui.input_then_render('s')
+    tui.input('j');
+    tui.input('j');
+    tui.input('s')
         .assert_rendered_term_svg_eq(file!["snapshots/enter_stack_mode_from_commits_001.svg"]);
 }
 
@@ -52,35 +52,35 @@ fn moving_stacks() {
     let mut tui = test_tui(env);
 
     for name in ["one", "two", "three"] {
-        tui.input_then_render('g');
-        tui.input_then_render('b');
-        tui.input_then_render(KeyCode::Enter);
+        tui.input('g');
+        tui.input('b');
+        tui.input(KeyCode::Enter);
         for _ in 0..100 {
-            tui.input_then_render(KeyCode::Backspace);
+            tui.input(KeyCode::Backspace);
         }
-        tui.input_then_render(name);
-        tui.input_then_render(KeyCode::Enter);
-        tui.input_then_render('g');
+        tui.input(name);
+        tui.input(KeyCode::Enter);
+        tui.input('g');
     }
 
     tui.reload()
         .assert_rendered_term_svg_eq(file!["snapshots/moving_stacks_001.svg"]);
 
-    tui.input_then_render('j');
-    tui.input_then_render('s');
-    tui.input_then_render('m')
+    tui.input('j');
+    tui.input('s');
+    tui.input('m')
         .assert_rendered_term_svg_eq(file!["snapshots/moving_stacks_002.svg"]);
-    tui.input_then_render('j')
+    tui.input('j')
         .assert_rendered_term_svg_eq(file!["snapshots/moving_stacks_003.svg"]);
-    tui.input_then_render(KeyCode::Enter)
+    tui.input(KeyCode::Enter)
         .assert_rendered_term_svg_eq(file!["snapshots/moving_stacks_004.svg"]);
 
-    tui.input_then_render('s');
-    tui.input_then_render('m');
-    tui.input_then_render('k')
+    tui.input('s');
+    tui.input('m');
+    tui.input('k')
         .assert_rendered_term_svg_eq(file!["snapshots/moving_stacks_005.svg"]);
 
-    tui.input_then_render(KeyCode::Enter)
+    tui.input(KeyCode::Enter)
         .assert_rendered_term_svg_eq(file!["snapshots/moving_stacks_006.svg"]);
 }
 
@@ -92,35 +92,35 @@ fn applying_stacks() {
     let mut tui = test_tui(env);
 
     for name in ["one", "two"] {
-        tui.input_then_render('g');
-        tui.input_then_render('b');
-        tui.input_then_render(KeyCode::Enter);
+        tui.input('g');
+        tui.input('b');
+        tui.input(KeyCode::Enter);
         for _ in 0..100 {
-            tui.input_then_render(KeyCode::Backspace);
+            tui.input(KeyCode::Backspace);
         }
-        tui.input_then_render(name);
-        tui.input_then_render(KeyCode::Enter);
-        tui.input_then_render('g');
+        tui.input(name);
+        tui.input(KeyCode::Enter);
+        tui.input('g');
     }
 
     tui.reload()
         .assert_rendered_term_svg_eq(file!["snapshots/applying_stacks_001.svg"]);
 
     for _ in 0..2 {
-        tui.input_then_render('s');
-        tui.input_then_render('u');
-        tui.input_then_render('g');
+        tui.input('s');
+        tui.input('u');
+        tui.input('g');
     }
 
     tui.reload()
         .assert_rendered_term_svg_eq(file!["snapshots/applying_stacks_002.svg"]);
 
-    tui.input_then_render('s');
-    tui.input_then_render('a')
+    tui.input('s');
+    tui.input('a')
         .assert_rendered_term_svg_eq(file!["snapshots/applying_stacks_003.svg"]);
-    tui.input_then_render("two")
+    tui.input("two")
         .assert_rendered_term_svg_eq(file!["snapshots/applying_stacks_004.svg"]);
-    tui.input_then_render(KeyCode::Enter)
+    tui.input(KeyCode::Enter)
         .assert_rendered_term_svg_eq(file!["snapshots/applying_stacks_005.svg"]);
 }
 
@@ -133,14 +133,13 @@ fn escape_moves_cursor_back_to_valid_position() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render('j')
-        .assert_current_line_eq(str![["┊╭┄g0 [A]"]]);
-    tui.input_then_render('s');
-    tui.input_then_render('m');
-    tui.input_then_render('j');
+    tui.input('j').assert_current_line_eq(str![["┊╭┄g0 [A]"]]);
+    tui.input('s');
+    tui.input('m');
+    tui.input('j');
 
     // cancelling should put the cursor at a valid position
-    tui.input_then_render(KeyCode::Esc)
+    tui.input(KeyCode::Esc)
         .assert_current_line_eq(str![["┴ 0dc3733 (common base) 2000-01-02 add M"]]);
 }
 
@@ -153,12 +152,11 @@ fn maintains_cursor_position_if_on_source() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render('j')
-        .assert_current_line_eq(str![["┊╭┄g0 [A]"]]);
-    tui.input_then_render('s');
-    tui.input_then_render('m');
+    tui.input('j').assert_current_line_eq(str![["┊╭┄g0 [A]"]]);
+    tui.input('s');
+    tui.input('m');
 
     // cancelling should put the cursor at a valid position
-    tui.input_then_render(KeyCode::Esc)
+    tui.input(KeyCode::Esc)
         .assert_current_line_eq(str![["┊╭┄g0 [A]"]]);
 }

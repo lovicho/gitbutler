@@ -65,6 +65,9 @@ pub fn default_key_binds() -> KeyBinds {
                 builder.details_scroll_down().register();
                 builder.details_next_hunk().register();
                 builder.details_prev_hunk().register();
+
+                builder.details_discard().register();
+
                 builder.details_jump_up().register();
                 builder.details_jump_down().register();
 
@@ -74,11 +77,9 @@ pub fn default_key_binds() -> KeyBinds {
                 builder.toggle_full_screen_details().register();
 
                 builder
-                    .key_bind(
-                        "hide details",
-                        press().code(KeyCode::Char('d')),
-                        Message::DetailsLayout(DetailsLayoutMessage::Dismiss),
-                    )
+                    .key_bind("hide details", press().code(KeyCode::Char('d')), || {
+                        Message::DetailsLayout(DetailsLayoutMessage::Dismiss)
+                    })
                     .register();
                 builder.grow_details().register();
                 builder.shrink_details().register();
@@ -125,26 +126,22 @@ pub fn confirm_key_binds() -> KeyBinds {
     let mut builder = key_binds.for_all_modes();
 
     builder
-        .key_bind(
-            "select",
-            press().code(KeyCode::Enter),
-            Message::Confirm(ConfirmMessage::Confirm),
-        )
+        .key_bind("select", press().code(KeyCode::Enter), || {
+            Message::Confirm(ConfirmMessage::Confirm)
+        })
         .register();
 
     builder
-        .key_bind(
-            "yes",
-            press().code(KeyCode::Char('y')),
-            Message::Confirm(ConfirmMessage::Yes),
-        )
+        .key_bind("yes", press().code(KeyCode::Char('y')), || {
+            Message::Confirm(ConfirmMessage::Yes)
+        })
         .register();
 
     builder
         .key_bind(
             "no",
             press().code(KeyCode::Char('n')).alt_code(KeyCode::Esc),
-            Message::Confirm(ConfirmMessage::No),
+            || Message::Confirm(ConfirmMessage::No),
         )
         .register();
 
@@ -152,7 +149,7 @@ pub fn confirm_key_binds() -> KeyBinds {
         .key_bind(
             "left",
             press().code(KeyCode::Char('h')).alt_code(KeyCode::Left),
-            Message::Confirm(ConfirmMessage::Left),
+            || Message::Confirm(ConfirmMessage::Left),
         )
         .register();
 
@@ -160,7 +157,7 @@ pub fn confirm_key_binds() -> KeyBinds {
         .key_bind(
             "right",
             press().code(KeyCode::Char('l')).alt_code(KeyCode::Right),
-            Message::Confirm(ConfirmMessage::Right),
+            || Message::Confirm(ConfirmMessage::Right),
         )
         .register();
 
@@ -175,59 +172,45 @@ pub fn fuzzy_picker_key_binds() -> KeyBinds {
     let mut builder = key_binds.for_all_modes();
 
     builder
-        .key_bind(
-            "up",
-            press().alt_code(KeyCode::Up),
-            Message::FuzzyPicker(FuzzyPickerMessage::MoveCursorUp),
-        )
+        .key_bind("up", press().alt_code(KeyCode::Up), || {
+            Message::FuzzyPicker(FuzzyPickerMessage::MoveCursorUp)
+        })
         .register();
 
     builder
-        .key_bind(
-            "down",
-            press().alt_code(KeyCode::Down),
-            Message::FuzzyPicker(FuzzyPickerMessage::MoveCursorDown),
-        )
+        .key_bind("down", press().alt_code(KeyCode::Down), || {
+            Message::FuzzyPicker(FuzzyPickerMessage::MoveCursorDown)
+        })
         .register();
 
     builder
-        .key_bind(
-            "up",
-            press().control().code(KeyCode::Char('p')),
-            Message::FuzzyPicker(FuzzyPickerMessage::MoveCursorUp),
-        )
+        .key_bind("up", press().control().code(KeyCode::Char('p')), || {
+            Message::FuzzyPicker(FuzzyPickerMessage::MoveCursorUp)
+        })
         .register();
 
     builder
-        .key_bind(
-            "down",
-            press().control().code(KeyCode::Char('n')),
-            Message::FuzzyPicker(FuzzyPickerMessage::MoveCursorDown),
-        )
+        .key_bind("down", press().control().code(KeyCode::Char('n')), || {
+            Message::FuzzyPicker(FuzzyPickerMessage::MoveCursorDown)
+        })
         .register();
 
     builder
-        .key_bind(
-            "confirm",
-            press().code(KeyCode::Enter),
-            Message::FuzzyPicker(FuzzyPickerMessage::Confirm),
-        )
+        .key_bind("confirm", press().code(KeyCode::Enter), || {
+            Message::FuzzyPicker(FuzzyPickerMessage::Confirm)
+        })
         .register();
 
     builder
-        .key_bind(
-            "back",
-            press().code(KeyCode::Esc),
-            Message::FuzzyPicker(FuzzyPickerMessage::Close),
-        )
+        .key_bind("back", press().code(KeyCode::Esc), || {
+            Message::FuzzyPicker(FuzzyPickerMessage::Close)
+        })
         .register();
 
     builder
-        .key_bind(
-            "back",
-            press().control().code(KeyCode::Char('[')),
-            Message::FuzzyPicker(FuzzyPickerMessage::Close),
-        )
+        .key_bind("back", press().control().code(KeyCode::Char('[')), || {
+            Message::FuzzyPicker(FuzzyPickerMessage::Close)
+        })
         .hide_from_hotbar()
         .register();
 
@@ -240,18 +223,18 @@ pub fn help_key_binds() -> KeyBinds {
     let mut builder = key_binds.for_all_modes();
 
     builder
-        .up_with(Message::Help(HelpMessage::ScrollUp(1)))
+        .up_with(|| Message::Help(HelpMessage::ScrollUp(1)))
         .register();
 
     builder
-        .down_with(Message::Help(HelpMessage::ScrollDown(1)))
+        .down_with(|| Message::Help(HelpMessage::ScrollDown(1)))
         .register();
 
     builder
         .key_bind(
             "jump up",
             press().control().code(KeyCode::Char('u')),
-            Message::Help(HelpMessage::ScrollUp(KeyBindsBuilder::JUMP_DISTANCE)),
+            || Message::Help(HelpMessage::ScrollUp(KeyBindsBuilder::JUMP_DISTANCE)),
         )
         .register();
 
@@ -259,7 +242,7 @@ pub fn help_key_binds() -> KeyBinds {
         .key_bind(
             "jump down",
             press().control().code(KeyCode::Char('d')),
-            Message::Help(HelpMessage::ScrollDown(KeyBindsBuilder::JUMP_DISTANCE)),
+            || Message::Help(HelpMessage::ScrollDown(KeyBindsBuilder::JUMP_DISTANCE)),
         )
         .register();
 
@@ -267,16 +250,14 @@ pub fn help_key_binds() -> KeyBinds {
         .key_bind(
             "back",
             press().code(KeyCode::Char('?')).alt_code(KeyCode::Esc),
-            Message::Help(HelpMessage::Close),
+            || Message::Help(HelpMessage::Close),
         )
         .register();
 
     builder
-        .key_bind(
-            "back",
-            press().control().code(KeyCode::Char('[')),
-            Message::Help(HelpMessage::Close),
-        )
+        .key_bind("back", press().control().code(KeyCode::Char('[')), || {
+            Message::Help(HelpMessage::Close)
+        })
         .hide_from_hotbar()
         .register();
 
@@ -366,7 +347,7 @@ impl KeyBindsBuilder<'_> {
         &mut self,
         short_description: &'static str,
         key_matcher: KeyMatcher,
-        message: Message,
+        make_message: MakeMessage,
     ) -> KeyBindsInModesBuilder<'_> {
         KeyBindsInModesBuilder {
             key_binds: self.key_binds,
@@ -374,7 +355,7 @@ impl KeyBindsBuilder<'_> {
             long_description: None,
             key_matcher,
             modes: self.modes.clone(),
-            message,
+            make_message,
             hide_from_hotbar: false,
             show_only_in_normal_mode_help_section: false,
             always_show_in_hot_bar: false,
@@ -382,11 +363,11 @@ impl KeyBindsBuilder<'_> {
     }
 
     fn down(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.down_with(Message::MoveCursorDown(1))
+        self.down_with(|| Message::MoveCursorDown(1))
             .show_only_in_normal_mode_help_section()
     }
 
-    fn down_with(&mut self, msg: Message) -> KeyBindsInModesBuilder<'_> {
+    fn down_with(&mut self, msg: MakeMessage) -> KeyBindsInModesBuilder<'_> {
         self.key_bind(
             "down",
             press().code(KeyCode::Char('j')).alt_code(KeyCode::Down),
@@ -395,11 +376,11 @@ impl KeyBindsBuilder<'_> {
     }
 
     fn up(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.up_with(Message::MoveCursorUp(1))
+        self.up_with(|| Message::MoveCursorUp(1))
             .show_only_in_normal_mode_help_section()
     }
 
-    fn up_with(&mut self, msg: Message) -> KeyBindsInModesBuilder<'_> {
+    fn up_with(&mut self, msg: MakeMessage) -> KeyBindsInModesBuilder<'_> {
         self.key_bind(
             "up",
             press().code(KeyCode::Char('k')).alt_code(KeyCode::Up),
@@ -414,7 +395,7 @@ impl KeyBindsBuilder<'_> {
                 .shift()
                 .code(KeyCode::Char('J'))
                 .alt_code(KeyCode::Down),
-            Message::MoveCursorNextSection,
+            || Message::MoveCursorNextSection,
         )
         .hide_from_hotbar()
         .show_only_in_normal_mode_help_section()
@@ -427,7 +408,7 @@ impl KeyBindsBuilder<'_> {
                 .shift()
                 .code(KeyCode::Char('K'))
                 .alt_code(KeyCode::Up),
-            Message::MoveCursorPreviousSection,
+            || Message::MoveCursorPreviousSection,
         )
         .hide_from_hotbar()
         .show_only_in_normal_mode_help_section()
@@ -439,7 +420,7 @@ impl KeyBindsBuilder<'_> {
         self.key_bind(
             "jump up",
             press().control().code(KeyCode::Char('u')),
-            Message::MoveCursorUp(Self::JUMP_DISTANCE),
+            || Message::MoveCursorUp(Self::JUMP_DISTANCE),
         )
         .hide_from_hotbar()
         .show_only_in_normal_mode_help_section()
@@ -449,18 +430,16 @@ impl KeyBindsBuilder<'_> {
         self.key_bind(
             "jump down",
             press().control().code(KeyCode::Char('d')),
-            Message::MoveCursorDown(Self::JUMP_DISTANCE),
+            || Message::MoveCursorDown(Self::JUMP_DISTANCE),
         )
         .hide_from_hotbar()
         .show_only_in_normal_mode_help_section()
     }
 
     fn jump_enter(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "jump",
-            press().code(KeyCode::Char('/')),
-            Message::Jump(JumpMessage::Enter),
-        )
+        self.key_bind("jump", press().code(KeyCode::Char('/')), || {
+            Message::Jump(JumpMessage::Enter)
+        })
         .hide_from_hotbar()
         .show_only_in_normal_mode_help_section()
         .long_description("Search for short IDs and jump there")
@@ -470,32 +449,26 @@ impl KeyBindsBuilder<'_> {
         self.key_bind(
             "previous",
             press().control().code(KeyCode::Char('p')),
-            Message::Jump(JumpMessage::Previous),
+            || Message::Jump(JumpMessage::Previous),
         )
     }
 
     fn jump_next(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "next",
-            press().control().code(KeyCode::Char('n')),
-            Message::Jump(JumpMessage::Next),
-        )
+        self.key_bind("next", press().control().code(KeyCode::Char('n')), || {
+            Message::Jump(JumpMessage::Next)
+        })
     }
 
     fn jump_confirm(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "confirm",
-            press().code(KeyCode::Enter),
-            Message::Jump(JumpMessage::Confirm),
-        )
+        self.key_bind("confirm", press().code(KeyCode::Enter), || {
+            Message::Jump(JumpMessage::Confirm)
+        })
     }
 
     fn toggle_details(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "details",
-            press().code(KeyCode::Char('d')),
-            Message::DetailsLayout(DetailsLayoutMessage::ToggleVisibility),
-        )
+        self.key_bind("details", press().code(KeyCode::Char('d')), || {
+            Message::DetailsLayout(DetailsLayoutMessage::ToggleVisibility)
+        })
         .long_description("Toggle the details view")
         .show_only_in_normal_mode_help_section()
     }
@@ -504,7 +477,7 @@ impl KeyBindsBuilder<'_> {
         self.key_bind(
             "full screen details",
             press().shift().code(KeyCode::Char('D')),
-            Message::DetailsLayout(DetailsLayoutMessage::ToggleFullScreen),
+            || Message::DetailsLayout(DetailsLayoutMessage::ToggleFullScreen),
         )
         .hide_from_hotbar()
         .long_description("Toggle the full screen details view")
@@ -515,78 +488,68 @@ impl KeyBindsBuilder<'_> {
         self.key_bind(
             "normal mode",
             press().control().code(KeyCode::Char('[')),
-            Message::Back,
+            || Message::Back,
         )
         .hide_from_hotbar()
         .show_only_in_normal_mode_help_section()
     }
 
     fn grow_details(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "grow details",
-            press().code(KeyCode::Char('+')),
-            Message::GrowDetails,
-        )
+        self.key_bind("grow details", press().code(KeyCode::Char('+')), || {
+            Message::GrowDetails
+        })
         .hide_from_hotbar()
         .show_only_in_normal_mode_help_section()
     }
 
     fn shrink_details(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "shrink details",
-            press().code(KeyCode::Char('-')),
-            Message::ShrinkDetails,
-        )
+        self.key_bind("shrink details", press().code(KeyCode::Char('-')), || {
+            Message::ShrinkDetails
+        })
         .hide_from_hotbar()
         .show_only_in_normal_mode_help_section()
     }
 
     fn undo(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind("undo", press().code(KeyCode::Char('u')), Message::Undo)
+        self.key_bind("undo", press().code(KeyCode::Char('u')), || Message::Undo)
             .show_only_in_normal_mode_help_section()
             .long_description("Undo the last operation")
     }
 
     fn redo(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "redo",
-            press().shift().code(KeyCode::Char('U')),
-            Message::Redo,
-        )
+        self.key_bind("redo", press().shift().code(KeyCode::Char('U')), || {
+            Message::Redo
+        })
         .show_only_in_normal_mode_help_section()
         .hide_from_hotbar()
         .long_description("Redo the last undo")
     }
 
     fn mark(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind("mark", press().code(KeyCode::Char(' ')), Message::Mark)
+        self.key_bind("mark", press().code(KeyCode::Char(' ')), || Message::Mark)
             .show_only_in_normal_mode_help_section()
             .long_description("Mark and rub multiple items")
     }
 
     fn quit(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind("quit", press().code(KeyCode::Char('q')), Message::Quit)
+        self.key_bind("quit", press().code(KeyCode::Char('q')), || Message::Quit)
             .show_only_in_normal_mode_help_section()
             .always_show_in_hot_bar()
     }
 
     fn help(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "help",
-            press().code(KeyCode::Char('?')),
-            Message::ToggleHelp,
-        )
+        self.key_bind("help", press().code(KeyCode::Char('?')), || {
+            Message::ToggleHelp
+        })
         .show_only_in_normal_mode_help_section()
         .long_description("Show this help menu")
         .always_show_in_hot_bar()
     }
 
     fn uncommitted_area(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "goto uncommitted",
-            press().code(KeyCode::Char('g')),
-            Message::SelectUncommitted,
-        )
+        self.key_bind("goto uncommitted", press().code(KeyCode::Char('g')), || {
+            Message::SelectUncommitted
+        })
         .hide_from_hotbar()
         .show_only_in_normal_mode_help_section()
     }
@@ -595,29 +558,25 @@ impl KeyBindsBuilder<'_> {
         self.key_bind(
             "goto merge base",
             press().shift().code(KeyCode::Char('G')),
-            Message::SelectMergeBase,
+            || Message::SelectMergeBase,
         )
         .hide_from_hotbar()
         .show_only_in_normal_mode_help_section()
     }
 
     fn branch_picker(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "pick branch",
-            press().code(KeyCode::Char('t')),
-            Message::PickAndGotoBranch,
-        )
+        self.key_bind("pick branch", press().code(KeyCode::Char('t')), || {
+            Message::PickAndGotoBranch
+        })
         .hide_from_hotbar()
         .show_only_in_normal_mode_help_section()
         .long_description("Fuzzy search for branches")
     }
 
     fn rub(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "rub",
-            press().code(KeyCode::Char('r')),
-            Message::Rub(RubMessage::Start),
-        )
+        self.key_bind("rub", press().code(KeyCode::Char('r')), || {
+            Message::Rub(RubMessage::Start)
+        })
         .long_description("Squash or undo commits")
     }
 
@@ -625,64 +584,52 @@ impl KeyBindsBuilder<'_> {
         self.key_bind(
             "reverse rub",
             press().shift().code(KeyCode::Char('R')),
-            Message::Rub(RubMessage::StartReverse),
+            || Message::Rub(RubMessage::StartReverse),
         )
         .long_description("Rub uncommitted changes into selection")
         .hide_from_hotbar()
     }
 
     fn commit(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "commit",
-            press().code(KeyCode::Char('c')),
-            Message::Commit(CommitMessage::Start),
-        )
+        self.key_bind("commit", press().code(KeyCode::Char('c')), || {
+            Message::Commit(CommitMessage::Start)
+        })
         .long_description("Create a new commit")
     }
 
     fn new_commit(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "empty commit",
-            press().code(KeyCode::Char('n')),
-            Message::Commit(CommitMessage::CreateEmpty),
-        )
+        self.key_bind("empty commit", press().code(KeyCode::Char('n')), || {
+            Message::Commit(CommitMessage::CreateEmpty)
+        })
         .long_description("Insert empty commit")
         .hide_from_hotbar()
     }
 
     fn move_mode(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "move",
-            press().code(KeyCode::Char('m')),
-            Message::Move(MoveMessage::Start),
-        )
+        self.key_bind("move", press().code(KeyCode::Char('m')), || {
+            Message::Move(MoveMessage::Start)
+        })
         .long_description("Move selection somewhere else")
     }
 
     fn move_toggle_insert_side(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "above/below",
-            press().code(KeyCode::Char('a')),
-            Message::Move(MoveMessage::ToggleInsertSide),
-        )
+        self.key_bind("above/below", press().code(KeyCode::Char('a')), || {
+            Message::Move(MoveMessage::ToggleInsertSide)
+        })
         .long_description("Toggle moving above or below")
     }
 
     fn branch(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "branch",
-            press().code(KeyCode::Char('b')),
-            Message::NewBranch,
-        )
+        self.key_bind("branch", press().code(KeyCode::Char('b')), || {
+            Message::NewBranch
+        })
         .long_description("Create a new branch")
     }
 
     fn stack(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "stack",
-            press().code(KeyCode::Char('s')),
-            Message::Stack(StackMessage::Enter),
-        )
+        self.key_bind("stack", press().code(KeyCode::Char('s')), || {
+            Message::Stack(StackMessage::Enter)
+        })
         .long_description("Enter stack mode")
     }
 
@@ -690,16 +637,14 @@ impl KeyBindsBuilder<'_> {
         self.key_bind(
             "focus details",
             press().code(KeyCode::Char('l')).alt_code(KeyCode::Right),
-            Message::DetailsLayout(DetailsLayoutMessage::Focus { full_screen: false }),
+            || Message::DetailsLayout(DetailsLayoutMessage::Focus { full_screen: false }),
         )
     }
 
     fn reword_inline(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "reword",
-            press().code(KeyCode::Enter),
-            Message::Reword(RewordMessage::InlineStart),
-        )
+        self.key_bind("reword", press().code(KeyCode::Enter), || {
+            Message::Reword(RewordMessage::InlineStart)
+        })
         .long_description("Reword commit or branch inline")
     }
 
@@ -707,18 +652,16 @@ impl KeyBindsBuilder<'_> {
         self.key_bind(
             "reword with editor",
             press().shift().code(KeyCode::Char('M')),
-            Message::Reword(RewordMessage::WithEditor),
+            || Message::Reword(RewordMessage::WithEditor),
         )
         .long_description("Reword commit with the configured editor")
         .hide_from_hotbar()
     }
 
     fn files(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "files",
-            press().code(KeyCode::Char('f')),
-            Message::Files(FilesMessage::ToggleFilesForSelectedCommit),
-        )
+        self.key_bind("files", press().code(KeyCode::Char('f')), || {
+            Message::Files(FilesMessage::ToggleFilesForSelectedCommit)
+        })
         .long_description("Show files in commit")
     }
 
@@ -726,58 +669,48 @@ impl KeyBindsBuilder<'_> {
         self.key_bind(
             "show all files",
             press().shift().code(KeyCode::Char('F')),
-            Message::Files(FilesMessage::ToggleGlobalFilesList),
+            || Message::Files(FilesMessage::ToggleGlobalFilesList),
         )
         .long_description("Show files in all commits")
         .hide_from_hotbar()
     }
 
     fn discard(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "discard",
-            press().code(KeyCode::Char('x')),
-            Message::Discard,
-        )
+        self.key_bind("discard", press().code(KeyCode::Char('x')), || {
+            Message::Discard
+        })
         .long_description("Discard the selection")
     }
 
     fn command(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "but command",
-            press().code(KeyCode::Char(':')),
-            Message::Command(CommandMessage::Start(CommandModeKind::But)),
-        )
+        self.key_bind("but command", press().code(KeyCode::Char(':')), || {
+            Message::Command(CommandMessage::Start(CommandModeKind::But))
+        })
         .long_description("Run a `but` command")
         .hide_from_hotbar()
         .show_only_in_normal_mode_help_section()
     }
 
     fn shell_command(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "shell command",
-            press().code(KeyCode::Char('!')),
-            Message::Command(CommandMessage::Start(CommandModeKind::Shell)),
-        )
+        self.key_bind("shell command", press().code(KeyCode::Char('!')), || {
+            Message::Command(CommandMessage::Start(CommandModeKind::Shell))
+        })
         .long_description("Run any shell command")
         .hide_from_hotbar()
         .show_only_in_normal_mode_help_section()
     }
 
     fn reload(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "reload",
-            press().control().code(KeyCode::Char('r')),
-            Message::Reload(None, ReloadCause::Manual),
-        )
+        self.key_bind("reload", press().control().code(KeyCode::Char('r')), || {
+            Message::Reload(None, ReloadCause::Manual)
+        })
         .hide_from_hotbar()
     }
 
     fn copy(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "copy",
-            press().code(KeyCode::Char('y')),
-            Message::CopySelection,
-        )
+        self.key_bind("copy", press().code(KeyCode::Char('y')), || {
+            Message::CopySelection
+        })
         .hide_from_hotbar()
         .long_description("Copy selection")
     }
@@ -786,14 +719,14 @@ impl KeyBindsBuilder<'_> {
         self.key_bind(
             "copy more",
             press().shift().code(KeyCode::Char('Y')),
-            Message::CopySelectionPicker,
+            || Message::CopySelectionPicker,
         )
         .hide_from_hotbar()
         .long_description("Copy selection picker")
     }
 
     fn back(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind("back", press().code(KeyCode::Esc), Message::Back)
+        self.key_bind("back", press().code(KeyCode::Esc), || Message::Back)
             .hide_from_hotbar()
             .show_only_in_normal_mode_help_section()
     }
@@ -802,7 +735,7 @@ impl KeyBindsBuilder<'_> {
         self.key_bind(
             "confirm",
             press().code(KeyCode::Enter).alt_code(KeyCode::Char('c')),
-            Message::ConfirmAndQuit,
+            || Message::ConfirmAndQuit,
         )
         .long_description("Rub target into selection")
     }
@@ -811,7 +744,7 @@ impl KeyBindsBuilder<'_> {
         self.key_bind(
             "use target message",
             press().shift().code(KeyCode::Char('T')),
-            Message::Rub(RubMessage::UseTargetMessage),
+            || Message::Rub(RubMessage::UseTargetMessage),
         )
         .long_description("When squashing use target message and discard source message")
     }
@@ -820,17 +753,15 @@ impl KeyBindsBuilder<'_> {
         self.key_bind(
             "use source message",
             press().shift().code(KeyCode::Char('S')),
-            Message::Rub(RubMessage::UseSourceMessage),
+            || Message::Rub(RubMessage::UseSourceMessage),
         )
         .long_description("When squashing use source message and discard target message")
     }
 
     fn rub_confirm(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "confirm",
-            press().code(KeyCode::Enter),
-            Message::Rub(RubMessage::Confirm),
-        )
+        self.key_bind("confirm", press().code(KeyCode::Enter), || {
+            Message::Rub(RubMessage::Confirm)
+        })
         .long_description("Rub target into selection")
     }
 
@@ -838,62 +769,50 @@ impl KeyBindsBuilder<'_> {
         self.key_bind(
             "open editor",
             press().alt().code(KeyCode::Char('e')),
-            Message::Reword(RewordMessage::OpenEditor),
+            || Message::Reword(RewordMessage::OpenEditor),
         )
     }
 
     fn reword_confirm(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "confirm",
-            press().code(KeyCode::Enter),
-            Message::Reword(RewordMessage::InlineConfirm),
-        )
+        self.key_bind("confirm", press().code(KeyCode::Enter), || {
+            Message::Reword(RewordMessage::InlineConfirm)
+        })
     }
 
     fn command_confirm(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "run command",
-            press().code(KeyCode::Enter),
-            Message::Command(CommandMessage::Confirm),
-        )
+        self.key_bind("run command", press().code(KeyCode::Enter), || {
+            Message::Command(CommandMessage::Confirm)
+        })
     }
 
     fn commit_confirm(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "confirm",
-            press().code(KeyCode::Enter),
-            Message::Commit(CommitMessage::Confirm),
-        )
+        self.key_bind("confirm", press().code(KeyCode::Enter), || {
+            Message::Commit(CommitMessage::Confirm)
+        })
     }
 
     fn commit_toggle_insert_side(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "above/below",
-            press().code(KeyCode::Char('a')),
-            Message::Commit(CommitMessage::ToggleInsertSide),
-        )
+        self.key_bind("above/below", press().code(KeyCode::Char('a')), || {
+            Message::Commit(CommitMessage::ToggleInsertSide)
+        })
         .long_description("Toggle committing above or below")
     }
 
     fn commit_empty_message(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "empty message",
-            press().code(KeyCode::Char('e')),
+        self.key_bind("empty message", press().code(KeyCode::Char('e')), || {
             Message::Commit(CommitMessage::ToggleMessageComposer(
                 CommitMessageComposer::Empty,
-            )),
-        )
+            ))
+        })
         .long_description("When creating commit, leave message empty")
     }
 
     fn commit_reword_inline(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "reword inline",
-            press().code(KeyCode::Char('i')),
+        self.key_bind("reword inline", press().code(KeyCode::Char('i')), || {
             Message::Commit(CommitMessage::ToggleMessageComposer(
                 CommitMessageComposer::Inline,
-            )),
-        )
+            ))
+        })
         .long_description("When creating commit, reword it inline")
     }
 
@@ -901,52 +820,42 @@ impl KeyBindsBuilder<'_> {
         self.key_bind(
             "commit to new branch",
             press().code(KeyCode::Char('b')),
-            Message::Commit(CommitMessage::CommitToNewBranch),
+            || Message::Commit(CommitMessage::CommitToNewBranch),
         )
         .long_description("Create a new branch, then commit to it")
     }
 
     fn move_confirm(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "confirm",
-            press().code(KeyCode::Enter),
-            Message::Move(MoveMessage::Confirm),
-        )
+        self.key_bind("confirm", press().code(KeyCode::Enter), || {
+            Message::Move(MoveMessage::Confirm)
+        })
     }
 
     fn apply(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "apply",
-            press().code(KeyCode::Char('a')),
-            Message::Stack(StackMessage::ShowApplyPicker),
-        )
+        self.key_bind("apply", press().code(KeyCode::Char('a')), || {
+            Message::Stack(StackMessage::ShowApplyPicker)
+        })
         .long_description("Apply stack")
     }
 
     fn unapply(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "unapply",
-            press().code(KeyCode::Char('u')),
-            Message::Stack(StackMessage::Unapply),
-        )
+        self.key_bind("unapply", press().code(KeyCode::Char('u')), || {
+            Message::Stack(StackMessage::Unapply)
+        })
         .long_description("Unapply stack")
     }
 
     fn reorder(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "move",
-            press().code(KeyCode::Char('m')),
-            Message::Stack(StackMessage::MoveStart),
-        )
+        self.key_bind("move", press().code(KeyCode::Char('m')), || {
+            Message::Stack(StackMessage::MoveStart)
+        })
         .long_description("Move stack")
     }
 
     fn reorder_confirm(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "confirm",
-            press().code(KeyCode::Enter),
-            Message::Stack(StackMessage::MoveConfirm),
-        )
+        self.key_bind("confirm", press().code(KeyCode::Enter), || {
+            Message::Stack(StackMessage::MoveConfirm)
+        })
     }
 
     fn details_next_hunk(&mut self) -> KeyBindsInModesBuilder<'_> {
@@ -956,7 +865,7 @@ impl KeyBindsBuilder<'_> {
                 .shift()
                 .code(KeyCode::Char('J'))
                 .alt_code(KeyCode::Down),
-            Message::Details(DetailsMessage::SelectNextSection),
+            || Message::Details(DetailsMessage::SelectNextSection),
         )
     }
 
@@ -967,7 +876,7 @@ impl KeyBindsBuilder<'_> {
                 .shift()
                 .code(KeyCode::Char('K'))
                 .alt_code(KeyCode::Up),
-            Message::Details(DetailsMessage::SelectPrevSection),
+            || Message::Details(DetailsMessage::SelectPrevSection),
         )
     }
 
@@ -975,7 +884,7 @@ impl KeyBindsBuilder<'_> {
         self.key_bind(
             "up",
             press().code(KeyCode::Char('k')).alt_code(KeyCode::Up),
-            Message::Details(DetailsMessage::ScrollUp(1)),
+            || Message::Details(DetailsMessage::ScrollUp(1)),
         )
     }
 
@@ -983,15 +892,21 @@ impl KeyBindsBuilder<'_> {
         self.key_bind(
             "down",
             press().code(KeyCode::Char('j')).alt_code(KeyCode::Down),
-            Message::Details(DetailsMessage::ScrollDown(1)),
+            || Message::Details(DetailsMessage::ScrollDown(1)),
         )
+    }
+
+    fn details_discard(&mut self) -> KeyBindsInModesBuilder<'_> {
+        self.key_bind("discard", press().code(KeyCode::Char('x')), || {
+            Message::Details(DetailsMessage::Discard)
+        })
     }
 
     fn details_jump_up(&mut self) -> KeyBindsInModesBuilder<'_> {
         self.key_bind(
             "jump up",
             press().control().code(KeyCode::Char('u')),
-            Message::Details(DetailsMessage::ScrollUp(Self::JUMP_DISTANCE)),
+            || Message::Details(DetailsMessage::ScrollUp(Self::JUMP_DISTANCE)),
         )
     }
 
@@ -999,16 +914,14 @@ impl KeyBindsBuilder<'_> {
         self.key_bind(
             "jump down",
             press().control().code(KeyCode::Char('d')),
-            Message::Details(DetailsMessage::ScrollDown(Self::JUMP_DISTANCE)),
+            || Message::Details(DetailsMessage::ScrollDown(Self::JUMP_DISTANCE)),
         )
     }
 
     fn details_copy(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "copy hunk",
-            press().code(KeyCode::Char('y')),
-            Message::Details(DetailsMessage::CopyCurrentHunk),
-        )
+        self.key_bind("copy hunk", press().code(KeyCode::Char('y')), || {
+            Message::Details(DetailsMessage::CopyCurrentHunk)
+        })
         .hide_from_hotbar()
         .long_description("Copy current hunk to clipboard")
     }
@@ -1017,23 +930,21 @@ impl KeyBindsBuilder<'_> {
         self.key_bind(
             "focus status",
             press().code(KeyCode::Char('h')).alt_code(KeyCode::Left),
-            Message::UnfocusDetails,
+            || Message::UnfocusDetails,
         )
     }
 
     fn details_top(&mut self) -> KeyBindsInModesBuilder<'_> {
-        self.key_bind(
-            "goto top",
-            press().code(KeyCode::Char('g')),
-            Message::Details(DetailsMessage::GotoTop),
-        )
+        self.key_bind("goto top", press().code(KeyCode::Char('g')), || {
+            Message::Details(DetailsMessage::GotoTop)
+        })
     }
 
     fn details_bottom(&mut self) -> KeyBindsInModesBuilder<'_> {
         self.key_bind(
             "goto bottom",
             press().shift().code(KeyCode::Char('G')),
-            Message::Details(DetailsMessage::GotoBottom),
+            || Message::Details(DetailsMessage::GotoBottom),
         )
     }
 }
@@ -1138,6 +1049,8 @@ fn register_non_mode_specific_key_binds(
     builder.back().register();
 }
 
+type MakeMessage = fn() -> Message;
+
 #[derive(Debug)]
 #[must_use]
 struct KeyBindsInModesBuilder<'a> {
@@ -1146,7 +1059,7 @@ struct KeyBindsInModesBuilder<'a> {
     long_description: Option<&'static str>,
     key_matcher: KeyMatcher,
     modes: Vec<ModeDiscriminant>,
-    message: Message,
+    make_message: MakeMessage,
     hide_from_hotbar: bool,
     show_only_in_normal_mode_help_section: bool,
     always_show_in_hot_bar: bool,
@@ -1194,7 +1107,7 @@ impl KeyBindsInModesBuilder<'_> {
             long_description,
             key_matcher,
             modes,
-            message,
+            make_message,
             hide_from_hotbar,
             show_only_in_normal_mode_help_section,
             always_show_in_hot_bar,
@@ -1206,7 +1119,7 @@ impl KeyBindsInModesBuilder<'_> {
             chord_display: key_matcher.chord_display(),
             key_matcher,
             modes,
-            message,
+            make_message,
             hide_from_hotbar,
             show_only_in_normal_mode_help_section,
             always_show_in_hot_bar,
@@ -1221,7 +1134,7 @@ pub struct KeyBind {
     chord_display: Cow<'static, str>,
     key_matcher: KeyMatcher,
     modes: Vec<ModeDiscriminant>,
-    message: Message,
+    make_message: MakeMessage,
     hide_from_hotbar: bool,
     show_only_in_normal_mode_help_section: bool,
     always_show_in_hot_bar: bool,
@@ -1249,7 +1162,7 @@ impl KeyBind {
     }
 
     pub fn message(&self) -> Message {
-        self.message.clone()
+        (self.make_message)()
     }
 
     pub fn hide_from_hotbar(&self) -> bool {

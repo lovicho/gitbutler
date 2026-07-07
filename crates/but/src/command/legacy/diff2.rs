@@ -125,6 +125,7 @@ impl DiffLineWriter for DiffWriter<'_> {
         match line {
             DetailsLine::Text {
                 id: _,
+                cli_id: _,
                 line,
                 skip_when_copying_hunk: _,
             } => {
@@ -139,12 +140,12 @@ impl DiffLineWriter for DiffWriter<'_> {
                 writeln!(self.out, "{text}")?;
             }
             DetailsLine::Code(code_line) => {
-                let highlighted_line = code_line.highlighted_line.borrow();
-                let highlighted_line = highlighted_line
+                let syntax_highlighted_line = code_line.syntax_highlighted_line.borrow();
+                let syntax_highlighted_line = syntax_highlighted_line
                     .as_ref()
                     .expect("WithSyntaxHighlighting ensures the line is highlighted");
 
-                for span in highlighted_line {
+                for span in syntax_highlighted_line {
                     let rendered = span.style.paint(&span.content);
                     write!(self.out, "{rendered}")?;
                 }

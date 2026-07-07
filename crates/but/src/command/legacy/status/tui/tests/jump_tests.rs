@@ -19,27 +19,27 @@ fn jumping_around() {
     let mut tui = test_tui(env);
 
     // jumping straight to the matching line
-    tui.input_then_render('/')
+    tui.input('/')
         .assert_rendered_term_svg_eq(file!["snapshots/jumping_around_001.svg"]);
-    tui.input_then_render("h0")
+    tui.input("h0")
         .assert_rendered_term_svg_eq(file!["snapshots/jumping_around_002.svg"]);
 
     // cycling through matches
-    tui.input_then_render('/');
-    tui.input_then_render("kl")
+    tui.input('/');
+    tui.input("kl")
         .assert_rendered_term_svg_eq(file!["snapshots/jumping_around_003.svg"]);
-    tui.input_then_render((KeyModifiers::CONTROL, 'p'))
+    tui.input((KeyModifiers::CONTROL, 'p'))
         .assert_rendered_term_svg_eq(file!["snapshots/jumping_around_004.svg"]);
-    tui.input_then_render((KeyModifiers::CONTROL, 'p'))
+    tui.input((KeyModifiers::CONTROL, 'p'))
         .assert_rendered_term_svg_eq(file!["snapshots/jumping_around_005.svg"]);
-    tui.input_then_render(KeyCode::Enter)
+    tui.input(KeyCode::Enter)
         .assert_rendered_term_svg_eq(file!["snapshots/jumping_around_006.svg"]);
 
     // jumping to zz
-    tui.input_then_render('/');
-    tui.input_then_render('z')
+    tui.input('/');
+    tui.input('z')
         .assert_rendered_term_svg_eq(file!["snapshots/jumping_around_007.svg"]);
-    tui.input_then_render('z')
+    tui.input('z')
         .assert_rendered_term_svg_eq(file!["snapshots/jumping_around_008.svg"]);
 }
 
@@ -54,11 +54,11 @@ fn jump_from_other_modes() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render('r')
+    tui.input('r')
         .assert_rendered_term_svg_eq(file!["snapshots/jump_from_other_modes_001.svg"]);
-    tui.input_then_render('/')
+    tui.input('/')
         .assert_rendered_term_svg_eq(file!["snapshots/jump_from_other_modes_002.svg"]);
-    tui.input_then_render("38")
+    tui.input("38")
         .assert_rendered_term_svg_eq(file!["snapshots/jump_from_other_modes_003.svg"]);
 }
 
@@ -71,9 +71,9 @@ fn clears_backstack_on_escape() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render('/')
+    tui.input('/')
         .assert_backstack_eq([BackstackEntry::LeaveNormalMode]);
-    tui.input_then_render(KeyCode::Esc).assert_backstack_eq([]);
+    tui.input(KeyCode::Esc).assert_backstack_eq([]);
 }
 
 #[test]
@@ -87,18 +87,18 @@ fn restores_backstack_from_previous_mode() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render(' ');
-    tui.input_then_render('r')
+    tui.input(' ');
+    tui.input('r')
         .assert_backstack_eq([BackstackEntry::LeaveNormalMode, BackstackEntry::Mark]);
 
-    tui.input_then_render('/')
+    tui.input('/')
         .assert_backstack_eq([BackstackEntry::LeaveNormalMode, BackstackEntry::Mark]);
-    tui.input_then_render(KeyCode::Esc)
+    tui.input(KeyCode::Esc)
         .assert_backstack_eq([BackstackEntry::LeaveNormalMode, BackstackEntry::Mark]);
 
-    tui.input_then_render('/')
+    tui.input('/')
         .assert_backstack_eq([BackstackEntry::LeaveNormalMode, BackstackEntry::Mark]);
-    tui.input_then_render("38")
+    tui.input("38")
         .assert_backstack_eq([BackstackEntry::LeaveNormalMode, BackstackEntry::Mark]);
 }
 
@@ -111,20 +111,19 @@ fn highlights_exact_matches_when_file_list_is_open() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render((KeyModifiers::SHIFT, 'F'));
-    tui.input_then_render('/');
-    tui.input_then_render('9');
-    tui.input_then_render('4')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/highlights_exact_matches_when_file_list_is_open_001.svg"
-        ]);
+    tui.input((KeyModifiers::SHIFT, 'F'));
+    tui.input('/');
+    tui.input('9');
+    tui.input('4').assert_rendered_term_svg_eq(file![
+        "snapshots/highlights_exact_matches_when_file_list_is_open_001.svg"
+    ]);
 
-    tui.input_then_render((KeyModifiers::CONTROL, 'n'))
+    tui.input((KeyModifiers::CONTROL, 'n'))
         .assert_rendered_term_svg_eq(file![
             "snapshots/highlights_exact_matches_when_file_list_is_open_002.svg"
         ]);
 
-    tui.input_then_render((KeyModifiers::CONTROL, 'n'))
+    tui.input((KeyModifiers::CONTROL, 'n'))
         .assert_rendered_term_svg_eq(file![
             "snapshots/highlights_exact_matches_when_file_list_is_open_003.svg"
         ]);

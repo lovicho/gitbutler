@@ -14,13 +14,13 @@ fn toggle_details_view_for_commit() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render([KeyCode::Down, KeyCode::Down])
+    tui.input([KeyCode::Down, KeyCode::Down])
         .assert_rendered_term_svg_eq(file!["snapshots/toggle_details_view_for_commit_001.svg"]);
 
-    tui.input_then_render('d')
+    tui.input('d')
         .assert_rendered_term_svg_eq(file!["snapshots/toggle_details_view_for_commit_002.svg"]);
 
-    tui.input_then_render('d')
+    tui.input('d')
         .assert_rendered_term_svg_eq(file!["snapshots/toggle_details_view_for_commit_003.svg"]);
 }
 
@@ -31,19 +31,34 @@ fn details_view_updates_with_selection_changes() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render('d')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/details_view_updates_with_selection_changes_001.svg"
-        ]);
+    tui.input('d').assert_rendered_term_svg_eq(file![
+        "snapshots/details_view_updates_with_selection_changes_001.svg"
+    ]);
 
-    tui.input_then_render([KeyCode::Down, KeyCode::Down])
+    tui.input([KeyCode::Down, KeyCode::Down])
         .assert_rendered_term_svg_eq(file![
             "snapshots/details_view_updates_with_selection_changes_002.svg"
         ]);
 
-    tui.input_then_render((KeyModifiers::SHIFT, 'J'))
+    tui.input((KeyModifiers::SHIFT, 'J'))
         .assert_rendered_term_svg_eq(file![
             "snapshots/details_view_updates_with_selection_changes_003.svg"
+        ]);
+}
+
+#[test]
+fn manual_reload_does_not_highlight_details_when_status_is_focused() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+    env.file("uncommitted.txt", "changed\n");
+
+    let mut tui = test_tui(env);
+
+    tui.input('d');
+
+    tui.input((KeyModifiers::CONTROL, 'r'))
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/manual_reload_does_not_highlight_details_when_status_is_focused_001.svg"
         ]);
 }
 
@@ -67,10 +82,9 @@ fn details_view_supports_scroll_controls() {
         },
     );
 
-    tui.input_then_render('l')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/details_view_supports_scroll_controls_001.svg"
-        ]);
+    tui.input('l').assert_rendered_term_svg_eq(file![
+        "snapshots/details_view_supports_scroll_controls_001.svg"
+    ]);
 
     // scroll by single lines
     tui.render_with_messages('j', Vec::new());
@@ -125,7 +139,7 @@ fn details_scroll_down_updates_selection_when_selected_hunk_leaves_view() {
         },
     );
 
-    tui.input_then_render((KeyModifiers::SHIFT, 'D'));
+    tui.input((KeyModifiers::SHIFT, 'D'));
     tui.render_with_messages(None, Vec::new());
 
     tui.render_with_messages(['j'; 8], Vec::new())
@@ -152,7 +166,7 @@ fn details_scroll_up_updates_selection_to_previous_visible_hunk() {
         },
     );
 
-    tui.input_then_render((KeyModifiers::SHIFT, 'D'));
+    tui.input((KeyModifiers::SHIFT, 'D'));
     tui.render_with_messages(None, Vec::new());
     tui.render_with_messages((KeyModifiers::SHIFT, 'J'), Vec::new());
     tui.render_with_messages((KeyModifiers::SHIFT, 'J'), Vec::new());
@@ -183,26 +197,25 @@ fn commit_message_wraps_in_details_view() {
         },
     );
 
-    tui.input_then_render([KeyCode::Down, KeyCode::Down])
+    tui.input([KeyCode::Down, KeyCode::Down])
         .assert_rendered_term_svg_eq(file![
             "snapshots/commit_message_wraps_in_details_view_001.svg"
         ]);
 
-    tui.input_then_render(KeyCode::Enter)
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/commit_message_wraps_in_details_view_002.svg"
-        ]);
+    tui.input(KeyCode::Enter).assert_rendered_term_svg_eq(file![
+        "snapshots/commit_message_wraps_in_details_view_002.svg"
+    ]);
 
-    tui.input_then_render(" this commit message is intentionally long so the details pane has to wrap the text across multiple visual lines")
+    tui.input(" this commit message is intentionally long so the details pane has to wrap the text across multiple visual lines")
         .assert_rendered_term_svg_eq(file!["snapshots/commit_message_wraps_in_details_view_003.svg"]);
 
     with_var("GIT_AUTHOR_DATE", Some("2000-01-01T00:00:00Z"), || {
         with_var("GIT_COMMITTER_DATE", Some("2000-01-01T00:00:00Z"), || {
-            tui.input_then_render(KeyCode::Enter);
+            tui.input(KeyCode::Enter);
         });
     });
 
-    tui.input_then_render('d');
+    tui.input('d');
 
     tui.render_with_messages((KeyModifiers::CONTROL, 'n'), Vec::new())
         .assert_rendered_term_svg_eq(file![
@@ -234,10 +247,9 @@ fn details_view_renders_multiple_hunks_and_files() {
         },
     );
 
-    tui.input_then_render('d')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/details_view_renders_multiple_hunks_and_files_001.svg"
-        ]);
+    tui.input('d').assert_rendered_term_svg_eq(file![
+        "snapshots/details_view_renders_multiple_hunks_and_files_001.svg"
+    ]);
 }
 
 #[test]
@@ -256,10 +268,9 @@ fn details_diff_svg_shows_plus_and_minus_backgrounds() {
         },
     );
 
-    tui.input_then_render('d')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/details_diff_svg_shows_plus_and_minus_backgrounds_001.svg"
-        ]);
+    tui.input('d').assert_rendered_term_svg_eq(file![
+        "snapshots/details_diff_svg_shows_plus_and_minus_backgrounds_001.svg"
+    ]);
 }
 
 #[test]
@@ -280,23 +291,21 @@ fn toggling_details_off_and_on_resets_scroll_position() {
         },
     );
 
-    tui.input_then_render('l')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/toggling_details_off_and_on_resets_scroll_position_001.svg"
-        ]);
+    tui.input('l').assert_rendered_term_svg_eq(file![
+        "snapshots/toggling_details_off_and_on_resets_scroll_position_001.svg"
+    ]);
 
-    tui.input_then_render((KeyModifiers::CONTROL, 'd'))
+    tui.input((KeyModifiers::CONTROL, 'd'))
         .assert_rendered_term_svg_eq(file![
             "snapshots/toggling_details_off_and_on_resets_scroll_position_002.svg"
         ]);
 
-    tui.input_then_render('h');
-    tui.input_then_render('d')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/toggling_details_off_and_on_resets_scroll_position_003.svg"
-        ]);
+    tui.input('h');
+    tui.input('d').assert_rendered_term_svg_eq(file![
+        "snapshots/toggling_details_off_and_on_resets_scroll_position_003.svg"
+    ]);
 
-    tui.input_then_render('d');
+    tui.input('d');
     tui.render_with_messages(None, Vec::new())
         .assert_rendered_term_svg_eq(file![
             "snapshots/toggling_details_off_and_on_resets_scroll_position_004.svg"
@@ -326,10 +335,9 @@ fn details_view_syntax_highlighting_survives_scrolling() {
         },
     );
 
-    tui.input_then_render('l')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/details_view_syntax_highlighting_survives_scrolling_001.svg"
-        ]);
+    tui.input('l').assert_rendered_term_svg_eq(file![
+        "snapshots/details_view_syntax_highlighting_survives_scrolling_001.svg"
+    ]);
 
     tui.render_with_messages((KeyModifiers::CONTROL, 'd'), Vec::new())
         .assert_rendered_term_svg_eq(file![
@@ -356,8 +364,8 @@ fn details_view_can_grow_and_shrink() {
         },
     );
 
-    tui.input_then_render('d');
-    tui.input_then_render("++-")
+    tui.input('d');
+    tui.input("++-")
         .assert_rendered_term_svg_eq(file!["snapshots/details_view_can_grow_and_shrink_001.svg"]);
 }
 
@@ -375,9 +383,9 @@ fn details_view_resize_clamps_to_max_and_min_width() {
         },
     );
 
-    tui.input_then_render('d');
-    tui.input_then_render("++++++++++++++++++++");
-    tui.input_then_render("--------------------")
+    tui.input('d');
+    tui.input("++++++++++++++++++++");
+    tui.input("--------------------")
         .assert_rendered_term_svg_eq(file![
             "snapshots/details_view_resize_clamps_to_max_and_min_width_001.svg"
         ]);
@@ -404,16 +412,15 @@ fn details_cursor_stays_visible_after_resizing() {
         },
     );
 
-    tui.input_then_render('d');
-    tui.input_then_render('l');
-    tui.input_then_render("----------");
-    tui.input_then_render('j');
-    tui.input_then_render('j');
+    tui.input('d');
+    tui.input('l');
+    tui.input("----------");
+    tui.input('j');
+    tui.input('j');
 
-    tui.input_then_render("++++++++++")
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/details_cursor_stays_visible_after_resizing_001.svg"
-        ]);
+    tui.input("++++++++++").assert_rendered_term_svg_eq(file![
+        "snapshots/details_cursor_stays_visible_after_resizing_001.svg"
+    ]);
 }
 
 #[test]
@@ -426,71 +433,64 @@ fn toggle_full_screen_details_view() {
     let mut tui = test_tui(env);
 
     // can open details with shift+d
-    tui.input_then_render((KeyModifiers::SHIFT, 'D'))
+    tui.input((KeyModifiers::SHIFT, 'D'))
         .assert_rendered_term_svg_eq(file![
             "snapshots/toggle_full_screen_details_view_for_commit_001_open_full_screen.svg"
         ]);
 
     // full screen details don't close when pressing h
-    tui.input_then_render('h')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/toggle_full_screen_details_view_for_commit_002_h_keeps_full_screen_open.svg"
-        ]);
+    tui.input('h').assert_rendered_term_svg_eq(file![
+        "snapshots/toggle_full_screen_details_view_for_commit_002_h_keeps_full_screen_open.svg"
+    ]);
 
     // can close details with shift+d
-    tui.input_then_render((KeyModifiers::SHIFT, 'D'))
+    tui.input((KeyModifiers::SHIFT, 'D'))
         .assert_rendered_term_svg_eq(file![
             "snapshots/toggle_full_screen_details_view_for_commit_003_shift_d_closes_full_screen.svg"
         ]);
 
     // can close full screen details with escape
-    tui.input_then_render((KeyModifiers::SHIFT, 'D'))
+    tui.input((KeyModifiers::SHIFT, 'D'))
         .assert_rendered_term_svg_eq(file![
             "snapshots/toggle_full_screen_details_view_for_commit_004_reopen_full_screen.svg"
         ]);
-    tui.input_then_render(KeyCode::Esc)
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/toggle_full_screen_details_view_for_commit_005_escape_closes_full_screen.svg"
-        ]);
+    tui.input(KeyCode::Esc).assert_rendered_term_svg_eq(file![
+        "snapshots/toggle_full_screen_details_view_for_commit_005_escape_closes_full_screen.svg"
+    ]);
 
     // can close full screen details with d
-    tui.input_then_render((KeyModifiers::SHIFT, 'D'))
+    tui.input((KeyModifiers::SHIFT, 'D'))
         .assert_rendered_term_svg_eq(file![
             "snapshots/toggle_full_screen_details_view_for_commit_006_reopen_full_screen.svg"
         ]);
-    tui.input_then_render('d')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/toggle_full_screen_details_view_for_commit_007_d_closes_full_screen.svg"
-        ]);
+    tui.input('d').assert_rendered_term_svg_eq(file![
+        "snapshots/toggle_full_screen_details_view_for_commit_007_d_closes_full_screen.svg"
+    ]);
 
     // shift+d with split details in normal mode opens full screen details
-    tui.input_then_render('d')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/toggle_full_screen_details_view_for_commit_008_split_details.svg"
-        ]);
-    tui.input_then_render((KeyModifiers::SHIFT, 'D'))
+    tui.input('d').assert_rendered_term_svg_eq(file![
+        "snapshots/toggle_full_screen_details_view_for_commit_008_split_details.svg"
+    ]);
+    tui.input((KeyModifiers::SHIFT, 'D'))
         .assert_rendered_term_svg_eq(file![
             "snapshots/toggle_full_screen_details_view_for_commit_009_split_to_full_screen.svg"
         ]);
-    tui.input_then_render(KeyCode::Esc)
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/toggle_full_screen_details_view_for_commit_010_escape_closes_from_split.svg"
-        ]);
+    tui.input(KeyCode::Esc).assert_rendered_term_svg_eq(file![
+        "snapshots/toggle_full_screen_details_view_for_commit_010_escape_closes_from_split.svg"
+    ]);
 
     // shift+d with split details in details mode opens full screen details
-    tui.input_then_render('d')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/toggle_full_screen_details_view_for_commit_011_split_details.svg"
-        ]);
-    tui.input_then_render('l')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/toggle_full_screen_details_view_for_commit_012_split_details_mode.svg"
-        ]);
-    tui.input_then_render((KeyModifiers::SHIFT, 'D'))
+    tui.input('d').assert_rendered_term_svg_eq(file![
+        "snapshots/toggle_full_screen_details_view_for_commit_011_split_details.svg"
+    ]);
+    tui.input('l').assert_rendered_term_svg_eq(file![
+        "snapshots/toggle_full_screen_details_view_for_commit_012_split_details_mode.svg"
+    ]);
+    tui.input((KeyModifiers::SHIFT, 'D'))
         .assert_rendered_term_svg_eq(file![
             "snapshots/toggle_full_screen_details_view_for_commit_013_details_mode_to_full_screen.svg"
         ]);
-    tui.input_then_render(KeyCode::Esc)
+    tui.input(KeyCode::Esc)
         .assert_rendered_term_svg_eq(file![
             "snapshots/toggle_full_screen_details_view_for_commit_014_escape_closes_from_details_mode.svg"
         ]);
@@ -503,7 +503,7 @@ fn details_view_with_no_changes() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render((KeyModifiers::SHIFT, 'D'));
+    tui.input((KeyModifiers::SHIFT, 'D'));
 
     tui.render_with_messages(None, Vec::new())
         .assert_rendered_contains("0 files changed, +0 -0");
@@ -518,15 +518,13 @@ fn unfocusing_split_details_with_escape() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render('l')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/unfocusing_split_details_with_escape_focused.svg"
-        ]);
+    tui.input('l').assert_rendered_term_svg_eq(file![
+        "snapshots/unfocusing_split_details_with_escape_focused.svg"
+    ]);
 
-    tui.input_then_render(KeyCode::Esc)
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/unfocusing_split_details_with_escape_unfocused.svg"
-        ]);
+    tui.input(KeyCode::Esc).assert_rendered_term_svg_eq(file![
+        "snapshots/unfocusing_split_details_with_escape_unfocused.svg"
+    ]);
 }
 
 #[test]
@@ -538,13 +536,12 @@ fn close_split_details_with_escape() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render('d')
+    tui.input('d')
         .assert_rendered_term_svg_eq(file!["snapshots/close_split_details_with_escape_open.svg"]);
 
-    tui.input_then_render(KeyCode::Esc)
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/close_split_details_with_escape_closed.svg"
-        ]);
+    tui.input(KeyCode::Esc).assert_rendered_term_svg_eq(file![
+        "snapshots/close_split_details_with_escape_closed.svg"
+    ]);
 }
 
 #[test]
@@ -556,13 +553,12 @@ fn escape_after_toggling_split_details_closed_does_not_reopen_details() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render('d');
-    tui.input_then_render('d');
+    tui.input('d');
+    tui.input('d');
 
-    tui.input_then_render(KeyCode::Esc)
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/close_split_details_with_escape_closed.svg"
-        ]);
+    tui.input(KeyCode::Esc).assert_rendered_term_svg_eq(file![
+        "snapshots/close_split_details_with_escape_closed.svg"
+    ]);
 }
 
 #[test]
@@ -574,13 +570,12 @@ fn escape_after_toggling_full_screen_details_closed_does_not_reopen_details() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render((KeyModifiers::SHIFT, 'D'));
-    tui.input_then_render((KeyModifiers::SHIFT, 'D'));
+    tui.input((KeyModifiers::SHIFT, 'D'));
+    tui.input((KeyModifiers::SHIFT, 'D'));
 
-    tui.input_then_render(KeyCode::Esc)
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/toggle_full_screen_details_view_for_commit_closed_full_screen_details.svg"
-        ]);
+    tui.input(KeyCode::Esc).assert_rendered_term_svg_eq(file![
+        "snapshots/toggle_full_screen_details_view_for_commit_closed_full_screen_details.svg"
+    ]);
 }
 
 #[test]
@@ -592,17 +587,15 @@ fn open_and_focus_details_split_can_be_closed_with_esc() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render('l')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/open_and_focus_details_split_can_be_closed_with_esc_focused.svg"
-        ]);
+    tui.input('l').assert_rendered_term_svg_eq(file![
+        "snapshots/open_and_focus_details_split_can_be_closed_with_esc_focused.svg"
+    ]);
 
-    tui.input_then_render(KeyCode::Esc)
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/open_and_focus_details_split_can_be_closed_with_esc_open.svg"
-        ]);
+    tui.input(KeyCode::Esc).assert_rendered_term_svg_eq(file![
+        "snapshots/open_and_focus_details_split_can_be_closed_with_esc_open.svg"
+    ]);
 
-    tui.input_then_render(KeyCode::Esc);
+    tui.input(KeyCode::Esc);
 }
 
 #[test]
@@ -614,6 +607,110 @@ fn viewing_empty_file() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render('d')
+    tui.input('d')
         .assert_rendered_term_svg_eq(file!["snapshots/viewing_empty_file_001.svg"]);
+}
+
+#[test]
+fn discard_hunk_from_detail_view_via_uncommitted() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.file("one", "content of one");
+    env.file("two", "content of two");
+    env.file("three", "content of three");
+
+    let mut tui = test_tui(env);
+
+    tui.input('d');
+    tui.input('l');
+    tui.input((KeyModifiers::SHIFT, 'G'))
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/discard_hunk_from_detail_view_via_uncommitted_001.svg"
+        ]);
+
+    tui.input('x')
+        .assert_rendered_contains("Discard hunk twop:b two?")
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/discard_hunk_from_detail_view_via_uncommitted_002.svg"
+        ]);
+    tui.input('y').assert_rendered_term_svg_eq(file![
+        "snapshots/discard_hunk_from_detail_view_via_uncommitted_003.svg"
+    ]);
+
+    tui.input('x')
+        .assert_rendered_contains("Discard hunk or:f three?")
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/discard_hunk_from_detail_view_via_uncommitted_004.svg"
+        ]);
+    tui.input('y').assert_rendered_term_svg_eq(file![
+        "snapshots/discard_hunk_from_detail_view_via_uncommitted_005.svg"
+    ]);
+
+    tui.input('x')
+        .assert_rendered_contains("Discard hunk kl:f one?")
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/discard_hunk_from_detail_view_via_uncommitted_006.svg"
+        ]);
+    tui.input('y').assert_rendered_term_svg_eq(file![
+        "snapshots/discard_hunk_from_detail_view_via_uncommitted_007.svg"
+    ]);
+}
+
+#[test]
+fn discard_hunk_from_detail_view_via_file() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.file("one", "content of one");
+    env.file("two", "content of two");
+    env.file("three", "content of three");
+
+    env.file(
+        "x-file",
+        Vec::from([
+            "line 1", "line 2", "line 3", "line 4", "line 5", "line 6", "line 7", "line 8",
+            "line 9",
+        ])
+        .join("\n"),
+    );
+
+    let mut tui = test_tui(env);
+
+    tui.input('j');
+    tui.input('j');
+    tui.input('j');
+    tui.input('j');
+    tui.input('c');
+    tui.input('e');
+    tui.input('b');
+
+    tui.env().prepend_file("x-file", "new first line");
+    tui.env().append_file("x-file", "new first line");
+
+    tui.reload().assert_rendered_term_svg_eq(file![
+        "snapshots/discard_hunk_from_detail_view_via_file_001.svg"
+    ]);
+
+    tui.input('g');
+    tui.input('j');
+    tui.input('j');
+    tui.input('j');
+    tui.input('j').assert_rendered_term_svg_eq(file![
+        "snapshots/discard_hunk_from_detail_view_via_file_002.svg"
+    ]);
+    tui.input('d');
+    tui.input('l');
+
+    tui.input((KeyModifiers::SHIFT, 'G'));
+    tui.input('x')
+        .assert_rendered_contains("Discard hunk px:0 x-file?");
+    tui.input('y').assert_rendered_term_svg_eq(file![
+        "snapshots/discard_hunk_from_detail_view_via_file_003.svg"
+    ]);
+
+    tui.input('x');
+    tui.input('y').assert_rendered_term_svg_eq(file![
+        "snapshots/discard_hunk_from_detail_view_via_file_004.svg"
+    ]);
 }

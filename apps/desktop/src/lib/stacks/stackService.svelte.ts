@@ -619,10 +619,14 @@ export class StackService {
 		assignTo?: string;
 		dryRun: boolean;
 	}) {
-		const result = await this.backendApi.endpoints.commitUncommitChanges.mutate({
+		const result = await this.backendApi.endpoints.commitUncommitChangesFromCommits.mutate({
 			projectId: args.projectId,
-			changes: args.changes,
-			commitId: args.commitId,
+			sources: [
+				{
+					commitId: args.commitId,
+					changes: args.changes,
+				},
+			],
 			assignTo: args.assignTo,
 			dryRun: args.dryRun,
 		});

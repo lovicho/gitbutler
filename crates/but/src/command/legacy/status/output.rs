@@ -134,12 +134,14 @@ impl StatusOutput<'_> {
         connector: Vec<Span<'static>>,
         line: BranchLineContent,
         id: CliId,
+        is_merged_upstream: bool,
     ) -> anyhow::Result<()> {
         self.push_line(
             Some(connector),
             StatusOutputContent::Branch(line),
             StatusOutputLineData::Branch {
                 cli_id: Arc::new(id),
+                is_merged_upstream,
             },
         )
     }
@@ -353,11 +355,13 @@ impl StatusOutputLine {
                 | CommitClassification::Modified => true,
                 CommitClassification::Upstream | CommitClassification::Integrated => false,
             },
+            StatusOutputLineData::Branch {
+                is_merged_upstream, ..
+            } => !*is_merged_upstream,
             StatusOutputLineData::StagedChanges { .. }
             | StatusOutputLineData::StagedFile { .. }
             | StatusOutputLineData::UncommittedChanges { .. }
             | StatusOutputLineData::UncommittedFile { .. }
-            | StatusOutputLineData::Branch { .. }
             | StatusOutputLineData::CommitMessage
             | StatusOutputLineData::MergeBase
             | StatusOutputLineData::File { .. } => true,
@@ -392,6 +396,7 @@ pub(super) enum StatusOutputLineData {
     },
     Branch {
         cli_id: Arc<CliId>,
+        is_merged_upstream: bool,
     },
     Commit {
         cli_id: Arc<CliId>,
@@ -415,7 +420,7 @@ impl StatusOutputLineData {
         match self {
             StatusOutputLineData::UncommittedChanges { cli_id }
             | StatusOutputLineData::UncommittedFile { cli_id }
-            | StatusOutputLineData::Branch { cli_id }
+            | StatusOutputLineData::Branch { cli_id, .. }
             | StatusOutputLineData::StagedChanges { cli_id }
             | StatusOutputLineData::StagedFile { cli_id }
             | StatusOutputLineData::Commit { cli_id, .. }

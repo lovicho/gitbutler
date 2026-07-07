@@ -20,27 +20,26 @@ fn rub_api_uncommitted_to_commit() {
     tui.reload()
         .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊   vo A test.txt"]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
 
-    tui.input_then_render('n')
+    tui.input('n')
         .assert_current_line_eq(str!["┊●   f184fc7 (no commit message) (no changes)"]);
 
-    tui.input_then_render([KeyCode::Up, KeyCode::Up])
+    tui.input([KeyCode::Up, KeyCode::Up])
         .assert_current_line_eq(str!["┊   vo A test.txt"]);
 
-    tui.input_then_render('r')
+    tui.input('r')
         .assert_current_line_eq(str!["┊   << source >> << noop >> vo A test.txt"]);
 
-    tui.input_then_render(KeyCode::Down)
-        .assert_current_line_eq(str![
-            "┊●   << amend >> f184fc7 (no commit message) (no changes)"
-        ]);
+    tui.input(KeyCode::Down).assert_current_line_eq(str![
+        "┊●   << amend >> f184fc7 (no commit message) (no changes)"
+    ]);
 
-    tui.input_then_render(KeyCode::Enter)
+    tui.input(KeyCode::Enter)
         .assert_current_line_eq(str!["┊●   6bdd3d2 (no commit message)"])
         .assert_rendered_term_svg_eq(file!["snapshots/rub_api_uncommitted_to_commit.svg"]);
 }
@@ -57,19 +56,19 @@ fn rub_api_uncommitted_to_commit_preserves_global_file_list() {
     tui.reload()
         .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
 
-    tui.input_then_render((KeyModifiers::SHIFT, 'F'))
+    tui.input((KeyModifiers::SHIFT, 'F'))
         .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊   vo A test.txt"]);
 
-    tui.input_then_render('r')
+    tui.input('r')
         .assert_current_line_eq(str!["┊   << source >> << noop >> vo A test.txt"]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊●   << amend >> 9477ae7 add A"]);
 
-    tui.input_then_render(KeyCode::Enter)
+    tui.input(KeyCode::Enter)
         .assert_current_line_eq(str!["┊●   8474410 add A"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/rub_api_uncommitted_to_commit_preserves_global_file_list_final.svg"
@@ -89,13 +88,13 @@ fn rub_api_unassign_uncommitted_operation() {
     tui.reload()
         .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊   vo A test.txt"]);
 
-    tui.input_then_render('r')
+    tui.input('r')
         .assert_current_line_eq(str!["┊   << source >> << noop >> vo A test.txt"]);
 
-    tui.input_then_render(KeyCode::Up)
+    tui.input(KeyCode::Up)
         .assert_current_line_eq(str!["╭┄<< unassign hunks >> zz [uncommitted]"]);
 }
 
@@ -112,13 +111,13 @@ fn rub_api_uncommitted_to_commit_operation() {
     tui.reload()
         .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊   vo A test.txt"]);
 
-    tui.input_then_render('r')
+    tui.input('r')
         .assert_current_line_eq(str!["┊   << source >> << noop >> vo A test.txt"]);
 
-    tui.input_then_render([KeyCode::Down, KeyCode::Down])
+    tui.input([KeyCode::Down, KeyCode::Down])
         .assert_current_line_eq(str!["┊●   << amend >> d3e2ba3 add B"]);
 }
 
@@ -135,14 +134,14 @@ fn mark_and_rub_multiple_uncommitted_files() {
 
     tui.reload();
 
-    tui.input_then_render('j');
-    tui.input_then_render(' ');
-    tui.input_then_render(' ');
+    tui.input('j');
+    tui.input(' ');
+    tui.input(' ');
 
-    tui.input_then_render('r')
+    tui.input('r')
         .assert_current_line_eq(str!["┊●   << amend >> 9477ae7 add A"]);
 
-    tui.input_then_render(KeyCode::Enter)
+    tui.input(KeyCode::Enter)
         .assert_current_line_eq(str!["┊●   91784b3 add A"]);
 
     let status = tui.env().invoke_git("status --porcelain");
@@ -160,13 +159,13 @@ fn rub_api_cannot_rub_into_branches() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render([KeyCode::Down, KeyCode::Down])
+    tui.input([KeyCode::Down, KeyCode::Down])
         .assert_current_line_eq(str!["┊●   9477ae7 add A"]);
 
-    tui.input_then_render('r')
+    tui.input('r')
         .assert_current_line_eq(str!["┊●   << source >> << noop >> 9477ae7 add A"]);
 
-    tui.input_then_render(KeyCode::Up)
+    tui.input(KeyCode::Up)
         .assert_current_line_eq(str!["╭┄<< undo commit >> zz [uncommitted] (no changes)"]);
 }
 
@@ -184,16 +183,16 @@ fn rub_api_reverse_rub_uses_uncommitted_source_when_uncommitted_has_changes() {
     tui.reload()
         .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
 
-    tui.input_then_render((KeyModifiers::SHIFT, 'J'))
+    tui.input((KeyModifiers::SHIFT, 'J'))
         .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊●   9477ae7 add A"]);
 
-    tui.input_then_render((KeyModifiers::SHIFT, 'R'))
+    tui.input((KeyModifiers::SHIFT, 'R'))
         .assert_current_line_eq(str!["┊●   << amend >> 9477ae7 add A"]);
 
-    tui.input_then_render([KeyCode::Up, KeyCode::Up])
+    tui.input([KeyCode::Up, KeyCode::Up])
         .assert_current_line_eq(str!["╭┄<< source >> << noop >> zz [uncommitted]"]);
 }
 
@@ -208,13 +207,13 @@ fn rub_api_reverse_rub_uses_uncommitted_source_when_stack_has_no_assigned_change
     tui.reload()
         .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
 
-    tui.input_then_render([KeyCode::Down, KeyCode::Down])
+    tui.input([KeyCode::Down, KeyCode::Down])
         .assert_current_line_eq(str!["┊●   9477ae7 add A"]);
 
-    tui.input_then_render((KeyModifiers::SHIFT, 'R'))
+    tui.input((KeyModifiers::SHIFT, 'R'))
         .assert_current_line_eq(str!["┊●   << amend >> 9477ae7 add A"]);
 
-    tui.input_then_render([KeyCode::Up, KeyCode::Up])
+    tui.input([KeyCode::Up, KeyCode::Up])
         .assert_current_line_eq(str![
             "╭┄<< source >> << noop >> zz [uncommitted] (no changes)"
         ]);
@@ -231,7 +230,7 @@ fn rub_api_reverse_rub_is_noop_on_non_commit_selection() {
     tui.reload()
         .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
 
-    tui.input_then_render((KeyModifiers::SHIFT, 'R'))
+    tui.input((KeyModifiers::SHIFT, 'R'))
         .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
 }
 
@@ -246,13 +245,13 @@ fn rub_api_undo_commit_operation() {
     tui.reload()
         .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
 
-    tui.input_then_render([KeyCode::Down, KeyCode::Down])
+    tui.input([KeyCode::Down, KeyCode::Down])
         .assert_current_line_eq(str!["┊●   9477ae7 add A"]);
 
-    tui.input_then_render('r')
+    tui.input('r')
         .assert_current_line_eq(str!["┊●   << source >> << noop >> 9477ae7 add A"]);
 
-    tui.input_then_render([KeyCode::Up, KeyCode::Up])
+    tui.input([KeyCode::Up, KeyCode::Up])
         .assert_current_line_eq(str!["╭┄<< undo commit >> zz [uncommitted] (no changes)"]);
 }
 
@@ -267,13 +266,13 @@ fn rub_api_squash_commits_operation() {
     tui.reload()
         .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
 
-    tui.input_then_render([KeyCode::Down, KeyCode::Down])
+    tui.input([KeyCode::Down, KeyCode::Down])
         .assert_current_line_eq(str!["┊●   9477ae7 add A"]);
 
-    tui.input_then_render('r')
+    tui.input('r')
         .assert_current_line_eq(str!["┊●   << source >> << noop >> 9477ae7 add A"]);
 
-    tui.input_then_render([KeyCode::Down, KeyCode::Down, KeyCode::Down, KeyCode::Down])
+    tui.input([KeyCode::Down, KeyCode::Down, KeyCode::Down, KeyCode::Down])
         .assert_current_line_eq(str!["┊●   << squash >> d3e2ba3 add B"]);
 }
 
@@ -284,27 +283,27 @@ fn rub_api_squash_commits_toggles_message_strategy_labels() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render([KeyCode::Down, KeyCode::Down])
+    tui.input([KeyCode::Down, KeyCode::Down])
         .assert_current_line_eq(str!["┊●   9477ae7 add A"]);
 
-    tui.input_then_render('r')
+    tui.input('r')
         .assert_current_line_eq(str!["┊●   << source >> << noop >> 9477ae7 add A"]);
 
-    tui.input_then_render([KeyCode::Down, KeyCode::Down, KeyCode::Down, KeyCode::Down])
+    tui.input([KeyCode::Down, KeyCode::Down, KeyCode::Down, KeyCode::Down])
         .assert_current_line_eq(str!["┊●   << squash >> d3e2ba3 add B"]);
 
-    tui.input_then_render((KeyModifiers::SHIFT, 'T'))
+    tui.input((KeyModifiers::SHIFT, 'T'))
         .assert_current_line_eq(str!["┊●   << squash (use this message) >> d3e2ba3 add B"]);
 
-    tui.input_then_render((KeyModifiers::SHIFT, 'T'))
+    tui.input((KeyModifiers::SHIFT, 'T'))
         .assert_current_line_eq(str!["┊●   << squash >> d3e2ba3 add B"]);
 
-    tui.input_then_render((KeyModifiers::SHIFT, 'S'))
+    tui.input((KeyModifiers::SHIFT, 'S'))
         .assert_current_line_eq(str![
             "┊●   << squash (discard this message) >> d3e2ba3 add B"
         ]);
 
-    tui.input_then_render((KeyModifiers::SHIFT, 'S'))
+    tui.input((KeyModifiers::SHIFT, 'S'))
         .assert_current_line_eq(str!["┊●   << squash >> d3e2ba3 add B"]);
 }
 
@@ -315,19 +314,19 @@ fn rub_api_squash_commits_can_keep_target_message() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render([KeyCode::Down, KeyCode::Down])
+    tui.input([KeyCode::Down, KeyCode::Down])
         .assert_current_line_eq(str!["┊●   9477ae7 add A"]);
 
-    tui.input_then_render('r')
+    tui.input('r')
         .assert_current_line_eq(str!["┊●   << source >> << noop >> 9477ae7 add A"]);
 
-    tui.input_then_render([KeyCode::Down, KeyCode::Down, KeyCode::Down, KeyCode::Down])
+    tui.input([KeyCode::Down, KeyCode::Down, KeyCode::Down, KeyCode::Down])
         .assert_current_line_eq(str!["┊●   << squash >> d3e2ba3 add B"]);
 
-    tui.input_then_render((KeyModifiers::SHIFT, 'T'))
+    tui.input((KeyModifiers::SHIFT, 'T'))
         .assert_current_line_eq(str!["┊●   << squash (use this message) >> d3e2ba3 add B"]);
 
-    tui.input_then_render(KeyCode::Enter)
+    tui.input(KeyCode::Enter)
         .assert_current_line_eq(str!["┊●   4788772 add B"]);
 }
 
@@ -338,21 +337,21 @@ fn rub_api_squash_commits_can_keep_source_message() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render([KeyCode::Down, KeyCode::Down])
+    tui.input([KeyCode::Down, KeyCode::Down])
         .assert_current_line_eq(str!["┊●   9477ae7 add A"]);
 
-    tui.input_then_render('r')
+    tui.input('r')
         .assert_current_line_eq(str!["┊●   << source >> << noop >> 9477ae7 add A"]);
 
-    tui.input_then_render([KeyCode::Down, KeyCode::Down, KeyCode::Down, KeyCode::Down])
+    tui.input([KeyCode::Down, KeyCode::Down, KeyCode::Down, KeyCode::Down])
         .assert_current_line_eq(str!["┊●   << squash >> d3e2ba3 add B"]);
 
-    tui.input_then_render((KeyModifiers::SHIFT, 'S'))
+    tui.input((KeyModifiers::SHIFT, 'S'))
         .assert_current_line_eq(str![
             "┊●   << squash (discard this message) >> d3e2ba3 add B"
         ]);
 
-    tui.input_then_render(KeyCode::Enter)
+    tui.input(KeyCode::Enter)
         .assert_current_line_eq(str!["┊●   75eb901 add A"]);
 }
 
@@ -367,19 +366,19 @@ fn rub_api_committed_file_to_commit_operation() {
     tui.reload()
         .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
 
-    tui.input_then_render([KeyCode::Down, KeyCode::Down])
+    tui.input([KeyCode::Down, KeyCode::Down])
         .assert_current_line_eq(str!["┊●   9477ae7 add A"]);
 
-    tui.input_then_render((KeyModifiers::SHIFT, 'F'))
+    tui.input((KeyModifiers::SHIFT, 'F'))
         .assert_current_line_eq(str!["┊●   9477ae7 add A"]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊│     94:tm A A"]);
 
-    tui.input_then_render('r')
+    tui.input('r')
         .assert_current_line_eq(str!["┊│     << source >> << noop >> 94:tm A A"]);
 
-    tui.input_then_render(KeyCode::Up)
+    tui.input(KeyCode::Up)
         .assert_current_line_eq(str!["┊●   << move file >> 9477ae7 add A"]);
 }
 
@@ -394,19 +393,19 @@ fn rub_api_committed_file_to_uncommitted_operation() {
     tui.reload()
         .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
 
-    tui.input_then_render([KeyCode::Down, KeyCode::Down])
+    tui.input([KeyCode::Down, KeyCode::Down])
         .assert_current_line_eq(str!["┊●   9477ae7 add A"]);
 
-    tui.input_then_render((KeyModifiers::SHIFT, 'F'))
+    tui.input((KeyModifiers::SHIFT, 'F'))
         .assert_current_line_eq(str!["┊●   9477ae7 add A"]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊│     94:tm A A"]);
 
-    tui.input_then_render('r')
+    tui.input('r')
         .assert_current_line_eq(str!["┊│     << source >> << noop >> 94:tm A A"]);
 
-    tui.input_then_render([KeyCode::Up, KeyCode::Up, KeyCode::Up])
+    tui.input([KeyCode::Up, KeyCode::Up, KeyCode::Up])
         .assert_current_line_eq(str!["╭┄<< uncommit file >> zz [uncommitted] (no changes)"]);
 }
 
@@ -424,16 +423,16 @@ fn rub_api_uncommitted_area_to_stack_operation() {
     tui.reload()
         .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊   nk A a.txt"]);
 
-    tui.input_then_render('r')
+    tui.input('r')
         .assert_current_line_eq(str!["┊   << source >> << noop >> nk A a.txt"]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊●   << amend >> 9477ae7 add A"]);
 
-    tui.input_then_render(KeyCode::Enter)
+    tui.input(KeyCode::Enter)
         .assert_current_line_eq(str!["┊●   55d8e41 add A"]);
 }
 
@@ -451,16 +450,16 @@ fn rub_api_uncommitted_hunk_to_stack_operation() {
     tui.reload()
         .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊   nk A a.txt"]);
 
-    tui.input_then_render('r')
+    tui.input('r')
         .assert_current_line_eq(str!["┊   << source >> << noop >> nk A a.txt"]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊●   << amend >> 9477ae7 add A"]);
 
-    tui.input_then_render(KeyCode::Enter)
+    tui.input(KeyCode::Enter)
         .assert_current_line_eq(str!["┊●   55d8e41 add A"]);
 }
 
@@ -477,16 +476,16 @@ fn rub_api_stack_to_uncommitted_operation() {
     tui.reload()
         .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊   vo A test.txt"]);
 
-    tui.input_then_render('r')
+    tui.input('r')
         .assert_current_line_eq(str!["┊   << source >> << noop >> vo A test.txt"]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊●   << amend >> 9477ae7 add A"]);
 
-    tui.input_then_render(KeyCode::Enter)
+    tui.input(KeyCode::Enter)
         .assert_current_line_eq(str!["┊●   8474410 add A"]);
 }
 
@@ -504,19 +503,19 @@ fn rub_api_stack_to_stack_operation() {
     tui.reload()
         .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊   tm M A"]);
 
-    tui.input_then_render('r')
+    tui.input('r')
         .assert_current_line_eq(str!["┊   << source >> << noop >> tm M A"]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊●   << amend >> 9477ae7 add A"]);
 
-    tui.input_then_render(KeyCode::Enter)
+    tui.input(KeyCode::Enter)
         .assert_current_line_eq(str!["┊●   056a77b add A"]);
 
-    tui.input_then_render([
+    tui.input([
         KeyCode::Up,
         KeyCode::Up,
         KeyCode::Up,
@@ -527,23 +526,22 @@ fn rub_api_stack_to_stack_operation() {
     ])
     .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊   pl M B"]);
 
-    tui.input_then_render('r')
+    tui.input('r')
         .assert_current_line_eq(str!["┊   << source >> << noop >> pl M B"]);
 
-    tui.input_then_render([KeyCode::Down, KeyCode::Down, KeyCode::Down, KeyCode::Down])
+    tui.input([KeyCode::Down, KeyCode::Down, KeyCode::Down, KeyCode::Down])
         .assert_current_line_eq(str!["┊●   << amend >> d3e2ba3 add B"]);
 
-    tui.input_then_render(KeyCode::Enter)
+    tui.input(KeyCode::Enter)
         .assert_current_line_eq(str!["┊●   7f2e16d add B"]);
 
-    tui.input_then_render((KeyModifiers::SHIFT, 'K'))
+    tui.input((KeyModifiers::SHIFT, 'K'))
         .assert_current_line_eq(str!["┊╭┄h0 [B]"]);
 
-    tui.input_then_render('r')
-        .assert_current_line_eq(str!["┊╭┄h0 [B]"]);
+    tui.input('r').assert_current_line_eq(str!["┊╭┄h0 [B]"]);
 }
 
 #[test]
@@ -557,31 +555,29 @@ fn rub_multiple_commits_into_uncommitted_area() {
     tui.env().file("B", "content");
     tui.reload();
 
-    tui.input_then_render('j');
-    tui.input_then_render('c');
-    tui.input_then_render('e');
-    tui.input_then_render('b');
+    tui.input('j');
+    tui.input('c');
+    tui.input('e');
+    tui.input('b');
 
-    tui.input_then_render('g');
-    tui.input_then_render('j');
-    tui.input_then_render('c');
-    tui.input_then_render('e');
-    tui.input_then_render('j');
-    tui.input_then_render(KeyCode::Enter);
+    tui.input('g');
+    tui.input('j');
+    tui.input('c');
+    tui.input('e');
+    tui.input('j');
+    tui.input(KeyCode::Enter);
 
-    tui.input_then_render(' ');
-    tui.input_then_render(' ');
+    tui.input(' ');
+    tui.input(' ');
 
-    tui.input_then_render('r');
-    tui.input_then_render('g')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/rub_multiple_commits_into_uncommitted_001.svg"
-        ]);
+    tui.input('r');
+    tui.input('g').assert_rendered_term_svg_eq(file![
+        "snapshots/rub_multiple_commits_into_uncommitted_001.svg"
+    ]);
 
-    tui.input_then_render(KeyCode::Enter)
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/rub_multiple_commits_into_uncommitted_final.svg"
-        ]);
+    tui.input(KeyCode::Enter).assert_rendered_term_svg_eq(file![
+        "snapshots/rub_multiple_commits_into_uncommitted_final.svg"
+    ]);
 }
 
 #[test]
@@ -593,30 +589,26 @@ fn marks_are_maintained_after_leaving_rub_mode() {
 
     tui.reload();
 
-    tui.input_then_render('j');
-    tui.input_then_render('n');
-    tui.input_then_render('n');
-    tui.input_then_render('n')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/marks_are_maintained_after_leaving_rub_mode_001.svg"
-        ]);
+    tui.input('j');
+    tui.input('n');
+    tui.input('n');
+    tui.input('n').assert_rendered_term_svg_eq(file![
+        "snapshots/marks_are_maintained_after_leaving_rub_mode_001.svg"
+    ]);
 
-    tui.input_then_render(' ');
-    tui.input_then_render(' ');
-    tui.input_then_render(' ')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/marks_are_maintained_after_leaving_rub_mode_002.svg"
-        ]);
+    tui.input(' ');
+    tui.input(' ');
+    tui.input(' ').assert_rendered_term_svg_eq(file![
+        "snapshots/marks_are_maintained_after_leaving_rub_mode_002.svg"
+    ]);
 
-    tui.input_then_render('r')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/marks_are_maintained_after_leaving_rub_mode_003.svg"
-        ]);
+    tui.input('r').assert_rendered_term_svg_eq(file![
+        "snapshots/marks_are_maintained_after_leaving_rub_mode_003.svg"
+    ]);
 
-    tui.input_then_render(KeyCode::Esc)
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/marks_are_maintained_after_leaving_rub_mode_004.svg"
-        ]);
+    tui.input(KeyCode::Esc).assert_rendered_term_svg_eq(file![
+        "snapshots/marks_are_maintained_after_leaving_rub_mode_004.svg"
+    ]);
 }
 
 #[test]
@@ -628,19 +620,19 @@ fn moves_cursor_back_into_file_list() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render('j');
-    tui.input_then_render('j');
-    tui.input_then_render('j')
+    tui.input('j');
+    tui.input('j');
+    tui.input('j')
         .assert_rendered_term_svg_eq(file!["snapshots/moves_cursor_back_into_file_list_001.svg"]);
 
-    tui.input_then_render('f')
+    tui.input('f')
         .assert_rendered_term_svg_eq(file!["snapshots/moves_cursor_back_into_file_list_002.svg"]);
 
-    tui.input_then_render('r');
-    tui.input_then_render('g')
+    tui.input('r');
+    tui.input('g')
         .assert_rendered_term_svg_eq(file!["snapshots/moves_cursor_back_into_file_list_003.svg"]);
 
-    tui.input_then_render(KeyCode::Esc)
+    tui.input(KeyCode::Esc)
         .assert_rendered_term_svg_eq(file!["snapshots/moves_cursor_back_into_file_list_004.svg"]);
 }
 
@@ -653,29 +645,25 @@ fn moves_the_cursor_back_to_a_valid_location_when_going_back() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render('j');
-    tui.input_then_render('j');
-    tui.input_then_render('n');
-    tui.input_then_render('n');
-    tui.input_then_render('n')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/moves_the_cursor_back_to_a_valid_location_when_going_back_001.svg"
-        ]);
+    tui.input('j');
+    tui.input('j');
+    tui.input('n');
+    tui.input('n');
+    tui.input('n').assert_rendered_term_svg_eq(file![
+        "snapshots/moves_the_cursor_back_to_a_valid_location_when_going_back_001.svg"
+    ]);
 
-    tui.input_then_render(' ');
-    tui.input_then_render(' ');
-    tui.input_then_render('r')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/moves_the_cursor_back_to_a_valid_location_when_going_back_002.svg"
-        ]);
+    tui.input(' ');
+    tui.input(' ');
+    tui.input('r').assert_rendered_term_svg_eq(file![
+        "snapshots/moves_the_cursor_back_to_a_valid_location_when_going_back_002.svg"
+    ]);
 
-    tui.input_then_render('g')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/moves_the_cursor_back_to_a_valid_location_when_going_back_003.svg"
-        ]);
+    tui.input('g').assert_rendered_term_svg_eq(file![
+        "snapshots/moves_the_cursor_back_to_a_valid_location_when_going_back_003.svg"
+    ]);
 
-    tui.input_then_render(KeyCode::Esc)
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/moves_the_cursor_back_to_a_valid_location_when_going_back_004.svg"
-        ]);
+    tui.input(KeyCode::Esc).assert_rendered_term_svg_eq(file![
+        "snapshots/moves_the_cursor_back_to_a_valid_location_when_going_back_004.svg"
+    ]);
 }

@@ -330,13 +330,11 @@ impl gix::diff::tree::Visit for Delegate {
 impl std::fmt::Debug for Outcome {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let Outcome {
-            snapshot_tree,
             head_update,
             num_deleted_files,
             num_added_or_updated_files,
         } = self;
         f.debug_struct("Outcome")
-            .field("snapshot_tree", snapshot_tree)
             .field("num_deleted_files", num_deleted_files)
             .field("num_added_or_updated_files", num_added_or_updated_files)
             .field(

@@ -112,7 +112,7 @@ impl ReorderStackSource {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum StackMessage {
     Enter,
     ShowApplyPicker,
@@ -191,7 +191,7 @@ fn line_uses_top_stack_for_stack_mode(line: &StatusOutputLine) -> bool {
 pub fn stack_ids_in_display_order(status_lines: &[StatusOutputLine]) -> Vec<StackId> {
     let mut stack_ids = Vec::new();
     for line in status_lines {
-        if let StatusOutputLineData::Branch { cli_id } = &line.data
+        if let StatusOutputLineData::Branch { cli_id, .. } = &line.data
             && let CliId::Branch {
                 stack_id: Some(stack_id),
                 ..
@@ -209,7 +209,7 @@ fn stack_id_for_line(
     status_lines: &[StatusOutputLine],
 ) -> Option<StackId> {
     match &line.data {
-        StatusOutputLineData::Branch { cli_id }
+        StatusOutputLineData::Branch { cli_id, .. }
         | StatusOutputLineData::StagedChanges { cli_id }
         | StatusOutputLineData::StagedFile { cli_id }
         | StatusOutputLineData::UncommittedFile { cli_id }

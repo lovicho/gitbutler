@@ -76,6 +76,14 @@ impl AgentTarget {
             | detect_agent::Agent::Antigravity
             | detect_agent::Agent::Replit
             | detect_agent::Agent::V0
+            | detect_agent::Agent::Crush
+            | detect_agent::Agent::PulumiNeo
+            | detect_agent::Agent::Goose
+            | detect_agent::Agent::Amp
+            | detect_agent::Agent::Cline
+            | detect_agent::Agent::RooCode
+            | detect_agent::Agent::Trae
+            | detect_agent::Agent::TabnineCli
             | detect_agent::Agent::Unknown => None,
         }
     }

@@ -19,13 +19,13 @@ fn commit_mode_enter_and_escape() {
     tui.reload()
         .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
 
-    tui.input_then_render('c')
+    tui.input('c')
         .assert_current_line_eq(str!["╭┄<< source >> << noop >> zz [uncommitted]"]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
 
-    tui.input_then_render(KeyCode::Esc)
+    tui.input(KeyCode::Esc)
         .assert_current_line_eq(str!["┊╭┄g0 [A]"])
         .assert_rendered_term_svg_eq(file!["snapshots/commit_mode_enter_and_escape_final.svg"]);
 }
@@ -42,10 +42,10 @@ fn commit_confirm_on_source_is_noop() {
     tui.reload()
         .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
 
-    tui.input_then_render('c')
+    tui.input('c')
         .assert_current_line_eq(str!["╭┄<< source >> << noop >> zz [uncommitted]"]);
 
-    tui.input_then_render(KeyCode::Enter)
+    tui.input(KeyCode::Enter)
         .assert_current_line_eq(str!["╭┄zz [uncommitted]"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/commit_confirm_on_source_is_noop_final.svg"
@@ -62,29 +62,28 @@ fn commiting_with_no_uncommitted_changes() {
     tui.reload()
         .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
 
-    tui.input_then_render('c')
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
+    tui.input('c').assert_current_line_eq(str!["┊╭┄g0 [A]"]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊●   9477ae7 add A"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/commiting_with_no_uncommitted_changes_001.svg"
         ]);
 
-    tui.input_then_render(KeyCode::Up)
+    tui.input(KeyCode::Up)
         .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
 
-    tui.input_then_render('e')
+    tui.input('e')
         .assert_current_line_eq(str!["┊╭┄g0 [A]"])
         .assert_rendered_contains("┊│ << commit to branch (empty message) >>")
         .assert_rendered_term_svg_eq(file![
             "snapshots/commiting_with_no_uncommitted_changes_002.svg"
         ]);
 
-    tui.input_then_render(KeyCode::Enter)
+    tui.input(KeyCode::Enter)
         .assert_current_line_eq(str!["┊●   f184fc7 (no commit message) (no changes)"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/commiting_with_no_uncommitted_changes_003.svg"
@@ -110,14 +109,14 @@ fn commit_from_unstaged_changes_creates_commit_visible_in_tui() {
     tui.reload()
         .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
 
-    tui.input_then_render('c')
+    tui.input('c')
         .assert_current_line_eq(str!["╭┄<< source >> << noop >> zz [uncommitted]"]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
 
     with_var("GIT_EDITOR", Some(editor_command), || {
-        tui.input_then_render(KeyCode::Enter)
+        tui.input(KeyCode::Enter)
             .assert_current_line_eq(str!["┊●   48fdc38 commit from tui test"]);
     });
 
@@ -147,14 +146,14 @@ fn commit_from_unstaged_changes_to_new_branch_creates_branch_and_commit() {
     tui.reload()
         .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
 
-    tui.input_then_render('c')
+    tui.input('c')
         .assert_current_line_eq(str!["╭┄<< source >> << noop >> zz [uncommitted]"]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
 
     with_var("GIT_EDITOR", Some(editor_command), || {
-        tui.input_then_render('b')
+        tui.input('b')
             .assert_current_line_eq(str!["┊●   48fdc38 commit from tui test"]);
     });
 
@@ -190,14 +189,14 @@ fn commit_from_unstaged_changes_with_multiple_hunks_in_same_file_commits_all_cha
     tui.reload()
         .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
 
-    tui.input_then_render('c')
+    tui.input('c')
         .assert_current_line_eq(str!["╭┄<< source >> << noop >> zz [uncommitted]"]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
 
     with_var("GIT_EDITOR", Some(editor_command.clone()), || {
-        tui.input_then_render(KeyCode::Enter)
+        tui.input(KeyCode::Enter)
             .assert_current_line_eq(str!["┊●   7f81dac commit from tui test"]);
     });
 
@@ -215,18 +214,18 @@ fn commit_from_unstaged_changes_with_multiple_hunks_in_same_file_commits_all_cha
     tui.env().file("multi-hunk.txt", changed);
 
     tui.reload();
-    tui.input_then_render(std::array::repeat::<_, 20>(KeyCode::Up));
+    tui.input(std::array::repeat::<_, 20>(KeyCode::Up));
     tui.reload()
         .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
 
-    tui.input_then_render('c')
+    tui.input('c')
         .assert_current_line_eq(str!["╭┄<< source >> << noop >> zz [uncommitted]"]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
 
     with_var("GIT_EDITOR", Some(editor_command), || {
-        tui.input_then_render(KeyCode::Enter)
+        tui.input(KeyCode::Enter)
             .assert_current_line_eq(str!["┊●   ab9015b commit from tui test"]);
     });
 
@@ -249,10 +248,10 @@ fn commit_mode_shows_commit_below_on_commit_rows() {
     tui.reload()
         .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
 
-    tui.input_then_render('c')
+    tui.input('c')
         .assert_current_line_eq(str!["╭┄<< source >> << noop >> zz [uncommitted]"]);
 
-    tui.input_then_render([KeyCode::Down, KeyCode::Down])
+    tui.input([KeyCode::Down, KeyCode::Down])
         .assert_current_line_eq(str!["┊●   9477ae7 add A"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/commit_mode_shows_commit_below_on_commit_rows_final.svg"
@@ -278,21 +277,21 @@ fn commit_to_commit_above_creates_commit_visible_in_tui() {
     tui.reload()
         .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
 
-    tui.input_then_render('c')
+    tui.input('c')
         .assert_current_line_eq(str!["╭┄<< source >> << noop >> zz [uncommitted]"]);
 
-    tui.input_then_render([KeyCode::Down, KeyCode::Down])
+    tui.input([KeyCode::Down, KeyCode::Down])
         .assert_current_line_eq(str!["┊●   9477ae7 add A"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/commit_to_commit_above_creates_commit_visible_in_tui_final_001.svg"
         ]);
 
-    tui.input_then_render('a')
+    tui.input('a')
         .assert_current_line_eq(str!["┊│   << commit above >>"])
         .assert_rendered_contains("┊│   << commit above >>");
 
     with_var("GIT_EDITOR", Some(editor_command), || {
-        tui.input_then_render(KeyCode::Enter)
+        tui.input(KeyCode::Enter)
             .assert_current_line_eq(str!["┊●   48fdc38 commit from tui test"]);
     });
 
@@ -322,10 +321,10 @@ fn commit_to_commit_below_creates_commit_visible_in_tui() {
     tui.reload()
         .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
 
-    tui.input_then_render('c')
+    tui.input('c')
         .assert_current_line_eq(str!["╭┄<< source >> << noop >> zz [uncommitted]"]);
 
-    tui.input_then_render([KeyCode::Down, KeyCode::Down])
+    tui.input([KeyCode::Down, KeyCode::Down])
         .assert_current_line_eq(str!["┊●   9477ae7 add A"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/commit_to_commit_below_creates_commit_visible_in_tui_001.svg"
@@ -333,7 +332,7 @@ fn commit_to_commit_below_creates_commit_visible_in_tui() {
         .assert_rendered_contains("┊│   << commit below >>");
 
     with_var("GIT_EDITOR", Some(editor_command), || {
-        tui.input_then_render(KeyCode::Enter)
+        tui.input(KeyCode::Enter)
             .assert_current_line_eq(str!["┊●   584b4d0 commit from tui test"]);
     });
 
@@ -356,35 +355,35 @@ fn commit_mode_from_staged_changes_stays_within_current_stack() {
     tui.reload()
         .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊   vo A test.txt"]);
 
-    tui.input_then_render('r')
+    tui.input('r')
         .assert_current_line_eq(str!["┊   << source >> << noop >> vo A test.txt"]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊●   << amend >> 9477ae7 add A"]);
 
-    tui.input_then_render(KeyCode::Enter)
+    tui.input(KeyCode::Enter)
         .assert_current_line_eq(str!["┊●   8474410 add A"]);
 
-    tui.input_then_render([KeyCode::Up, KeyCode::Up])
+    tui.input([KeyCode::Up, KeyCode::Up])
         .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
 
-    tui.input_then_render('c').assert_current_line_eq(str![
+    tui.input('c').assert_current_line_eq(str![
         "╭┄<< source >> << noop >> zz [uncommitted] (no changes)"
     ]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊●   8474410 add A"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/commit_mode_from_staged_changes_stays_within_current_stack_001.svg"
         ]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊╭┄h0 [B]"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/commit_mode_from_staged_changes_stays_within_current_stack_final.svg"
@@ -403,39 +402,39 @@ fn commit_with_inline_reword() {
     tui.reload()
         .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
 
-    tui.input_then_render('c')
+    tui.input('c')
         .assert_current_line_eq(str!["╭┄<< source >> << noop >> zz [uncommitted]"]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
 
-    tui.input_then_render('e')
+    tui.input('e')
         .assert_current_line_eq(str!["┊╭┄g0 [A]"])
         .assert_rendered_contains("┊│ << commit to branch (empty message) >>")
         .assert_rendered_term_svg_eq(file!["snapshots/commit_with_inline_reword_001.svg"]);
 
-    tui.input_then_render('i')
+    tui.input('i')
         .assert_current_line_eq(str!["┊╭┄g0 [A]"])
         .assert_rendered_contains("┊│ << commit to branch (reword inline) >>")
         .assert_rendered_term_svg_eq(file!["snapshots/commit_with_inline_reword_002.svg"]);
 
-    tui.input_then_render('i')
+    tui.input('i')
         .assert_current_line_eq(str!["┊╭┄g0 [A]"])
         .assert_rendered_contains("┊│ << commit to branch >>")
         .assert_rendered_term_svg_eq(file!["snapshots/commit_with_inline_reword_003.svg"]);
 
-    tui.input_then_render('i')
+    tui.input('i')
         .assert_current_line_eq(str!["┊╭┄g0 [A]"])
         .assert_rendered_contains("┊│ << commit to branch (reword inline) >>")
         .assert_rendered_term_svg_eq(file!["snapshots/commit_with_inline_reword_004.svg"]);
 
-    tui.input_then_render(KeyCode::Enter)
+    tui.input(KeyCode::Enter)
         .assert_current_line_eq(str!["┊●   6bdd3d2"]);
 
-    tui.input_then_render("commit message here")
+    tui.input("commit message here")
         .assert_current_line_eq(str!["┊●   6bdd3d2 commit message here"]);
 
-    tui.input_then_render(KeyCode::Enter)
+    tui.input(KeyCode::Enter)
         .assert_current_line_eq(str!["┊●   072c144 commit message here"]);
 }
 
@@ -447,32 +446,32 @@ fn commit_moved_file_from_uncommitted_changes_line() {
     let mut tui = test_tui(env);
 
     // show files in commits
-    tui.input_then_render((KeyModifiers::SHIFT, 'F'));
+    tui.input((KeyModifiers::SHIFT, 'F'));
 
     // commit test.txt
     tui.env().file("test.txt", "content");
     tui.reload();
-    tui.input_then_render('c');
-    tui.input_then_render(KeyCode::Down);
-    tui.input_then_render('i');
-    tui.input_then_render(KeyCode::Enter);
-    tui.input_then_render("add test.txt");
-    tui.input_then_render(KeyCode::Enter);
+    tui.input('c');
+    tui.input(KeyCode::Down);
+    tui.input('i');
+    tui.input(KeyCode::Enter);
+    tui.input("add test.txt");
+    tui.input(KeyCode::Enter);
 
     // go back to top to normalize inputs
-    tui.input_then_render('g');
+    tui.input('g');
 
     // move the file
     tui.env().rename_file("test.txt", "moved-test.txt");
     tui.reload();
 
     // commit the moved file
-    tui.input_then_render('c');
-    tui.input_then_render(KeyCode::Down);
-    tui.input_then_render('i');
-    tui.input_then_render(KeyCode::Enter);
-    tui.input_then_render("move test.txt to moved-test.txt");
-    tui.input_then_render(KeyCode::Enter);
+    tui.input('c');
+    tui.input(KeyCode::Down);
+    tui.input('i');
+    tui.input(KeyCode::Enter);
+    tui.input("move test.txt to moved-test.txt");
+    tui.input(KeyCode::Enter);
 
     // there should be no more changes to commit
     tui.reload()
@@ -487,34 +486,34 @@ fn commit_moved_file_from_file_line() {
     let mut tui = test_tui(env);
 
     // show files in commits
-    tui.input_then_render((KeyModifiers::SHIFT, 'F'));
+    tui.input((KeyModifiers::SHIFT, 'F'));
 
     // commit test.txt
     tui.env().file("test.txt", "content");
     tui.reload();
-    tui.input_then_render('c');
-    tui.input_then_render(KeyCode::Down);
-    tui.input_then_render('i');
-    tui.input_then_render(KeyCode::Enter);
-    tui.input_then_render("add test.txt");
-    tui.input_then_render(KeyCode::Enter);
+    tui.input('c');
+    tui.input(KeyCode::Down);
+    tui.input('i');
+    tui.input(KeyCode::Enter);
+    tui.input("add test.txt");
+    tui.input(KeyCode::Enter);
 
     // go back to top to normalize inputs
-    tui.input_then_render('g');
+    tui.input('g');
 
     // move the file
     tui.env().rename_file("test.txt", "moved-test.txt");
     tui.reload();
 
     // commit the moved file via the file list, not [uncommitted]
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str![["┊   yw R moved-test.txt"]]);
-    tui.input_then_render('c');
-    tui.input_then_render(KeyCode::Down);
-    tui.input_then_render('i');
-    tui.input_then_render(KeyCode::Enter);
-    tui.input_then_render("move test.txt to moved-test.txt");
-    tui.input_then_render(KeyCode::Enter);
+    tui.input('c');
+    tui.input(KeyCode::Down);
+    tui.input('i');
+    tui.input(KeyCode::Enter);
+    tui.input("move test.txt to moved-test.txt");
+    tui.input(KeyCode::Enter);
 
     // there should be no more changes to commit
     tui.reload()
@@ -529,7 +528,7 @@ fn commit_moved_and_modified_file() {
     let mut tui = test_tui(env);
 
     // show files in commits
-    tui.input_then_render((KeyModifiers::SHIFT, 'F'));
+    tui.input((KeyModifiers::SHIFT, 'F'));
 
     // commit test.txt
     tui.env().file("test.txt", "");
@@ -538,15 +537,15 @@ fn commit_moved_and_modified_file() {
     }
 
     tui.reload();
-    tui.input_then_render('c');
-    tui.input_then_render(KeyCode::Down);
-    tui.input_then_render('i');
-    tui.input_then_render(KeyCode::Enter);
-    tui.input_then_render("add test.txt");
-    tui.input_then_render(KeyCode::Enter);
+    tui.input('c');
+    tui.input(KeyCode::Down);
+    tui.input('i');
+    tui.input(KeyCode::Enter);
+    tui.input("add test.txt");
+    tui.input(KeyCode::Enter);
 
     // go back to top to normalize inputs
-    tui.input_then_render('g');
+    tui.input('g');
 
     // move and modify the file
     tui.env().rename_file("test.txt", "moved-test.txt");
@@ -554,12 +553,12 @@ fn commit_moved_and_modified_file() {
     tui.reload();
 
     // commit the moved file
-    tui.input_then_render('c');
-    tui.input_then_render(KeyCode::Down);
-    tui.input_then_render('i');
-    tui.input_then_render(KeyCode::Enter);
-    tui.input_then_render("move test.txt to moved-test.txt");
-    tui.input_then_render(KeyCode::Enter);
+    tui.input('c');
+    tui.input(KeyCode::Down);
+    tui.input('i');
+    tui.input(KeyCode::Enter);
+    tui.input("move test.txt to moved-test.txt");
+    tui.input(KeyCode::Enter);
 
     // there should be no more changes to commit
     tui.reload()
@@ -578,19 +577,17 @@ fn cannot_select_uncommitted_files_with_commits_marked() {
     tui.reload();
 
     // mark the commit
-    tui.input_then_render('j');
-    tui.input_then_render('j');
-    tui.input_then_render('j');
-    tui.input_then_render(' ')
+    tui.input('j');
+    tui.input('j');
+    tui.input('j');
+    tui.input(' ')
         .assert_current_line_eq(str![["┊✔︎   9477ae7 add A"]]);
 
     // moving up selects the branch
-    tui.input_then_render('k')
-        .assert_current_line_eq(str![["┊╭┄g0 [A]"]]);
+    tui.input('k').assert_current_line_eq(str![["┊╭┄g0 [A]"]]);
 
     // cannot move further up, stays on the branch
-    tui.input_then_render('k')
-        .assert_current_line_eq(str![["┊╭┄g0 [A]"]]);
+    tui.input('k').assert_current_line_eq(str![["┊╭┄g0 [A]"]]);
 }
 
 #[test]
@@ -605,14 +602,14 @@ fn cannot_select_committed_files_with_commits_marked() {
     tui.reload();
 
     // mark the commit
-    tui.input_then_render('j');
-    tui.input_then_render('j');
-    tui.input_then_render('j');
-    tui.input_then_render(' ')
+    tui.input('j');
+    tui.input('j');
+    tui.input('j');
+    tui.input(' ')
         .assert_current_line_eq(str![["┊✔︎   9477ae7 add A"]]);
 
     // cannot open the file list with marked commits
-    tui.input_then_render('f')
+    tui.input('f')
         .assert_current_line_eq(str![["┊✔︎   9477ae7 add A"]]);
 }
 
@@ -628,22 +625,23 @@ fn cannot_select_committed_files_from_global_listing_with_commits_marked() {
     tui.reload();
 
     // mark the commit
-    tui.input_then_render('j');
-    tui.input_then_render('j');
-    tui.input_then_render('j');
-    tui.input_then_render(' ')
+    tui.input('j');
+    tui.input('j');
+    tui.input('j');
+    tui.input(' ')
         .assert_current_line_eq(str![["┊✔︎   9477ae7 add A"]]);
 
-    tui.input_then_render((KeyModifiers::SHIFT, 'F'))
+    tui.input((KeyModifiers::SHIFT, 'F'))
         .assert_current_line_eq(str![["┊✔︎   9477ae7 add A"]]);
 
-    tui.input_then_render('j')
+    tui.input('j')
         .assert_current_line_eq(str![["┊✔︎   9477ae7 add A"]])
         .assert_rendered_term_svg_eq(file!["snapshots/cannot_select_committed_files_from_global_listing_with_commits_marked_showing_global_file_list.svg"]);
 
     // the global file list can be closed with f
-    tui.input_then_render('f')
-        .assert_rendered_term_svg_eq(file!["snapshots/cannot_select_committed_files_from_global_listing_with_commits_marked_final.svg"]);
+    tui.input('f').assert_rendered_term_svg_eq(file![
+        "snapshots/cannot_select_committed_files_from_global_listing_with_commits_marked_final.svg"
+    ]);
 }
 
 #[test]
@@ -657,13 +655,12 @@ fn escape_from_commit_mode_preserves_marks() {
     tui.env().file("two", "content");
     tui.reload();
 
-    tui.input_then_render('j');
-    tui.input_then_render(' ').assert_rendered_contains("✔︎");
+    tui.input('j');
+    tui.input(' ').assert_rendered_contains("✔︎");
 
-    tui.input_then_render('c').assert_rendered_contains("✔︎");
+    tui.input('c').assert_rendered_contains("✔︎");
 
-    tui.input_then_render(KeyCode::Esc)
-        .assert_rendered_contains("✔︎");
+    tui.input(KeyCode::Esc).assert_rendered_contains("✔︎");
 }
 
 #[test]
@@ -679,18 +676,17 @@ fn mark_and_commit_multiple_uncommitted_files() {
 
     tui.reload();
 
-    tui.input_then_render('j');
-    tui.input_then_render(' ');
-    tui.input_then_render(' ');
-    tui.input_then_render('c')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/mark_and_commit_multiple_uncommitted_files_001.svg"
-        ]);
+    tui.input('j');
+    tui.input(' ');
+    tui.input(' ');
+    tui.input('c').assert_rendered_term_svg_eq(file![
+        "snapshots/mark_and_commit_multiple_uncommitted_files_001.svg"
+    ]);
 
-    tui.input_then_render('j');
-    tui.input_then_render('e');
-    tui.input_then_render(KeyCode::Enter);
-    tui.input_then_render((KeyModifiers::SHIFT, 'F'))
+    tui.input('j');
+    tui.input('e');
+    tui.input(KeyCode::Enter);
+    tui.input((KeyModifiers::SHIFT, 'F'))
         .assert_rendered_term_svg_eq(file![
             "snapshots/mark_and_commit_multiple_uncommitted_files_final.svg"
         ]);
@@ -705,12 +701,12 @@ fn committing_above_below() {
 
     tui.env().file("test.txt", "content");
 
-    tui.input_then_render('c');
-    tui.input_then_render('j')
+    tui.input('c');
+    tui.input('j')
         .assert_rendered_term_svg_eq(file!["snapshots/committing_above_below_001.svg"]);
-    tui.input_then_render('j')
+    tui.input('j')
         .assert_rendered_term_svg_eq(file!["snapshots/committing_above_below_002.svg"]);
-    tui.input_then_render('a')
+    tui.input('a')
         .assert_rendered_term_svg_eq(file!["snapshots/committing_above_below_003.svg"]);
 }
 
@@ -723,16 +719,14 @@ fn cannot_commit_to_new_branch_from_commit_line() {
 
     tui.env().file("test.txt", "content");
 
-    tui.input_then_render('c');
-    tui.input_then_render('j');
-    tui.input_then_render('j')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/cannot_commit_to_new_branch_from_commit_line_001.svg"
-        ]);
-    tui.input_then_render('b')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/cannot_commit_to_new_branch_from_commit_line_002.svg"
-        ]);
+    tui.input('c');
+    tui.input('j');
+    tui.input('j').assert_rendered_term_svg_eq(file![
+        "snapshots/cannot_commit_to_new_branch_from_commit_line_001.svg"
+    ]);
+    tui.input('b').assert_rendered_term_svg_eq(file![
+        "snapshots/cannot_commit_to_new_branch_from_commit_line_002.svg"
+    ]);
 }
 
 #[test]
@@ -746,10 +740,9 @@ fn commit_to_new_branch_from_uncommitted_area() {
 
     tui.reload();
 
-    tui.input_then_render('c');
-    tui.input_then_render('e');
-    tui.input_then_render('b')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/commit_to_new_branch_from_uncommitted_001.svg"
-        ]);
+    tui.input('c');
+    tui.input('e');
+    tui.input('b').assert_rendered_term_svg_eq(file![
+        "snapshots/commit_to_new_branch_from_uncommitted_001.svg"
+    ]);
 }

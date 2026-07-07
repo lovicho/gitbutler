@@ -20,9 +20,13 @@ use crate::{
             render_loop_once,
         },
     },
-    theme,
     tui::TerminalGuard,
     utils::{OutputChannel, WriteWithUtils},
+};
+
+use super::super::{
+    mode::Mode,
+    render::{details_content_area_for_app, status_layout},
 };
 
 pub struct TestTui {
@@ -171,7 +175,7 @@ impl TestTui {
     }
 
     #[track_caller]
-    pub fn input_then_render<E>(&mut self, event: E) -> TestTuiInputThenRenderResult<'_>
+    pub fn input<E>(&mut self, event: E) -> TestTuiInputThenRenderResult<'_>
     where
         E: InputEventPolling,
     {
@@ -230,8 +234,6 @@ impl TestTui {
 
 impl Drop for TestTui {
     fn drop(&mut self) {
-        use colored::Colorize;
-
         if self.env.is_none() {
             // `TestTui::recreate` was called, in which case we'll print the state of the new tui
             // when that is dropped
@@ -243,26 +245,15 @@ impl Drop for TestTui {
         // much of it depends on getting the cursor on the right line.
 
         let render_result = TestTuiInputThenRenderResult(self);
-        let selected_row = render_result.selected_row().map(|row| row as usize);
 
         eprintln!("\nCurrent terminal state:");
 
         for (idx, line) in render_result.rendered_output().lines().enumerate() {
             let line = line.trim_matches('"');
-            if selected_row.is_some_and(|row| row == idx) {
-                colored::control::set_override(true);
-                eprintln!(
-                    "\"{}\"",
-                    line.on_custom_color(colored::CustomColor {
-                        r: 69,
-                        g: 71,
-                        b: 90
-                    })
-                );
-                colored::control::unset_override();
-            } else {
-                eprintln!("\"{line}\"");
-            }
+            eprintln!(
+                "\"{}\"",
+                render_result.highlighted_debug_line(idx as u16, line)
+            );
         }
 
         match &self.svg_snapshot_comparison {
@@ -322,20 +313,97 @@ impl TestTuiInputThenRenderResult<'_> {
         self.0.terminal.backend().to_string()
     }
 
-    /// We might not be able to find the selected row for example if we're in full screen details
-    /// view.
-    fn selected_row(&self) -> Option<u16> {
+    fn highlighted_debug_line(&self, y: u16, rendered_line: &str) -> String {
         let backend = self.0.terminal.backend();
         let buffer = backend.buffer();
         let area = *buffer.area();
-        let selected_bg = theme::get()
+        if y >= area.height {
+            return rendered_line.to_owned();
+        }
+
+        let selected_bg = self
+            .0
+            .app
+            .theme
             .selection_highlight
             .bg
             .expect("background must be set on selection_highlight");
+        let details_area = details_content_area_for_app(&self.0.app, area);
+        let selected_status_row = self.selected_status_row();
+        let highlight_cell = |x, y| {
+            if selected_status_row.is_some_and(|row| row == y) {
+                return buffer[(x, y)].bg == selected_bg;
+            }
+            if matches!(&*self.0.app.mode, Mode::Details(..))
+                && details_area.is_some_and(|area| {
+                    x >= area.x
+                        && x < area.x.saturating_add(area.width)
+                        && y >= area.y
+                        && y < area.y.saturating_add(area.height)
+                })
+            {
+                return buffer[(x, y)].bg == selected_bg;
+            }
+            false
+        };
 
-        (area.y..area.y.saturating_add(area.height)).find(|&y| {
-            (area.x..area.x.saturating_add(area.width)).any(|x| buffer[(x, y)].bg == selected_bg)
-        })
+        let mut rendered = String::new();
+        let mut highlighted = String::new();
+        let mut plain = String::new();
+        let mut highlighting = false;
+
+        colored::control::set_override(true);
+        for x in area.x..area.x.saturating_add(area.width) {
+            let symbol = buffer[(x, y)].symbol();
+            let cell_is_highlighted = highlight_cell(x, y);
+            if cell_is_highlighted != highlighting {
+                flush_highlighted_debug_line_segment(&mut rendered, &mut plain, &mut highlighted);
+                highlighting = cell_is_highlighted;
+            }
+
+            if highlighting {
+                highlighted.push_str(symbol);
+            } else {
+                plain.push_str(symbol);
+            }
+        }
+        flush_highlighted_debug_line_segment(&mut rendered, &mut plain, &mut highlighted);
+        colored::control::unset_override();
+
+        rendered.trim_end().to_owned()
+    }
+
+    /// We might not be able to find the selected row for example if we're in full screen details
+    /// view, where the status cursor exists but the status list is not rendered.
+    fn selected_status_row(&self) -> Option<u16> {
+        if matches!(&*self.0.app.mode, Mode::Details(details_mode) if details_mode.full_screen) {
+            return None;
+        }
+
+        let buffer = self.0.terminal.backend().buffer();
+        let terminal_area = *buffer.area();
+        let main_content_area = ratatui::layout::Rect {
+            height: terminal_area.height.saturating_sub(1),
+            ..terminal_area
+        };
+        let status_area = status_layout(&self.0.app, main_content_area).status_area;
+        let status_inner_area = ratatui::layout::Rect {
+            height: status_area.height.saturating_sub(1),
+            ..status_area
+        };
+
+        let cursor_index = self.0.app.cursor.index();
+        let scroll_top = self.0.app.status_scroll.top();
+        if cursor_index < scroll_top {
+            return None;
+        }
+
+        let row_offset = cursor_index - scroll_top;
+        if row_offset >= status_inner_area.height as usize {
+            return None;
+        }
+
+        Some(status_inner_area.y + row_offset as u16)
     }
 
     #[track_caller]
@@ -345,8 +413,8 @@ impl TestTuiInputThenRenderResult<'_> {
         let area = *buffer.area();
 
         let selected_row = self
-            .selected_row()
-            .expect("failed to find selected row in rendered output");
+            .selected_status_row()
+            .expect("failed to find selected status row in rendered output");
 
         let mut line = String::new();
         for x in area.x..area.x.saturating_add(area.width) {
@@ -388,6 +456,30 @@ impl TestTuiInputThenRenderResult<'_> {
             panic!("wrong backstack\n  expected: {expected:?}\n  actual: {actual:?}");
         }
         self
+    }
+}
+
+fn flush_highlighted_debug_line_segment(
+    rendered: &mut String,
+    plain: &mut String,
+    highlighted: &mut String,
+) {
+    use colored::Colorize;
+
+    rendered.push_str(plain);
+    plain.clear();
+
+    if !highlighted.is_empty() {
+        rendered.push_str(
+            &highlighted
+                .on_custom_color(colored::CustomColor {
+                    r: 69,
+                    g: 71,
+                    b: 90,
+                })
+                .to_string(),
+        );
+        highlighted.clear();
     }
 }
 

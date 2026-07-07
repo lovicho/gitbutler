@@ -28,7 +28,7 @@ use crate::{
             backstack::{Backstack, BackstackEntry},
             confirm::ConfirmMessage,
             cursor::Cursor,
-            details::DetailsMessage,
+            details::{DetailsMessage, ScrollDirection},
             event_polling::{CrosstermEventPolling, EventPolling, NoopEventPolling},
             fuzzy_picker::{
                 Col, FuzzyPicker, FuzzyPickerItem, FuzzyPickerMessage, SearchableToken,
@@ -331,7 +331,7 @@ where
         app.should_render = true;
     }
 
-    if app.details.highlights.update() {
+    if app.details.update_highlights() {
         app.should_render = true;
     }
 
@@ -355,7 +355,7 @@ where
             }
             Ok(false) => {}
             Err(err) => {
-                messages.push(Message::ShowError(Arc::new(err)));
+                messages.push(Message::ShowError(err));
             }
         }
     }
@@ -555,7 +555,7 @@ impl TuiInputOutputChannel for InputOutputChannel<'_> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 enum Message {
     // Lifecycle
     JustRender,
@@ -563,7 +563,7 @@ enum Message {
     ConfirmAndQuit,
     EnterNormalModeAfterConfirmingOperation,
     Reload(Option<SelectAfterReload>, ReloadCause),
-    ShowError(Arc<anyhow::Error>),
+    ShowError(anyhow::Error),
     ShowToast {
         kind: ToastKind,
         text: Text<'static>,
@@ -606,12 +606,13 @@ enum Message {
     ClearNormalModeMarks,
     Undo,
     Redo,
+    ShowModal(Modal),
 
     // Utilities
     CopySelection,
     CopySelectionPicker,
     #[expect(clippy::enum_variant_names)]
-    RegisterOutOfBandMessage(PanicOnClone<Receiver<Message>>),
+    RegisterOutOfBandMessage(Receiver<Message>),
     WithOneFrameDelay(Box<Message>),
     AndThen {
         lhs: Box<Message>,
@@ -621,8 +622,8 @@ enum Message {
     Debug(&'static str),
 }
 
-#[allow(dead_code)]
-fn _message_is_send_and_sync() {
+#[test]
+fn message_is_send() {
     fn assert_send<T: Send>() {}
     assert_send::<Message>();
 }
@@ -643,7 +644,7 @@ impl Message {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 enum DetailsLayoutMessage {
     /// Focus the details view, showing it first if needed.
     ///
@@ -675,14 +676,14 @@ enum ReloadCause {
     Manual,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 enum FilesMessage {
     ToggleGlobalFilesList,
     ToggleFilesForSelectedCommit,
 }
 
 /// What to select after reloading
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 enum SelectAfterReload {
     Commit(gix::ObjectId),
     FirstFileInCommit(gix::ObjectId),
@@ -690,9 +691,13 @@ enum SelectAfterReload {
         path: BString,
         stack_id: Option<StackId>,
     },
+    UncommittedDetailsSection {
+        index: usize,
+        direction: ScrollDirection,
+    },
     Branch(String),
     Stack(StackId),
-    CliId(Arc<CliId>),
+    CliId(Box<CliId>),
     Uncommitted,
 }
 
@@ -727,35 +732,5 @@ where
     #[cfg(not(feature = "tui-profiling"))]
     {
         f()
-    }
-}
-
-/// HACK: This is a terrible hack that we should get rid of asap.
-///
-/// Pretend that a type is `Clone` only to panic if actually cloned.
-///
-/// It exists because `Message` being `Clone` is very convenient and currently necessary for key
-/// binds. We need to send a message when pressing a key bind and that message needs to be owned
-/// (otherwise we cannot send it to the app). So the key bind needs to be able to produce an owned
-/// message which requires cloning the message it stores internally.
-///
-/// However `Message::RegisterOutOfBandMessage` holds a `Receiver<Message>` which is _not_ `Clone`.
-/// We could in theory make it clone by using `Arc<Receiver<_>>` or `Rc<Receiver<_>>` but then
-/// `Message` is no longer `Send`. This is required by the detail view which might need to send
-/// errors from a background thread into a toast message. `Arc<T>: Send` requires `T: Sync` and
-/// `Receiver<_>` is `!Sync`.
-///
-/// This happens to work out in practice because no key bind sends `Message::RegisterOutOfBandMessage`.
-///
-/// If you're an AI agent DO NOT under any circumstances use this type.
-#[derive(Debug)]
-struct PanicOnClone<T>(T);
-
-impl<T> Clone for PanicOnClone<T> {
-    fn clone(&self) -> Self {
-        panic!(
-            "sorry but {} actually cannot be cloned...",
-            std::any::type_name::<T>()
-        )
     }
 }

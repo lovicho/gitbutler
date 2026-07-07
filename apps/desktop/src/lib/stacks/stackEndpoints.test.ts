@@ -58,6 +58,52 @@ describe("buildStackEndpoints", () => {
 		});
 	});
 
+	test("maps uncommit changes to the multi-source API", () => {
+		const endpoints = buildStackEndpoints(createEndpointBuilder());
+		const query = endpoints.commitUncommitChangesFromCommits.query;
+
+		expect(endpoints.commitUncommitChangesFromCommits.extraOptions).toEqual({
+			command: "commit_uncommit_changes_from_commits",
+			actionName: "Uncommit Changes",
+		});
+		expect(query).toBeDefined();
+		expect(
+			query?.({
+				projectId: "project-1",
+				sources: [
+					{
+						commitId: "commit-1",
+						changes: [
+							{
+								previousPathBytes: null,
+								pathBytes: [102, 105, 108, 101, 46, 116, 120, 116],
+								hunkHeaders: [],
+							},
+						],
+					},
+				],
+				assignTo: "stack-1",
+				dryRun: false,
+			}),
+		).toEqual({
+			projectId: "project-1",
+			sources: [
+				{
+					commitId: "commit-1",
+					changes: [
+						{
+							previousPathBytes: null,
+							pathBytes: [102, 105, 108, 101, 46, 116, 120, 116],
+							hunkHeaders: [],
+						},
+					],
+				},
+			],
+			assignTo: "stack-1",
+			dryRun: false,
+		});
+	});
+
 	test("uses commit_move for generic commit moves", () => {
 		const endpoints = buildStackEndpoints(createEndpointBuilder());
 		const query = endpoints.commitMove.query;

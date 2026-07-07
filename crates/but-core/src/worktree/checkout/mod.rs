@@ -23,9 +23,6 @@ pub struct Options {
 /// The successful outcome of [super::safe_checkout_from_head()] operation.
 #[derive(Clone)]
 pub struct Outcome {
-    /// The tree of the snapshot which stores the worktree changes that have been overwritten as part of the checkout,
-    /// based on the `current_head_tree_id` from which it was created.
-    pub snapshot_tree: Option<gix::ObjectId>,
     /// If `new_head_id` was a commit, these are the ref-edits returned after performing the transaction.
     pub head_update: Option<Vec<gix::refs::transaction::RefEdit>>,
     /// The number of files that were deleted turn the current worktree into the desired one.

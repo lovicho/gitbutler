@@ -59,6 +59,8 @@ import type {
 	BranchCreatePlacement,
 	BranchCreateResult,
 	BranchRemoveResult,
+	UncommitChangesFromCommitsResult,
+	UncommitChangesSource,
 } from "@gitbutler/but-sdk";
 
 export type BranchParams = {
@@ -640,24 +642,22 @@ export function buildStackEndpoints(build: BackendEndpointBuilder) {
 				invalidatesList(ReduxTag.CommitChanges),
 			],
 		}),
-		commitUncommitChanges: build.mutation<
-			MoveChangesResult,
+		commitUncommitChangesFromCommits: build.mutation<
+			UncommitChangesFromCommitsResult,
 			{
 				projectId: string;
-				changes: DiffSpec[];
-				commitId: string;
+				sources: UncommitChangesSource[];
 				assignTo?: string;
 				dryRun: boolean;
 			}
 		>({
 			extraOptions: {
-				command: "commit_uncommit_changes",
+				command: "commit_uncommit_changes_from_commits",
 				actionName: "Uncommit Changes",
 			},
-			query: ({ projectId, changes, commitId, assignTo, dryRun }) => ({
+			query: ({ projectId, sources, assignTo, dryRun }) => ({
 				projectId,
-				changes,
-				commitId,
+				sources,
 				assignTo,
 				dryRun,
 			}),

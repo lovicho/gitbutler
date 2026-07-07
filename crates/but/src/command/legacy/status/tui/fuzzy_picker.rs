@@ -28,8 +28,9 @@ pub struct FuzzyPicker<T> {
     cursor: usize,
     scroll_top: Cell<usize>,
     matcher: DebugAsType<SkimMatcherV2>,
-    on_item_selected:
-        DebugAsType<Box<dyn FnOnce(T, &mut Context, &mut Vec<Message>) -> anyhow::Result<()>>>,
+    on_item_selected: DebugAsType<
+        Box<dyn FnOnce(T, &mut Context, &mut Vec<Message>) -> anyhow::Result<()> + Send>,
+    >,
     theme: &'static Theme,
 }
 
@@ -65,7 +66,7 @@ where
 {
     pub fn new<F>(items: NonEmpty<T>, theme: &'static Theme, on_item_selected: F) -> Self
     where
-        F: FnOnce(T, &mut Context, &mut Vec<Message>) -> anyhow::Result<()> + 'static,
+        F: FnOnce(T, &mut Context, &mut Vec<Message>) -> anyhow::Result<()> + Send + 'static,
     {
         let mut textarea = TextArea::default();
         textarea.set_cursor_line_style(theme.default);
@@ -329,7 +330,7 @@ where
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum FuzzyPickerMessage {
     MoveCursorDown,
     MoveCursorUp,

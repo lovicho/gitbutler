@@ -1186,6 +1186,9 @@ async fn handle_command(
             .and_then(|params| but_api::branch::branch_create_cmd(params).map(|r| json!(r))),
         "branch_remove" => deserialize_json(request.params)
             .and_then(|params| but_api::branch::branch_remove_cmd(params).map(|r| json!(r))),
+        "commit_uncommit_changes_from_commits" => {
+            commit::uncommit::commit_uncommit_changes_from_commits_cmd(request.params)
+        }
         // Async virtual branches commands (not yet migrated due to different pattern)
         "upstream_integration_statuses" => {
             let params = deserialize_json(request.params);

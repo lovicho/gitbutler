@@ -11,13 +11,13 @@ fn marking_individual_commit_toggles_mark_indicator() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render([KeyCode::Down, KeyCode::Down])
+    tui.input([KeyCode::Down, KeyCode::Down])
         .assert_current_line_eq(str!["┊●   9477ae7 add A"]);
 
-    tui.input_then_render(' ')
+    tui.input(' ')
         .assert_current_line_eq(str!["┊✔︎   9477ae7 add A"]);
 
-    tui.input_then_render(' ')
+    tui.input(' ')
         .assert_current_line_eq(str!["┊●   9477ae7 add A"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/marking_individual_commit_toggles_mark_indicator_final.svg"
@@ -31,13 +31,12 @@ fn marking_branch_toggles_all_commits_in_that_branch() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
 
-    tui.input_then_render(' ')
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
+    tui.input(' ').assert_current_line_eq(str!["┊╭┄g0 [A]"]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊✔︎   9477ae7 add A"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/marking_branch_toggles_all_commits_in_that_branch_final.svg"
@@ -55,19 +54,19 @@ fn marking_uncommitted_toggles_all_uncommitted_files() {
     tui.reload()
         .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
 
-    tui.input_then_render(' ')
+    tui.input(' ')
         .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊✔︎  nk A a.txt"]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊✔︎  pn A b.txt"]);
 
-    tui.input_then_render('g');
-    tui.input_then_render(' ');
+    tui.input('g');
+    tui.input(' ');
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊   nk A a.txt"]);
 }
 
@@ -78,25 +77,25 @@ fn multi_squash_marked_commits_into_selected_marked_target() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render([KeyCode::Down, KeyCode::Down])
+    tui.input([KeyCode::Down, KeyCode::Down])
         .assert_current_line_eq(str!["┊●   9477ae7 add A"]);
 
-    tui.input_then_render(' ')
+    tui.input(' ')
         .assert_current_line_eq(str!["┊✔︎   9477ae7 add A"]);
 
-    tui.input_then_render((KeyModifiers::SHIFT, 'J'))
+    tui.input((KeyModifiers::SHIFT, 'J'))
         .assert_current_line_eq(str!["┊╭┄h0 [B]"]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊●   d3e2ba3 add B"]);
 
-    tui.input_then_render(' ')
+    tui.input(' ')
         .assert_current_line_eq(str!["┊✔︎   d3e2ba3 add B"]);
 
-    tui.input_then_render('r')
+    tui.input('r')
         .assert_current_line_eq(str!["┊✔︎   << source >> << squash >> d3e2ba3 add B"]);
 
-    tui.input_then_render(KeyCode::Enter)
+    tui.input(KeyCode::Enter)
         .assert_current_line_eq(str!["┊●   377fa8b add B"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/multi_squash_marked_commits_into_selected_marked_target_final.svg"
@@ -114,26 +113,26 @@ fn marks_still_show_in_split_details() {
     let mut tui = test_tui(env);
 
     // mark some things
-    tui.input_then_render('j');
-    tui.input_then_render(' ')
+    tui.input('j');
+    tui.input(' ')
         .assert_rendered_contains("┊✔︎    kl A one")
         .assert_rendered_contains("┊   twop A two")
         .assert_backstack_eq([BackstackEntry::Mark])
         .assert_rendered_term_svg_eq(file!["snapshots/marks_still_show_in_split_details_001.svg"]);
 
     // open details view and still see the marks
-    tui.input_then_render('d')
+    tui.input('d')
         .assert_rendered_contains("+content of two")
         .assert_rendered_contains("┊✔︎    kl A one")
         .assert_rendered_contains("┊   twop A two")
         .assert_backstack_eq([BackstackEntry::OpenSplitDetailsView, BackstackEntry::Mark])
         .assert_rendered_term_svg_eq(file!["snapshots/marks_still_show_in_split_details_002.svg"]);
-    tui.input_then_render('d')
+    tui.input('d')
         .assert_backstack_eq([BackstackEntry::Mark])
         .assert_rendered_term_svg_eq(file!["snapshots/marks_still_show_in_split_details_003.svg"]);
 
     // opening and focusing details should still show marks
-    tui.input_then_render('l')
+    tui.input('l')
         .assert_rendered_contains("details")
         .assert_rendered_contains("+content of two")
         .assert_rendered_contains("┊✔︎    kl A one")
@@ -146,7 +145,7 @@ fn marks_still_show_in_split_details() {
         .assert_rendered_term_svg_eq(file!["snapshots/marks_still_show_in_split_details_004.svg"]);
 
     // going back to normal mode should retain marks and keep details open
-    tui.input_then_render('h')
+    tui.input('h')
         .assert_rendered_contains("normal")
         .assert_rendered_contains("+content of two")
         .assert_rendered_contains("┊✔︎    kl A one")
@@ -167,28 +166,28 @@ fn can_only_mark_files_from_one_commit() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render('j');
-    tui.input_then_render(' ');
-    tui.input_then_render(' ');
+    tui.input('j');
+    tui.input(' ');
+    tui.input(' ');
 
-    tui.input_then_render('c');
-    tui.input_then_render('e');
-    tui.input_then_render('b');
-    tui.input_then_render('g');
-    tui.input_then_render(' ');
-    tui.input_then_render('c');
-    tui.input_then_render('e');
-    tui.input_then_render('j');
-    tui.input_then_render('j');
-    tui.input_then_render(KeyCode::Enter);
+    tui.input('c');
+    tui.input('e');
+    tui.input('b');
+    tui.input('g');
+    tui.input(' ');
+    tui.input('c');
+    tui.input('e');
+    tui.input('j');
+    tui.input('j');
+    tui.input(KeyCode::Enter);
 
-    tui.input_then_render((KeyModifiers::SHIFT, 'F'))
+    tui.input((KeyModifiers::SHIFT, 'F'))
         .assert_rendered_term_svg_eq(file![
             "snapshots/can_only_mark_files_from_one_commit_001.svg"
         ]);
 
-    tui.input_then_render('j');
-    tui.input_then_render(' ')
+    tui.input('j');
+    tui.input(' ')
         .assert_current_line_eq(str![["┊│     bd:tw A two"]])
         .assert_backstack_eq([BackstackEntry::Mark, BackstackEntry::ShowFileList])
         .assert_rendered_term_svg_eq(file![
@@ -197,7 +196,7 @@ fn can_only_mark_files_from_one_commit() {
 
     // we shouldn't be allowed to select lines outside the commit files
     for _ in 0..10 {
-        tui.input_then_render('j')
+        tui.input('j')
             .assert_current_line_eq(str![["┊│     bd:tw A two"]])
             .assert_backstack_eq([BackstackEntry::Mark, BackstackEntry::ShowFileList])
             .assert_rendered_term_svg_eq(file![
@@ -205,7 +204,7 @@ fn can_only_mark_files_from_one_commit() {
             ]);
     }
     for _ in 0..10 {
-        tui.input_then_render('k')
+        tui.input('k')
             .assert_current_line_eq(str![["┊✔︎     bd:or A three"]])
             .assert_backstack_eq([BackstackEntry::Mark, BackstackEntry::ShowFileList])
             .assert_rendered_term_svg_eq(file![

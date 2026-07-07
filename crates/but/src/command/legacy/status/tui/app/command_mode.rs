@@ -25,7 +25,7 @@ pub enum CommandModeKind {
     Shell,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum CommandMessage {
     Start(CommandModeKind),
     Input(Event),

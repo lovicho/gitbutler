@@ -12,11 +12,12 @@ use anyhow::Context as _;
 use but_ctx::{Context, OnDemand};
 use gix::ObjectId;
 use itertools::{Itertools as _, Position};
+use nonempty::NonEmpty;
 use ratatui::{
     Frame,
     layout::Rect,
     style::{Color, Stylize as _},
-    text::Line,
+    text::{Line, Span},
     widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState},
 };
 use syntect::{easy::HighlightLines, highlighting, parsing::SyntaxSet};
@@ -24,15 +25,20 @@ use syntect::{easy::HighlightLines, highlighting, parsing::SyntaxSet};
 use crate::{
     CliId,
     command::legacy::status::tui::{
-        Message, count_allocations,
+        Message, ReloadCause, SelectAfterReload,
+        app::Modal,
+        confirm::Confirm,
+        count_allocations,
         details::worker::Worker,
         highlight::{self, Highlights},
+        message_on_drop::message_on_drop,
         render::available_lines_in_area,
     },
     theme::Theme,
     utils::{
         DebugAsType,
         diff_rendering::{self, CodeLineKind, DetailsLine, DiffLineWriter, IdGen, SectionId},
+        diff_specs::DiffSpecBuilder,
         string_interning::Strings,
     },
 };
@@ -41,7 +47,7 @@ mod worker;
 
 const CHANNEL_SIZE: usize = 1024;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum DetailsMessage {
     Deselect,
     SelectFirstSection,
@@ -52,6 +58,8 @@ pub enum DetailsMessage {
     ScrollDown(usize),
     GotoTop,
     GotoBottom,
+    Discard,
+    DropToBeDiscarded,
 }
 
 #[derive(Debug)]
@@ -64,14 +72,15 @@ pub struct Details {
     syntax_theme: DebugAsType<OnDemand<highlighting::Theme>>,
     strings: Strings,
     selected_section: Cell<SelectedSection>,
-    select_first_section_when_available: Cell<bool>,
+    pending_section_selection: Cell<PendingSectionSelection>,
     sections: Vec<Section>,
     scroll: ScrollState,
     layout_cache: RefCell<LayoutCache>,
     cache: Cache,
     out_of_band_messages_tx: Sender<Message>,
-    pub highlights: Highlights<SectionId>,
+    highlights: Highlights<SectionId>,
     worker: Worker,
+    to_be_discarded: Vec<SectionId>,
 }
 
 #[derive(Debug, Default)]
@@ -105,7 +114,7 @@ impl Details {
             syntax_theme: OnDemand::new(|| theme.load_syntax_highlighting_theme()).into(),
             strings: Default::default(),
             selected_section: Default::default(),
-            select_first_section_when_available: Default::default(),
+            pending_section_selection: Default::default(),
             line_reader: Default::default(),
             scroll: Default::default(),
             layout_cache: Default::default(),
@@ -113,6 +122,7 @@ impl Details {
             out_of_band_messages_tx,
             highlights: Default::default(),
             worker: Worker::new(),
+            to_be_discarded: Default::default(),
         }
     }
 
@@ -146,12 +156,19 @@ impl Details {
         self.reset_line_reader();
     }
 
-    pub fn clear_selection(&mut self) {
+    pub fn clear_selection_for_reload(&mut self, select_first_section_when_available: bool) {
         self.selection = None;
         self.reset_line_reader();
         self.clear_lines();
         self.reset_scroll();
-        self.select_first_section_when_available.set(true);
+        if select_first_section_when_available {
+            self.pending_section_selection
+                .set(PendingSectionSelection::First);
+        }
+    }
+
+    pub fn update_highlights(&mut self) -> bool {
+        self.highlights.update()
     }
 
     pub fn update(
@@ -307,6 +324,7 @@ impl Details {
                     &mut self.sections,
                     DetailsLine::Text {
                         id: None,
+                        cli_id: None,
                         line: Line::from("(stack assignments are not supported)")
                             .style(self.theme.hint),
                         skip_when_copying_hunk: false,
@@ -430,7 +448,7 @@ impl Details {
                             }
                             Err(err) if err.downcast_ref::<SendErrorCode>().is_none() => {
                                 tracing::error!("{err:#}");
-                                _ = error_tx.send(Message::ShowError(Arc::new(err)));
+                                _ = error_tx.send(Message::ShowError(err));
                                 _ = line_writer.tx.send(RenderThreadMessage::Failed);
                             }
                             Err(_) => {}
@@ -452,11 +470,11 @@ impl Details {
                             let section_added =
                                 push_line(&mut self.lines, &mut self.sections, line);
                             if section_added {
-                                select_first_section_if_pending(
-                                    &self.select_first_section_when_available,
+                                apply_pending_section_selection(
+                                    &self.pending_section_selection,
                                     &self.selected_section,
                                     &self.scroll,
-                                    self.sections.is_empty(),
+                                    self.sections.len(),
                                 );
                             }
                         }
@@ -474,7 +492,8 @@ impl Details {
                             }
 
                             if self.sections.is_empty() {
-                                self.select_first_section_when_available.set(false);
+                                self.pending_section_selection
+                                    .set(PendingSectionSelection::None);
                             }
 
                             self.line_reader = ChannelLineReader::Finished;
@@ -488,7 +507,8 @@ impl Details {
                             self.clear_lines();
                             self.line_reader = ChannelLineReader::Failed;
                             self.reset_scroll();
-                            self.select_first_section_when_available.set(false);
+                            self.pending_section_selection
+                                .set(PendingSectionSelection::None);
 
                             tracing::debug!("diff render thread failed");
 
@@ -501,7 +521,8 @@ impl Details {
                                     "diff render thread disconnected before completion"
                                 );
                                 self.line_reader = ChannelLineReader::Failed;
-                                self.select_first_section_when_available.set(false);
+                                self.pending_section_selection
+                                    .set(PendingSectionSelection::None);
                                 break Ok(true);
                             }
                         },
@@ -534,7 +555,7 @@ impl Details {
         let syntax_theme = self.syntax_theme.get().unwrap();
         let mut highlight_lines = None;
 
-        let section_selected_bg = self.theme.discrete_selection_highlight.bg.unwrap();
+        let section_selected_bg = self.theme.selection_highlight.bg.unwrap();
 
         let mut layout_cache = self.layout_cache.borrow_mut();
         layout_cache.update(area.width, &self.lines);
@@ -628,11 +649,10 @@ impl Details {
         frame.render_stateful_widget(scrollbar, scrollbar_area, &mut scrollbar_state);
     }
 
-    #[allow(clippy::ptr_arg)]
     pub fn try_handle_message(
         &mut self,
         msg: DetailsMessage,
-        _messages: &mut Vec<Message>,
+        messages: &mut Vec<Message>,
     ) -> anyhow::Result<()> {
         match msg {
             DetailsMessage::ScrollUp(n) => self.scroll.up(n),
@@ -697,6 +717,12 @@ impl Details {
             DetailsMessage::CopyCurrentHunk => {
                 self.copy_current_hunk()?;
             }
+            DetailsMessage::Discard => {
+                self.handle_discard(messages);
+            }
+            DetailsMessage::DropToBeDiscarded => {
+                self.to_be_discarded.clear();
+            }
         }
 
         Ok(())
@@ -720,7 +746,8 @@ impl Details {
             DetailsLine::Text {
                 line,
                 id,
-                skip_when_copying_hunk: _,
+                cli_id: _,
+                skip_when_copying_hunk,
             } => {
                 *highlight_lines = None;
 
@@ -736,7 +763,18 @@ impl Details {
                     } else if let Some(id) = id
                         && self.section_is_selected(*id, tui_has_focus)
                     {
-                        frame.render_widget(line.clone().bg(section_selected_bg), line_area);
+                        let line =
+                            if self.section_is_to_be_discarded(*id) && !*skip_when_copying_hunk {
+                                line.spans
+                                    .iter()
+                                    .cloned()
+                                    .map(|span| span.crossed_out())
+                                    .collect::<Line<'_>>()
+                                    .bg(section_selected_bg)
+                            } else {
+                                line.clone().bg(section_selected_bg)
+                            };
+                        frame.render_widget(line, line_area);
                     } else {
                         frame.render_widget(line, line_area);
                     }
@@ -780,23 +818,31 @@ impl Details {
                         &mut strings,
                     );
 
-                    let highlighted_line = line.highlighted_line.borrow();
-                    let highlighted_line = highlighted_line
+                    let syntax_highlighted_line = line.syntax_highlighted_line.borrow();
+                    let syntax_highlighted_line = syntax_highlighted_line
                         .as_ref()
                         .expect("line should have been highlighted by now");
 
                     if self.section_is_highlighted(id) {
                         frame.render_widget(
-                            highlighted_line.clone().style(highlight::style()),
+                            syntax_highlighted_line.clone().style(highlight::style()),
                             line_area,
                         );
                     } else if self.section_is_selected(id, tui_has_focus) {
-                        frame.render_widget(
-                            highlighted_line.clone().bg(section_selected_bg),
-                            line_area,
-                        );
+                        let line = if self.section_is_to_be_discarded(id) {
+                            syntax_highlighted_line
+                                .spans
+                                .iter()
+                                .cloned()
+                                .map(|span| span.crossed_out())
+                                .collect::<Line<'_>>()
+                                .bg(section_selected_bg)
+                        } else {
+                            syntax_highlighted_line.clone().bg(section_selected_bg)
+                        };
+                        frame.render_widget(line, line_area);
                     } else {
-                        frame.render_widget(highlighted_line, line_area);
+                        frame.render_widget(syntax_highlighted_line, line_area);
                     }
                 }
             }
@@ -848,17 +894,23 @@ impl Details {
         self.worker.clear_next_job();
     }
 
+    pub(super) fn select_section_when_available(&self, index: usize, direction: ScrollDirection) {
+        self.pending_section_selection
+            .set(PendingSectionSelection::Section { index, direction });
+    }
+
     fn select_first_section_if_pending(&self) {
-        select_first_section_if_pending(
-            &self.select_first_section_when_available,
+        apply_pending_section_selection(
+            &self.pending_section_selection,
             &self.selected_section,
             &self.scroll,
-            self.sections.is_empty(),
+            self.sections.len(),
         );
     }
 
     fn clear_pending_first_section_selection(&self) {
-        self.select_first_section_when_available.set(false);
+        self.pending_section_selection
+            .set(PendingSectionSelection::None);
     }
 
     fn update_selected_section_for_visible_range(
@@ -946,6 +998,10 @@ impl Details {
         self.highlights.contains(&id)
     }
 
+    fn section_is_to_be_discarded(&self, id: SectionId) -> bool {
+        self.to_be_discarded.contains(&id)
+    }
+
     fn copy_current_hunk(&mut self) -> anyhow::Result<()> {
         let section = match self.selected_section.get() {
             SelectedSection::Selected(i) => &self.sections[i],
@@ -963,21 +1019,123 @@ impl Details {
 
         Ok(())
     }
+
+    fn handle_discard(&mut self, messages: &mut Vec<Message>) {
+        let Some(status_selection) = &self.selection else {
+            return;
+        };
+        match status_selection {
+            CliId::UncommittedHunkOrFile(..) | CliId::Uncommitted { .. } => {}
+            CliId::PathPrefix { .. }
+            | CliId::CommittedFile { .. }
+            | CliId::Branch { .. }
+            | CliId::Commit { .. }
+            | CliId::Stack { .. } => return,
+        }
+        let SelectedSection::Selected(selected_section_idx) = self.selected_section.get() else {
+            return;
+        };
+        let section = &self.sections[selected_section_idx];
+        let Some(section_cli_id) = section.cli_id.as_ref().map(Arc::clone) else {
+            return;
+        };
+        let select_after_discard = if self.sections.get(selected_section_idx + 1).is_some() {
+            PendingSectionSelection::Section {
+                index: selected_section_idx,
+                direction: ScrollDirection::Down,
+            }
+        } else {
+            PendingSectionSelection::Section {
+                index: selected_section_idx.saturating_sub(1),
+                direction: ScrollDirection::Up,
+            }
+        };
+
+        self.to_be_discarded = Vec::from([section.id]);
+
+        let drop_to_be_discarded = message_on_drop(
+            Message::Details(DetailsMessage::DropToBeDiscarded),
+            messages,
+        );
+
+        let (formatted_cli_id, formatted_path) =
+            if let CliId::UncommittedHunkOrFile(hunk) = &*section_cli_id {
+                (
+                    Span::raw(section_cli_id.to_short_string()).style(self.theme.cli_id),
+                    Span::raw(hunk.hunk_assignments.head.path.clone()),
+                )
+            } else {
+                return;
+            };
+
+        let confirm = Confirm::new(
+            NonEmpty::new(Line::from_iter([
+                Span::raw("Discard hunk "),
+                formatted_cli_id,
+                Span::raw(" "),
+                formatted_path,
+                Span::raw("?"),
+            ])),
+            self.theme,
+            move |ctx, messages| {
+                let changes = {
+                    let context_lines = ctx.settings.context_lines;
+                    let (_guard, repo, ws, mut db) = ctx.workspace_and_db_mut()?;
+                    let mut builder = DiffSpecBuilder::new(&mut db, &repo, &ws, context_lines);
+                    builder.push_changes_from_id(&section_cli_id)?;
+                    builder.into_diff_specs()
+                };
+
+                if changes.is_empty() {
+                    return Ok(());
+                }
+
+                but_api::legacy::workspace::discard_worktree_changes(ctx, changes)?;
+
+                let PendingSectionSelection::Section { index, direction } = select_after_discard
+                else {
+                    unreachable!("discard selection is always a specific details section")
+                };
+                messages.push(Message::Reload(
+                    Some(SelectAfterReload::UncommittedDetailsSection { index, direction }),
+                    ReloadCause::Mutation,
+                ));
+
+                drop(drop_to_be_discarded);
+
+                Ok(())
+            },
+        );
+
+        messages.push(Message::ShowModal(Modal::Confirm { confirm }));
+    }
 }
 
-fn select_first_section_if_pending(
-    select_first_section_when_available: &Cell<bool>,
+fn apply_pending_section_selection(
+    pending_section_selection: &Cell<PendingSectionSelection>,
     selected_section: &Cell<SelectedSection>,
     scroll: &ScrollState,
-    sections_is_empty: bool,
+    sections_len: usize,
 ) {
-    if !select_first_section_when_available.get() || sections_is_empty {
-        return;
+    match pending_section_selection.get() {
+        PendingSectionSelection::None => {}
+        PendingSectionSelection::First => {
+            if sections_len == 0 {
+                return;
+            }
+            selected_section.set(SelectedSection::Selected(0));
+            scroll.goto_top();
+            pending_section_selection.set(PendingSectionSelection::None);
+        }
+        PendingSectionSelection::Section { index, direction } => {
+            if index >= sections_len {
+                return;
+            }
+            selected_section.set(SelectedSection::Selected(index));
+            scroll.to_section(index, direction);
+            pending_section_selection.set(PendingSectionSelection::None);
+        }
     }
-
-    selected_section.set(SelectedSection::Selected(0));
-    scroll.goto_top();
-    select_first_section_when_available.set(false);
 }
 
 struct ChannelLineWriter {
@@ -1013,6 +1171,7 @@ impl std::error::Error for SendErrorCode {}
 #[derive(Debug)]
 struct Section {
     id: SectionId,
+    cli_id: Option<Arc<CliId>>,
     first_line: usize,
     last_line: usize,
 }
@@ -1027,16 +1186,16 @@ fn push_line(lines: &mut Vec<DetailsLine>, sections: &mut Vec<Section>, line: De
 }
 
 fn extend_section_list(sections: &mut Vec<Section>, line_index: usize, line: &DetailsLine) -> bool {
-    let id = match line {
-        DetailsLine::Text { id, .. } => {
+    let (id, cli_id) = match line {
+        DetailsLine::Text { id, cli_id, .. } => {
             if let Some(id) = id {
-                *id
+                (*id, cli_id.clone())
             } else {
                 return false;
             }
         }
-        DetailsLine::Code(line) => line.id,
-        DetailsLine::TextToWrap { id, .. } => *id,
+        DetailsLine::Code(line) => (line.id, line.cli_id.clone()),
+        DetailsLine::TextToWrap { id, .. } => (*id, None),
         DetailsLine::SectionSeparator => return false,
     };
 
@@ -1049,6 +1208,7 @@ fn extend_section_list(sections: &mut Vec<Section>, line_index: usize, line: &De
 
     sections.push(Section {
         id,
+        cli_id,
         first_line: line_index,
         last_line: line_index,
     });
@@ -1124,9 +1284,20 @@ enum ScrollIntent {
 }
 
 #[derive(Debug, Copy, Clone)]
-enum ScrollDirection {
+pub(super) enum ScrollDirection {
     Up,
     Down,
+}
+
+#[derive(Debug, Copy, Clone, Default)]
+enum PendingSectionSelection {
+    #[default]
+    None,
+    First,
+    Section {
+        index: usize,
+        direction: ScrollDirection,
+    },
 }
 
 #[derive(Debug, Default)]
@@ -1355,6 +1526,7 @@ fn format_lines_in_section(lines: &[DetailsLine]) -> String {
                 line,
                 skip_when_copying_hunk,
                 id: _,
+                cli_id: _,
             } => {
                 if *skip_when_copying_hunk {
                     continue;

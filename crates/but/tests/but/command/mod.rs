@@ -58,6 +58,8 @@ mod r#switch;
 #[cfg(feature = "legacy")]
 mod teardown;
 #[cfg(feature = "legacy")]
+mod uncommit;
+#[cfg(feature = "legacy")]
 mod undo;
 #[cfg(feature = "legacy")]
 mod worktree;

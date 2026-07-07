@@ -17,14 +17,15 @@ use crate::{
 pub struct Confirm {
     lines: NonEmpty<Line<'static>>,
     yes_selected: bool,
-    on_yes: DebugAsType<Box<dyn FnOnce(&mut Context, &mut Vec<Message>) -> anyhow::Result<()>>>,
+    on_yes:
+        DebugAsType<Box<dyn FnOnce(&mut Context, &mut Vec<Message>) -> anyhow::Result<()> + Send>>,
     theme: &'static Theme,
 }
 
 impl Confirm {
     pub fn new<F>(lines: NonEmpty<Line<'static>>, theme: &'static Theme, on_yes: F) -> Self
     where
-        F: FnOnce(&mut Context, &mut Vec<Message>) -> anyhow::Result<()> + 'static,
+        F: FnOnce(&mut Context, &mut Vec<Message>) -> anyhow::Result<()> + Send + 'static,
     {
         Self {
             lines,
@@ -125,7 +126,7 @@ fn style_button(
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum ConfirmMessage {
     Confirm,
     Left,

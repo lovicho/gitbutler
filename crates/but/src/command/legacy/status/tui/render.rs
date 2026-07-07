@@ -378,7 +378,7 @@ fn row_stack_ids(lines: &[StatusOutputLine]) -> Vec<Option<StackId>> {
     let mut row_stack_ids = lines
         .iter()
         .map(|line| match &line.data {
-            StatusOutputLineData::Branch { cli_id } => {
+            StatusOutputLineData::Branch { cli_id, .. } => {
                 let stack_id = stack_id_from_cli_id(cli_id.as_ref());
                 current_stack_id = stack_id;
                 stack_id
@@ -1114,7 +1114,7 @@ pub fn commit_operation_display(
     } = mode;
 
     match data {
-        StatusOutputLineData::Branch { cli_id } => {
+        StatusOutputLineData::Branch { cli_id, .. } => {
             if let Some(stack_scope) = scope_to_stack
                 && let Some(stack_id) = cli_id.stack_id()
                 && *stack_scope != stack_id
@@ -1270,7 +1270,7 @@ pub fn stack_operation_display(
 ) -> Option<&'static str> {
     let StackMode { stack_heads } = mode;
     match data {
-        StatusOutputLineData::Branch { cli_id } => {
+        StatusOutputLineData::Branch { cli_id, .. } => {
             let CliId::Branch { name, .. } = &**cli_id else {
                 return None;
             };

@@ -47,7 +47,7 @@ impl InlineRewordMode {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum RewordMessage {
     WithEditor,
     OpenEditor,

@@ -60,7 +60,7 @@ pub fn safe_checkout_from_head(
 
     let mut opts = git2::build::CheckoutBuilder::new();
     let changed_files = delegate.changed_files;
-    let snapshot_tree = merge_worktree_changes_into_destination_or_keep_snapshot(
+    let _ = merge_worktree_changes_into_destination_or_keep_snapshot(
         &changed_files,
         repo,
         source_tree.id,
@@ -189,7 +189,6 @@ pub fn safe_checkout_from_head(
     }
 
     Ok(Outcome {
-        snapshot_tree,
         head_update,
         num_deleted_files,
         num_added_or_updated_files: changed_files.len() - num_deleted_files,

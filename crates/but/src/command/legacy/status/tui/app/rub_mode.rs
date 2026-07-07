@@ -148,7 +148,7 @@ impl ModeRender for RubMode {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum RubMessage {
     Start,
     StartReverse,

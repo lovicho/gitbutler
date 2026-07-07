@@ -15,7 +15,6 @@ use crate::{
             mark::{MarkableRef, commits_on_branch},
         },
         confirm::Confirm,
-        key_bind::confirm_key_binds,
         message_on_drop,
         mode::Mode,
         operations,
@@ -38,7 +37,7 @@ impl App {
             } = &**cli_id
                 && *branch_stack_id == stack_id
             {
-                Some(SelectAfterReload::CliId(Arc::clone(cli_id)))
+                Some(SelectAfterReload::CliId(Box::new((**cli_id).clone())))
             } else {
                 None
             }
@@ -299,7 +298,6 @@ impl App {
                 }
                 CliId::PathPrefix { .. } => return Ok(()),
             },
-            key_binds: confirm_key_binds(),
         });
 
         Ok(())
@@ -447,10 +445,7 @@ impl App {
             },
         );
 
-        self.modal = Some(Modal::Confirm {
-            confirm,
-            key_binds: confirm_key_binds(),
-        });
+        self.modal = Some(Modal::Confirm { confirm });
 
         Ok(())
     }

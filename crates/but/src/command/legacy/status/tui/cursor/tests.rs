@@ -68,12 +68,14 @@ fn branch_cli_id(name: &str, id: &str, stack_id: Option<StackId>) -> Arc<CliId> 
 fn branch_line(name: &str, id: &str) -> StatusOutputLine {
     line(StatusOutputLineData::Branch {
         cli_id: branch_cli_id(name, id, None),
+        is_merged_upstream: false,
     })
 }
 
 fn stack_branch_line(name: &str, id: &str, stack_id: StackId) -> StatusOutputLine {
     line(StatusOutputLineData::Branch {
         cli_id: branch_cli_id(name, id, Some(stack_id)),
+        is_merged_upstream: false,
     })
 }
 
@@ -230,6 +232,7 @@ fn restore_returns_matching_line_by_cli_id() {
                 id: "b0".into(),
                 stack_id: None,
             }),
+            is_merged_upstream: false,
         }),
         line(StatusOutputLineData::UncommittedChanges {
             cli_id: uncommitted_area("u0"),
@@ -291,6 +294,7 @@ fn select_finds_commit_line_by_object_id() {
                 id: "b0".into(),
                 stack_id: None,
             }),
+            is_merged_upstream: false,
         }),
         line(StatusOutputLineData::Commit {
             cli_id: commit_cli_id(wanted, "c1"),
@@ -351,6 +355,7 @@ fn select_after_discarded_commit_selects_commit_below_when_on_top_commit() {
     let lines = vec![
         line(StatusOutputLineData::Branch {
             cli_id: branch_cli_id("main", "b0", None),
+            is_merged_upstream: false,
         }),
         line(StatusOutputLineData::Commit {
             cli_id: commit_cli_id(top, "c0"),
@@ -377,6 +382,7 @@ fn select_after_discarded_commit_selects_commit_above_when_on_bottom_commit() {
     let lines = vec![
         line(StatusOutputLineData::Branch {
             cli_id: branch_cli_id("main", "b0", None),
+            is_merged_upstream: false,
         }),
         line(StatusOutputLineData::Commit {
             cli_id: commit_cli_id(above, "c0"),
@@ -402,6 +408,7 @@ fn select_after_discarded_commit_selects_branch_when_commit_is_only_one_in_branc
     let lines = vec![
         line(StatusOutputLineData::Branch {
             cli_id: branch_cli_id("main", "b0", None),
+            is_merged_upstream: false,
         }),
         line(StatusOutputLineData::Commit {
             cli_id: commit_cli_id(only, "c0"),
@@ -425,6 +432,7 @@ fn select_after_discarded_commit_selects_commit_below_when_on_middle_commit() {
     let lines = vec![
         line(StatusOutputLineData::Branch {
             cli_id: branch_cli_id("main", "b0", None),
+            is_merged_upstream: false,
         }),
         line(StatusOutputLineData::Commit {
             cli_id: commit_cli_id(above, "c0"),
@@ -456,6 +464,7 @@ fn select_after_discarded_commits_keeps_unmarked_current_commit_selected() {
     let lines = vec![
         line(StatusOutputLineData::Branch {
             cli_id: branch_cli_id("main", "b0", None),
+            is_merged_upstream: false,
         }),
         line(StatusOutputLineData::Commit {
             cli_id: commit_cli_id(marked, "c0"),
@@ -483,6 +492,7 @@ fn select_after_discarded_commits_skips_marked_commit_below() {
     let lines = vec![
         line(StatusOutputLineData::Branch {
             cli_id: branch_cli_id("main", "b0", None),
+            is_merged_upstream: false,
         }),
         line(StatusOutputLineData::Commit {
             cli_id: commit_cli_id(top, "c0"),
@@ -515,6 +525,7 @@ fn select_after_discarded_commits_selects_commit_above_when_no_unmarked_commit_b
     let lines = vec![
         line(StatusOutputLineData::Branch {
             cli_id: branch_cli_id("main", "b0", None),
+            is_merged_upstream: false,
         }),
         line(StatusOutputLineData::Commit {
             cli_id: commit_cli_id(above, "c0"),
@@ -546,6 +557,7 @@ fn select_after_discarded_commits_selects_branch_when_all_commits_in_section_are
     let lines = vec![
         line(StatusOutputLineData::Branch {
             cli_id: branch_cli_id("main", "b0", None),
+            is_merged_upstream: false,
         }),
         line(StatusOutputLineData::Commit {
             cli_id: commit_cli_id(top, "c0"),
@@ -597,7 +609,7 @@ fn select_after_discarded_marks_keeps_unmarked_current_uncommitted_selected() {
 
     assert!(matches!(
         Cursor(2).select_after_discarded_marks(&lines, &discarded_marks),
-        Some(SelectAfterReload::CliId(cli_id)) if *cli_id == **current_cli_id
+        Some(SelectAfterReload::CliId(cli_id)) if cli_id.as_ref() == &**current_cli_id
     ));
 }
 
@@ -615,7 +627,7 @@ fn select_after_discarded_marks_selects_unmarked_uncommitted_below_marked_top_un
 
     assert!(matches!(
         Cursor(1).select_after_discarded_marks(&lines, &discarded_marks),
-        Some(SelectAfterReload::CliId(cli_id)) if *cli_id == **below_cli_id
+        Some(SelectAfterReload::CliId(cli_id)) if cli_id.as_ref() == &**below_cli_id
     ));
 }
 
@@ -634,7 +646,7 @@ fn select_after_discarded_marks_selects_unmarked_uncommitted_below_marked_middle
 
     assert!(matches!(
         Cursor(2).select_after_discarded_marks(&lines, &discarded_marks),
-        Some(SelectAfterReload::CliId(cli_id)) if *cli_id == **below_cli_id
+        Some(SelectAfterReload::CliId(cli_id)) if cli_id.as_ref() == &**below_cli_id
     ));
 }
 
@@ -652,7 +664,7 @@ fn select_after_discarded_marks_selects_unmarked_uncommitted_above_marked_bottom
 
     assert!(matches!(
         Cursor(2).select_after_discarded_marks(&lines, &discarded_marks),
-        Some(SelectAfterReload::CliId(cli_id)) if *cli_id == **above_cli_id
+        Some(SelectAfterReload::CliId(cli_id)) if cli_id.as_ref() == &**above_cli_id
     ));
 }
 
@@ -669,7 +681,7 @@ fn select_after_discarded_marks_selects_header_above_marked_uncommitted() {
 
     assert!(matches!(
         Cursor(1).select_after_discarded_marks(&lines, &discarded_marks),
-        Some(SelectAfterReload::CliId(cli_id)) if *cli_id == **header_cli_id
+        Some(SelectAfterReload::CliId(cli_id)) if cli_id.as_ref() == &**header_cli_id
     ));
 }
 
@@ -695,6 +707,7 @@ fn select_after_discarded_branch_selects_branch_below_when_available() {
     let lines = vec![
         line(StatusOutputLineData::Branch {
             cli_id: branch_cli_id("one", "b0", None),
+            is_merged_upstream: false,
         }),
         line(StatusOutputLineData::Commit {
             cli_id: commit_cli_id("1111111111111111111111111111111111111111", "c0"),
@@ -703,6 +716,7 @@ fn select_after_discarded_branch_selects_branch_below_when_available() {
         }),
         line(StatusOutputLineData::Branch {
             cli_id: branch_cli_id("two", "b1", None),
+            is_merged_upstream: false,
         }),
     ];
 
@@ -717,9 +731,11 @@ fn select_after_discarded_branch_selects_branch_above_when_no_branch_below() {
     let lines = vec![
         line(StatusOutputLineData::Branch {
             cli_id: branch_cli_id("one", "b0", None),
+            is_merged_upstream: false,
         }),
         line(StatusOutputLineData::Branch {
             cli_id: branch_cli_id("two", "b1", None),
+            is_merged_upstream: false,
         }),
     ];
 
@@ -737,6 +753,7 @@ fn select_after_discarded_branch_selects_uncommitted_when_it_is_the_only_branch(
         }),
         line(StatusOutputLineData::Branch {
             cli_id: branch_cli_id("one", "b0", None),
+            is_merged_upstream: false,
         }),
     ];
 
@@ -889,6 +906,7 @@ fn select_branch_finds_branch_line_by_name() {
                 id: "b0".into(),
                 stack_id: None,
             }),
+            is_merged_upstream: false,
         }),
     ];
 
@@ -903,6 +921,7 @@ fn select_branch_returns_none_when_branch_is_missing() {
             id: "b0".into(),
             stack_id: None,
         }),
+        is_merged_upstream: false,
     })];
 
     assert_eq!(Cursor::select_branch("feature", &lines), None);
@@ -917,6 +936,7 @@ fn select_branch_uses_first_matching_line_when_branch_appears_multiple_times() {
                 id: "b0".into(),
                 stack_id: None,
             }),
+            is_merged_upstream: false,
         }),
         line(StatusOutputLineData::StagedChanges {
             cli_id: Arc::new(CliId::Branch {
@@ -939,6 +959,7 @@ fn select_uncommitted_finds_uncommitted_line() {
                 id: "b0".into(),
                 stack_id: None,
             }),
+            is_merged_upstream: false,
         }),
         line(StatusOutputLineData::UncommittedChanges {
             cli_id: uncommitted_area("u0"),
@@ -970,6 +991,7 @@ fn select_uncommitted_returns_none_when_missing() {
             id: "b0".into(),
             stack_id: None,
         }),
+        is_merged_upstream: false,
     })];
 
     assert_eq!(Cursor::select_uncommitted(&lines), None);
@@ -984,6 +1006,7 @@ fn select_merge_base_finds_merge_base_line() {
                 id: "b0".into(),
                 stack_id: None,
             }),
+            is_merged_upstream: false,
         }),
         line(StatusOutputLineData::MergeBase),
     ];
@@ -999,6 +1022,7 @@ fn select_merge_base_returns_none_when_missing() {
             id: "b0".into(),
             stack_id: None,
         }),
+        is_merged_upstream: false,
     })];
 
     assert_eq!(Cursor::select_merge_base(&lines), None);
@@ -1058,6 +1082,7 @@ fn selection_cli_id_for_reload_uses_parent_when_file_is_selected_and_files_are_h
         line(StatusOutputLineData::Hint),
         line(StatusOutputLineData::Branch {
             cli_id: parent.clone(),
+            is_merged_upstream: false,
         }),
         line(StatusOutputLineData::File {
             cli_id: uncommitted_area("file0"),
@@ -1104,6 +1129,7 @@ fn selection_cli_id_for_reload_uses_selected_cli_id_for_non_file_lines() {
     });
     let lines = vec![line(StatusOutputLineData::Branch {
         cli_id: selected.clone(),
+        is_merged_upstream: false,
     })];
 
     assert_eq!(
@@ -1120,6 +1146,7 @@ fn selection_cli_id_for_reload_returns_none_when_cursor_is_out_of_bounds() {
             id: "b0".into(),
             stack_id: None,
         }),
+        is_merged_upstream: false,
     })];
 
     assert_eq!(
@@ -1149,6 +1176,7 @@ fn selection_cli_id_for_reload_uses_nearest_parent_section_for_file() {
     let lines = vec![
         line(StatusOutputLineData::Branch {
             cli_id: first_parent,
+            is_merged_upstream: false,
         }),
         line(StatusOutputLineData::File {
             cli_id: uncommitted_area("file0"),
@@ -1302,6 +1330,7 @@ fn move_down_within_section_stops_at_next_section() {
     let lines = vec![
         line(StatusOutputLineData::Branch {
             cli_id: branch_cli_id("main", "b0", None),
+            is_merged_upstream: false,
         }),
         line(StatusOutputLineData::Hint),
         line(StatusOutputLineData::Commit {
@@ -1311,6 +1340,7 @@ fn move_down_within_section_stops_at_next_section() {
         }),
         line(StatusOutputLineData::Branch {
             cli_id: branch_cli_id("other", "b1", None),
+            is_merged_upstream: false,
         }),
     ];
 
@@ -1385,6 +1415,7 @@ fn move_next_section_moves_to_next_jump_target() {
                 id: "a0".into(),
                 stack_id: None,
             }),
+            is_merged_upstream: false,
         }),
         line(StatusOutputLineData::Commit {
             cli_id: commit_cli_id("1111111111111111111111111111111111111111", "c0"),
@@ -1397,6 +1428,7 @@ fn move_next_section_moves_to_next_jump_target() {
                 id: "a1".into(),
                 stack_id: None,
             }),
+            is_merged_upstream: false,
         }),
         line(StatusOutputLineData::Commit {
             cli_id: commit_cli_id("2222222222222222222222222222222222222222", "c0"),
@@ -1449,6 +1481,7 @@ fn move_previous_section_moves_to_current_section_header_when_cursor_is_inside_i
                 id: "a0".into(),
                 stack_id: None,
             }),
+            is_merged_upstream: false,
         }),
         line(StatusOutputLineData::Commit {
             cli_id: commit_cli_id("1111111111111111111111111111111111111111", "c0"),
@@ -1461,6 +1494,7 @@ fn move_previous_section_moves_to_current_section_header_when_cursor_is_inside_i
                 id: "a1".into(),
                 stack_id: None,
             }),
+            is_merged_upstream: false,
         }),
         line(StatusOutputLineData::Commit {
             cli_id: commit_cli_id("2222222222222222222222222222222222222222", "c0"),
@@ -1643,12 +1677,14 @@ fn movement_in_rub_mode_handles_starting_on_unavailable_line() {
     let lines = vec![
         line(StatusOutputLineData::Branch {
             cli_id: allowed_a.clone(),
+            is_merged_upstream: false,
         }),
         line(StatusOutputLineData::StagedFile {
             cli_id: allowed_a.clone(),
         }),
         line(StatusOutputLineData::Branch {
             cli_id: blocked.clone(),
+            is_merged_upstream: false,
         }),
         line(StatusOutputLineData::StagedChanges {
             cli_id: allowed_b.clone(),
@@ -1688,6 +1724,7 @@ fn move_next_section_skips_non_jump_targets_like_commits() {
                 id: "b0".into(),
                 stack_id: None,
             }),
+            is_merged_upstream: false,
         }),
         line(StatusOutputLineData::Commit {
             cli_id: commit_cli_id("1111111111111111111111111111111111111111", "c0"),
@@ -1700,6 +1737,7 @@ fn move_next_section_skips_non_jump_targets_like_commits() {
                 id: "a0".into(),
                 stack_id: None,
             }),
+            is_merged_upstream: false,
         }),
     ];
 
@@ -1724,6 +1762,7 @@ fn move_next_section_can_jump_to_merge_base_line() {
                 id: "b0".into(),
                 stack_id: None,
             }),
+            is_merged_upstream: false,
         }),
         line(StatusOutputLineData::Commit {
             cli_id: commit_cli_id("1111111111111111111111111111111111111111", "c0"),
@@ -1754,6 +1793,7 @@ fn move_previous_section_can_jump_from_merge_base_line() {
                 id: "b0".into(),
                 stack_id: None,
             }),
+            is_merged_upstream: false,
         }),
         line(StatusOutputLineData::Commit {
             cli_id: commit_cli_id("1111111111111111111111111111111111111111", "c0"),
@@ -1790,13 +1830,19 @@ fn move_next_section_in_rub_mode_jumps_to_first_selectable_in_next_section() {
     let commit_a = commit_cli_id("1111111111111111111111111111111111111111", "c0");
     let commit_b = commit_cli_id("2222222222222222222222222222222222222222", "c1");
     let lines = vec![
-        line(StatusOutputLineData::Branch { cli_id: branch_a }),
+        line(StatusOutputLineData::Branch {
+            cli_id: branch_a,
+            is_merged_upstream: false,
+        }),
         line(StatusOutputLineData::Commit {
             cli_id: commit_a.clone(),
             stack_id: None,
             classification: CommitClassification::LocalOnly,
         }),
-        line(StatusOutputLineData::Branch { cli_id: branch_b }),
+        line(StatusOutputLineData::Branch {
+            cli_id: branch_b,
+            is_merged_upstream: false,
+        }),
         line(StatusOutputLineData::Commit {
             cli_id: commit_b.clone(),
             stack_id: None,
@@ -1828,6 +1874,7 @@ fn move_previous_section_in_rub_mode_moves_to_first_selectable_in_current_sectio
     let lines = vec![
         line(StatusOutputLineData::Branch {
             cli_id: branch.clone(),
+            is_merged_upstream: false,
         }),
         line(StatusOutputLineData::Commit {
             cli_id: commit.clone(),
@@ -1871,14 +1918,23 @@ fn move_previous_section_in_rub_mode_from_first_selectable_goes_to_previous_sect
     let commit_a = commit_cli_id("1111111111111111111111111111111111111111", "c0");
     let commit_b = commit_cli_id("2222222222222222222222222222222222222222", "c1");
     let lines = vec![
-        line(StatusOutputLineData::Branch { cli_id: branch_a }),
+        line(StatusOutputLineData::Branch {
+            cli_id: branch_a,
+            is_merged_upstream: false,
+        }),
         line(StatusOutputLineData::Commit {
             cli_id: commit_a.clone(),
             stack_id: None,
             classification: CommitClassification::LocalOnly,
         }),
-        line(StatusOutputLineData::Branch { cli_id: blocked }),
-        line(StatusOutputLineData::Branch { cli_id: branch_b }),
+        line(StatusOutputLineData::Branch {
+            cli_id: blocked,
+            is_merged_upstream: false,
+        }),
+        line(StatusOutputLineData::Branch {
+            cli_id: branch_b,
+            is_merged_upstream: false,
+        }),
         line(StatusOutputLineData::Commit {
             cli_id: commit_b.clone(),
             stack_id: None,
@@ -1916,6 +1972,7 @@ fn move_next_section_in_rub_mode_skips_sections_without_selectable_targets() {
     let lines = vec![
         line(StatusOutputLineData::Branch {
             cli_id: blocked_branch,
+            is_merged_upstream: false,
         }),
         line(StatusOutputLineData::Commit {
             cli_id: blocked_commit,
@@ -1924,6 +1981,7 @@ fn move_next_section_in_rub_mode_skips_sections_without_selectable_targets() {
         }),
         line(StatusOutputLineData::Branch {
             cli_id: allowed_branch,
+            is_merged_upstream: false,
         }),
         line(StatusOutputLineData::Commit {
             cli_id: allowed_commit.clone(),

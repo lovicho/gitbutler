@@ -16,11 +16,11 @@ fn discard_prompt_can_be_cancelled() {
     tui.reload()
         .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
 
-    tui.input_then_render('x')
+    tui.input('x')
         .assert_rendered_contains("Discard uncommitted changes?")
         .assert_rendered_contains("<< discard >>");
 
-    tui.input_then_render('n');
+    tui.input('n');
 
     tui.reload()
         .assert_current_line_eq(str!["╭┄zz [uncommitted]"])
@@ -39,10 +39,10 @@ fn discard_uncommitted_confirm_yes_discards_changes() {
     tui.reload()
         .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
 
-    tui.input_then_render('x')
+    tui.input('x')
         .assert_rendered_contains("Discard uncommitted changes?");
 
-    tui.input_then_render('y');
+    tui.input('y');
 
     tui.reload()
         .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
@@ -67,10 +67,10 @@ fn discard_uncommitted_cancel_keeps_changes() {
     tui.reload()
         .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
 
-    tui.input_then_render('x')
+    tui.input('x')
         .assert_rendered_contains("Discard uncommitted changes?");
 
-    tui.input_then_render('n');
+    tui.input('n');
 
     tui.reload()
         .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
@@ -93,14 +93,14 @@ fn discard_commit_confirm_yes_removes_commit() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render([KeyCode::Down, KeyCode::Down])
+    tui.input([KeyCode::Down, KeyCode::Down])
         .assert_current_line_eq(str!["┊●   9477ae7 add A"]);
 
-    tui.input_then_render('x')
+    tui.input('x')
         .assert_rendered_contains("Discard commit")
         .assert_rendered_contains("<< discard >>");
 
-    tui.input_then_render('y');
+    tui.input('y');
     tui.reload();
 
     let log = tui.env().invoke_git("log --oneline");
@@ -121,20 +121,20 @@ fn discard_top_commit_selects_next_commit_in_branch() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
 
-    tui.input_then_render('n')
+    tui.input('n')
         .assert_current_line_eq(str!["┊●   f184fc7 (no commit message) (no changes)"]);
 
-    tui.input_then_render('n')
+    tui.input('n')
         .assert_current_line_eq(str!["┊●   9638f28 (no commit message) (no changes)"]);
 
-    tui.input_then_render('x')
+    tui.input('x')
         .assert_rendered_contains("Discard commit")
         .assert_rendered_contains("<< discard >>");
 
-    tui.input_then_render('y');
+    tui.input('y');
 
     tui.reload()
         .assert_current_line_eq(str!["┊●   f184fc7 (no commit message) (no changes)"]);
@@ -152,26 +152,26 @@ fn discard_stack_confirm_yes_discards_staged_changes() {
     tui.reload()
         .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊   vo A test.txt"]);
 
-    tui.input_then_render('r')
+    tui.input('r')
         .assert_current_line_eq(str!["┊   << source >> << noop >> vo A test.txt"]);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊●   << amend >> 9477ae7 add A"]);
 
-    tui.input_then_render(KeyCode::Enter)
+    tui.input(KeyCode::Enter)
         .assert_current_line_eq(str!["┊●   8474410 add A"]);
 
-    tui.input_then_render([KeyCode::Up, KeyCode::Up])
+    tui.input([KeyCode::Up, KeyCode::Up])
         .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
 
-    tui.input_then_render('x')
+    tui.input('x')
         .assert_rendered_contains("Discard uncommitted changes?")
         .assert_rendered_contains("<< discard >>");
 
-    tui.input_then_render('y');
+    tui.input('y');
 
     tui.reload()
         .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
@@ -191,17 +191,17 @@ fn discard_branch_confirm_yes_removes_branch() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
 
-    tui.input_then_render('b')
+    tui.input('b')
         .assert_current_line_eq(str!["┊╭┄br [c-branch-1] (no commits)"]);
 
-    tui.input_then_render('x')
+    tui.input('x')
         .assert_rendered_contains("Discard branch c-branch-1?")
         .assert_rendered_contains("<< discard >>");
 
-    tui.input_then_render('y');
+    tui.input('y');
 
     tui.reload().assert_current_line_eq(str!["┊╭┄g0 [A]"]);
 
@@ -223,16 +223,16 @@ fn discard_branch_cancel_keeps_branch() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render(KeyCode::Down)
+    tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
 
-    tui.input_then_render('b')
+    tui.input('b')
         .assert_current_line_eq(str!["┊╭┄br [c-branch-1] (no commits)"]);
 
-    tui.input_then_render('x')
+    tui.input('x')
         .assert_rendered_contains("Discard branch c-branch-1?");
 
-    tui.input_then_render('n');
+    tui.input('n');
 
     tui.reload()
         .assert_current_line_eq(str!["┊╭┄br [c-branch-1] (no commits)"]);
@@ -255,24 +255,23 @@ fn discard_multiple_commits() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render('b')
+    tui.input('b')
         .assert_current_line_eq(str!["┊╭┄br [c-branch-1] (no commits)"]);
 
     for msg in ["one", "two", "three"] {
-        tui.input_then_render('n');
-        tui.input_then_render(KeyCode::Enter);
-        tui.input_then_render(msg);
-        tui.input_then_render(KeyCode::Enter);
+        tui.input('n');
+        tui.input(KeyCode::Enter);
+        tui.input(msg);
+        tui.input(KeyCode::Enter);
     }
 
-    tui.input_then_render(' ');
-    tui.input_then_render(KeyCode::Down);
-    tui.input_then_render(' ');
+    tui.input(' ');
+    tui.input(KeyCode::Down);
+    tui.input(' ');
 
-    tui.input_then_render('x')
-        .assert_rendered_contains("Discard?");
+    tui.input('x').assert_rendered_contains("Discard?");
 
-    tui.input_then_render('y');
+    tui.input('y');
 
     tui.reload()
         .assert_rendered_term_svg_eq(file!["snapshots/discard_multiple_commits_final.svg"]);
@@ -289,13 +288,13 @@ fn mark_and_discard_uncommitted_files() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render('j');
-    tui.input_then_render(' ');
-    tui.input_then_render('j');
-    tui.input_then_render(' ');
+    tui.input('j');
+    tui.input(' ');
+    tui.input('j');
+    tui.input(' ');
 
-    tui.input_then_render('x');
-    tui.input_then_render('y');
+    tui.input('x');
+    tui.input('y');
 
     tui.reload().assert_rendered_term_svg_eq(file![
         "snapshots/mark_and_discard_uncommitted_files_final.svg"
@@ -313,42 +312,38 @@ fn discard_individual_committed_files_from_local_file_list() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render('c');
-    tui.input_then_render('e');
-    tui.input_then_render('b');
+    tui.input('c');
+    tui.input('e');
+    tui.input('b');
 
-    tui.input_then_render('f')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/discard_individual_committed_files_from_local_file_list_001.svg"
-        ]);
+    tui.input('f').assert_rendered_term_svg_eq(file![
+        "snapshots/discard_individual_committed_files_from_local_file_list_001.svg"
+    ]);
 
-    tui.input_then_render('x')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/discard_individual_committed_files_from_local_file_list_002.svg"
-        ]);
-    tui.input_then_render('y')
+    tui.input('x').assert_rendered_term_svg_eq(file![
+        "snapshots/discard_individual_committed_files_from_local_file_list_002.svg"
+    ]);
+    tui.input('y')
         .assert_current_line_eq(str![["┊│     5f:or A three"]])
         .assert_rendered_term_svg_eq(file![
             "snapshots/discard_individual_committed_files_from_local_file_list_003.svg"
         ])
         .assert_backstack_eq([BackstackEntry::ShowFileList]);
 
-    tui.input_then_render('x')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/discard_individual_committed_files_from_local_file_list_004.svg"
-        ]);
-    tui.input_then_render('y')
+    tui.input('x').assert_rendered_term_svg_eq(file![
+        "snapshots/discard_individual_committed_files_from_local_file_list_004.svg"
+    ]);
+    tui.input('y')
         .assert_current_line_eq(str![["┊│     c0:tw A two"]])
         .assert_rendered_term_svg_eq(file![
             "snapshots/discard_individual_committed_files_from_local_file_list_005.svg"
         ])
         .assert_backstack_eq([BackstackEntry::ShowFileList]);
 
-    tui.input_then_render('x')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/discard_individual_committed_files_from_local_file_list_006.svg"
-        ]);
-    tui.input_then_render('y')
+    tui.input('x').assert_rendered_term_svg_eq(file![
+        "snapshots/discard_individual_committed_files_from_local_file_list_006.svg"
+    ]);
+    tui.input('y')
         .assert_current_line_eq(str![["┊●   0b42c46 (no commit message) (no changes)"]])
         .assert_rendered_term_svg_eq(file![
             "snapshots/discard_individual_committed_files_from_local_file_list_007.svg"
@@ -367,33 +362,30 @@ fn discard_individual_committed_files_from_global_file_list() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render('c');
-    tui.input_then_render('e');
-    tui.input_then_render('b');
-    tui.input_then_render((KeyModifiers::SHIFT, 'F'))
+    tui.input('c');
+    tui.input('e');
+    tui.input('b');
+    tui.input((KeyModifiers::SHIFT, 'F'))
         .assert_rendered_term_svg_eq(file![
             "snapshots/discard_individual_committed_files_from_global_file_list_001.svg"
         ]);
 
-    tui.input_then_render('j');
+    tui.input('j');
 
-    tui.input_then_render('x')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/discard_individual_committed_files_from_global_file_list_002.svg"
-        ]);
-    tui.input_then_render('y')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/discard_individual_committed_files_from_global_file_list_003.svg"
-        ]);
+    tui.input('x').assert_rendered_term_svg_eq(file![
+        "snapshots/discard_individual_committed_files_from_global_file_list_002.svg"
+    ]);
+    tui.input('y').assert_rendered_term_svg_eq(file![
+        "snapshots/discard_individual_committed_files_from_global_file_list_003.svg"
+    ]);
 
-    tui.input_then_render('x');
-    tui.input_then_render('y')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/discard_individual_committed_files_from_global_file_list_004.svg"
-        ]);
+    tui.input('x');
+    tui.input('y').assert_rendered_term_svg_eq(file![
+        "snapshots/discard_individual_committed_files_from_global_file_list_004.svg"
+    ]);
 
-    tui.input_then_render('x');
-    tui.input_then_render('y')
+    tui.input('x');
+    tui.input('y')
         .assert_rendered_term_svg_eq(file![
             "snapshots/discard_individual_committed_files_from_global_file_list_005.svg"
         ])
@@ -411,37 +403,35 @@ fn discard_marked_committed_files_from_local_file_list() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render('c');
-    tui.input_then_render('e');
-    tui.input_then_render('b');
-    tui.input_then_render('f')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/discard_marked_committed_files_from_local_file_list_001.svg"
-        ]);
+    tui.input('c');
+    tui.input('e');
+    tui.input('b');
+    tui.input('f').assert_rendered_term_svg_eq(file![
+        "snapshots/discard_marked_committed_files_from_local_file_list_001.svg"
+    ]);
 
-    tui.input_then_render(' ');
-    tui.input_then_render(' ')
+    tui.input(' ');
+    tui.input(' ')
         .assert_backstack_eq([BackstackEntry::Mark, BackstackEntry::ShowFileList])
         .assert_rendered_term_svg_eq(file![
             "snapshots/discard_marked_committed_files_from_local_file_list_002.svg"
         ]);
 
-    tui.input_then_render('x')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/discard_marked_committed_files_from_local_file_list_003.svg"
-        ]);
-    tui.input_then_render('y')
+    tui.input('x').assert_rendered_term_svg_eq(file![
+        "snapshots/discard_marked_committed_files_from_local_file_list_003.svg"
+    ]);
+    tui.input('y')
         .assert_current_line_eq(str![["┊│     c0:tw A two"]])
         .assert_backstack_eq([BackstackEntry::ShowFileList])
         .assert_rendered_term_svg_eq(file![
             "snapshots/discard_marked_committed_files_from_local_file_list_004.svg"
         ]);
 
-    tui.input_then_render(' ')
+    tui.input(' ')
         .assert_backstack_eq([BackstackEntry::Mark, BackstackEntry::ShowFileList]);
 
-    tui.input_then_render('x');
-    tui.input_then_render('y')
+    tui.input('x');
+    tui.input('y')
         .assert_current_line_eq(str![["┊●   0b42c46 (no commit message) (no changes)"]])
         .assert_backstack_eq([])
         .assert_rendered_term_svg_eq(file![
@@ -460,34 +450,30 @@ fn discard_marked_committed_files_from_global_file_list() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render('c');
-    tui.input_then_render('e');
-    tui.input_then_render('b');
-    tui.input_then_render((KeyModifiers::SHIFT, 'F'))
+    tui.input('c');
+    tui.input('e');
+    tui.input('b');
+    tui.input((KeyModifiers::SHIFT, 'F'))
         .assert_rendered_term_svg_eq(file![
             "snapshots/discard_marked_committed_files_from_global_file_list_001.svg"
         ]);
 
-    tui.input_then_render('j');
-    tui.input_then_render(' ');
-    tui.input_then_render(' ')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/discard_marked_committed_files_from_global_file_list_002.svg"
-        ]);
+    tui.input('j');
+    tui.input(' ');
+    tui.input(' ').assert_rendered_term_svg_eq(file![
+        "snapshots/discard_marked_committed_files_from_global_file_list_002.svg"
+    ]);
 
-    tui.input_then_render('x')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/discard_marked_committed_files_from_global_file_list_003.svg"
-        ]);
-    tui.input_then_render('y')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/discard_marked_committed_files_from_global_file_list_004.svg"
-        ]);
+    tui.input('x').assert_rendered_term_svg_eq(file![
+        "snapshots/discard_marked_committed_files_from_global_file_list_003.svg"
+    ]);
+    tui.input('y').assert_rendered_term_svg_eq(file![
+        "snapshots/discard_marked_committed_files_from_global_file_list_004.svg"
+    ]);
 
-    tui.input_then_render('k')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/discard_marked_committed_files_from_global_file_list_005.svg"
-        ]);
+    tui.input('k').assert_rendered_term_svg_eq(file![
+        "snapshots/discard_marked_committed_files_from_global_file_list_005.svg"
+    ]);
 }
 
 #[test]
@@ -497,21 +483,21 @@ fn global_file_list_stays_open_after_discarding_the_last_file_in_a_commit() {
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render((KeyModifiers::SHIFT, 'F'))
+    tui.input((KeyModifiers::SHIFT, 'F'))
         .assert_rendered_term_svg_eq(file![
             "snapshots/global_file_list_stays_open_after_discarding_the_last_file_in_a_commit_001.svg"
         ]);
 
     // discard the file in the top commit
-    tui.input_then_render('j');
-    tui.input_then_render('j');
-    tui.input_then_render('j')
+    tui.input('j');
+    tui.input('j');
+    tui.input('j')
         .assert_current_line_eq(str![["┊│     94:tm A A"]]);
-    tui.input_then_render('x');
-    tui.input_then_render('y');
+    tui.input('x');
+    tui.input('y');
 
     // after discarding the last file in the commit the global file list should still be open
-    tui.input_then_render('g')
+    tui.input('g')
         .assert_rendered_term_svg_eq(file![
             "snapshots/global_file_list_stays_open_after_discarding_the_last_file_in_a_commit_002.svg"
         ])
@@ -525,17 +511,17 @@ fn global_file_list_stays_open_after_marking_and_discarding_all_files_in_a_commi
 
     let mut tui = test_tui(env);
 
-    tui.input_then_render((KeyModifiers::SHIFT, 'F'));
+    tui.input((KeyModifiers::SHIFT, 'F'));
 
-    tui.input_then_render('j');
-    tui.input_then_render('j');
-    tui.input_then_render('j');
-    tui.input_then_render(' ');
-    tui.input_then_render('x')
+    tui.input('j');
+    tui.input('j');
+    tui.input('j');
+    tui.input(' ');
+    tui.input('x')
         .assert_rendered_term_svg_eq(file![
             "snapshots/global_file_list_stays_open_after_marking_and_discarding_all_files_in_a_commit_001.svg"
         ]);
-    tui.input_then_render('y')
+    tui.input('y')
         .assert_rendered_term_svg_eq(file![
             "snapshots/global_file_list_stays_open_after_marking_and_discarding_all_files_in_a_commit_002.svg"
         ])

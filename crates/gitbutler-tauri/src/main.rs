@@ -529,6 +529,7 @@ fn main() -> anyhow::Result<()> {
                 commit::move_changes::tauri_commit_move_changes_between::commit_move_changes_between,
                 commit::squash::tauri_commit_squash::commit_squash,
                 commit::uncommit::tauri_commit_uncommit_changes::commit_uncommit_changes,
+                commit::uncommit::tauri_commit_uncommit_changes_from_commits::commit_uncommit_changes_from_commits,
                 commit::uncommit::tauri_commit_uncommit::commit_uncommit,
                 workspace::tauri_workspace_integrate_upstream::workspace_integrate_upstream,
                 land::tauri_branch_land::branch_land,

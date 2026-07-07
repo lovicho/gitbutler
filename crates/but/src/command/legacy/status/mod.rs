@@ -1264,6 +1264,7 @@ fn print_group(
                     suffix: branch_suffix,
                 },
                 branch_cli_id,
+                is_merged_upstream,
             )?;
 
             first = false;

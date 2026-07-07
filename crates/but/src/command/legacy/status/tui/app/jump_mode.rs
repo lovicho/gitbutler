@@ -42,7 +42,7 @@ impl JumpMode {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum JumpMessage {
     Enter,
     Input(Event),

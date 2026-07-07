@@ -1,10 +1,12 @@
+use std::collections::HashMap;
 use std::fmt;
 
 use crate::theme::{self, Paint};
 use anyhow::bail;
 use bstr::BStr;
 use but_api::commit::types::{
-    CommitCreateResult, CommitMoveResult, CommitSquashResult, MoveChangesResult, UncommitResult,
+    CommitCreateResult, CommitMoveResult, CommitSquashResult, MoveChangesResult,
+    UncommitChangesSource, UncommitResult,
 };
 use but_core::{DiffSpec, DryRun, ref_metadata::StackId, sync::RepoExclusive};
 use but_ctx::Context;
@@ -1540,6 +1542,18 @@ pub(crate) fn handle_uncommit(
         return Ok(());
     }
 
+    // When every source is a committed file, uncommit them in a single batched
+    // operation. This lets the backend group the changes by commit and apply them
+    // in child-to-parent order, so callers can pass files from several commits
+    // (and in any order) without hitting stale commit IDs from intermediate
+    // rebases. Whole-commit sources keep the sequential `rub <source> zz` path.
+    if sources
+        .iter()
+        .all(|source| matches!(source, CliId::CommittedFile { .. }))
+    {
+        return uncommit_committed_files(ctx, out, &sources);
+    }
+
     // Call the main rub handler with "zz" as target
     handle(
         ctx,
@@ -1548,6 +1562,104 @@ pub(crate) fn handle_uncommit(
         "zz",
         MessageCombinationStrategy::KeepBoth,
     )
+}
+
+/// Uncommit one or more committed files as a single multi-source operation.
+///
+/// Committed-file ids are grouped by commit so each source commit yields a
+/// single [`UncommitChangesSource`] with all of its changes combined. This
+/// computes the diff specs for a commit in one pass and keeps the payload to one
+/// entry per commit; the backend then applies them child-to-parent in one editor
+/// session. Sources that could not be applied are reported best-effort without
+/// failing the whole operation.
+fn uncommit_committed_files(
+    ctx: &mut Context,
+    out: &mut OutputChannel,
+    sources: &[CliId],
+) -> anyhow::Result<()> {
+    // Group the requested paths by commit, preserving first-seen commit order.
+    let mut commit_order = Vec::new();
+    let mut paths_by_commit: HashMap<gix::ObjectId, Vec<&BStr>> = HashMap::new();
+    for source in sources {
+        let CliId::CommittedFile {
+            commit_id, path, ..
+        } = source
+        else {
+            unreachable!("uncommit_committed_files only handles committed files");
+        };
+        match paths_by_commit.get_mut(commit_id) {
+            Some(paths) => paths.push(path.as_ref()),
+            None => {
+                commit_order.push(*commit_id);
+                paths_by_commit.insert(*commit_id, vec![path.as_ref()]);
+            }
+        }
+    }
+
+    // One source per commit, with the changes for all of its paths combined.
+    let mut uncommit_sources = Vec::with_capacity(commit_order.len());
+    for commit_id in commit_order {
+        let paths = paths_by_commit
+            .remove(&commit_id)
+            .expect("commit id was just inserted");
+        uncommit_sources.push(UncommitChangesSource {
+            commit_id,
+            changes: file_changes_from_commit_paths(ctx, commit_id, &paths)?,
+        });
+    }
+
+    // One source per commit, so this is the number of commits we attempted.
+    let source_count = uncommit_sources.len();
+    let result = but_api::commit::uncommit::commit_uncommit_changes_from_commits(
+        ctx,
+        uncommit_sources,
+        None,
+        DryRun::No,
+    )?;
+
+    // The multi-source API is best-effort and returns `Ok` even when sources
+    // fail. If every commit failed, nothing was uncommitted, so fail the command
+    // (matching the old single-source behavior) rather than reporting success.
+    if result.failures.len() == source_count {
+        let repo = ctx.repo.get()?;
+        let details = result
+            .failures
+            .iter()
+            .map(|failure| {
+                format!(
+                    "{}: {}",
+                    shorten_object_id(&repo, failure.commit_id),
+                    failure.error
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        bail!("Failed to uncommit changes:\n{details}");
+    }
+
+    // Partial success: warn about the sources that could not be applied.
+    if !result.failures.is_empty()
+        && let Some(out) = out.for_human()
+    {
+        let t = theme::get();
+        let repo = ctx.repo.get()?;
+        for failure in &result.failures {
+            writeln!(
+                out,
+                "Warning: could not uncommit changes from {}: {}",
+                t.cli_id.paint(shorten_object_id(&repo, failure.commit_id)),
+                failure.error
+            )?;
+        }
+    }
+
+    if let Some(out) = out.for_human() {
+        writeln!(out, "Uncommitted changes")?;
+    } else if let Some(out) = out.for_json() {
+        out.write_value(serde_json::json!({"ok": true}))?;
+    }
+
+    Ok(())
 }
 
 /// Handler for `but amend <file>... <commit>` - runs `but rub <file> <commit>`
@@ -1998,12 +2110,24 @@ fn changes_for_stack_assignment(
 fn file_changes_from_commit(
     ctx: &Context,
     commit_oid: gix::ObjectId,
-    path: &bstr::BStr,
+    path: &BStr,
+) -> anyhow::Result<Vec<DiffSpec>> {
+    file_changes_from_commit_paths(ctx, commit_oid, std::slice::from_ref(&path))
+}
+
+/// Compute the combined diff specs for several `paths` in a single commit, using
+/// one workspace/db and [`DiffSpecBuilder`] setup for all of them.
+fn file_changes_from_commit_paths(
+    ctx: &Context,
+    commit_oid: gix::ObjectId,
+    paths: &[&BStr],
 ) -> anyhow::Result<Vec<DiffSpec>> {
     let context_lines = ctx.settings.context_lines;
     let (_guard, repo, ws, mut db) = ctx.workspace_and_db_mut()?;
     let mut builder = DiffSpecBuilder::new(&mut db, &repo, &ws, context_lines);
-    builder.push_changes_from_path_in_commit(path, commit_oid, "no parents")?;
+    for path in paths {
+        builder.push_changes_from_path_in_commit(path, commit_oid, "no parents")?;
+    }
     Ok(builder.into_diff_specs())
 }
 

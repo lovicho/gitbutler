@@ -38,7 +38,7 @@ use super::{
     help::Help,
     highlight::Highlights,
     key_bind::{
-        KeyBinds, default_key_binds, fuzzy_picker_key_binds, help_key_binds,
+        KeyBinds, confirm_key_binds, default_key_binds, fuzzy_picker_key_binds, help_key_binds,
         normal_with_marks_key_binds,
     },
     mode::Mode,
@@ -134,6 +134,7 @@ impl App {
         let app_key_binds = AppKeyBinds {
             key_binds: default_key_binds(),
             normal_with_marks_key_binds: normal_with_marks_key_binds(),
+            confirm_key_binds: confirm_key_binds(),
         };
 
         let mode = RememberToUpdateBackstack::new(match run_options {
@@ -175,8 +176,8 @@ impl App {
 
     pub fn active_key_binds(&self) -> &KeyBinds {
         match &self.modal {
-            Some(Modal::Confirm { key_binds, .. })
-            | Some(Modal::GotoBranchPicker { key_binds, .. })
+            Some(Modal::Confirm { .. }) => &self.app_key_binds.confirm_key_binds,
+            Some(Modal::GotoBranchPicker { key_binds, .. })
             | Some(Modal::ApplyStackPicker { key_binds, .. })
             | Some(Modal::CopySelectionPicker { key_binds, .. })
             | Some(Modal::Help { key_binds, .. }) => key_binds,
@@ -205,7 +206,7 @@ impl App {
         anyhow::Error: From<<T::Backend as Backend>::Error>,
     {
         if let Err(err) = self.try_handle_message(ctx, out, mode, terminal_guard, messages, msg) {
-            messages.push(Message::ShowError(Arc::new(err)));
+            messages.push(Message::ShowError(err));
         }
     }
 
@@ -376,10 +377,10 @@ impl App {
                 self.toasts.insert(kind, text);
             }
             Message::Confirm(confirm_message) => match self.modal.take() {
-                Some(Modal::Confirm { confirm, key_binds }) => {
+                Some(Modal::Confirm { confirm }) => {
                     self.modal = confirm
                         .handle_message(confirm_message, ctx, messages)?
-                        .map(|confirm| Modal::Confirm { confirm, key_binds });
+                        .map(|confirm| Modal::Confirm { confirm });
                 }
                 modal => self.modal = modal,
             },
@@ -429,7 +430,7 @@ impl App {
                 self.details.try_handle_message(details_message, messages)?;
             }
             Message::RegisterOutOfBandMessage(rx) => {
-                self.incoming_out_of_band_messages.push(rx.0);
+                self.incoming_out_of_band_messages.push(rx);
             }
             Message::WithOneFrameDelay(msg) => {
                 self.delayed_messages.push(*msg);
@@ -488,6 +489,9 @@ impl App {
             }
             Message::Stack(stack_message) => self.handle_stack(stack_message, ctx, messages)?,
             Message::Jump(jump_message) => self.handle_jump(jump_message, messages),
+            Message::ShowModal(modal) => {
+                self.modal = Some(modal);
+            }
         }
 
         self.status_scroll.to_cursor();
@@ -734,10 +738,35 @@ impl App {
         select_after_reload: Option<SelectAfterReload>,
         cause: ReloadCause,
     ) -> anyhow::Result<()> {
+        tracing::debug!("handle_reload");
+
         let close_empty_global_file_list_after_reload = matches!(
             (&self.flags.show_files, &select_after_reload),
             (FilesStatusFlag::All, Some(SelectAfterReload::Commit(_)))
         );
+
+        let select_details_section_after_reload = match &select_after_reload {
+            Some(SelectAfterReload::UncommittedDetailsSection { index, direction }) => {
+                Some((*index, *direction))
+            }
+            Some(SelectAfterReload::Commit(_))
+            | Some(SelectAfterReload::FirstFileInCommit(_))
+            | Some(SelectAfterReload::UncommittedFile { .. })
+            | Some(SelectAfterReload::Branch(_))
+            | Some(SelectAfterReload::Stack(_))
+            | Some(SelectAfterReload::CliId(_))
+            | Some(SelectAfterReload::Uncommitted)
+            | None => None,
+        };
+
+        let status_selection_before_details_reload = select_details_section_after_reload
+            .is_some()
+            .then(|| {
+                self.cursor
+                    .selection_cli_id_for_reload(&self.status_lines, self.flags.show_files)
+                    .cloned()
+            })
+            .flatten();
 
         if let Some(select_after_reload) = &select_after_reload {
             match select_after_reload {
@@ -759,6 +788,7 @@ impl App {
                 SelectAfterReload::Branch(_)
                 | SelectAfterReload::Uncommitted
                 | SelectAfterReload::UncommittedFile { .. }
+                | SelectAfterReload::UncommittedDetailsSection { .. }
                 | SelectAfterReload::Stack(_)
                 | SelectAfterReload::CliId(_) => {}
             }
@@ -773,6 +803,12 @@ impl App {
                 }
                 SelectAfterReload::Branch(branch) => Cursor::select_branch(&branch, &new_lines),
                 SelectAfterReload::Uncommitted => Cursor::select_uncommitted(&new_lines),
+                SelectAfterReload::UncommittedDetailsSection { .. } => {
+                    status_selection_before_details_reload
+                        .as_deref()
+                        .and_then(|cli_id| Cursor::restore(cli_id, &new_lines))
+                        .or_else(|| Cursor::select_uncommitted(&new_lines))
+                }
                 SelectAfterReload::UncommittedFile { path, stack_id } => {
                     Cursor::select_uncommitted_file(path.as_ref(), stack_id, &new_lines)
                 }
@@ -822,7 +858,11 @@ impl App {
         if self.is_details_visible {
             match cause {
                 ReloadCause::Mutation | ReloadCause::Watcher | ReloadCause::Manual => {
-                    self.details.clear_selection();
+                    let details_focused = matches!(&*self.mode, Mode::Details(..));
+                    self.details.clear_selection_for_reload(details_focused);
+                    if let Some((index, direction)) = select_details_section_after_reload {
+                        self.details.select_section_when_available(index, direction);
+                    }
                 }
                 ReloadCause::ViewOnly => {}
             }
@@ -839,7 +879,7 @@ impl App {
     }
 
     /// Handles showing a transient UI error.
-    fn handle_show_error(&mut self, err: Arc<anyhow::Error>, messages: &mut Vec<Message>) {
+    fn handle_show_error(&mut self, err: anyhow::Error, messages: &mut Vec<Message>) {
         self.toasts
             .insert(ToastKind::Error, format_error_for_tui(&err));
 
@@ -859,7 +899,7 @@ impl App {
         };
 
         match &selection.data {
-            StatusOutputLineData::Branch { cli_id } => {
+            StatusOutputLineData::Branch { cli_id, .. } => {
                 let CliId::Branch { name, .. } = &**cli_id else {
                     return Ok(());
                 };
@@ -914,7 +954,7 @@ impl App {
         };
 
         let new_name = match &selection.data {
-            StatusOutputLineData::Branch { cli_id } => {
+            StatusOutputLineData::Branch { cli_id, .. } => {
                 let CliId::Branch { name, .. } = &**cli_id else {
                     return Ok(());
                 };
@@ -1178,13 +1218,13 @@ impl StatusScroll {
 pub struct AppKeyBinds {
     key_binds: KeyBinds,
     normal_with_marks_key_binds: KeyBinds,
+    confirm_key_binds: KeyBinds,
 }
 
 #[derive(Debug)]
 pub enum Modal {
     Confirm {
         confirm: Confirm,
-        key_binds: KeyBinds,
     },
     CopySelectionPicker {
         picker: Box<FuzzyPicker<CopySelectionItem>>,
