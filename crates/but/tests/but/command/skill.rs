@@ -117,9 +117,13 @@ fn skill_install_absolute_path_outside_repo_does_not_require_global() -> anyhow:
     let json: serde_json::Value = serde_json::from_slice(&output)?;
     assert_eq!(json.get("success").and_then(|v| v.as_bool()), Some(true));
     let expected_path = install_dir.display().to_string();
+    let paths = json
+        .get("paths")
+        .and_then(|v| v.as_array())
+        .expect("paths array should be present");
     assert_eq!(
-        json.get("path").and_then(|v| v.as_str()),
-        Some(expected_path.as_str())
+        paths.iter().map(|v| v.as_str()).collect::<Vec<_>>(),
+        vec![Some(expected_path.as_str())]
     );
 
     Ok(())
@@ -227,11 +231,106 @@ fn skill_install_detect_finds_agent_skills_installation_in_repo() -> anyhow::Res
         .clone();
 
     let json: serde_json::Value = serde_json::from_slice(&output)?;
+    let paths = json
+        .get("paths")
+        .and_then(|value| value.as_array())
+        .expect("paths array should be present");
     assert!(
-        json.get("path")
-            .and_then(|value| value.as_str())
-            .is_some_and(path_ends_with_gitbutler_agents_dir),
+        paths
+            .iter()
+            .filter_map(|value| value.as_str())
+            .any(path_ends_with_gitbutler_agents_dir),
         "expected detect to reuse .agents/skills/gitbutler, got: {json:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn skill_install_detect_updates_every_installation_in_scope() -> anyhow::Result<()> {
+    let env = Sandbox::open_with_default_settings("repo-no-remote");
+
+    // Two GitButler skills installed under different formats in the local scope.
+    for agent_dir in [".agents", ".claude"] {
+        env.but("")
+            .arg("skill")
+            .arg("install")
+            .args(["--format", "json"])
+            .arg("--path")
+            .arg(relative_agent_skill_path(agent_dir))
+            .allow_json()
+            .assert()
+            .success();
+    }
+
+    let output = env
+        .but("skill install --format json --detect")
+        .allow_json()
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let json: serde_json::Value = serde_json::from_slice(&output)?;
+    let paths = json
+        .get("paths")
+        .and_then(|value| value.as_array())
+        .expect("paths array should be present");
+    assert_eq!(
+        paths.len(),
+        2,
+        "detect refreshes every install in the scope, got: {json:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn skill_check_ignores_format_outside_its_scope() -> anyhow::Result<()> {
+    let env = Sandbox::open_with_default_settings("repo-no-remote");
+
+    // `.copilot/skills` is a global-only format. Installed inside a repo via an
+    // explicit --path, a local-scope scan must not discover (and later overwrite)
+    // it as a local install.
+    let copilot_path = std::path::PathBuf::from(".copilot")
+        .join("skills")
+        .join("gitbutler");
+    env.but("")
+        .arg("skill")
+        .arg("install")
+        .args(["--format", "json"])
+        .arg("--path")
+        .arg(&copilot_path)
+        .allow_json()
+        .assert()
+        .success();
+
+    let output = env
+        .but("skill check --local --format json")
+        .allow_json()
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let json: serde_json::Value = serde_json::from_slice(&output)?;
+    let skills = json
+        .get("skills")
+        .and_then(|value| value.as_array())
+        .expect("skills array should be present");
+    assert!(
+        !skills.iter().any(|skill| {
+            skill
+                .get("path")
+                .and_then(|value| value.as_str())
+                .is_some_and(|path| {
+                    path.replace('\\', "/")
+                        .ends_with(".copilot/skills/gitbutler")
+                })
+        }),
+        "a global-only .copilot install must not be discovered in local scope, got: {skills:?}"
     );
 
     Ok(())

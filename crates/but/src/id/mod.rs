@@ -347,9 +347,6 @@ impl<'a> Node<'a> for &'a RemoteCommitWithId {
 pub struct SegmentWithId {
     /// The short ID.
     pub short_id: ShortId,
-    /// True iff `short_id` was generated from scratch (and not from a substring
-    /// of the branch name).
-    pub is_auto_id: bool,
     /// The original segment except that `commits` and `commits_on_remote` are
     /// blank to save memory.
     pub inner: StackSegment,
@@ -824,18 +821,6 @@ impl IdMap {
             return Ok(Vec::new());
         }
 
-        // Partial branch name match.
-        for stack_with_id in self.indexed_stacks.borrow_owner().iter() {
-            for segment_with_id in stack_with_id.segments.iter() {
-                if segment_with_id
-                    .branch_name()
-                    .is_some_and(|branch_name| branch_name.contains_str(element))
-                {
-                    matches.push(Box::new(segment_with_id));
-                }
-            }
-        }
-
         // Only try SHA matching if the input looks like a hex string
         if element
             .chars()
@@ -881,7 +866,7 @@ impl IdMap {
         // Then try CliId matching
         for stack_with_id in self.indexed_stacks.borrow_owner().iter() {
             for segment_with_id in stack_with_id.segments.iter() {
-                if segment_with_id.is_auto_id && segment_with_id.short_id == element {
+                if segment_with_id.short_id == element {
                     matches.push(Box::new(segment_with_id));
                 }
             }
@@ -910,11 +895,15 @@ impl IdMap {
             matches.push(Box::new(Unstaged {}));
         }
 
-        // To avoid false positives, only check uncommitted files if nothing
-        // else matches. See the uncommitted_files_disambiguate_with_branch()
-        // test for an example of the desired behavior (an uncommitted file
-        // is assigned the ID "kpr" to avoid ambiguity with a branch with the
-        // substring "kp"), so it should not match with "kp".
+        // We only match against uncommitted files if there are no other matches. The reason for
+        // this is that we want prefix matching for uncommitted files to make the IDs "stable under
+        // shortening". However, as the reverse hex IDs of uncommitted files may collide with branch
+        // names and/or branch short IDs, we only match against uncommitted files if there are no
+        // other matches. This allows branch name short IDs to be prefixes of uncommitted file short
+        // IDs.
+        //
+        // We should consider namespacing the branch short IDs as this problem will only grow with
+        // the introduction of change IDs for commits.
         if matches.is_empty() {
             let element_bstring = BString::from(element);
             for (reverse_hex, uncommitted_file) in self

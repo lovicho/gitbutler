@@ -77,9 +77,12 @@ impl<M: RefMetadata> Editor<'_, '_, M> {
         Ok((self.new_selector(*first_parent), self.find_commit(pick.id)?))
     }
 
-    /// Writes a commit with correct signing to the in memory repository,
-    /// without updating the history log.
-    pub fn new_commit_untracked(
+    /// Writes a commit with correct signing to the in memory repository.
+    ///
+    /// This does not update the commit mappings; a rewrite is only recorded
+    /// once the commit is installed into the graph via [`Editor::replace`] or
+    /// a rebase.
+    pub fn new_commit(
         &self,
         commit: but_core::CommitOwned,
         date_mode: DateMode,
@@ -90,18 +93,6 @@ impl<M: RefMetadata> Editor<'_, '_, M> {
             date_mode,
             SignCommit::IfSignCommitsEnabled,
         )
-    }
-
-    /// Writes a commit with correct signing to the in memory repository.
-    pub fn new_commit(
-        &mut self,
-        commit: but_core::CommitOwned,
-        date_mode: DateMode,
-    ) -> Result<gix::ObjectId> {
-        let commit_id = commit.id;
-        let new_id = self.new_commit_untracked(commit, date_mode)?;
-        self.history.update_mapping(commit_id, new_id);
-        Ok(new_id)
     }
 
     /// Creates a commit with only the signature, author, and headers set correctly.

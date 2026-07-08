@@ -48,7 +48,7 @@ pub fn render_app(app: &App, frame: &mut Frame) {
             file_browser_area,
             details_pane_area,
         }) => {
-            let status_block = pane_block(app, true, Borders::BOTTOM);
+            let status_block = pane_block(app, Borders::NONE);
             frame.render_widget(status_block, layout.status_area);
 
             if let Some(file_browser_area) = file_browser_area
@@ -68,9 +68,8 @@ pub fn render_app(app: &App, frame: &mut Frame) {
             pane_area,
             content_area,
         }) => {
-            let details_focused = matches!(&*app.mode, Mode::Details(..));
-            let status_block = pane_block(app, !details_focused, Borders::BOTTOM);
-            let details_block = pane_block(app, details_focused, Borders::BOTTOM);
+            let status_block = pane_block(app, Borders::NONE);
+            let details_block = pane_block(app, Borders::NONE);
 
             let status_inner_area = status_block.inner(layout.status_area);
             frame.render_widget(status_block, layout.status_area);
@@ -82,7 +81,7 @@ pub fn render_app(app: &App, frame: &mut Frame) {
             render_details_pane(app, content_area, frame);
         }
         None => {
-            let status_block = pane_block(app, true, Borders::BOTTOM);
+            let status_block = pane_block(app, Borders::NONE);
             let status_inner_area = status_block.inner(layout.status_area);
             frame.render_widget(status_block, layout.status_area);
             render_status(app, status_inner_area, frame);
@@ -132,12 +131,7 @@ fn render_details_separator(app: &App, area: Rect, frame: &mut Frame) {
 }
 
 pub(crate) fn details_content_area(app: &App, details_area: Rect) -> Rect {
-    let details_area = pane_block(
-        app,
-        matches!(&*app.mode, Mode::Details(..)),
-        Borders::BOTTOM,
-    )
-    .inner(details_area);
+    let details_area = pane_block(app, Borders::NONE).inner(details_area);
     details_separator(app).inner(details_area)
 }
 
@@ -154,17 +148,9 @@ fn file_browser_details_block(app: &App) -> Block<'static> {
         .borders(Borders::LEFT)
 }
 
-fn pane_block(app: &App, focused: bool, borders: Borders) -> Block<'static> {
-    let border_style = if focused {
-        app.theme.default.fg(app.mode.bg(app.theme))
-    } else {
-        app.theme.border
-    };
-    let border_type = if focused {
-        BorderType::Thick
-    } else {
-        BorderType::Plain
-    };
+fn pane_block(app: &App, borders: Borders) -> Block<'static> {
+    let border_style = app.theme.border;
+    let border_type = BorderType::Plain;
 
     Block::bordered()
         .border_style(border_style)
@@ -228,8 +214,7 @@ fn app_layout(app: &App, terminal_area: Rect) -> AppLayout {
         && details_mode.full_screen
     {
         if app.file_browser.is_some() {
-            let status_block_area =
-                pane_block(app, true, Borders::BOTTOM).inner(status_layout.status_area);
+            let status_block_area = pane_block(app, Borders::NONE).inner(status_layout.status_area);
             let details_layout = Layout::horizontal([Constraint::Length(50), Constraint::Min(1)])
                 .split(status_block_area);
             let details_pane_area = details_layout[1];
@@ -240,8 +225,12 @@ fn app_layout(app: &App, terminal_area: Rect) -> AppLayout {
                 details_pane_area: Some(details_pane_area),
             })
         } else {
-            let content_area =
-                pane_block(app, true, Borders::BOTTOM).inner(status_layout.status_area);
+            let content_area = pane_block(app, Borders::NONE).inner(status_layout.status_area);
+            let content_area = Rect {
+                x: content_area.x.saturating_add(1),
+                width: content_area.width.saturating_sub(1),
+                ..content_area
+            };
             Some(DetailsPaneLayout::FullScreen {
                 content_area,
                 file_browser_area: None,
@@ -513,7 +502,7 @@ fn render_status_list_item(
     if (is_selected || stack_highlight) && highlight_current_line {
         frame
             .buffer_mut()
-            .set_style(area, app.theme.selection_highlight);
+            .set_style(area, app.selection_highlight_color());
     }
 
     let mut line = RenderSingleLineSpans::new(frame, area);
@@ -835,7 +824,7 @@ fn render_operation_extension_line(
     if app.has_focus {
         frame
             .buffer_mut()
-            .set_style(area, app.theme.selection_highlight);
+            .set_style(area, app.selection_highlight_color());
     }
 
     let mut line = RenderSingleLineSpans::new(frame, area);

@@ -84,6 +84,7 @@ fn reword_a_commit() -> Result<()> {
     insta::assert_debug_snapshot!(outcome.history.commit_mappings(), @"
     {
         Sha1(2fc288c36c8bb710c78203f78ea9883724ce142b): Sha1(53af95adeaf78258ee71c74fe4daa6628d750ff1),
+        Sha1(add59d26b2ffd7468fcb44c2db48111dd8f481e5): Sha1(6de6b92e431243cc4676179bd5ef17d95642d250),
         Sha1(e8ee978dac10e6a85006543ef08be07c5824b4f7): Sha1(78aaae2b4d822ed0cc7e0e83767b5dec2c88791b),
     }
     ");
@@ -183,6 +184,7 @@ fn amend_a_commit() -> Result<()> {
     insta::assert_debug_snapshot!(outcome.history.commit_mappings(), @"
     {
         Sha1(2fc288c36c8bb710c78203f78ea9883724ce142b): Sha1(810119232dd43ad1edc6b3d1a9cc2cd507d92a4e),
+        Sha1(add59d26b2ffd7468fcb44c2db48111dd8f481e5): Sha1(f1905a822d4cad49595b47f24d40702dc41a0b57),
         Sha1(e8ee978dac10e6a85006543ef08be07c5824b4f7): Sha1(e7221b5ace99ba38e222e19e5da9c6966955e37b),
     }
     ");

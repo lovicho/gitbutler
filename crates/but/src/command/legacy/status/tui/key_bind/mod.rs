@@ -61,10 +61,11 @@ pub fn default_key_binds() -> KeyBinds {
                 register_non_mode_specific_key_binds(&mut builder, WithFocusDetails::No);
             }
             ModeDiscriminant::Details => {
-                builder.details_scroll_up().register();
-                builder.details_scroll_down().register();
                 builder.details_next_hunk().register();
                 builder.details_prev_hunk().register();
+
+                builder.details_scroll_up().register();
+                builder.details_scroll_down().register();
 
                 builder.details_discard().register();
 
@@ -861,10 +862,7 @@ impl KeyBindsBuilder<'_> {
     fn details_next_hunk(&mut self) -> KeyBindsInModesBuilder<'_> {
         self.key_bind(
             "next hunk",
-            press()
-                .shift()
-                .code(KeyCode::Char('J'))
-                .alt_code(KeyCode::Down),
+            press().code(KeyCode::Char('j')).alt_code(KeyCode::Down),
             || Message::Details(DetailsMessage::SelectNextSection),
         )
     }
@@ -872,10 +870,7 @@ impl KeyBindsBuilder<'_> {
     fn details_prev_hunk(&mut self) -> KeyBindsInModesBuilder<'_> {
         self.key_bind(
             "prev hunk",
-            press()
-                .shift()
-                .code(KeyCode::Char('K'))
-                .alt_code(KeyCode::Up),
+            press().code(KeyCode::Char('k')).alt_code(KeyCode::Up),
             || Message::Details(DetailsMessage::SelectPrevSection),
         )
     }
@@ -883,7 +878,10 @@ impl KeyBindsBuilder<'_> {
     fn details_scroll_up(&mut self) -> KeyBindsInModesBuilder<'_> {
         self.key_bind(
             "up",
-            press().code(KeyCode::Char('k')).alt_code(KeyCode::Up),
+            press()
+                .shift()
+                .code(KeyCode::Char('K'))
+                .alt_code(KeyCode::Up),
             || Message::Details(DetailsMessage::ScrollUp(1)),
         )
     }
@@ -891,7 +889,10 @@ impl KeyBindsBuilder<'_> {
     fn details_scroll_down(&mut self) -> KeyBindsInModesBuilder<'_> {
         self.key_bind(
             "down",
-            press().code(KeyCode::Char('j')).alt_code(KeyCode::Down),
+            press()
+                .shift()
+                .code(KeyCode::Char('J'))
+                .alt_code(KeyCode::Down),
             || Message::Details(DetailsMessage::ScrollDown(1)),
         )
     }

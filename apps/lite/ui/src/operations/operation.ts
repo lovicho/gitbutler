@@ -419,6 +419,7 @@ const intoOperation = ({
 	);
 };
 
+// https://linear.app/gitbutler/issue/GB-1735/support-all-permutations-of-moving-branches-and-commits
 const moveOperation = ({
 	source,
 	target,
@@ -429,10 +430,6 @@ const moveOperation = ({
 	side: InsertSide;
 }): OperationWithLabel | null => {
 	const branchMoveOperation = Match.value({ source, target, side }).pipe(
-		// This should support `relativeTo`:
-		// https://linear.app/gitbutler/issue/GB-1161/refsbranches-should-use-bytes-instead-of-strings
-		// https://linear.app/gitbutler/issue/GB-1199/support-moving-branches-relative-to-commits
-		// https://linear.app/gitbutler/issue/GB-1232/support-moving-branch-before-another-branch
 		Match.when(
 			{
 				source: { _tag: "Branch" },

@@ -2,6 +2,7 @@ import uiStyles from "#ui/components/ui.module.css";
 import { SuspenseQuery } from "@suspensive/react-query";
 import {
 	useMergeReview,
+	useOpenInEditor,
 	usePublishReview,
 	useSaveGUISettings,
 	useSetReviewAutoMerge,
@@ -16,6 +17,7 @@ import {
 	getGUISettingsQueryOptions,
 	getReviewMergeStatusQueryOptions,
 	headInfoQueryOptions,
+	listEditorsQueryOptions,
 	listReviewsQueryOptions,
 	treeChangeDiffsQueryOptions,
 } from "#ui/api/queries.ts";
@@ -109,7 +111,7 @@ import { useFileMenuItems } from "#ui/routes/project/$id/workspace/useFileMenuIt
 import { useMergedRefs } from "@base-ui/utils/useMergedRefs";
 import { getHeadInfoIndex } from "#ui/api/ref-info.ts";
 import { Checkbox } from "#ui/components/Checkbox.tsx";
-import { GUISettings } from "#electron/settings.ts";
+import type { GUISettings } from "#electron/settings.ts";
 
 type BranchTab = "diff" | "pr";
 
@@ -117,13 +119,11 @@ type BranchTab = "diff" | "pr";
 // stored in local storage.
 type PanelId = "files-panel" | "diff-panel";
 
-type DiffConfig = Required<Pick<GUISettings, "diffBackground" | "diffOverflow" | "diffStyle">>;
-
-const diffDefaults: DiffConfig = {
+const diffDefaults = {
 	diffBackground: true,
 	diffOverflow: "scroll",
 	diffStyle: "split",
-};
+} satisfies Partial<GUISettings>;
 
 const codeViewItemId = ({ changesetKey, path }: { changesetKey: string; path: string }): string =>
 	`${changesetKey}:${path}`;
@@ -330,6 +330,12 @@ const DiffContents: FC<{
 }) => {
 	const [collapsedItems, setCollapsedItems] = useState<Set<string>>(new Set());
 	const dispatch = useAppDispatch();
+	const { data: editors } = useQuery(listEditorsQueryOptions);
+	const { data: preferredEditor } = useQuery({
+		...getGUISettingsQueryOptions(),
+		select: (cfg) => editors?.find((editor) => editor.id === cfg.editorId),
+	});
+	const openInEditor = useOpenInEditor();
 
 	const diffSelection = useDiffSelection(projectId, navigationIndex);
 	const diffSelectionFile =
@@ -387,6 +393,24 @@ const DiffContents: FC<{
 				conflictBehavior: "allow",
 				target: selectionScopeRef,
 				meta: diffHotkeys.unfoldFile.meta,
+			},
+		},
+		{
+			hotkey: diffHotkeys.openInEditor.hotkey,
+			callback: () =>
+				diffSelectionFile &&
+				preferredEditor &&
+				openInEditor.mutate({
+					projectId,
+					editorId: preferredEditor.id,
+					path: diffSelectionFile.change.path,
+					lineNr: null,
+				}),
+			options: {
+				enabled: !!diffSelectionFile && !!preferredEditor,
+				conflictBehavior: "allow",
+				target: selectionScopeRef,
+				meta: diffHotkeys.openInEditor.meta,
 			},
 		},
 	]);

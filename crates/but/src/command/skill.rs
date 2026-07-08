@@ -112,6 +112,15 @@ impl SkillFormat {
         join_relative_path(base_dir, self.path_components)
     }
 
+    /// The skills directory that holds this format's installation folder.
+    fn skills_parent_dir(&self, base_dir: &std::path::Path) -> PathBuf {
+        let (_, parent) = self
+            .path_components
+            .split_last()
+            .expect("skill format path components are never empty");
+        join_relative_path(base_dir, parent)
+    }
+
     fn is_available_for(&self, global: bool) -> bool {
         matches!(
             (global, self.availability),
@@ -355,21 +364,20 @@ fn resolve_custom_path(custom: &str, ctx: Option<&mut Context>, global: bool) ->
     }
 }
 
-/// Validate that a SKILL.md file is actually a GitButler skill
+/// Validate that a SKILL.md file is actually a GitButler skill by requiring
+/// `name: but` in its YAML frontmatter.
+///
+/// The check is deliberately strict: discovery scans every entry inside an
+/// agent's `skills` directory, so a looser match (the string `name: but`
+/// appearing in prose, or a `# GitButler CLI Skill` header in another skill's
+/// docs) could misclassify an unrelated skill and let `--detect`/`--update`
+/// overwrite it.
 fn is_gitbutler_skill(skill_md_path: &std::path::Path) -> bool {
-    if let Ok(content) = std::fs::read_to_string(skill_md_path) {
-        // Check for GitButler-specific markers with proper context
-        // Look for YAML frontmatter with "name: but" or the specific header
-        let has_frontmatter_name = content.lines().any(|line| line.trim() == "name: but");
-
-        let has_gitbutler_header = content.lines().any(|line| {
-            line.contains("# GitButler CLI Skill") || line.contains("GitButler CLI (`but` command)")
-        });
-
-        has_frontmatter_name || has_gitbutler_header
-    } else {
-        false
-    }
+    std::fs::read_to_string(skill_md_path)
+        .ok()
+        .and_then(|content| frontmatter_value(&content, "name:"))
+        .as_deref()
+        == Some("but")
 }
 
 /// Extract the version from an installed SKILL.md file's YAML frontmatter.
@@ -382,19 +390,25 @@ fn extract_installed_version(skill_md_path: &std::path::Path) -> Option<String> 
 /// Extract the version from YAML frontmatter content.
 /// Returns None if the content has no frontmatter or no version entry.
 fn extract_installed_version_from_content(content: &str) -> Option<String> {
+    frontmatter_value(content, "version:")
+}
+
+/// Read a top-level `key` (e.g. `"name:"`, `"version:"`) from the leading YAML
+/// frontmatter and return its parsed value. None if the content has no
+/// frontmatter or the key is absent.
+fn frontmatter_value(content: &str, key: &str) -> Option<String> {
     let mut lines = content.lines();
 
-    // Parse YAML frontmatter (between --- markers)
+    // Frontmatter must open on the very first line.
     if lines.next()? != "---" {
         return None;
     }
 
-    // Find the version line in frontmatter
     for line in lines {
         if line == "---" {
             break;
         }
-        if let Some(value) = line.strip_prefix("version:") {
+        if let Some(value) = line.strip_prefix(key) {
             return Some(parse_yaml_value(value));
         }
     }
@@ -428,6 +442,29 @@ fn parse_yaml_value(value: &str) -> String {
     value.trim().to_string()
 }
 
+/// Find GitButler skill installations for one format under `base_dir`.
+///
+/// Scans the format's skills directory and accepts any folder name, so custom
+/// installs like `.claude/skills/but` are found too - identity comes from the
+/// SKILL.md contents, not the folder name.
+fn find_format_installations(format: &SkillFormat, base_dir: &std::path::Path) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(format.skills_parent_dir(base_dir)) else {
+        return Vec::new();
+    };
+    let mut found: Vec<PathBuf> = entries
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| is_gitbutler_skill(&path.join("SKILL.md")))
+        .collect();
+    found.sort();
+    found
+}
+
+/// Scope labels for a skill installation. Single-sourced here because
+/// [`detect_install_paths`] selects installations by scope.
+const SCOPE_GLOBAL: &str = "global";
+const SCOPE_LOCAL: &str = "local";
+
 /// Find all GitButler skill installations.
 ///
 /// Returns a list of (install_path, format_name, scope) tuples.
@@ -442,7 +479,7 @@ fn find_all_installations(
     let mut base_dirs: Vec<(PathBuf, &str)> = Vec::new();
 
     if check_global && let Some(home) = dirs::home_dir() {
-        base_dirs.push((home, "global"));
+        base_dirs.push((home, SCOPE_GLOBAL));
     }
 
     if check_local
@@ -450,17 +487,20 @@ fn find_all_installations(
         && let Ok(repo) = ctx.repo.get()
         && let Some(workdir) = repo.workdir()
     {
-        base_dirs.push((workdir.to_path_buf(), "local"));
+        base_dirs.push((workdir.to_path_buf(), SCOPE_LOCAL));
     }
 
-    // Check each format in each base directory
+    // Scan each base directory for the formats valid in its scope, so a
+    // scope-specific location (e.g. `.github/skills` locally, `.copilot/skills`
+    // globally) isn't discovered under the wrong scope.
     for (base_dir, scope) in base_dirs {
+        let is_global = scope == SCOPE_GLOBAL;
         for format in SKILL_FORMATS {
-            let potential_path = format.get_install_path(&base_dir);
-            let skill_md_path = potential_path.join("SKILL.md");
-
-            if skill_md_path.exists() && is_gitbutler_skill(&skill_md_path) {
-                installations.push((potential_path, format.name, scope));
+            if !format.is_available_for(is_global) {
+                continue;
+            }
+            for path in find_format_installations(format, &base_dir) {
+                installations.push((path, format.name, scope));
             }
         }
     }
@@ -848,87 +888,29 @@ fn print_human_check_output(
     Ok(())
 }
 
-/// Detect installation path by finding existing skill installation
-fn detect_install_path(ctx: Option<&mut Context>, global: bool) -> Result<PathBuf> {
-    // Determine which base directories to check
-    let base_dirs: Vec<(PathBuf, &str)> = if global {
-        // Only check global locations
-        vec![(
-            dirs::home_dir()
-                .ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?,
-            "global",
-        )]
-    } else if let Some(ctx) = ctx {
-        // Check local repo first, then fall back to global
-        let repo = ctx.repo.get()?;
-        let local_dir = repo
-            .workdir()
-            .ok_or_else(|| anyhow::anyhow!("Not in a Git repository"))?
-            .to_path_buf();
-        let global_dir = dirs::home_dir()
-            .ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
-        vec![(local_dir, "local"), (global_dir, "global")]
-    } else {
-        // No repo context, only check global
-        vec![(
-            dirs::home_dir()
-                .ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?,
-            "global",
-        )]
-    };
+/// Detect existing skill installations to refresh in place.
+///
+/// Returns every GitButler skill in the highest-priority scope that has one
+/// (local before global), so `--detect` refreshes them all instead of forcing a
+/// choice between them. Filtering to a single scope keeps a repo-local `--detect`
+/// from reaching into global installs.
+fn detect_install_paths(ctx: Option<&mut Context>, global: bool) -> Result<Vec<PathBuf>> {
+    let installations = find_all_installations(ctx, true, !global)?;
 
-    // Check each scope in priority order (local before global)
-    // Return the first scope that has installations, erroring only if multiple in same scope
-    for (base_dir, scope) in &base_dirs {
-        let mut scope_installations: Vec<(PathBuf, &str)> = Vec::new();
-
-        for format in SKILL_FORMATS {
-            let potential_path = format.get_install_path(base_dir);
-            let skill_md_path = potential_path.join("SKILL.md");
-            if skill_md_path.exists() && is_gitbutler_skill(&skill_md_path) {
-                scope_installations.push((potential_path, format.name));
-            }
-        }
-
-        match scope_installations.len() {
-            0 => {
-                // No installations in this scope, try next scope
-                continue;
-            }
-            1 => {
-                // Exactly one installation in this scope - use it
-                return Ok(scope_installations[0].0.clone());
-            }
-            _ => {
-                // Multiple installations in the same scope - error
-                let installations_list = scope_installations
-                    .iter()
-                    .map(|(path, format)| {
-                        format!("  • {} - {} ({})", format, path.display(), scope)
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n");
-
-                anyhow::bail!(
-                    "Multiple skill installations found in {scope} scope. Please use --path to specify which one to update:\n{installations_list}"
-                )
-            }
+    for scope in [SCOPE_LOCAL, SCOPE_GLOBAL] {
+        let paths: Vec<PathBuf> = installations
+            .iter()
+            .filter(|(_, _, s)| *s == scope)
+            .map(|(path, _, _)| path.clone())
+            .collect();
+        if !paths.is_empty() {
+            return Ok(paths);
         }
     }
 
-    // No installations found in any scope
-    let checked_locations = base_dirs
-        .iter()
-        .flat_map(|(base_dir, scope)| {
-            SKILL_FORMATS
-                .iter()
-                .map(move |f| format!("  • {} ({})", f.get_install_path(base_dir).display(), scope))
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-
     anyhow::bail!(
-        "Could not detect installation location. No existing skill found in:\n{checked_locations}"
+        "Could not detect an existing GitButler skill installation.\n\
+         Run `but skill install` to create one, or use `--path <dir>` to choose a location."
     )
 }
 
@@ -1184,40 +1166,43 @@ fn install_skill(
         }
     }
 
-    // Determine installation path
-    let install_path = if let Some(custom) = custom_path {
-        resolve_custom_path(&custom, ctx, global)?
+    // Determine installation path(s). Only --detect can yield more than one, when
+    // several GitButler skills share a scope; they are all refreshed together.
+    let install_paths = if let Some(custom) = custom_path {
+        vec![resolve_custom_path(&custom, ctx, global)?]
     } else if detect {
-        detect_install_path(ctx, global)?
+        detect_install_paths(ctx, global)?
     } else {
-        prompt_for_install_path(ctx, global, out, &mut progress)?
+        vec![prompt_for_install_path(ctx, global, out, &mut progress)?]
     };
 
-    // Validate installation path
-    if install_path.exists() && install_path.is_file() {
-        anyhow::bail!(
-            "Installation path {} is a file, not a directory. Please specify a directory path.",
-            install_path.display()
-        );
-    }
+    let mut version = "";
+    for install_path in &install_paths {
+        // Validate installation path
+        if install_path.exists() && install_path.is_file() {
+            anyhow::bail!(
+                "Installation path {} is a file, not a directory. Please specify a directory path.",
+                install_path.display()
+            );
+        }
 
-    // Check if files already exist and warn user
-    let skill_md_path = install_path.join("SKILL.md");
-    if skill_md_path.exists()
-        && let Some(writer) = out.for_human()
-    {
-        writeln!(writer)?;
-        writeln!(
-            writer,
-            "{} Skill files already exist at {}",
-            t.sym().warning,
-            t.config_value.paint(install_path.display().to_string())
-        )?;
-        writeln!(writer, "  Overwriting existing files...")?;
-        writeln!(writer)?;
-    }
+        // Check if files already exist and warn user
+        if install_path.join("SKILL.md").exists()
+            && let Some(writer) = out.for_human()
+        {
+            writeln!(writer)?;
+            writeln!(
+                writer,
+                "{} Skill files already exist at {}",
+                t.sym().warning,
+                t.config_value.paint(install_path.display().to_string())
+            )?;
+            writeln!(writer, "  Overwriting existing files...")?;
+            writeln!(writer)?;
+        }
 
-    let version = write_skill_files(&install_path)?;
+        version = write_skill_files(install_path)?;
+    }
 
     if let Some(writer) = out.for_human() {
         writeln!(writer)?;
@@ -1227,11 +1212,22 @@ fn install_skill(
             t.sym().success
         )?;
         writeln!(writer)?;
-        writeln!(
-            writer,
-            "  Location: {}",
-            t.config_value.paint(install_path.display().to_string())
-        )?;
+        if let [only] = install_paths.as_slice() {
+            writeln!(
+                writer,
+                "  Location: {}",
+                t.config_value.paint(only.display().to_string())
+            )?;
+        } else {
+            writeln!(writer, "  Locations:")?;
+            for install_path in &install_paths {
+                writeln!(
+                    writer,
+                    "    • {}",
+                    t.config_value.paint(install_path.display().to_string())
+                )?;
+            }
+        }
         writeln!(writer)?;
         writeln!(writer, "  Files installed:")?;
         for file in SKILL_FILES {
@@ -1242,10 +1238,14 @@ fn install_skill(
 
     if let Some(out) = out.for_json() {
         let file_paths: Vec<String> = SKILL_FILES.iter().map(|f| f.display_path()).collect();
+        let paths: Vec<String> = install_paths
+            .iter()
+            .map(|p| p.display().to_string())
+            .collect();
         let result = serde_json::json!({
             "success": true,
             "version": version,
-            "path": install_path.display().to_string(),
+            "paths": paths,
             "files": file_paths
         });
         out.write_value(result)?;
@@ -1513,13 +1513,13 @@ mod tests {
         );
     }
 
-    // NOTE: detect_install_path is difficult to test in isolation because it depends on
+    // NOTE: detect_install_paths is difficult to test in isolation because it depends on
     // dirs::home_dir() and git repository context. It's tested indirectly through
     // integration tests and manual testing. The core logic (is_gitbutler_skill validation
-    // and scope prioritization) is tested separately.
+    // and per-format discovery) is tested separately.
 
     #[test]
-    fn is_gitbutler_skill_validates_correct_skill() {
+    fn is_gitbutler_skill_requires_name_but_in_frontmatter() {
         use std::fs;
 
         use tempfile::TempDir;
@@ -1527,48 +1527,43 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let skill_path = temp_dir.path().join("SKILL.md");
 
-        // Test with valid GitButler skill content (frontmatter)
+        // Identity comes from `name: but` in the YAML frontmatter.
         fs::write(
             &skill_path,
-            "---\nname: but\nversion: 1.0.0\n---\n# Content",
+            "---\nname: but\nversion: 1.0.0\n---\n# GitButler CLI Skill",
         )
         .unwrap();
         assert!(
             is_gitbutler_skill(&skill_path),
-            "Should recognize valid GitButler skill with frontmatter"
+            "frontmatter name: but is the identity marker"
         );
 
-        // Test with valid GitButler skill content (header)
-        fs::write(&skill_path, "# GitButler CLI Skill\n\nContent here").unwrap();
+        // Another skill that only mentions GitButler in its header or body must not
+        // be misclassified - discovery would otherwise overwrite it in place.
+        fs::write(
+            &skill_path,
+            "---\nname: other-skill\n---\n# GitButler CLI Skill\n\nExample: `name: but`",
+        )
+        .unwrap();
         assert!(
-            is_gitbutler_skill(&skill_path),
-            "Should recognize valid GitButler skill with header"
+            !is_gitbutler_skill(&skill_path),
+            "a sibling skill's declared name wins over body mentions of GitButler"
         );
 
-        // Test with invalid content that contains the strings but not as exact matches
+        // The header alone, with no frontmatter, is not a reliable marker.
+        fs::write(&skill_path, "# GitButler CLI Skill\n\nContent here").unwrap();
+        assert!(!is_gitbutler_skill(&skill_path));
+
+        // Prose that merely contains the marker string.
         fs::write(
             &skill_path,
             "I was reading about the GitButler CLI and the name: but that's not right",
         )
         .unwrap();
-        assert!(
-            !is_gitbutler_skill(&skill_path),
-            "Should reject content with strings in wrong context"
-        );
+        assert!(!is_gitbutler_skill(&skill_path));
 
-        // Test with random content
-        fs::write(&skill_path, "Some random content").unwrap();
-        assert!(
-            !is_gitbutler_skill(&skill_path),
-            "Should reject non-GitButler content"
-        );
-
-        // Test with nonexistent file
-        let nonexistent = temp_dir.path().join("nonexistent.md");
-        assert!(
-            !is_gitbutler_skill(&nonexistent),
-            "Should return false for nonexistent file"
-        );
+        // Nonexistent file.
+        assert!(!is_gitbutler_skill(&temp_dir.path().join("nonexistent.md")));
     }
 
     #[test]
@@ -1862,6 +1857,46 @@ mod tests {
     }
 
     #[test]
+    fn find_format_installations_accepts_any_folder_name() {
+        use std::fs;
+
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let skills_dir = temp_dir.path().join(".claude").join("skills");
+
+        // A GitButler skill under a custom folder name, plus one under the
+        // canonical name - both are real installations.
+        let gitbutler_skill = "---\nname: but\nversion: 1.0.0\n---\n# GitButler CLI Skill";
+        for folder in ["but", "gitbutler"] {
+            fs::create_dir_all(skills_dir.join(folder)).unwrap();
+            fs::write(skills_dir.join(folder).join("SKILL.md"), gitbutler_skill).unwrap();
+        }
+        // Another agent's skill is ignored
+        fs::create_dir_all(skills_dir.join("other")).unwrap();
+        fs::write(
+            skills_dir.join("other").join("SKILL.md"),
+            "# Some other skill",
+        )
+        .unwrap();
+
+        let format = SKILL_FORMATS
+            .iter()
+            .find(|f| f.name == "Claude Code")
+            .unwrap();
+
+        assert_eq!(
+            find_format_installations(format, temp_dir.path()),
+            vec![skills_dir.join("but"), skills_dir.join("gitbutler")],
+            "every GitButler skill is found by SKILL.md contents, not folder name, in sorted order"
+        );
+
+        let format_without_dir = SKILL_FORMATS.iter().find(|f| f.name == "Cursor").unwrap();
+        assert!(
+            find_format_installations(format_without_dir, temp_dir.path()).is_empty(),
+            "a missing skills directory yields no installations"
+        );
+    }
+
+    #[test]
     fn skill_status_up_to_date_logic() {
         // Same version should be up to date
         let status = SkillStatus {
@@ -1963,6 +1998,18 @@ mod tests {
             "---\nversion: 1.0.0\n---\n\nversion: 2.0.0 in the body",
         );
         assert_eq!(version, Some("1.0.0".to_string()));
+    }
+
+    #[test]
+    fn frontmatter_value_handles_crlf_line_endings() {
+        // Windows checkouts use CRLF. `str::lines()` strips the `\r\n` terminator,
+        // so the `---` delimiters and keys still match without special handling.
+        let content = "---\r\nname: but\r\nversion: 1.2.3\r\n---\r\n# GitButler CLI Skill";
+        assert_eq!(frontmatter_value(content, "name:").as_deref(), Some("but"));
+        assert_eq!(
+            frontmatter_value(content, "version:").as_deref(),
+            Some("1.2.3")
+        );
     }
 
     #[test]

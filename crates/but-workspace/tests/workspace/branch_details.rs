@@ -388,5 +388,13 @@ mod with_workspace {
         fn remove(&mut self, _ref_name: &FullNameRef) -> anyhow::Result<bool> {
             unreachable!()
         }
+
+        fn rename(
+            &mut self,
+            _old_ref_name: &FullNameRef,
+            _new_ref_name: &FullNameRef,
+        ) -> anyhow::Result<()> {
+            unreachable!()
+        }
     }
 }

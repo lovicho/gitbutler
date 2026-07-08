@@ -386,11 +386,7 @@ impl TestTuiInputThenRenderResult<'_> {
             height: terminal_area.height.saturating_sub(1),
             ..terminal_area
         };
-        let status_area = status_layout(&self.0.app, main_content_area).status_area;
-        let status_inner_area = ratatui::layout::Rect {
-            height: status_area.height.saturating_sub(1),
-            ..status_area
-        };
+        let status_inner_area = status_layout(&self.0.app, main_content_area).status_area;
 
         let cursor_index = self.0.app.cursor.index();
         let scroll_top = self.0.app.status_scroll.top();

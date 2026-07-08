@@ -150,6 +150,7 @@ pub trait CommandExt {
 impl CommandExt for snapbox::cmd::Command {
     fn with_color_for_svg(self) -> snapbox::cmd::Command {
         self.env("CLICOLOR_FORCE", "1")
+            .env("COLORTERM", "truecolor")
     }
 
     fn allow_json(self) -> Self {

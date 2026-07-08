@@ -59,6 +59,7 @@ import { buildIndexByKey, type NavigationIndex } from "#ui/workspace/navigation-
 import { reverse } from "effect/Array";
 import { OperationControls } from "#ui/routes/project/$id/workspace/OperationControls.tsx";
 import { WorkspacePageErrorBoundary } from "./WorkspacePageErrorBoundary.tsx";
+import { Settings } from "./Settings.tsx";
 
 // This must be unique as to not collide with other IDs, and stable because it's
 // stored in local storage.
@@ -317,6 +318,11 @@ const WorkspacePage: FC = () => {
 		else dispatch(projectActions.closeDialog({ projectId }));
 	};
 
+	const setSettingsOpen = (open: boolean) => {
+		if (open) dispatch(projectActions.openSettings({ projectId }));
+		else dispatch(projectActions.closeDialog({ projectId }));
+	};
+
 	const openProjectPicker = () => {
 		dispatch(projectActions.openProjectPicker({ projectId }));
 	};
@@ -347,6 +353,10 @@ const WorkspacePage: FC = () => {
 				conflictBehavior: "allow",
 				enabled: detailsFullWindow,
 			},
+		},
+		{
+			hotkey: workspaceHotkeys.settings.hotkey,
+			callback: () => setSettingsOpen(dialog._tag !== "Settings"),
 		},
 	]);
 
@@ -453,6 +463,7 @@ const WorkspacePage: FC = () => {
 							onOpenChange={setProjectPickerOpen}
 						/>
 					),
+					Settings: () => <Settings open onOpenChange={setSettingsOpen} />,
 				}),
 			)}
 		</>

@@ -925,6 +925,16 @@ impl RefMetadata for RecordingMetadata {
     fn remove(&mut self, _ref_name: &FullNameRef) -> anyhow::Result<bool> {
         Ok(false)
     }
+
+    fn rename(
+        &mut self,
+        _old_ref_name: &FullNameRef,
+        _new_ref_name: &FullNameRef,
+    ) -> anyhow::Result<()> {
+        // Renames aren't part of the recorded transaction surface (like `remove`, which is handled
+        // out-of-band via `Transaction::remove_reference`); nothing to record here.
+        Ok(())
+    }
 }
 
 #[derive(Debug, Default)]

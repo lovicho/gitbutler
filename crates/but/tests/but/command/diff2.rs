@@ -1,4 +1,4 @@
-use crate::utils::Sandbox;
+use crate::utils::{CommandExt, Sandbox};
 
 #[test]
 fn uncommitted() {
@@ -28,32 +28,10 @@ puts "\nA distant door unlocks."
     );
 
     env.but("_diff2")
+        .with_color_for_svg()
         .assert()
         .success()
-        .stdout_eq(snapbox::str![[r#"
-───────────╮
- qs:d file │
-───────────╯
- 
-@@ -1,0 +1,17 @@
-────────────────
-  ┊  1 │ +
-  ┊  2 │ +items = ["ink ribbon", "old key", "green herb", "crank", "lighter"]
-  ┊  3 │ +
-  ┊  4 │ +puts "You check the desk drawer..."
-  ┊  5 │ +sleep 0.8
-  ┊  6 │ +
-  ┊  7 │ +found = items.sample
-  ┊  8 │ +
-  ┊  9 │ +if found == "green herb"
-  ┊ 10 │ +  puts "You found a #{found}."
-  ┊ 11 │ +  puts "You feel just a little better."
-  ┊ 12 │ +else
-  ┊ 13 │ +  puts "You found an #{found}." rescue puts "You found a #{found}."
-  ┊ 14 │ +  puts "Probably useful somewhere."
-  ┊ 15 │ +end
-  ┊ 16 │ +
-  ┊ 17 │ +puts "/nA distant door unlocks."
-
-"#]]);
+        .stdout_eq(snapbox::file![
+            "snapshots/diff2/uncommitted.stdout.term.svg"
+        ]);
 }

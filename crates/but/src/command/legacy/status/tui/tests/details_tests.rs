@@ -7,6 +7,16 @@ use crate::command::legacy::status::tui::tests::utils::{
     TestTuiOptions, test_tui, test_tui_with_options,
 };
 
+mod binds {
+    use crossterm::event::KeyModifiers;
+
+    pub const SCROLL_DOWN: char = 'j';
+    pub const SCROLL_UP: char = 'k';
+
+    pub const NEXT_HUNK: (KeyModifiers, char) = (KeyModifiers::SHIFT, 'J');
+    pub const PREV_HUNK: (KeyModifiers, char) = (KeyModifiers::SHIFT, 'K');
+}
+
 #[test]
 fn toggle_details_view_for_commit() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
@@ -87,14 +97,14 @@ fn details_view_supports_scroll_controls() {
     ]);
 
     // scroll by single lines
-    tui.render_with_messages('j', Vec::new());
-    tui.render_with_messages('j', Vec::new());
-    tui.render_with_messages('j', Vec::new())
+    tui.render_with_messages(binds::NEXT_HUNK, Vec::new());
+    tui.render_with_messages(binds::NEXT_HUNK, Vec::new());
+    tui.render_with_messages(binds::NEXT_HUNK, Vec::new())
         .assert_rendered_term_svg_eq(file![
             "snapshots/details_view_supports_scroll_controls_002.svg"
         ]);
-    tui.render_with_messages('k', Vec::new());
-    tui.render_with_messages('k', Vec::new())
+    tui.render_with_messages(binds::PREV_HUNK, Vec::new());
+    tui.render_with_messages(binds::PREV_HUNK, Vec::new())
         .assert_rendered_term_svg_eq(file![
             "snapshots/details_view_supports_scroll_controls_003.svg"
         ]);
@@ -110,12 +120,12 @@ fn details_view_supports_scroll_controls() {
         ]);
 
     // navigate by hunk
-    tui.render_with_messages((KeyModifiers::SHIFT, 'J'), Vec::new())
+    tui.render_with_messages(binds::SCROLL_DOWN, Vec::new())
         .assert_rendered_term_svg_eq(file![
             "snapshots/details_view_supports_scroll_controls_006.svg"
         ]);
 
-    tui.render_with_messages((KeyModifiers::SHIFT, 'K'), Vec::new())
+    tui.render_with_messages(binds::SCROLL_UP, Vec::new())
         .assert_rendered_term_svg_eq(file![
             "snapshots/details_view_supports_scroll_controls_007.svg"
         ]);
@@ -142,7 +152,7 @@ fn details_scroll_down_updates_selection_when_selected_hunk_leaves_view() {
     tui.input((KeyModifiers::SHIFT, 'D'));
     tui.render_with_messages(None, Vec::new());
 
-    tui.render_with_messages(['j'; 8], Vec::new())
+    tui.render_with_messages([binds::NEXT_HUNK; 8], Vec::new())
         .assert_rendered_term_svg_eq(file![
             "snapshots/details_scroll_down_updates_selection_when_selected_hunk_leaves_view_001.svg"
         ]);
@@ -168,10 +178,10 @@ fn details_scroll_up_updates_selection_to_previous_visible_hunk() {
 
     tui.input((KeyModifiers::SHIFT, 'D'));
     tui.render_with_messages(None, Vec::new());
-    tui.render_with_messages((KeyModifiers::SHIFT, 'J'), Vec::new());
-    tui.render_with_messages((KeyModifiers::SHIFT, 'J'), Vec::new());
+    tui.render_with_messages(binds::SCROLL_DOWN, Vec::new());
+    tui.render_with_messages(binds::SCROLL_DOWN, Vec::new());
 
-    tui.render_with_messages(['k'; 8], Vec::new())
+    tui.render_with_messages([binds::PREV_HUNK; 8], Vec::new())
         .assert_rendered_term_svg_eq(file![
             "snapshots/details_scroll_up_updates_selection_to_previous_visible_hunk_001.svg"
         ]);
@@ -415,8 +425,8 @@ fn details_cursor_stays_visible_after_resizing() {
     tui.input('d');
     tui.input('l');
     tui.input("----------");
-    tui.input('j');
-    tui.input('j');
+    tui.input(binds::NEXT_HUNK);
+    tui.input(binds::NEXT_HUNK);
 
     tui.input("++++++++++").assert_rendered_term_svg_eq(file![
         "snapshots/details_cursor_stays_visible_after_resizing_001.svg"
@@ -712,5 +722,19 @@ fn discard_hunk_from_detail_view_via_file() {
     tui.input('x');
     tui.input('y').assert_rendered_term_svg_eq(file![
         "snapshots/discard_hunk_from_detail_view_via_file_004.svg"
+    ]);
+}
+
+#[test]
+fn highlighting_multiline_things_work() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.file("one.py", include_str!("fixtures/python_with_shebang.py"));
+
+    let mut tui = test_tui(env);
+
+    tui.input('d').assert_rendered_term_svg_eq(file![
+        "snapshots/highlighting_multiline_things_work_001.svg"
     ]);
 }

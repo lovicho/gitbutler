@@ -36,7 +36,6 @@ fn stacks_info_without_short_ids(stacks: Vec<Stack>) -> StacksInfo {
                 .collect::<Vec<_>>();
             stack_with_id.segments.push(SegmentWithId {
                 short_id: ShortId::default(),
-                is_auto_id: false,
                 inner: segment,
                 workspace_commits,
                 remote_commits,
@@ -102,18 +101,18 @@ fn populate_branch_short_ids(
             // name, it doesn't need an ID.
             continue;
         };
-        (segment.short_id, segment.is_auto_id) = 'short_id: {
+        segment.short_id = 'short_id: {
             // Find first non-conflicting pair or triple (i.e. used in
             // exactly one branch) and use it.
             for candidate in branch_name.windows(2).chain(branch_name.windows(3)) {
                 if let Ok(short_id) = str::from_utf8(candidate)
                     && let Some(1) = short_ids_to_count.get(short_id)
                 {
-                    break 'short_id (short_id.to_owned(), false);
+                    break 'short_id short_id.to_owned();
                 }
             }
             // If none available, use next available ID.
-            (id_usage.next_available()?.to_short_id(), true)
+            id_usage.next_available()?.to_short_id()
         };
     }
 

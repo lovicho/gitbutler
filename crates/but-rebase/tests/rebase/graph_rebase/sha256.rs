@@ -40,7 +40,7 @@ fn inserting_a_step_rewrites_sha256_commits() -> Result<()> {
     let (selector, mut merge_obj) = editor.find_selectable_commit(merge_id)?;
     merge_obj.message = "Commit below the merge commit in SHA-256".into();
     merge_obj.parents = vec![].into();
-    let new_commit = editor.new_commit_untracked(merge_obj, DateMode::CommitterKeepAuthorKeep)?;
+    let new_commit = editor.new_commit(merge_obj, DateMode::CommitterKeepAuthorKeep)?;
 
     editor.insert(selector, Step::new_pick(new_commit), InsertSide::Below)?;
 
@@ -115,7 +115,7 @@ fn replacing_a_step_rewrites_sha256_descendants() -> Result<()> {
         .find_selectable_commit(a)
         .context("failed to select branch A commit")?;
     a_obj.message = "A: SHA-256 reworded".into();
-    let a_new = editor.new_commit_untracked(a_obj, DateMode::CommitterKeepAuthorKeep)?;
+    let a_new = editor.new_commit(a_obj, DateMode::CommitterKeepAuthorKeep)?;
 
     editor.replace(a_selector, Step::new_pick(a_new))?;
 
@@ -151,6 +151,7 @@ fn replacing_a_step_rewrites_sha256_descendants() -> Result<()> {
     insta::assert_debug_snapshot!(outcome.history.commit_mappings(), @"
     {
         Sha256(0f01c778cee8081dcfd51d010dfcf6dca150fad6cd58bc269b9aed22587b97fb): Sha256(f6f0125b1f12060e754ba973e8e630cdb51622c06fa9ebdc76afa5510817e2d3),
+        Sha256(2ff29ffab0c95397a8da853ee4ee8bdad788b23a55a1071edf3f218a13c3e10e): Sha256(b5c16abf204e78c0c7cf47a75e5532e31ae40129cdb181739f3742ab31e09f44),
         Sha256(8ab779b6d7ff461b6a09a86724e26c18a4d9d66f733a1cf3c927dc98e6eecbec): Sha256(fccb3fdbafb315097348b7c66fa86a745d923f0f59574cc31650b52f5f1390a2),
     }
     ");

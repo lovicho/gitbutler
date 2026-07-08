@@ -1177,6 +1177,18 @@ impl App {
             });
         }
     }
+
+    pub fn details_focused(&self) -> bool {
+        matches!(&*self.mode, Mode::Details(..))
+    }
+
+    pub fn selection_highlight_color(&self) -> Style {
+        if self.details_focused() {
+            self.theme.discrete_selection_highlight
+        } else {
+            self.theme.selection_highlight
+        }
+    }
 }
 
 #[derive(Debug)]

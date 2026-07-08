@@ -335,9 +335,19 @@ impl<M: RefMetadata> Editor<'_, '_, M> {
 
     /// Replaces the node that the function was pointing to.
     ///
+    /// If a commit step has been replaced with another commit step, the commit
+    /// mappings will get updated to include an entry going from the old to the
+    /// new object id.
+    ///
     /// Returns the replaced step.
     pub fn replace(&mut self, target: impl ToSelector, mut step: Step) -> Result<Step> {
         let target = self.history.normalize_selector(target.to_selector(self)?)?;
+        if let (Step::Pick(from), Step::Pick(to)) = (&self.graph[target.id], &step)
+            && !from.exclude_from_tracking
+            && !to.exclude_from_tracking
+        {
+            self.history.update_mapping(from.id, to.id);
+        };
         std::mem::swap(&mut self.graph[target.id], &mut step);
         Ok(step)
     }

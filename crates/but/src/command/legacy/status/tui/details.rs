@@ -16,7 +16,7 @@ use nonempty::NonEmpty;
 use ratatui::{
     Frame,
     layout::Rect,
-    style::{Color, Stylize as _},
+    style::Stylize as _,
     text::{Line, Span},
     widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState},
 };
@@ -32,12 +32,15 @@ use crate::{
         details::worker::Worker,
         highlight::{self, Highlights},
         message_on_drop::message_on_drop,
+        mode::ModeDiscriminant,
         render::available_lines_in_area,
     },
     theme::Theme,
     utils::{
         DebugAsType,
-        diff_rendering::{self, CodeLineKind, DetailsLine, DiffLineWriter, IdGen, SectionId},
+        diff_rendering::{
+            self, CodeLineKind, DetailsLine, DiffLineWriter, IdGen, SectionId, load_syntax_set,
+        },
         diff_specs::DiffSpecBuilder,
         string_interning::Strings,
     },
@@ -110,7 +113,7 @@ impl Details {
             selection: Default::default(),
             lines: Default::default(),
             sections: Default::default(),
-            syntax_set: OnDemand::new(|| Ok(SyntaxSet::load_defaults_newlines())).into(),
+            syntax_set: OnDemand::new(|| Ok(load_syntax_set())).into(),
             syntax_theme: OnDemand::new(|| theme.load_syntax_highlighting_theme()).into(),
             strings: Default::default(),
             selected_section: Default::default(),
@@ -555,8 +558,6 @@ impl Details {
         let syntax_theme = self.syntax_theme.get().unwrap();
         let mut highlight_lines = None;
 
-        let section_selected_bg = self.theme.selection_highlight.bg.unwrap();
-
         let mut layout_cache = self.layout_cache.borrow_mut();
         layout_cache.update(area.width, &self.lines);
 
@@ -586,6 +587,12 @@ impl Details {
 
         let scroll_top = self.scroll.top();
         self.update_selected_section_for_visible_range(scroll_top, viewport_height, &layout_cache);
+        let selected_section_visible_range = self.selected_section_visible_range(
+            scroll_top,
+            viewport_height,
+            &layout_cache,
+            tui_has_focus,
+        );
 
         let Some((mut line_index, mut line_offset)) = layout_cache.line_at_display_row(scroll_top)
         else {
@@ -601,7 +608,6 @@ impl Details {
                 &mut areas,
                 area.width,
                 tui_has_focus,
-                section_selected_bg,
                 &syntax_set,
                 &syntax_theme,
                 &mut highlight_lines,
@@ -616,12 +622,44 @@ impl Details {
             }
         }
 
+        if let Some((section_id, range)) = selected_section_visible_range {
+            self.render_selected_section_marker(section_id, area, range, frame);
+        }
+
         // Draw the scrollbar over the content instead of reserving a column for it.
         // Reserving a column changes the text width, so the layout cache would need
         // to recompute wrapped line heights when the scrollbar appears, which is
         // expensive for large diffs.
         if show_scrollbar && max_scroll_top > 0 {
             self.render_scrollbar(area, scroll_top, max_scroll_top, frame);
+        }
+    }
+
+    fn render_selected_section_marker(
+        &self,
+        id: SectionId,
+        area: Rect,
+        visible_range: std::ops::Range<usize>,
+        frame: &mut Frame,
+    ) {
+        let Some(x) = area.x.checked_sub(1) else {
+            return;
+        };
+        for row in visible_range {
+            let color = if self.section_is_highlighted(id) {
+                highlight::style().bg.unwrap()
+            } else {
+                ModeDiscriminant::Details.bg(self.theme)
+            };
+            frame.render_widget(
+                Span::raw("▌").fg(color),
+                Rect {
+                    x,
+                    y: area.y + row as u16,
+                    width: 1,
+                    height: 1,
+                },
+            );
         }
     }
 
@@ -736,7 +774,6 @@ impl Details {
         areas: &mut impl Iterator<Item = Rect>,
         width: u16,
         tui_has_focus: bool,
-        section_selected_bg: Color,
         syntax_set: &'a SyntaxSet,
         syntax_theme: &'a syntect::highlighting::Theme,
         highlight_lines: &mut Option<HighlightLines<'a>>,
@@ -757,30 +794,23 @@ impl Details {
                     };
 
                     if let Some(id) = id
-                        && self.section_is_highlighted(*id)
-                    {
-                        frame.render_widget(line.clone().style(highlight::style()), line_area);
-                    } else if let Some(id) = id
                         && self.section_is_selected(*id, tui_has_focus)
+                        && self.section_is_to_be_discarded(*id)
+                        && !*skip_when_copying_hunk
                     {
-                        let line =
-                            if self.section_is_to_be_discarded(*id) && !*skip_when_copying_hunk {
-                                line.spans
-                                    .iter()
-                                    .cloned()
-                                    .map(|span| span.crossed_out())
-                                    .collect::<Line<'_>>()
-                                    .bg(section_selected_bg)
-                            } else {
-                                line.clone().bg(section_selected_bg)
-                            };
+                        let line = line
+                            .spans
+                            .iter()
+                            .cloned()
+                            .map(|span| span.crossed_out())
+                            .collect::<Line<'_>>();
                         frame.render_widget(line, line_area);
                     } else {
                         frame.render_widget(line, line_area);
                     }
                 }
             }
-            DetailsLine::TextToWrap { text, id } => {
+            DetailsLine::TextToWrap { text, .. } => {
                 *highlight_lines = None;
 
                 for line in wrapped_text_lines(text, width).skip(skip_display_lines) {
@@ -788,13 +818,7 @@ impl Details {
                         return RenderedLine::viewport_filled();
                     };
 
-                    if self.section_is_highlighted(*id) {
-                        frame.render_widget(Line::from(line).style(highlight::style()), line_area);
-                    } else if self.section_is_selected(*id, tui_has_focus) {
-                        frame.render_widget(Line::from(line).bg(section_selected_bg), line_area);
-                    } else {
-                        frame.render_widget(&*line, line_area);
-                    }
+                    frame.render_widget(&*line, line_area);
                 }
             }
             DetailsLine::Code(line) => {
@@ -823,12 +847,7 @@ impl Details {
                         .as_ref()
                         .expect("line should have been highlighted by now");
 
-                    if self.section_is_highlighted(id) {
-                        frame.render_widget(
-                            syntax_highlighted_line.clone().style(highlight::style()),
-                            line_area,
-                        );
-                    } else if self.section_is_selected(id, tui_has_focus) {
+                    if self.section_is_selected(id, tui_has_focus) {
                         let line = if self.section_is_to_be_discarded(id) {
                             syntax_highlighted_line
                                 .spans
@@ -836,9 +855,8 @@ impl Details {
                                 .cloned()
                                 .map(|span| span.crossed_out())
                                 .collect::<Line<'_>>()
-                                .bg(section_selected_bg)
                         } else {
-                            syntax_highlighted_line.clone().bg(section_selected_bg)
+                            syntax_highlighted_line.clone()
                         };
                         frame.render_widget(line, line_area);
                     } else {
@@ -992,6 +1010,28 @@ impl Details {
             }
             SelectedSection::None | SelectedSection::Deselected(_) => false,
         }
+    }
+
+    fn selected_section_visible_range(
+        &self,
+        scroll_top: usize,
+        viewport_height: usize,
+        layout_cache: &LayoutCache,
+        tui_has_focus: bool,
+    ) -> Option<(SectionId, std::ops::Range<usize>)> {
+        if !tui_has_focus {
+            return None;
+        }
+        let SelectedSection::Selected(index) = self.selected_section.get() else {
+            return None;
+        };
+        let section = self.sections.get(index)?;
+        let visible_end = scroll_top.saturating_add(viewport_height);
+        let (section_start, section_end) = section_display_range(section, layout_cache);
+        let start = section_start.max(scroll_top);
+        let end = section_end.min(visible_end);
+        let range = (start < end).then_some(start - scroll_top..end - scroll_top)?;
+        Some((section.id, range))
     }
 
     fn section_is_highlighted(&self, id: SectionId) -> bool {

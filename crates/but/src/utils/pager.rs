@@ -15,8 +15,7 @@ const DEFAULT_PAGER: &str = "less";
 /// - `F`: Quit if content fits on screen.
 /// - `X`: Don't clear the screen on exit.
 /// - `R`: Recognize ANSI color escape sequences and use them verbatim to *keep* styling.
-/// - `S`: Don't wrap long lines. We don't want wrapping as we control the layout carefully.
-const DEFAULT_PAGER_ARGS: &str = "FXRS";
+const DEFAULT_PAGER_ARGS: &str = "FXR"; // Do not put S in here. Like, really. Don't.
 const DEFAULT_PAGER_ENV_VAR: &str = "LESS";
 
 /// Attempt to initialize a new pager.

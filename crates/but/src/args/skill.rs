@@ -43,7 +43,7 @@ pub enum Subcommands {
     /// but skill install --path .agents/skills/gitbutler
     /// ```
     ///
-    /// Auto-detect installation location (update existing installation):
+    /// Auto-detect installation location (update existing installations):
     ///
     /// ```text
     /// but skill install --detect
@@ -58,7 +58,8 @@ pub enum Subcommands {
         /// Outside a repository, relative paths require --global.
         #[clap(long, short = 'p')]
         path: Option<String>,
-        /// Automatically detect where to install by finding existing installation
+        /// Refresh existing installations in place, updating every GitButler skill
+        /// found in the current scope (local before global)
         #[clap(long, short = 'd')]
         detect: bool,
     },

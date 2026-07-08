@@ -1,5 +1,10 @@
 import rowStyles from "./Row.module.css";
-import { changesInWorktreeQueryOptions, headInfoQueryOptions } from "#ui/api/queries.ts";
+import {
+	changesInWorktreeQueryOptions,
+	getGUISettingsQueryOptions,
+	headInfoQueryOptions,
+	listEditorsQueryOptions,
+} from "#ui/api/queries.ts";
 import { getHeadInfoIndex } from "#ui/api/ref-info.ts";
 import { uncommittedChangesFileParent, fileOperand, FileParent } from "#ui/operands.ts";
 import { projectActions, selectProjectOutlineModeState } from "#ui/projects/state.ts";
@@ -19,6 +24,7 @@ import { useHotkeys } from "@tanstack/react-hotkeys";
 import { useMergedRefs } from "@base-ui/utils/useMergedRefs";
 import { FileRow } from "./FileRow.tsx";
 import type { FileRowItem } from "./file-row.ts";
+import { useOpenInEditor } from "#ui/api/mutations.ts";
 
 const useFilesTreeHotkeys = ({
 	navigationIndex,
@@ -37,6 +43,12 @@ const useFilesTreeHotkeys = ({
 }) => {
 	const outlineMode = useAppSelector((state) => selectProjectOutlineModeState(state, projectId));
 	const { data: worktreeChanges } = useQuery(changesInWorktreeQueryOptions(projectId));
+	const { data: editors } = useQuery(listEditorsQueryOptions);
+	const { data: preferredEditor } = useQuery({
+		...getGUISettingsQueryOptions(),
+		select: (cfg) => editors?.find((editor) => editor.id === cfg.editorId),
+	});
+	const openInEditor = useOpenInEditor();
 
 	const dispatch = useAppDispatch();
 
@@ -73,6 +85,25 @@ const useFilesTreeHotkeys = ({
 				enabled: selectedChangesFile !== null && outlineMode._tag === "Default",
 				target: ref,
 				meta: changesFileHotkeys.absorb.meta,
+			},
+		},
+		{
+			hotkey: changesFileHotkeys.openInEditor.hotkey,
+			callback: () => {
+				if (!preferredEditor || selectedChangesFile === null) return;
+
+				openInEditor.mutate({
+					projectId,
+					editorId: preferredEditor.id,
+					path: selectedChangesFile,
+					lineNr: null,
+				});
+			},
+			options: {
+				conflictBehavior: "allow",
+				enabled: preferredEditor && selectedChangesFile !== null,
+				target: ref,
+				meta: changesFileHotkeys.openInEditor.meta,
 			},
 		},
 	]);

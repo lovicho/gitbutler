@@ -517,8 +517,7 @@ fn uses_editor_visible_commits_not_only_original_workspace_graph() -> Result<()>
     let head = repo.rev_parse_single("HEAD")?.detach();
     let mut head_commit = editor.find_commit(head)?;
     head_commit.inner.message = "HEAD rewritten inside editor".into();
-    let rewritten_head =
-        editor.new_commit_untracked(head_commit, DateMode::CommitterUpdateAuthorKeep)?;
+    let rewritten_head = editor.new_commit(head_commit, DateMode::CommitterUpdateAuthorKeep)?;
 
     let head_selector = editor.select_commit(head)?;
     editor.replace(head_selector, Step::new_pick(rewritten_head))?;
@@ -647,8 +646,7 @@ fn planning_works_after_normalizing_chained_editor_mutations() -> Result<()> {
     let head_parent = repo.rev_parse_single("HEAD~1")?.detach();
     let mut rewritten_head = editor.find_commit(head)?;
     rewritten_head.inner.message = "HEAD rewritten inside editor".into();
-    let rewritten_head =
-        editor.new_commit_untracked(rewritten_head, DateMode::CommitterUpdateAuthorKeep)?;
+    let rewritten_head = editor.new_commit(rewritten_head, DateMode::CommitterUpdateAuthorKeep)?;
 
     let head_selector = editor.select_commit(head)?;
     editor.replace(head_selector, Step::new_pick(rewritten_head))?;

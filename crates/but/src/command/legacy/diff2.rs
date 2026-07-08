@@ -2,7 +2,6 @@ use bstr::BString;
 use but_ctx::Context;
 use gix::{ObjectId, refs::FullName};
 use serde::Serialize;
-use syntect::parsing::SyntaxSet;
 
 use crate::{
     CliResult, IdMap,
@@ -15,7 +14,9 @@ use crate::{
     theme::{Paint as _, Theme},
     utils::{
         CliOutput, CliOutputHuman, IntermediateChannel, WriteWithUtils,
-        diff_rendering::{self, DetailsLine, DiffLineWriter, IdGen, WithSyntaxHighlighting},
+        diff_rendering::{
+            self, DetailsLine, DiffLineWriter, IdGen, WithSyntaxHighlighting, load_syntax_set,
+        },
         string_interning::Strings,
     },
 };
@@ -30,7 +31,7 @@ impl CliOutputHuman for DiffOutcome<'_> {
     fn on_human(self, out: &mut dyn WriteWithUtils, theme: &'static Theme) -> anyhow::Result<()> {
         let Self { ctx, target } = self;
 
-        let syntax_set = SyntaxSet::load_defaults_newlines();
+        let syntax_set = load_syntax_set();
         let syntax_theme = theme.load_syntax_highlighting_theme()?;
 
         let strings = Strings::default();
@@ -145,8 +146,9 @@ impl DiffLineWriter for DiffWriter<'_> {
                     .as_ref()
                     .expect("WithSyntaxHighlighting ensures the line is highlighted");
 
+                let line_style = syntax_highlighted_line.style;
                 for span in syntax_highlighted_line {
-                    let rendered = span.style.paint(&span.content);
+                    let rendered = line_style.patch(span.style).paint(&span.content);
                     write!(self.out, "{rendered}")?;
                 }
                 writeln!(self.out)?;

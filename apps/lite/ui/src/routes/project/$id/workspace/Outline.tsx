@@ -78,6 +78,10 @@ export const Outline: FC<
 		dispatch(projectActions.openProjectPicker({ projectId }));
 	};
 
+	const openSettings = () => {
+		dispatch(projectActions.openSettings({ projectId }));
+	};
+
 	const branchCreateMutation = useBranchCreate();
 	const createIndependentBranch = () => {
 		branchCreateMutation.mutate(
@@ -133,6 +137,8 @@ export const Outline: FC<
 		outlineMode._tag === "Default" && !branchCreateMutation.isPending;
 
 	const canApplyBranch = outlineMode._tag === "Default";
+
+	const canOpenSettings = outlineMode._tag === "Default";
 
 	useHotkeys([
 		{
@@ -254,6 +260,26 @@ export const Outline: FC<
 										render={<TooltipPopup kbd={workspaceHotkeys.applyBranch.hotkey} />}
 									>
 										{workspaceHotkeys.applyBranch.meta.name}
+									</Tooltip.Popup>
+								</Tooltip.Positioner>
+							</Tooltip.Portal>
+						</Tooltip.Root>
+
+						<Tooltip.Root>
+							<Tooltip.Trigger
+								aria-label={workspaceHotkeys.settings.meta.name}
+								className={getButtonClassName({ iconOnly: true })}
+								onClick={openSettings}
+								// We pass `disabled` here because we want to disable the button, not
+								// the tooltip. Other props should be passed above.
+								render={<Button focusableWhenDisabled disabled={!canOpenSettings} />}
+							>
+								<Icon name="settings" />
+							</Tooltip.Trigger>
+							<Tooltip.Portal>
+								<Tooltip.Positioner sideOffset={4}>
+									<Tooltip.Popup render={<TooltipPopup kbd={workspaceHotkeys.settings.hotkey} />}>
+										{workspaceHotkeys.settings.meta.name}
 									</Tooltip.Popup>
 								</Tooltip.Positioner>
 							</Tooltip.Portal>

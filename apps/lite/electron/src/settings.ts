@@ -16,6 +16,7 @@ const guiSettingsV1 = type({
 	"diffBackground?": "boolean",
 	"diffOverflow?": "'scroll' | 'wrap'",
 	"diffStyle?": '"unified" | "split"',
+	"editorId?": "string",
 });
 
 type LegacyGUISettings = typeof guiSettingsV1.infer;
@@ -30,7 +31,7 @@ const defaultSettings: GUISettings = { version: 1 };
 const validate: (cfg: unknown) => LegacyGUISettings = legacyGUISettings.assert;
 
 /**
- * Migrate older versionied configs to the latest. Noop if config is already the latest version.
+ * Migrate older versioned configs to the latest. Noop if config is already the latest version.
  */
 const migrate = (cfg: LegacyGUISettings): GUISettings => {
 	switch (cfg.version) {

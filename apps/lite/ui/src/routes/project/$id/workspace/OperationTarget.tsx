@@ -1,4 +1,4 @@
-import { operandEquals, type Operand } from "#ui/operands.ts";
+import { type Operand } from "#ui/operands.ts";
 import { parseDragData } from "./DragData.ts";
 import styles from "./OperationTarget.module.css";
 import {
@@ -8,14 +8,14 @@ import {
 	useRunOperation,
 } from "#ui/operations/operation.ts";
 import { classes } from "#ui/components/classes.ts";
-import { projectActions, selectProjectOutlineModeState } from "#ui/projects/state.ts";
-import { useAppDispatch, useAppSelector } from "#ui/store.ts";
+import { projectActions } from "#ui/projects/state.ts";
+import { useAppDispatch } from "#ui/store.ts";
 import { dropTargetForElements } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import {
 	attachInstruction,
 	extractInstruction,
 } from "@atlaskit/pragmatic-drag-and-drop-hitbox/list-item";
-import { mergeProps, Tooltip, useRender } from "@base-ui/react";
+import { Tooltip, useRender } from "@base-ui/react";
 import { Match, pipe } from "effect";
 import { FC, useEffect, useEffectEvent, useRef } from "react";
 import { TooltipPopup } from "#ui/components/Tooltip.tsx";
@@ -139,102 +139,51 @@ const useOperationDropTarget = ({
 
 export type OperationTargetOutline = "inside" | "outside";
 
+export type ActiveOperation = { operationType: OperationType; tooltip?: string | undefined };
+
 export const OperationTarget: FC<
 	{
 		enabled: boolean;
 		target: Operand;
 		projectId: string;
-		isSelected: boolean;
-		isAbsorptionTarget: boolean;
+		activeOperation?: ActiveOperation | null;
 		outline: OperationTargetOutline;
 	} & useRender.ComponentProps<"div">
-> = ({ enabled, target, projectId, isSelected, isAbsorptionTarget, outline, render, ...props }) => {
+> = ({ enabled, target, projectId, activeOperation, outline, render, ...props }) => {
 	const { dropRef } = useOperationDropTarget({ enabled, target, projectId });
-
-	const activeTargetOperationType = useAppSelector((state) => {
-		const outlineMode = selectProjectOutlineModeState(state, projectId);
-
-		return Match.value(outlineMode).pipe(
-			Match.withReturnType<OperationType | null>(),
-			Match.when({ _tag: "Absorb" }, () => (isAbsorptionTarget ? "into" : null)),
-			Match.when({ _tag: "Transfer", value: { _tag: "Pointer" } }, ({ value: mode }) =>
-				mode.target &&
-				operandEquals(mode.target, target) &&
-				(mode.operationType !== "into" || !operandEquals(mode.source, target))
-					? mode.operationType
-					: null,
-			),
-			Match.when({ _tag: "Transfer", value: { _tag: "Keyboard" } }, ({ value: mode }) =>
-				isSelected && (mode.operationType !== "into" || !operandEquals(mode.source, target))
-					? mode.operationType
-					: null,
-			),
-			Match.orElse(() => null),
-		);
-	});
 
 	const targetEl = useRender({
 		render,
 		ref: dropRef,
-		props: mergeProps<"div">(props, {
-			className: classes(
-				activeTargetOperationType === "into" &&
-					classes(
-						styles.activeTarget,
-						Match.value(outline).pipe(
-							Match.when("inside", () => styles.activeTargetInside),
-							Match.when("outside", () => styles.activeTargetOutside),
-							Match.exhaustive,
-						),
-					),
-			),
-		}),
+		props,
 	});
 
-	const outlineMode = useAppSelector((state) => selectProjectOutlineModeState(state, projectId));
-
-	const tooltip =
-		activeTargetOperationType !== null
-			? Match.value(outlineMode).pipe(
-					Match.when({ _tag: "Absorb" }, () => <>Absorb target</>),
-					Match.when({ _tag: "Transfer", value: { _tag: "Pointer" } }, ({ value: mode }) =>
-						mode.target && mode.operationType !== null
-							? getOperation({
-									source: mode.source,
-									target: mode.target,
-									operationType: mode.operationType,
-								})?.label
-							: undefined,
-					),
-					Match.when(
-						{ _tag: "Transfer", value: { _tag: "Keyboard" } },
-						({ value: mode }) =>
-							getOperation({
-								source: mode.source,
-								target,
-								operationType: mode.operationType,
-							})?.label,
-					),
-					Match.orElse(() => undefined),
-				)
-			: undefined;
-
 	return (
-		<Tooltip.Root open={tooltip !== undefined} disableHoverablePopup>
+		<Tooltip.Root open={activeOperation?.tooltip !== undefined} disableHoverablePopup>
 			<Tooltip.Trigger
 				render={targetEl}
 				className={pipe(
-					activeTargetOperationType,
+					activeOperation?.operationType,
 					Match.value,
 					Match.when("above", () => classes(styles.insertionTarget, styles.insertionTargetAbove)),
 					Match.when("below", () => classes(styles.insertionTarget, styles.insertionTargetBelow)),
-					Match.whenOr("into", null, () => undefined),
+					Match.when("into", () =>
+						classes(
+							styles.activeTarget,
+							Match.value(outline).pipe(
+								Match.when("inside", () => styles.activeTargetInside),
+								Match.when("outside", () => styles.activeTargetOutside),
+								Match.exhaustive,
+							),
+						),
+					),
+					Match.when(undefined, () => undefined),
 					Match.exhaustive,
 				)}
 			/>
 			<Tooltip.Portal>
 				<Tooltip.Positioner sideOffset={8} side="right">
-					<Tooltip.Popup render={<TooltipPopup />}>{tooltip}</Tooltip.Popup>
+					<Tooltip.Popup render={<TooltipPopup />}>{activeOperation?.tooltip}</Tooltip.Popup>
 				</Tooltip.Positioner>
 			</Tooltip.Portal>
 		</Tooltip.Root>

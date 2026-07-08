@@ -16,7 +16,8 @@ type Dialog =
 	| { _tag: "ApplyBranchPicker" }
 	| { _tag: "BranchPicker" }
 	| { _tag: "CommandPalette" }
-	| { _tag: "ProjectPicker" };
+	| { _tag: "ProjectPicker" }
+	| { _tag: "Settings" };
 
 type ProjectState = {
 	detailsFullWindow: boolean;
@@ -255,6 +256,12 @@ const projectSlice = createSlice({
 				_tag: "ProjectPicker",
 			};
 		},
+		openSettings: (state, action: PayloadAction<{ projectId: string }>) => {
+			ensureProjectState(state, action.payload.projectId).dialog = {
+				_tag: "Settings",
+			};
+		},
+
 		closeDialog: (state, action: PayloadAction<{ projectId: string }>) => {
 			ensureProjectState(state, action.payload.projectId).dialog = { _tag: "None" };
 		},

@@ -4,7 +4,11 @@ import {
 	useDiscardWorktreeChanges,
 	useOpenInEditor,
 } from "#ui/api/mutations.ts";
-import { listEditorsQueryOptions, listProjectsQueryOptions } from "#ui/api/queries.ts";
+import {
+	getGUISettingsQueryOptions,
+	listEditorsQueryOptions,
+	listProjectsQueryOptions,
+} from "#ui/api/queries.ts";
 import {
 	changesFileHotkeys,
 	selectionOperationHotkeys,
@@ -35,6 +39,10 @@ export const useFileMenuItems = ({
 	const dispatch = useAppDispatch();
 	const { data: projects } = useSuspenseQuery(listProjectsQueryOptions);
 	const { data: editors } = useQuery(listEditorsQueryOptions);
+	const { data: preferredEditor } = useQuery({
+		...getGUISettingsQueryOptions(),
+		select: (cfg) => editors?.find((editor) => editor.id === cfg.editorId),
+	});
 
 	const selectedProject = projects.find((project) => project.id === projectId);
 	if (!selectedProject) throw new Error("Could not find selected project");
@@ -55,23 +63,36 @@ export const useFileMenuItems = ({
 
 	const menuItemGroups: Array<NonEmptyArray<NativeMenuItem>> = [
 		[
-			nativeMenuItem({
-				label: "Open In Editor",
-				submenu:
-					editors?.map((editor) =>
-						nativeMenuItem({
-							label: editor.name,
-							enabled: !openInEditor.isPending,
-							onSelect: () =>
-								openInEditor.mutate({
-									projectId,
-									editorId: editor.id,
-									path,
-									lineNr: null,
+			preferredEditor
+				? nativeMenuItem({
+						label: `Open in ${preferredEditor.name}`,
+						enabled: !openInEditor.isPending,
+						accelerator: toElectronAccelerator(changesFileHotkeys.openInEditor.hotkey),
+						onSelect: () =>
+							openInEditor.mutate({
+								projectId,
+								editorId: preferredEditor.id,
+								path,
+								lineNr: null,
+							}),
+					})
+				: nativeMenuItem({
+						label: "Open In Editor",
+						submenu:
+							editors?.map((editor) =>
+								nativeMenuItem({
+									label: editor.name,
+									enabled: !openInEditor.isPending,
+									onSelect: () =>
+										openInEditor.mutate({
+											projectId,
+											editorId: editor.id,
+											path,
+											lineNr: null,
+										}),
 								}),
-						}),
-					) ?? [],
-			}),
+							) ?? [],
+					}),
 			nativeMenuItem({
 				label: "Copy Path",
 				submenu: [

@@ -288,6 +288,23 @@ pub trait RefMetadata {
     ///
     /// It is OK to delete something that doesn't exist.
     fn remove(&mut self, ref_name: &gix::refs::FullNameRef) -> anyhow::Result<bool>;
+
+    /// Move all metadata associated with `old_ref_name` over to `new_ref_name`.
+    ///
+    /// This carries over any per-branch metadata blob and renames the persisted branch-stack-order
+    /// entry (see [`rename_branch_stack_order_reference`](Self::rename_branch_stack_order_reference)).
+    ///
+    /// It is OK to rename a `ref_name` that has no metadata, and renaming onto itself is a no-op.
+    ///
+    /// There is deliberately no default implementation: a generic one built from `branch` +
+    /// `set_branch` + `remove` would copy per-branch metadata into a *new* standalone stack and tear
+    /// the branch out of its existing one, fragmenting managed stacks. Each backend must move its
+    /// metadata in place instead.
+    fn rename(
+        &mut self,
+        old_ref_name: &gix::refs::FullNameRef,
+        new_ref_name: &gix::refs::FullNameRef,
+    ) -> anyhow::Result<()>;
 }
 
 /// A decoded commit object with easy access to additional GitButler information.

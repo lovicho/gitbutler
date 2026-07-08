@@ -389,7 +389,7 @@ pub fn integrate_upstream_with_hints<'ws, 'meta, M: RefMetadata>(
             let mut merge_commit = editor.empty_commit()?;
             merge_commit.message = format!("Merge {} into merge", target_ref.ref_name).into();
             let merge_commit =
-                editor.new_commit_untracked(merge_commit, DateMode::CommitterKeepAuthorKeep)?;
+                editor.new_commit(merge_commit, DateMode::CommitterKeepAuthorKeep)?;
             let merge_commit = editor.insert(
                 *head,
                 Step::Pick(Pick::new_untracked_pick(merge_commit)),

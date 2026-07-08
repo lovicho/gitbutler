@@ -12,6 +12,7 @@ import {
 	operandIdentityKey,
 	stackOperand,
 	type Operand,
+	operandEquals,
 } from "#ui/operands.ts";
 import { useOutlineSelection } from "#ui/selection-scopes.ts";
 import {
@@ -21,6 +22,7 @@ import {
 } from "#ui/projects/state.ts";
 import { OperationSourceC } from "#ui/routes/project/$id/workspace/OperationSourceC.tsx";
 import {
+	ActiveOperation,
 	OperationTarget,
 	OperationTargetOutline,
 } from "#ui/routes/project/$id/workspace/OperationTarget.tsx";
@@ -99,8 +101,38 @@ const OperandC: FC<
 > = ({ projectId, operand, outline, render, ...props }) => {
 	const isSelected = useIsSelected({ projectId, operand });
 	const absorptionTargetKeys = assert(use(AbsorptionTargetKeysContext));
-	const isAbsorptionTarget = absorptionTargetKeys.has(operandIdentityKey(operand));
 	const navigationIndex = assert(use(NavigationIndexContext));
+
+	const activeOperation = useAppSelector((state) => {
+		const outlineMode = selectProjectOutlineModeState(state, projectId);
+
+		return Match.value(outlineMode).pipe(
+			Match.when({ _tag: "Absorb" }, (): ActiveOperation | null => {
+				const isAbsorptionTarget = absorptionTargetKeys.has(operandIdentityKey(operand));
+				return isAbsorptionTarget ? { operationType: "into", tooltip: "Absorb target" } : null;
+			}),
+			Match.when({ _tag: "Transfer" }, ({ value: mode }): ActiveOperation | null => {
+				const isActive = Match.value(mode).pipe(
+					Match.tagsExhaustive({
+						Pointer: (mode) => mode.target !== null && operandEquals(mode.target, operand),
+						Keyboard: () => isSelected,
+					}),
+				);
+
+				return isActive && mode.operationType !== null
+					? {
+							operationType: mode.operationType,
+							tooltip: getOperation({
+								source: mode.source,
+								target: operand,
+								operationType: mode.operationType,
+							})?.label,
+						}
+					: null;
+			}),
+			Match.orElse(() => null),
+		);
+	});
 
 	return useRender({
 		render: (
@@ -113,8 +145,7 @@ const OperandC: FC<
 						enabled={navigationIndexIncludes(navigationIndex, operand, operandIdentityKey)}
 						projectId={projectId}
 						target={operand}
-						isSelected={isSelected}
-						isAbsorptionTarget={isAbsorptionTarget}
+						activeOperation={activeOperation}
 						outline={outline}
 						render={render}
 					/>

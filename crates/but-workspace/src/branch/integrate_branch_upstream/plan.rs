@@ -299,7 +299,7 @@ fn prepare_squash_step_for_editor<M: RefMetadata>(
         commit_message,
     )?;
 
-    editor.new_commit_untracked(squashed_commit, DateMode::CommitterUpdateAuthorKeep)
+    editor.new_commit(squashed_commit, DateMode::CommitterUpdateAuthorKeep)
 }
 
 fn apply_merge_commit_changes_outcome(
@@ -395,7 +395,7 @@ fn integration_steps_to_segment_steps_for_editor<M: RefMetadata>(
             PreparedIntegrationStep::Merge { commit_id } => {
                 let mut merge_commit = editor.empty_commit()?;
                 merge_commit.message = format!("Merge {commit_id} into previous commit").into();
-                let merge_commit = editor.new_commit_untracked(
+                let merge_commit = editor.new_commit(
                     merge_commit,
                     but_rebase::commit::DateMode::CommitterKeepAuthorKeep,
                 )?;

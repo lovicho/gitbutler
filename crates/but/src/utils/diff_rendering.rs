@@ -269,10 +269,15 @@ impl DetailsCodeLine {
         self.with_line_from_diff(|line| {
             let bg = self.line_numbers.kind.bg(theme);
             let line_numbers = self.line_numbers.spans(strings, theme);
-            *self.syntax_highlighted_line.borrow_mut() =
-                Some(Line::from_iter(line_numbers.into_iter().chain(
-                    syntax_highlight(line, bg, highlight_lines, syntax_set),
-                )));
+            let mut line = Line::from_iter(line_numbers.into_iter().chain(syntax_highlight(
+                line,
+                highlight_lines,
+                syntax_set,
+            )));
+            if let Some(bg) = bg {
+                line = line.bg(bg);
+            }
+            *self.syntax_highlighted_line.borrow_mut() = Some(line);
         });
     }
 
@@ -301,7 +306,6 @@ impl DetailsCodeLine {
 
 fn syntax_highlight(
     code: &str,
-    bg: Option<Color>,
     highlight_lines: &mut HighlightLines<'_>,
     syntax_set: &SyntaxSet,
 ) -> Vec<Span<'static>> {
@@ -314,13 +318,6 @@ fn syntax_highlight(
         .map(|(style, text)| {
             let color = Color::Rgb(style.foreground.r, style.foreground.g, style.foreground.b);
             Span::raw(text.to_string()).fg(color)
-        })
-        .map(move |span| {
-            if let Some(background) = bg {
-                span.bg(background)
-            } else {
-                span
-            }
         })
         .collect::<Vec<_>>()
 }
@@ -386,7 +383,7 @@ impl CodeLineNumbers {
                 Span::raw(strings.get_spaces((self.new_width - num_digits(new_line)) as _)),
                 Span::raw(strings.get_u32(new_line)).style(theme.addition),
                 Span::styled(" │ ", theme.border),
-                Span::raw("+").style(theme.addition_rich),
+                Span::raw("+"),
             ],
             CodeLineKind::Deletion { old_line } => [
                 Span::raw(strings.get_spaces((self.old_width - num_digits(old_line)) as _)),
@@ -394,7 +391,7 @@ impl CodeLineNumbers {
                 Span::styled(" ┊ ", theme.border),
                 Span::raw(strings.get_spaces(self.new_width as _)),
                 Span::styled(" │ ", theme.border),
-                Span::raw("-").style(theme.deletion_rich),
+                Span::raw("-"),
             ],
             CodeLineKind::Context { old_line, new_line } => [
                 Span::raw(strings.get_spaces((self.old_width - num_digits(old_line)) as _)),
@@ -1194,6 +1191,10 @@ fn format_with_dot_thousands(value: u64) -> String {
     }
 
     formatted.chars().rev().collect()
+}
+
+pub fn load_syntax_set() -> SyntaxSet {
+    SyntaxSet::load_defaults_nonewlines()
 }
 
 #[cfg(test)]
