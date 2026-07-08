@@ -140,13 +140,20 @@ export function parseQueryError(error: unknown): QueryError {
 export function emitQueryError(
 	posthog: PostHogWrapper | undefined,
 	error: unknown,
-	context?: { command?: string; actionName?: string },
+	context?: {
+		command?: string;
+		actionName?: string;
+		severity?: "error" | "warning" | "silent";
+	},
 ) {
 	const { name, message, code } = parseQueryError(error);
 	if (name === "SilentError") {
 		console.warn("SilentError suppressed from query:error telemetry", error);
 		return;
 	}
+	// Errors classified `silent` are expected states (offline network blips,
+	// known noise), not defects — keep them out of error telemetry.
+	if (context?.severity === "silent") return;
 	if (!posthog) return;
 	const key = `${context?.command ?? ""}|${name}`;
 	if (!shouldCaptureQueryError(key)) return;
@@ -156,5 +163,6 @@ export function emitQueryError(
 		error_code: code,
 		command: context?.command,
 		actionName: context?.actionName,
+		severity: context?.severity,
 	});
 }

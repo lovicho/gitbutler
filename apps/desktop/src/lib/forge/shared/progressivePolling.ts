@@ -30,9 +30,21 @@ const POLLING_THRESHOLD_INITIAL = 60 * 1000;
 const POLLING_THRESHOLD_SHORT = 10 * 60 * 1000;
 const POLLING_THRESHOLD_MEDIUM = 60 * 60 * 1000;
 
-export function getPollingInterval(elapsedMs: number, shouldStop: boolean): number {
+export function getPollingInterval(
+	elapsedMs: number,
+	shouldStop: boolean,
+	hasError: boolean = false,
+): number {
 	if (shouldStop) {
 		return 0; // Stop polling
+	}
+
+	// While the endpoint is failing (offline, rate limited, repo access
+	// lost), fast polling only amplifies the failure. Back off hard; a
+	// successful fetch (including refetch-on-focus/reconnect or a manual
+	// retry) clears the error and restores the progressive schedule.
+	if (hasError) {
+		return POLLING_INTERVAL_MEDIUM;
 	}
 
 	if (elapsedMs < POLLING_THRESHOLD_INITIAL) {

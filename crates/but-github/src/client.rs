@@ -213,9 +213,7 @@ impl GitHubClient {
             .send()
             .await?;
 
-        if !response.status().is_success() {
-            bail!("Failed to list checks for ref: {}", response.status());
-        }
+        ensure_success(&response)?;
 
         Ok(response)
     }

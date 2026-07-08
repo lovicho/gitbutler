@@ -48,6 +48,7 @@
 	const checksService = $derived(forgeInfo?.capabilities.checks ? checksMonitor : undefined);
 	let elapsedMs = $state<number>(0);
 	let loadedOnce = $state(false);
+	let hasPollError = $state(false);
 
 	const projectState = $derived(uiState.project(projectId));
 	const isDone = $derived(!projectState.branchesToPoll.current.includes(branchName));
@@ -58,7 +59,7 @@
 	// https://docs.github.com/en/rest/checks/runs?apiVersion=2022-11-28#list-check-runs-in-a-check-suite
 	const enabled = $derived(!isFork && !isMerged); // Deduplication.
 
-	const pollingInterval = $derived(getPollingInterval(elapsedMs, isDone));
+	const pollingInterval = $derived(getPollingInterval(elapsedMs, isDone, hasPollError));
 
 	const checksQuery = $derived(
 		enabled
@@ -193,6 +194,12 @@
 		if (loading) {
 			loadedOnce = true;
 		}
+
+		// Kept as state rather than a $derived off checksQuery: pollingInterval
+		// feeds checksQuery's subscription, so deriving the error back out of
+		// checksQuery would form a reactive cycle. A failing query backs polling
+		// off; the next successful fetch clears it and restores the schedule.
+		hasPollError = result?.isError ?? false;
 
 		// Compute shouldStop fresh each time the effect runs, since the grace
 		// period depends on wall-clock time.

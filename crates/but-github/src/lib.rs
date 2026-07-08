@@ -5,6 +5,7 @@ use but_secret::Sensitive;
 use but_settings::AppSettings;
 use serde::{Deserialize, Serialize};
 
+pub mod checks;
 mod client;
 mod graphql;
 pub mod pr;

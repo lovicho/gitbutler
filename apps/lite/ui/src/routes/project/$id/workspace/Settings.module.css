@@ -30,3 +30,33 @@
 		0 24px 64px -8px rgb(0 0 0 / 0.04),
 		0 40px 48px -32px rgb(0 0 0 / 0.04);
 }
+
+.heading {
+	margin-block-end: 24px;
+}
+
+.inputs {
+	display: grid;
+	grid-template-columns: auto 1fr;
+	gap: 16px;
+	rule: 1px solid var(--bg-3);
+}
+
+.input {
+	display: grid;
+	grid-template-columns: subgrid;
+	grid-column: 1 / -1;
+	align-items: center;
+	justify-content: space-between;
+
+	input,
+	select {
+		padding-inline: 4px;
+		padding-block: 8px;
+		text-align: right;
+	}
+}
+
+.label {
+	color: var(--text-2);
+}

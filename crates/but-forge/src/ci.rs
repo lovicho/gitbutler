@@ -21,27 +21,57 @@ pub fn ci_checks_for_ref_with_cache(
                     return Ok(cached);
                 }
             }
-            let checks =
-                ci_checks_for_ref(preferred_forge_user, forge_repo_info, storage, reference)?;
-            crate::db::cache_ci_checks(db, reference, &checks).ok();
-            checks
+            fetch_and_refresh_cache(
+                preferred_forge_user,
+                forge_repo_info,
+                storage,
+                reference,
+                db,
+            )?
         }
-        crate::CacheConfig::NoCache => {
-            let checks =
-                ci_checks_for_ref(preferred_forge_user, forge_repo_info, storage, reference)?;
-            crate::db::cache_ci_checks(db, reference, &checks).ok();
-            checks
-        }
+        crate::CacheConfig::NoCache => fetch_and_refresh_cache(
+            preferred_forge_user,
+            forge_repo_info,
+            storage,
+            reference,
+            db,
+        )?,
     };
     Ok(checks)
 }
 
+/// Fetch fresh checks from the forge and refresh the cache with the result.
+///
+/// A resolvable ref returns an authoritative list — even an empty one, which
+/// replaces the cache (e.g. after a force-push to a commit that has no CI). An
+/// unresolvable ref (`None`, e.g. a transient GitHub 422 before a pushed ref
+/// propagates) is surfaced as "no checks" for display but must not overwrite the
+/// previously-good checks that cache-only readers such as `but status` rely on,
+/// since it can be transient.
+fn fetch_and_refresh_cache(
+    preferred_forge_user: Option<crate::ForgeUser>,
+    forge_repo_info: &crate::forge::ForgeRepoInfo,
+    storage: &but_forge_storage::Controller,
+    reference: &str,
+    db: &mut but_db::DbHandle,
+) -> anyhow::Result<Vec<CiCheck>> {
+    match ci_checks_for_ref(preferred_forge_user, forge_repo_info, storage, reference)? {
+        Some(checks) => {
+            crate::db::cache_ci_checks(db, reference, &checks).ok();
+            Ok(checks)
+        }
+        None => Ok(Vec::new()),
+    }
+}
+
+/// Fetch checks from the forge. `None` means the ref did not resolve (only
+/// GitHub distinguishes this today); every other forge returns `Some`.
 fn ci_checks_for_ref(
     preferred_forge_user: Option<crate::ForgeUser>,
     forge_repo_info: &crate::forge::ForgeRepoInfo,
     storage: &but_forge_storage::Controller,
     reference: &str,
-) -> anyhow::Result<Vec<CiCheck>> {
+) -> anyhow::Result<Option<Vec<CiCheck>>> {
     let crate::forge::ForgeRepoInfo {
         forge, owner, repo, ..
     } = forge_repo_info;
@@ -50,29 +80,37 @@ fn ci_checks_for_ref(
             let preferred_account = preferred_forge_user
                 .as_ref()
                 .and_then(|user| user.github().cloned());
-            let gh = but_github::GitHubClient::from_storage(storage, preferred_account.as_ref())?;
 
             // Clone owned data for thread
             let owner = owner.clone();
             let repo = repo.clone();
+            let storage = storage.clone();
             let reference = reference.to_string();
             let reference_for_checks = reference.clone();
 
             let checks = std::thread::spawn(move || {
                 tokio::runtime::Runtime::new()
                     .unwrap()
-                    .block_on(gh.list_checks_for_ref(&owner, &repo, &reference))
+                    .block_on(but_github::checks::list_for_ref(
+                        preferred_account.as_ref(),
+                        &owner,
+                        &repo,
+                        &reference,
+                        &storage,
+                    ))
             })
             .join()
             .map_err(|e| anyhow::anyhow!("Failed to join thread: {e:?}"))?;
-            checks.map(|c| {
-                c.into_iter()
-                    .map(|check| {
-                        let mut ci_check = CiCheck::from(check);
-                        ci_check.reference = reference_for_checks.to_string();
-                        ci_check
-                    })
-                    .collect()
+            checks.map(|maybe_runs| {
+                maybe_runs.map(|runs| {
+                    runs.into_iter()
+                        .map(|check| {
+                            let mut ci_check = CiCheck::from(check);
+                            ci_check.reference = reference_for_checks.to_string();
+                            ci_check
+                        })
+                        .collect()
+                })
             })
         }
         ForgeName::GitLab => {
@@ -93,14 +131,16 @@ fn ci_checks_for_ref(
             })
             .join()
             .map_err(|e| anyhow::anyhow!("Failed to join thread: {e:?}"))??;
-            Ok(pipelines
-                .into_iter()
-                .map(|pipeline| {
-                    let mut ci_check = CiCheck::from(pipeline);
-                    ci_check.reference = reference_for_checks.to_string();
-                    ci_check
-                })
-                .collect())
+            Ok(Some(
+                pipelines
+                    .into_iter()
+                    .map(|pipeline| {
+                        let mut ci_check = CiCheck::from(pipeline);
+                        ci_check.reference = reference_for_checks.to_string();
+                        ci_check
+                    })
+                    .collect(),
+            ))
         }
         ForgeName::Bitbucket => {
             let preferred_account = preferred_forge_user
@@ -123,14 +163,16 @@ fn ci_checks_for_ref(
             .join()
             .map_err(|e| anyhow::anyhow!("Failed to join thread: {e:?}"))??;
 
-            Ok(statuses
-                .into_iter()
-                .map(|status| {
-                    let mut ci_check = CiCheck::from(status);
-                    ci_check.reference = reference_for_checks.to_string();
-                    ci_check
-                })
-                .collect())
+            Ok(Some(
+                statuses
+                    .into_iter()
+                    .map(|status| {
+                        let mut ci_check = CiCheck::from(status);
+                        ci_check.reference = reference_for_checks.to_string();
+                        ci_check
+                    })
+                    .collect(),
+            ))
         }
         _ => Err(anyhow::anyhow!(
             "Listing ci checks for forge {forge:?} is not implemented yet."

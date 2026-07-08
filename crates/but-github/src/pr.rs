@@ -54,7 +54,7 @@ pub async fn list_for_commit(
 /// Tag transport / auth failures with a `but_error::Code` so the desktop
 /// can present them appropriately (silent for offline, re-auth hint for 401).
 /// Only applied to read paths — mutations should still surface failures.
-fn classify_forge_error(err: anyhow::Error) -> anyhow::Error {
+pub(crate) fn classify_forge_error(err: anyhow::Error) -> anyhow::Error {
     if let Some(reqwest_err) = err.downcast_ref::<reqwest::Error>()
         && crate::is_network_error(reqwest_err)
     {

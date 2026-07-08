@@ -1,4 +1,5 @@
 import { emitQueryError, parseQueryError, SilentError } from "$lib/error/error";
+import { classify } from "$lib/error/errorClassification";
 import { isNormalizedError, type NormalizedError } from "$lib/error/normalizedError";
 import { reactive } from "@gitbutler/shared/reactiveUtils.svelte";
 import { type Reactive } from "@gitbutler/shared/storeUtils";
@@ -127,7 +128,11 @@ export function buildQueryHooks<Definitions extends ExtensionDefinitions>({
 			if (result.error) {
 				const error = result.error;
 				// track({ failure: true, startTime, error });
-				emitQueryError(posthog, error, { command, actionName });
+				emitQueryError(posthog, error, {
+					command,
+					actionName,
+					severity: classify(error).severity,
+				});
 			}
 			if (options?.transform && data) {
 				data = options.transform(data, queryArg);

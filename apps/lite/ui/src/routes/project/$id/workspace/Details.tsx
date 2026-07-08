@@ -112,6 +112,7 @@ import { useMergedRefs } from "@base-ui/utils/useMergedRefs";
 import { getHeadInfoIndex } from "#ui/api/ref-info.ts";
 import { Checkbox } from "#ui/components/Checkbox.tsx";
 import type { GUISettings } from "#electron/settings.ts";
+import { defaultSettings } from "#ui/settings.ts";
 
 type BranchTab = "diff" | "pr";
 
@@ -335,6 +336,18 @@ const DiffContents: FC<{
 		...getGUISettingsQueryOptions(),
 		select: (cfg) => editors?.find((editor) => editor.id === cfg.editorId),
 	});
+	const { data: preferredFontFamily } = useQuery({
+		...getGUISettingsQueryOptions(),
+		select: (cfg) => cfg.diffFontFamily,
+	});
+	const { data: preferredFontSize } = useQuery({
+		...getGUISettingsQueryOptions(),
+		select: (cfg) => cfg.diffFontSize,
+	});
+	const { data: preferredTabSize } = useQuery({
+		...getGUISettingsQueryOptions(),
+		select: (cfg) => cfg.diffTabSize,
+	});
 	const openInEditor = useOpenInEditor();
 
 	const diffSelection = useDiffSelection(projectId, navigationIndex);
@@ -543,7 +556,15 @@ const DiffContents: FC<{
 					paddingBottom: 9,
 				},
 				unsafeCSS: `
-					[data-code] {
+          :host {
+            background-color: transparent;
+          }
+
+          [data-diffs-header="custom"] {
+            background-color: var(--bg-1);
+          }
+
+          [data-code] {
             border-radius: 0 0 10px 10px;
           }
 
@@ -559,6 +580,11 @@ const DiffContents: FC<{
             --mix-selection-dark: 0%;
           }
         `,
+			}}
+			style={{
+				"--diffs-font-family": preferredFontFamily ?? defaultSettings.diffFontFamily,
+				"--diffs-font-size": `${preferredFontSize ?? defaultSettings.diffFontSize}px`,
+				"--diffs-tab-size": `${preferredTabSize ?? defaultSettings.diffTabSize}`,
 			}}
 		/>
 	);
