@@ -58,6 +58,27 @@ export async function mockForge(page: Page, mocks: ForgeMocks): Promise<void> {
 	}
 }
 
+/**
+ * The body of a *failed* backend command: `{ type: "error", subject }` — the
+ * shape `webInvoke` turns into a thrown `IpcError` (see `backend/web.ts`), which
+ * lands on the query as `result.error`.
+ *
+ * `mockForge` only emits success envelopes, so route the command directly with
+ * `page.route(...)` when you need a failure (see the CI back-off tests).
+ * `code` feeds the desktop error classifier — e.g. `"NetworkError"` classifies
+ * as `silent`, `"GitHubTokenExpired"` surfaces a re-auth hint.
+ */
+export function forgeErrorBody(overrides: { code?: string; message?: string } = {}): string {
+	return JSON.stringify({
+		type: "error",
+		subject: {
+			name: "API error",
+			message: overrides.message ?? "Unable to reach the forge.",
+			code: overrides.code,
+		},
+	});
+}
+
 /** A GitHub `ForgeInfo`, with every capability on by default. */
 export function githubForgeInfo(overrides: Partial<ForgeInfo> = {}): ForgeInfo {
 	return {

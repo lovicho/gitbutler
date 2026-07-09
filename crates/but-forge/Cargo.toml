@@ -39,5 +39,8 @@ serde_json = { workspace = true, features = ["arbitrary_precision"] }
 anyhow.workspace = true
 schemars = { workspace = true, optional = true }
 
+[dev-dependencies]
+tempfile.workspace = true
+
 [lints]
 workspace = true

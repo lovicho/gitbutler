@@ -1,5 +1,7 @@
 import {
 	ciCheck,
+	ciCheckRunning,
+	forgeErrorBody,
 	forgeReview,
 	githubForgeInfo,
 	gitlabForgeInfo,
@@ -11,7 +13,7 @@ import {
 import { applyUpstream, openWorkspace } from "../src/setup.ts";
 import { test } from "../src/test.ts";
 import { waitForTestId } from "../src/util.ts";
-import { expect, type Page } from "@playwright/test";
+import { expect, type Page, type Route } from "@playwright/test";
 import type { ForgeInfo, ForgeReview } from "@gitbutler/but-sdk";
 
 const PR_NUMBER = 42;
@@ -108,6 +110,106 @@ test("CI badge does not error for a PR from a fork", async ({ page, gitbutler })
 	await expect(badge).toContainText("No checks");
 	await expect(badge).not.toContainText("Error");
 	expect(ciChecksRequests).toBe(0);
+});
+
+/**
+ * Open the workspace with a GitHub PR whose `list_ci_checks` command is routed
+ * by `handler`, so a test can drive check-run failures / recovery / cadence
+ * directly. The rest of the forge surface is mocked normally.
+ */
+async function openGithubPrWithChecksRoute(
+	page: Page,
+	gitbutler: { runScript: (s: string, a?: string[]) => Promise<void> },
+	handler: (route: Route) => Promise<void> | void,
+	reviewOverrides: Partial<ForgeReview> = {},
+) {
+	await gitbutler.runScript("project-with-remote-branches.sh");
+	await applyUpstream(gitbutler as never, BRANCH);
+
+	const review = forgeReview(PR_NUMBER, BRANCH, reviewOverrides);
+	await mockForge(page, {
+		forge_info: githubForgeInfo(),
+		list_reviews: [review],
+		get_review: review,
+		get_review_merge_status: mergeStatus(),
+		get_repo_info: repoInfo(),
+	});
+	await page.route("**/list_ci_checks", handler);
+
+	await openWorkspace(page);
+	await waitForTestId(page, "branch-card");
+}
+
+test("a failing checks poll backs off instead of hammering the endpoint", async ({
+	page,
+	gitbutler,
+}) => {
+	// A recent `modifiedAt` keeps the healthy schedule on its fast 5s interval,
+	// so the back-off to 30s shows up as a drop in request cadence. An old date
+	// would already sit on the slow schedule and hide the difference.
+	const now = new Date().toISOString();
+	let checkRequests = 0;
+	await openGithubPrWithChecksRoute(
+		page,
+		gitbutler,
+		async (route) => {
+			checkRequests += 1;
+			await route.fulfill({
+				status: 200,
+				contentType: "application/json",
+				body: forgeErrorBody({ code: "NetworkError" }),
+			});
+		},
+		{ modifiedAt: now, createdAt: now, lastSyncAt: now },
+	);
+
+	const badge = await waitForTestId(page, "pr-checks-badge");
+	// The first failed poll surfaces the error state and trips the back-off.
+	await expect(badge).toContainText("Error");
+
+	const afterFirstError = checkRequests;
+	// Longer than the fast 5s interval, shorter than the 30s back-off: a
+	// hammering poller would fire ~2 more times in this window, a backed-off
+	// one ~0.
+	await page.waitForTimeout(13_000);
+	expect(checkRequests - afterFirstError).toBeLessThanOrEqual(1);
+});
+
+test("retrying a failed checks badge recovers once the fetch succeeds", async ({
+	page,
+	gitbutler,
+}) => {
+	// Fail until the badge is clicked, then serve a running check. Clicking the
+	// badge forces an immediate refetch, so recovery is deterministic instead of
+	// waiting out the back-off interval.
+	let shouldError = true;
+	await openGithubPrWithChecksRoute(page, gitbutler, async (route) => {
+		const body = shouldError
+			? forgeErrorBody({ code: "NetworkError" })
+			: JSON.stringify({ type: "success", subject: [ciCheckRunning("build")] });
+		await route.fulfill({ status: 200, contentType: "application/json", body });
+	});
+
+	const badge = await waitForTestId(page, "pr-checks-badge");
+	await expect(badge).toContainText("Error");
+
+	shouldError = false;
+	await badge.click();
+	await expect(badge).toContainText("Running");
+});
+
+test("empty checks render as no-checks, not an error", async ({ page, gitbutler }) => {
+	// A transient GitHub 422 (unresolvable ref) is mapped to an empty list by
+	// the backend, so from the renderer it is just a successful empty result —
+	// it must read as "No checks", never as an error.
+	await openWorkspaceWithMockedPr(page, gitbutler, {
+		forgeInfo: githubForgeInfo(),
+		checks: [],
+	});
+
+	const badge = await waitForTestId(page, "pr-checks-badge");
+	await expect(badge).toContainText("No checks");
+	await expect(badge).not.toContainText("Error");
 });
 
 test("GitLab MR shows the MR review badge", async ({ page, gitbutler }) => {

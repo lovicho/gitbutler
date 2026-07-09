@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { CHECKS_MONITOR } from "$lib/forge/checksMonitor.svelte";
 	import { FORGE_INFO_SERVICE } from "$lib/forge/forgeInfo.svelte";
-	import { getPollingInterval } from "$lib/forge/shared/progressivePolling";
+	import { createPollBackoff } from "$lib/forge/shared/pollErrorBackoff.svelte";
 	import { UI_STATE } from "$lib/state/uiState.svelte";
 	import { inject } from "@gitbutler/core/context";
 
@@ -48,7 +48,6 @@
 	const checksService = $derived(forgeInfo?.capabilities.checks ? checksMonitor : undefined);
 	let elapsedMs = $state<number>(0);
 	let loadedOnce = $state(false);
-	let hasPollError = $state(false);
 
 	const projectState = $derived(uiState.project(projectId));
 	const isDone = $derived(!projectState.branchesToPoll.current.includes(branchName));
@@ -59,7 +58,16 @@
 	// https://docs.github.com/en/rest/checks/runs?apiVersion=2022-11-28#list-check-runs-in-a-check-suite
 	const enabled = $derived(!isFork && !isMerged); // Deduplication.
 
-	const pollingInterval = $derived(getPollingInterval(elapsedMs, isDone, hasPollError));
+	// Backs polling off while the checks query is failing (offline, rate-limited,
+	// repo access lost) and restores the schedule on recovery. A transient 422
+	// unresolvable-ref is not an error here — the backend maps it to an empty
+	// list — so it does not trigger the backoff.
+	const backoff = createPollBackoff({
+		getResult: () => checksQuery?.result,
+		getElapsedMs: () => elapsedMs,
+		getShouldStop: () => isDone,
+	});
+	const pollingInterval = $derived(backoff.pollingInterval);
 
 	const checksQuery = $derived(
 		enabled
@@ -194,12 +202,6 @@
 		if (loading) {
 			loadedOnce = true;
 		}
-
-		// Kept as state rather than a $derived off checksQuery: pollingInterval
-		// feeds checksQuery's subscription, so deriving the error back out of
-		// checksQuery would form a reactive cycle. A failing query backs polling
-		// off; the next successful fetch clears it and restores the schedule.
-		hasPollError = result?.isError ?? false;
 
 		// Compute shouldStop fresh each time the effect runs, since the grace
 		// period depends on wall-clock time.

@@ -55,12 +55,29 @@ fn fetch_and_refresh_cache(
     reference: &str,
     db: &mut but_db::DbHandle,
 ) -> anyhow::Result<Vec<CiCheck>> {
-    match ci_checks_for_ref(preferred_forge_user, forge_repo_info, storage, reference)? {
+    let fetched = ci_checks_for_ref(preferred_forge_user, forge_repo_info, storage, reference)?;
+    Ok(refresh_cache_with_fetched(db, reference, fetched))
+}
+
+/// Apply a freshly-fetched result to the cache and return the checks to display.
+///
+/// `Some(checks)` is authoritative and refreshes the cache — even an empty vec,
+/// which clears it (e.g. after a force-push to a commit that has no CI). `None`
+/// means the ref did not resolve (a transient GitHub 422); it is surfaced as "no
+/// checks" for display but deliberately leaves the cache untouched, since a
+/// cache-only reader such as `but status` must not lose previously-good checks
+/// to a momentary blip.
+fn refresh_cache_with_fetched(
+    db: &mut but_db::DbHandle,
+    reference: &str,
+    fetched: Option<Vec<CiCheck>>,
+) -> Vec<CiCheck> {
+    match fetched {
         Some(checks) => {
             crate::db::cache_ci_checks(db, reference, &checks).ok();
-            Ok(checks)
+            checks
         }
-        None => Ok(Vec::new()),
+        None => Vec::new(),
     }
 }
 
@@ -462,7 +479,90 @@ impl From<but_bitbucket::BitbucketBuildStatus> for CiCheck {
 
 #[cfg(test)]
 mod tests {
-    use super::{CiCheck, CiConclusion, CiStatus};
+    use super::{CiCheck, CiConclusion, CiOutput, CiStatus, refresh_cache_with_fetched};
+
+    const REFERENCE: &str = "refs/heads/feature";
+
+    fn cache_check(id: i64) -> CiCheck {
+        CiCheck {
+            id,
+            name: format!("check-{id}"),
+            output: CiOutput::default(),
+            started_at: None,
+            status: CiStatus::InProgress,
+            head_sha: "deadbeef".into(),
+            url: String::new(),
+            html_url: String::new(),
+            details_url: String::new(),
+            pull_requests: Vec::new(),
+            reference: REFERENCE.to_string(),
+            last_sync_at: chrono::Local::now().naive_local(),
+        }
+    }
+
+    fn test_db() -> (tempfile::TempDir, but_db::DbHandle) {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = but_db::DbHandle::new_in_directory(tmp.path()).unwrap();
+        (tmp, db)
+    }
+
+    fn cached_ids(db: &but_db::DbHandle) -> Vec<i64> {
+        let mut ids: Vec<i64> = crate::db::ci_checks_from_cache(db, REFERENCE)
+            .unwrap()
+            .into_iter()
+            .map(|c| c.id)
+            .collect();
+        ids.sort_unstable();
+        ids
+    }
+
+    #[test]
+    fn some_non_empty_result_replaces_the_cache() {
+        let (_tmp, mut db) = test_db();
+        refresh_cache_with_fetched(&mut db, REFERENCE, Some(vec![cache_check(1)]));
+
+        let displayed = refresh_cache_with_fetched(
+            &mut db,
+            REFERENCE,
+            Some(vec![cache_check(2), cache_check(3)]),
+        );
+
+        assert_eq!(displayed.len(), 2);
+        assert_eq!(cached_ids(&db), vec![2, 3]);
+    }
+
+    #[test]
+    fn some_empty_result_clears_the_cache() {
+        let (_tmp, mut db) = test_db();
+        refresh_cache_with_fetched(&mut db, REFERENCE, Some(vec![cache_check(1)]));
+
+        // An authoritative empty list (e.g. a force-push to a commit with no CI)
+        // replaces the cache.
+        let displayed = refresh_cache_with_fetched(&mut db, REFERENCE, Some(Vec::new()));
+
+        assert!(displayed.is_empty());
+        assert!(
+            cached_ids(&db).is_empty(),
+            "an authoritative empty list should clear the cache"
+        );
+    }
+
+    #[test]
+    fn none_result_preserves_the_cache() {
+        let (_tmp, mut db) = test_db();
+        refresh_cache_with_fetched(&mut db, REFERENCE, Some(vec![cache_check(1)]));
+
+        // An unresolvable ref (a transient GitHub 422) shows "no checks" for
+        // display but must not wipe the previously-good cache.
+        let displayed = refresh_cache_with_fetched(&mut db, REFERENCE, None);
+
+        assert!(displayed.is_empty(), "an unresolvable ref shows no checks");
+        assert_eq!(
+            cached_ids(&db),
+            vec![1],
+            "a transient unresolvable ref must not wipe the cache"
+        );
+    }
 
     fn job(status: &str, web_url: Option<&str>) -> but_gitlab::GitLabPipelineJob {
         but_gitlab::GitLabPipelineJob {
