@@ -64,7 +64,6 @@
           pkgs.pnpm
           pkgs.playwright-driver.browsers
           cargoFlamegraph
-          pkgs.cargo-insta
           pkgs.cargo-machete
         ];
 

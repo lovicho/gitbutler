@@ -1,4 +1,5 @@
 //! These tests exercise the disconnect operation.
+use snapbox::IntoData;
 use std::collections::HashSet;
 
 use anyhow::{Context, Result};
@@ -13,13 +14,17 @@ use crate::utils::{fixture_writable, standard_options};
 fn disconnect_and_remove_middle_commit_in_linear_history() -> Result<()> {
     let (repo, _tmpdir, mut meta) = fixture_writable("four-commits")?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-	* 120e3a9 (HEAD -> main) c
-	* a96434e b
-	* d591dfe a
-	* 35b8235 base
-	");
-    insta::assert_snapshot!(git_status(&repo)?, @"");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 120e3a9 (HEAD -> main) c
+* a96434e b
+* d591dfe a
+* 35b8235 base
+
+"#]]
+    );
+    snapbox::assert_data_eq!(git_status(&repo)?, snapbox::str![""]);
 
     let graph = Graph::from_head(
         &repo,
@@ -51,22 +56,30 @@ fn disconnect_and_remove_middle_commit_in_linear_history() -> Result<()> {
 
     let outcome = editor.rebase()?;
     let overlayed = graph_tree(&outcome.overlayed_graph()?).to_string();
-    insta::assert_snapshot!(overlayed, @"
+    snapbox::assert_data_eq!(
+        &overlayed,
+        snapbox::str![[r#"
 
-    └── 👉►:0[0]:main[🌳]
-        ├── ·b4fd8ee (⌂|1)
-        ├── ·d591dfe (⌂|1)
-        └── 🏁·35b8235 (⌂|1)
-    ");
+└── 👉►:0[0]:main[🌳]
+    ├── ·b4fd8ee (⌂|1)
+    ├── ·d591dfe (⌂|1)
+    └── 🏁·35b8235 (⌂|1)
+
+"#]]
+    );
     let outcome = outcome.materialize()?;
     assert_eq!(overlayed, graph_tree(&outcome.workspace.graph).to_string());
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * b4fd8ee (HEAD -> main) c
-    * d591dfe a
-    * 35b8235 base
-    ");
-    insta::assert_snapshot!(git_status(&repo)?, @"");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* b4fd8ee (HEAD -> main) c
+* d591dfe a
+* 35b8235 base
+
+"#]]
+    );
+    snapbox::assert_data_eq!(git_status(&repo)?, snapbox::str![""]);
 
     Ok(())
 }
@@ -75,13 +88,17 @@ fn disconnect_and_remove_middle_commit_in_linear_history() -> Result<()> {
 fn disconnect_and_remove_two_middle_commits_in_linear_history() -> Result<()> {
     let (repo, _tmpdir, mut meta) = fixture_writable("four-commits")?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-	* 120e3a9 (HEAD -> main) c
-	* a96434e b
-	* d591dfe a
-	* 35b8235 base
-	");
-    insta::assert_snapshot!(git_status(&repo)?, @"");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 120e3a9 (HEAD -> main) c
+* a96434e b
+* d591dfe a
+* 35b8235 base
+
+"#]]
+    );
+    snapbox::assert_data_eq!(git_status(&repo)?, snapbox::str![""]);
 
     let graph = Graph::from_head(
         &repo,
@@ -118,20 +135,28 @@ fn disconnect_and_remove_two_middle_commits_in_linear_history() -> Result<()> {
 
     let outcome = editor.rebase()?;
     let overlayed = graph_tree(&outcome.overlayed_graph()?).to_string();
-    insta::assert_snapshot!(overlayed, @"
+    snapbox::assert_data_eq!(
+        &overlayed,
+        snapbox::str![[r#"
 
-    └── 👉►:0[0]:main[🌳]
-        ├── ·19f8134 (⌂|1)
-        └── 🏁·35b8235 (⌂|1)
-     ");
+└── 👉►:0[0]:main[🌳]
+    ├── ·19f8134 (⌂|1)
+    └── 🏁·35b8235 (⌂|1)
+
+"#]]
+    );
     let outcome = outcome.materialize()?;
     assert_eq!(overlayed, graph_tree(&outcome.workspace.graph).to_string());
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * 19f8134 (HEAD -> main) c
-    * 35b8235 base
-    ");
-    insta::assert_snapshot!(git_status(&repo)?, @"");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 19f8134 (HEAD -> main) c
+* 35b8235 base
+
+"#]]
+    );
+    snapbox::assert_data_eq!(git_status(&repo)?, snapbox::str![""]);
 
     Ok(())
 }
@@ -140,16 +165,21 @@ fn disconnect_and_remove_two_middle_commits_in_linear_history() -> Result<()> {
 fn disconnect_and_remove_commit_in_merge_history_rewires_children() -> Result<()> {
     let (repo, _tmpdir, mut meta) = fixture_writable("merge-in-the-middle")?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    * e8ee978 (HEAD -> with-inner-merge) on top of inner merge
-    *   2fc288c Merge branch 'B' into with-inner-merge
-    |\  
-    | * 984fd1c (B) C: new file with 10 lines
-    * | add59d2 (A) A: 10 lines on top
-    |/  
-    * 8f0d338 (tag: base, main) base
-    ");
-    insta::assert_snapshot!(git_status(&repo)?, @"");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* e8ee978 (HEAD -> with-inner-merge) on top of inner merge
+*   2fc288c Merge branch 'B' into with-inner-merge
+|\  
+| * 984fd1c (B) C: new file with 10 lines
+* | add59d2 (A) A: 10 lines on top
+|/  
+* 8f0d338 (tag: base, main) base
+
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(git_status(&repo)?, snapbox::str![""]);
 
     let graph = Graph::from_head(
         &repo,
@@ -181,18 +211,22 @@ fn disconnect_and_remove_commit_in_merge_history_rewires_children() -> Result<()
 
     let outcome = editor.rebase()?;
     let overlayed = graph_tree(&outcome.overlayed_graph()?).to_string();
-    insta::assert_snapshot!(overlayed, @"
+    snapbox::assert_data_eq!(
+        &overlayed,
+        snapbox::str![[r#"
 
-    └── 👉►:0[0]:with-inner-merge[🌳]
-        └── ·4023659 (⌂|1)
-            └── ►:1[1]:anon:
-                └── ·01c4df0 (⌂|1)
-                    ├── ►:2[3]:anon:
-                    │   └── 🏁·8f0d338 (⌂|1) ►A, ►main, ►tags/base
-                    └── ►:3[2]:B
-                        └── ·984fd1c (⌂|1)
-                            └── →:2:
-    ");
+└── 👉►:0[0]:with-inner-merge[🌳]
+    └── ·4023659 (⌂|1)
+        └── ►:1[1]:anon:
+            └── ·01c4df0 (⌂|1)
+                ├── ►:2[3]:anon:
+                │   └── 🏁·8f0d338 (⌂|1) ►A, ►main, ►tags/base
+                └── ►:3[2]:B
+                    └── ·984fd1c (⌂|1)
+                        └── →:2:
+
+"#]]
+    );
     let outcome = outcome.materialize()?;
     assert_eq!(overlayed, graph_tree(&outcome.workspace.graph).to_string());
 
@@ -200,15 +234,20 @@ fn disconnect_and_remove_commit_in_merge_history_rewires_children() -> Result<()
     let base = repo.rev_parse_single("base")?.detach();
     assert_eq!(a_now, base, "A should now point to base after disconnect");
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    * 4023659 (HEAD -> with-inner-merge) on top of inner merge
-    *   01c4df0 Merge branch 'B' into with-inner-merge
-    |\  
-    | * 984fd1c (B) C: new file with 10 lines
-    |/  
-    * 8f0d338 (tag: base, main, A) base
-    ");
-    insta::assert_snapshot!(git_status(&repo)?, @"");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 4023659 (HEAD -> with-inner-merge) on top of inner merge
+*   01c4df0 Merge branch 'B' into with-inner-merge
+|\  
+| * 984fd1c (B) C: new file with 10 lines
+|/  
+* 8f0d338 (tag: base, main, A) base
+
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(git_status(&repo)?, snapbox::str![""]);
 
     Ok(())
 }
@@ -217,20 +256,25 @@ fn disconnect_and_remove_commit_in_merge_history_rewires_children() -> Result<()
 fn disconnect_and_remove_merge_with_two_parents_and_two_children() -> Result<()> {
     let (repo, _tmpdir, mut meta) = fixture_writable("merge-with-two-children")?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *   d1cc4c7 (HEAD -> with-two-children) tip
-    |\  
-    | * ce6aca9 (C2) C2: second child
-    * | f94f259 (C1) C1: first child
-    |/  
-    *   c5d1178 (M) M: merge two parents
-    |\  
-    | * 392a8f8 (P2) P2: second merge parent
-    * | bc0e772 (P1) P1: first merge parent
-    |/  
-    * 7674a5e (tag: base, main) base
-    ");
-    insta::assert_snapshot!(git_status(&repo)?, @"");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   d1cc4c7 (HEAD -> with-two-children) tip
+|\  
+| * ce6aca9 (C2) C2: second child
+* | f94f259 (C1) C1: first child
+|/  
+*   c5d1178 (M) M: merge two parents
+|\  
+| * 392a8f8 (P2) P2: second merge parent
+* | bc0e772 (P1) P1: first merge parent
+|/  
+* 7674a5e (tag: base, main) base
+
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(git_status(&repo)?, snapbox::str![""]);
 
     let graph = Graph::from_head(
         &repo,
@@ -262,24 +306,28 @@ fn disconnect_and_remove_merge_with_two_parents_and_two_children() -> Result<()>
 
     let outcome = editor.rebase()?;
     let overlayed = graph_tree(&outcome.overlayed_graph()?).to_string();
-    insta::assert_snapshot!(overlayed, @"
+    snapbox::assert_data_eq!(
+        &overlayed,
+        snapbox::str![[r#"
 
-    └── 👉►:0[0]:with-two-children[🌳]
-        └── ·87269f1 (⌂|1)
-            ├── ►:1[1]:C1
-            │   └── ·3e50be4 (⌂|1)
-            │       ├── ►:3[2]:anon:
-            │       │   └── ·bc0e772 (⌂|1) ►M, ►P1
-            │       │       └── ►:5[3]:main
-            │       │           └── 🏁·7674a5e (⌂|1) ►tags/base
-            │       └── ►:4[2]:P2
-            │           └── ·392a8f8 (⌂|1)
-            │               └── →:5: (main)
-            └── ►:2[1]:C2
-                └── ·c291781 (⌂|1)
-                    ├── →:3:
-                    └── →:4: (P2)
-    ");
+└── 👉►:0[0]:with-two-children[🌳]
+    └── ·87269f1 (⌂|1)
+        ├── ►:1[1]:C1
+        │   └── ·3e50be4 (⌂|1)
+        │       ├── ►:3[2]:anon:
+        │       │   └── ·bc0e772 (⌂|1) ►M, ►P1
+        │       │       └── ►:5[3]:main
+        │       │           └── 🏁·7674a5e (⌂|1) ►tags/base
+        │       └── ►:4[2]:P2
+        │           └── ·392a8f8 (⌂|1)
+        │               └── →:5: (main)
+        └── ►:2[1]:C2
+            └── ·c291781 (⌂|1)
+                ├── →:3:
+                └── →:4: (P2)
+
+"#]]
+    );
     let outcome = outcome.materialize()?;
     assert_eq!(overlayed, graph_tree(&outcome.workspace.graph).to_string());
 
@@ -313,22 +361,27 @@ fn disconnect_and_remove_merge_with_two_parents_and_two_children() -> Result<()>
         "C2 should have both merge parents after removing M"
     );
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *   87269f1 (HEAD -> with-two-children) tip
-    |\  
-    | *   c291781 (C2) C2: second child
-    | |\  
-    * | \   3e50be4 (C1) C1: first child
-    |\ \ \  
-    | |/ /  
-    |/| /   
-    | |/    
-    | * 392a8f8 (P2) P2: second merge parent
-    * | bc0e772 (P1, M) P1: first merge parent
-    |/  
-    * 7674a5e (tag: base, main) base
-    ");
-    insta::assert_snapshot!(git_status(&repo)?, @"");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   87269f1 (HEAD -> with-two-children) tip
+|\  
+| *   c291781 (C2) C2: second child
+| |\  
+* | \   3e50be4 (C1) C1: first child
+|\ \ \  
+| |/ /  
+|/| /   
+| |/    
+| * 392a8f8 (P2) P2: second merge parent
+* | bc0e772 (P1, M) P1: first merge parent
+|/  
+* 7674a5e (tag: base, main) base
+
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(git_status(&repo)?, snapbox::str![""]);
 
     Ok(())
 }
@@ -337,20 +390,25 @@ fn disconnect_and_remove_merge_with_two_parents_and_two_children() -> Result<()>
 fn disconnect_and_remove_merge_with_two_parents_and_two_children_from_one_side() -> Result<()> {
     let (repo, _tmpdir, mut meta) = fixture_writable("merge-with-two-children")?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *   d1cc4c7 (HEAD -> with-two-children) tip
-    |\  
-    | * ce6aca9 (C2) C2: second child
-    * | f94f259 (C1) C1: first child
-    |/  
-    *   c5d1178 (M) M: merge two parents
-    |\  
-    | * 392a8f8 (P2) P2: second merge parent
-    * | bc0e772 (P1) P1: first merge parent
-    |/  
-    * 7674a5e (tag: base, main) base
-    ");
-    insta::assert_snapshot!(git_status(&repo)?, @"");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   d1cc4c7 (HEAD -> with-two-children) tip
+|\  
+| * ce6aca9 (C2) C2: second child
+* | f94f259 (C1) C1: first child
+|/  
+*   c5d1178 (M) M: merge two parents
+|\  
+| * 392a8f8 (P2) P2: second merge parent
+* | bc0e772 (P1) P1: first merge parent
+|/  
+* 7674a5e (tag: base, main) base
+
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(git_status(&repo)?, snapbox::str![""]);
 
     let graph = Graph::from_head(
         &repo,
@@ -393,24 +451,28 @@ fn disconnect_and_remove_merge_with_two_parents_and_two_children_from_one_side()
 
     let outcome = editor.rebase()?;
     let overlayed = graph_tree(&outcome.overlayed_graph()?).to_string();
-    insta::assert_snapshot!(overlayed, @"
+    snapbox::assert_data_eq!(
+        &overlayed,
+        snapbox::str![[r#"
 
-    └── 👉►:0[0]:with-two-children[🌳]
-        └── ·9de031b (⌂|1)
-            ├── ►:1[1]:C1
-            │   └── ·54d0b0d (⌂|1)
-            │       └── ►:3[2]:P1
-            │           └── ·bc0e772 (⌂|1)
-            │               └── ►:5[4]:main
-            │                   └── 🏁·7674a5e (⌂|1) ►tags/base
-            └── ►:2[1]:C2
-                └── ·41cb528 (⌂|1)
-                    └── ►:4[2]:M
-                        └── ·9f6b11a (⌂|1)
-                            └── ►:6[3]:P2
-                                └── ·392a8f8 (⌂|1)
-                                    └── →:5: (main)
-    ");
+└── 👉►:0[0]:with-two-children[🌳]
+    └── ·9de031b (⌂|1)
+        ├── ►:1[1]:C1
+        │   └── ·54d0b0d (⌂|1)
+        │       └── ►:3[2]:P1
+        │           └── ·bc0e772 (⌂|1)
+        │               └── ►:5[4]:main
+        │                   └── 🏁·7674a5e (⌂|1) ►tags/base
+        └── ►:2[1]:C2
+            └── ·41cb528 (⌂|1)
+                └── ►:4[2]:M
+                    └── ·9f6b11a (⌂|1)
+                        └── ►:6[3]:P2
+                            └── ·392a8f8 (⌂|1)
+                                └── →:5: (main)
+
+"#]]
+    );
     let outcome = outcome.materialize()?;
     assert_eq!(overlayed, graph_tree(&outcome.workspace.graph).to_string());
 
@@ -445,18 +507,23 @@ fn disconnect_and_remove_merge_with_two_parents_and_two_children_from_one_side()
         "C2 should have both merge parents after removing M"
     );
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *   9de031b (HEAD -> with-two-children) tip
-    |\  
-    | * 41cb528 (C2) C2: second child
-    | * 9f6b11a (M) M: merge two parents
-    | * 392a8f8 (P2) P2: second merge parent
-    * | 54d0b0d (C1) C1: first child
-    * | bc0e772 (P1) P1: first merge parent
-    |/  
-    * 7674a5e (tag: base, main) base
-    ");
-    insta::assert_snapshot!(git_status(&repo)?, @"");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   9de031b (HEAD -> with-two-children) tip
+|\  
+| * 41cb528 (C2) C2: second child
+| * 9f6b11a (M) M: merge two parents
+| * 392a8f8 (P2) P2: second merge parent
+* | 54d0b0d (C1) C1: first child
+* | bc0e772 (P1) P1: first merge parent
+|/  
+* 7674a5e (tag: base, main) base
+
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(git_status(&repo)?, snapbox::str![""]);
 
     Ok(())
 }
@@ -464,20 +531,25 @@ fn disconnect_and_remove_merge_with_two_parents_and_two_children_from_one_side()
 fn disconnect_remove_merge_with_two_parents_and_two_children_children_only() -> Result<()> {
     let (repo, _tmpdir, mut meta) = fixture_writable("merge-with-two-children")?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *   d1cc4c7 (HEAD -> with-two-children) tip
-    |\  
-    | * ce6aca9 (C2) C2: second child
-    * | f94f259 (C1) C1: first child
-    |/  
-    *   c5d1178 (M) M: merge two parents
-    |\  
-    | * 392a8f8 (P2) P2: second merge parent
-    * | bc0e772 (P1) P1: first merge parent
-    |/  
-    * 7674a5e (tag: base, main) base
-    ");
-    insta::assert_snapshot!(git_status(&repo)?, @"");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   d1cc4c7 (HEAD -> with-two-children) tip
+|\  
+| * ce6aca9 (C2) C2: second child
+* | f94f259 (C1) C1: first child
+|/  
+*   c5d1178 (M) M: merge two parents
+|\  
+| * 392a8f8 (P2) P2: second merge parent
+* | bc0e772 (P1) P1: first merge parent
+|/  
+* 7674a5e (tag: base, main) base
+
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(git_status(&repo)?, snapbox::str![""]);
 
     let graph = Graph::from_head(
         &repo,
@@ -516,22 +588,26 @@ fn disconnect_remove_merge_with_two_parents_and_two_children_children_only() -> 
 
     let outcome = editor.rebase()?;
     let overlayed = graph_tree(&outcome.overlayed_graph()?).to_string();
-    insta::assert_snapshot!(overlayed, @"
+    snapbox::assert_data_eq!(
+        &overlayed,
+        snapbox::str![[r#"
 
-    └── 👉►:0[0]:with-two-children[🌳]
-        └── ·b87b6c9 (⌂|1)
-            ├── ►:1[1]:C1
-            │   └── ·76ecfed (⌂|1)
-            │       └── ►:3[2]:M
-            │           └── ·9f6b11a (⌂|1)
-            │               └── ►:4[3]:P2
-            │                   └── ·392a8f8 (⌂|1)
-            │                       └── ►:5[4]:main
-            │                           └── 🏁·7674a5e (⌂|1) ►tags/base
-            └── ►:2[1]:C2
-                └── ·41cb528 (⌂|1)
-                    └── →:3: (M)
-    ");
+└── 👉►:0[0]:with-two-children[🌳]
+    └── ·b87b6c9 (⌂|1)
+        ├── ►:1[1]:C1
+        │   └── ·76ecfed (⌂|1)
+        │       └── ►:3[2]:M
+        │           └── ·9f6b11a (⌂|1)
+        │               └── ►:4[3]:P2
+        │                   └── ·392a8f8 (⌂|1)
+        │                       └── ►:5[4]:main
+        │                           └── 🏁·7674a5e (⌂|1) ►tags/base
+        └── ►:2[1]:C2
+            └── ·41cb528 (⌂|1)
+                └── →:3: (M)
+
+"#]]
+    );
     let outcome = outcome.materialize()?;
     assert_eq!(overlayed, graph_tree(&outcome.workspace.graph).to_string());
 
@@ -590,19 +666,24 @@ fn disconnect_remove_merge_with_two_parents_and_two_children_children_only() -> 
         );
     }
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    * bc0e772 (P1) P1: first merge parent
-    | *   b87b6c9 (HEAD -> with-two-children) tip
-    | |\  
-    | | * 41cb528 (C2) C2: second child
-    | * | 76ecfed (C1) C1: first child
-    | |/  
-    | * 9f6b11a (M) M: merge two parents
-    | * 392a8f8 (P2) P2: second merge parent
-    |/  
-    * 7674a5e (tag: base, main) base
-    ");
-    insta::assert_snapshot!(git_status(&repo)?, @"");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* bc0e772 (P1) P1: first merge parent
+| *   b87b6c9 (HEAD -> with-two-children) tip
+| |\  
+| | * 41cb528 (C2) C2: second child
+| * | 76ecfed (C1) C1: first child
+| |/  
+| * 9f6b11a (M) M: merge two parents
+| * 392a8f8 (P2) P2: second merge parent
+|/  
+* 7674a5e (tag: base, main) base
+
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(git_status(&repo)?, snapbox::str![""]);
 
     Ok(())
 }
@@ -657,25 +738,29 @@ fn disconnect_fails_when_parents_to_disconnect_is_none() -> Result<()> {
 
     let outcome = editor.rebase()?;
     let overlayed = graph_tree(&outcome.overlayed_graph()?).to_string();
-    insta::assert_snapshot!(overlayed, @"
+    snapbox::assert_data_eq!(
+        &overlayed,
+        snapbox::str![[r#"
 
-    └── 👉►:0[0]:with-two-children[🌳]
-        └── ·d1cc4c7 (⌂|1)
-            ├── ►:1[1]:C1
-            │   └── ·f94f259 (⌂|1)
-            │       └── ►:3[2]:M
-            │           └── ·c5d1178 (⌂|1)
-            │               ├── ►:4[3]:P1
-            │               │   └── ·bc0e772 (⌂|1)
-            │               │       └── ►:6[4]:main
-            │               │           └── 🏁·7674a5e (⌂|1) ►tags/base
-            │               └── ►:5[3]:P2
-            │                   └── ·392a8f8 (⌂|1)
-            │                       └── →:6: (main)
-            └── ►:2[1]:C2
-                └── ·ce6aca9 (⌂|1)
-                    └── →:3: (M)
-    ");
+└── 👉►:0[0]:with-two-children[🌳]
+    └── ·d1cc4c7 (⌂|1)
+        ├── ►:1[1]:C1
+        │   └── ·f94f259 (⌂|1)
+        │       └── ►:3[2]:M
+        │           └── ·c5d1178 (⌂|1)
+        │               ├── ►:4[3]:P1
+        │               │   └── ·bc0e772 (⌂|1)
+        │               │       └── ►:6[4]:main
+        │               │           └── 🏁·7674a5e (⌂|1) ►tags/base
+        │               └── ►:5[3]:P2
+        │                   └── ·392a8f8 (⌂|1)
+        │                       └── →:6: (main)
+        └── ►:2[1]:C2
+            └── ·ce6aca9 (⌂|1)
+                └── →:3: (M)
+
+"#]]
+    );
     let outcome = outcome.materialize()?;
     assert_eq!(overlayed, graph_tree(&outcome.workspace.graph).to_string());
 
@@ -735,25 +820,29 @@ fn disconnect_fails_fast_if_parent_to_disconnect_is_not_direct_parent() -> Resul
 
     let outcome = editor.rebase()?;
     let overlayed = graph_tree(&outcome.overlayed_graph()?).to_string();
-    insta::assert_snapshot!(overlayed, @"
+    snapbox::assert_data_eq!(
+        &overlayed,
+        snapbox::str![[r#"
 
-    └── 👉►:0[0]:with-two-children[🌳]
-        └── ·d1cc4c7 (⌂|1)
-            ├── ►:1[1]:C1
-            │   └── ·f94f259 (⌂|1)
-            │       └── ►:3[2]:M
-            │           └── ·c5d1178 (⌂|1)
-            │               ├── ►:4[3]:P1
-            │               │   └── ·bc0e772 (⌂|1)
-            │               │       └── ►:6[4]:main
-            │               │           └── 🏁·7674a5e (⌂|1) ►tags/base
-            │               └── ►:5[3]:P2
-            │                   └── ·392a8f8 (⌂|1)
-            │                       └── →:6: (main)
-            └── ►:2[1]:C2
-                └── ·ce6aca9 (⌂|1)
-                    └── →:3: (M)
-    ");
+└── 👉►:0[0]:with-two-children[🌳]
+    └── ·d1cc4c7 (⌂|1)
+        ├── ►:1[1]:C1
+        │   └── ·f94f259 (⌂|1)
+        │       └── ►:3[2]:M
+        │           └── ·c5d1178 (⌂|1)
+        │               ├── ►:4[3]:P1
+        │               │   └── ·bc0e772 (⌂|1)
+        │               │       └── ►:6[4]:main
+        │               │           └── 🏁·7674a5e (⌂|1) ►tags/base
+        │               └── ►:5[3]:P2
+        │                   └── ·392a8f8 (⌂|1)
+        │                       └── →:6: (main)
+        └── ►:2[1]:C2
+            └── ·ce6aca9 (⌂|1)
+                └── →:3: (M)
+
+"#]]
+    );
     let outcome = outcome.materialize()?;
     assert_eq!(overlayed, graph_tree(&outcome.workspace.graph).to_string());
 
@@ -813,25 +902,29 @@ fn disconnect_fails_fast_if_child_to_disconnect_is_not_direct_child() -> Result<
 
     let outcome = editor.rebase()?;
     let overlayed = graph_tree(&outcome.overlayed_graph()?).to_string();
-    insta::assert_snapshot!(overlayed, @"
+    snapbox::assert_data_eq!(
+        &overlayed,
+        snapbox::str![[r#"
 
-    └── 👉►:0[0]:with-two-children[🌳]
-        └── ·d1cc4c7 (⌂|1)
-            ├── ►:1[1]:C1
-            │   └── ·f94f259 (⌂|1)
-            │       └── ►:3[2]:M
-            │           └── ·c5d1178 (⌂|1)
-            │               ├── ►:4[3]:P1
-            │               │   └── ·bc0e772 (⌂|1)
-            │               │       └── ►:6[4]:main
-            │               │           └── 🏁·7674a5e (⌂|1) ►tags/base
-            │               └── ►:5[3]:P2
-            │                   └── ·392a8f8 (⌂|1)
-            │                       └── →:6: (main)
-            └── ►:2[1]:C2
-                └── ·ce6aca9 (⌂|1)
-                    └── →:3: (M)
-    ");
+└── 👉►:0[0]:with-two-children[🌳]
+    └── ·d1cc4c7 (⌂|1)
+        ├── ►:1[1]:C1
+        │   └── ·f94f259 (⌂|1)
+        │       └── ►:3[2]:M
+        │           └── ·c5d1178 (⌂|1)
+        │               ├── ►:4[3]:P1
+        │               │   └── ·bc0e772 (⌂|1)
+        │               │       └── ►:6[4]:main
+        │               │           └── 🏁·7674a5e (⌂|1) ►tags/base
+        │               └── ►:5[3]:P2
+        │                   └── ·392a8f8 (⌂|1)
+        │                       └── →:6: (main)
+        └── ►:2[1]:C2
+            └── ·ce6aca9 (⌂|1)
+                └── →:3: (M)
+
+"#]]
+    );
     let outcome = outcome.materialize()?;
     assert_eq!(overlayed, graph_tree(&outcome.workspace.graph).to_string());
 

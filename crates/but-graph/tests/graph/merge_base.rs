@@ -3,6 +3,7 @@ use but_graph::{
     CommitFlags, FirstParent, Graph, Segment, SegmentIndex, SegmentRelation, init::Tip,
 };
 use but_testsupport::{graph_tree, visualize_commit_graph_all};
+use snapbox::IntoData;
 
 use crate::init::{read_only_in_memory_scenario, standard_options};
 
@@ -33,28 +34,32 @@ fn find_git_merge_base_handles_duplicate_queue_entries_and_redundant_bases() -> 
     assert_eq!(graph.find_merge_base(a, c), Some(main));
     assert_eq!(graph.find_merge_base_octopus([a, c, merged]), Some(main));
 
-    insta::assert_snapshot!(graph_tree(&graph), @"
+    snapbox::assert_data_eq!(
+        graph_tree(&graph).to_string(),
+        snapbox::str![[r#"
 
-    └── 👉►:0[0]:merged[🌳]
-        └── ·8a6c109 (⌂|1)
-            ├── ►:1[1]:A
-            │   └── ·62b409a (⌂|1)
-            │       ├── ►:3[2]:anon:
-            │       │   └── ·592abec (⌂|1)
-            │       │       └── ►:7[3]:main
-            │       │           └── 🏁·965998b (⌂|1)
-            │       └── ►:4[2]:B
-            │           └── ·f16dddf (⌂|1)
-            │               └── →:7: (main)
-            └── ►:2[1]:C
-                └── ·7ed512a (⌂|1)
-                    ├── ►:5[2]:anon:
-                    │   └── ·35ee481 (⌂|1)
-                    │       └── →:7: (main)
-                    └── ►:6[2]:D
-                        └── ·ecb1877 (⌂|1)
-                            └── →:7: (main)
-    ");
+└── 👉►:0[0]:merged[🌳]
+    └── ·8a6c109 (⌂|1)
+        ├── ►:1[1]:A
+        │   └── ·62b409a (⌂|1)
+        │       ├── ►:3[2]:anon:
+        │       │   └── ·592abec (⌂|1)
+        │       │       └── ►:7[3]:main
+        │       │           └── 🏁·965998b (⌂|1)
+        │       └── ►:4[2]:B
+        │           └── ·f16dddf (⌂|1)
+        │               └── →:7: (main)
+        └── ►:2[1]:C
+            └── ·7ed512a (⌂|1)
+                ├── ►:5[2]:anon:
+                │   └── ·35ee481 (⌂|1)
+                │       └── →:7: (main)
+                └── ►:6[2]:D
+                    └── ·ecb1877 (⌂|1)
+                        └── →:7: (main)
+
+"#]]
+    );
 
     Ok(())
 }
@@ -80,28 +85,32 @@ fn relation_between_matches_merge_base_in_redundant_ancestor_case() -> anyhow::R
         SegmentRelation::Descendant
     );
     assert_eq!(graph.relation_between(a, c), SegmentRelation::Diverged);
-    insta::assert_snapshot!(graph_tree(&graph), @"
+    snapbox::assert_data_eq!(
+        graph_tree(&graph).to_string(),
+        snapbox::str![[r#"
 
-    └── 👉►:0[0]:merged[🌳]
-        └── ·8a6c109 (⌂|1)
-            ├── ►:1[1]:A
-            │   └── ·62b409a (⌂|1)
-            │       ├── ►:3[2]:anon:
-            │       │   └── ·592abec (⌂|1)
-            │       │       └── ►:7[3]:main
-            │       │           └── 🏁·965998b (⌂|1)
-            │       └── ►:4[2]:B
-            │           └── ·f16dddf (⌂|1)
-            │               └── →:7: (main)
-            └── ►:2[1]:C
-                └── ·7ed512a (⌂|1)
-                    ├── ►:5[2]:anon:
-                    │   └── ·35ee481 (⌂|1)
-                    │       └── →:7: (main)
-                    └── ►:6[2]:D
-                        └── ·ecb1877 (⌂|1)
-                            └── →:7: (main)
-    ");
+└── 👉►:0[0]:merged[🌳]
+    └── ·8a6c109 (⌂|1)
+        ├── ►:1[1]:A
+        │   └── ·62b409a (⌂|1)
+        │       ├── ►:3[2]:anon:
+        │       │   └── ·592abec (⌂|1)
+        │       │       └── ►:7[3]:main
+        │       │           └── 🏁·965998b (⌂|1)
+        │       └── ►:4[2]:B
+        │           └── ·f16dddf (⌂|1)
+        │               └── →:7: (main)
+        └── ►:2[1]:C
+            └── ·7ed512a (⌂|1)
+                ├── ►:5[2]:anon:
+                │   └── ·35ee481 (⌂|1)
+                │       └── →:7: (main)
+                └── ►:6[2]:D
+                    └── ·ecb1877 (⌂|1)
+                        └── →:7: (main)
+
+"#]]
+    );
 
     Ok(())
 }
@@ -109,22 +118,27 @@ fn relation_between_matches_merge_base_in_redundant_ancestor_case() -> anyhow::R
 #[test]
 fn reachable_difference_returns_commits_in_traversal_order() -> anyhow::Result<()> {
     let (repo, meta) = read_only_in_memory_scenario("four-diamond")?;
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *   8a6c109 (HEAD -> merged) Merge branch 'C' into merged
-    |\  
-    | *   7ed512a (C) Merge branch 'D' into C
-    | |\  
-    | | * ecb1877 (D) D
-    | * | 35ee481 C
-    | |/  
-    * |   62b409a (A) Merge branch 'B' into A
-    |\ \  
-    | * | f16dddf (B) B
-    | |/  
-    * / 592abec A
-    |/  
-    * 965998b (main) base
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   8a6c109 (HEAD -> merged) Merge branch 'C' into merged
+|\  
+| *   7ed512a (C) Merge branch 'D' into C
+| |\  
+| | * ecb1877 (D) D
+| * | 35ee481 C
+| |/  
+* |   62b409a (A) Merge branch 'B' into A
+|\ \  
+| * | f16dddf (B) B
+| |/  
+* / 592abec A
+|/  
+* 965998b (main) base
+
+"#]]
+        .raw()
+    );
 
     let graph = Graph::from_head(
         &repo,
@@ -191,28 +205,32 @@ fn explicit_traversal_tips_include_unnamed_revisions() -> anyhow::Result<()> {
     )?
     .validated()?;
 
-    insta::assert_snapshot!(graph_tree(&graph), @"
+    snapbox::assert_data_eq!(
+        graph_tree(&graph).to_string(),
+        snapbox::str![[r#"
 
-    └── 👉►:2[0]:merged[🌳]
-        └── ·8a6c109 (⌂|1)
-            ├── ►:0[1]:A
-            │   └── ·62b409a (⌂|1)
-            │       ├── ►:3[2]:anon:
-            │       │   └── ·592abec (⌂|1)
-            │       │       └── ►:7[3]:main
-            │       │           └── 🏁·965998b (⌂|1)
-            │       └── ►:4[2]:B
-            │           └── ·f16dddf (⌂|1)
-            │               └── →:7: (main)
-            └── ►:1[1]:C
-                └── ·7ed512a (⌂|1)
-                    ├── ►:5[2]:anon:
-                    │   └── ·35ee481 (⌂|1)
-                    │       └── →:7: (main)
-                    └── ►:6[2]:D
-                        └── ·ecb1877 (⌂|1)
-                            └── →:7: (main)
-    ");
+└── 👉►:2[0]:merged[🌳]
+    └── ·8a6c109 (⌂|1)
+        ├── ►:0[1]:A
+        │   └── ·62b409a (⌂|1)
+        │       ├── ►:3[2]:anon:
+        │       │   └── ·592abec (⌂|1)
+        │       │       └── ►:7[3]:main
+        │       │           └── 🏁·965998b (⌂|1)
+        │       └── ►:4[2]:B
+        │           └── ·f16dddf (⌂|1)
+        │               └── →:7: (main)
+        └── ►:1[1]:C
+            └── ·7ed512a (⌂|1)
+                ├── ►:5[2]:anon:
+                │   └── ·35ee481 (⌂|1)
+                │       └── →:7: (main)
+                └── ►:6[2]:D
+                    └── ·ecb1877 (⌂|1)
+                        └── →:7: (main)
+
+"#]]
+    );
 
     assert_eq!(
         graph.find_commit_ids_reachable_from_a_not_b(merged_id, a_id, FirstParent::No)?,
@@ -247,28 +265,32 @@ fn explicit_traversal_prioritizes_integrated_tips_independent_of_input_order() -
     )?
     .validated()?;
 
-    insta::assert_snapshot!(graph_tree(&graph), @"
+    snapbox::assert_data_eq!(
+        graph_tree(&graph).to_string(),
+        snapbox::str![[r#"
 
-    └── 👉►:2[0]:merged[🌳]
-        └── ·8a6c109 (⌂|1)
-            ├── ►:1[1]:A
-            │   └── ·62b409a (⌂|1)
-            │       ├── ►:3[2]:anon:
-            │       │   └── ·592abec (⌂|1)
-            │       │       └── ►:0[3]:main
-            │       │           └── 🏁·965998b (⌂|✓|1)
-            │       └── ►:4[2]:B
-            │           └── ·f16dddf (⌂|1)
-            │               └── →:0: (main)
-            └── ►:5[1]:C
-                └── ·7ed512a (⌂|1)
-                    ├── ►:6[2]:anon:
-                    │   └── ·35ee481 (⌂|1)
-                    │       └── →:0: (main)
-                    └── ►:7[2]:D
-                        └── ·ecb1877 (⌂|1)
-                            └── →:0: (main)
-    ");
+└── 👉►:2[0]:merged[🌳]
+    └── ·8a6c109 (⌂|1)
+        ├── ►:1[1]:A
+        │   └── ·62b409a (⌂|1)
+        │       ├── ►:3[2]:anon:
+        │       │   └── ·592abec (⌂|1)
+        │       │       └── ►:0[3]:main
+        │       │           └── 🏁·965998b (⌂|✓|1)
+        │       └── ►:4[2]:B
+        │           └── ·f16dddf (⌂|1)
+        │               └── →:0: (main)
+        └── ►:5[1]:C
+            └── ·7ed512a (⌂|1)
+                ├── ►:6[2]:anon:
+                │   └── ·35ee481 (⌂|1)
+                │       └── →:0: (main)
+                └── ►:7[2]:D
+                    └── ·ecb1877 (⌂|1)
+                        └── →:0: (main)
+
+"#]]
+    );
 
     let (main_seg, main) = graph
         .segment_and_commit_by_ref_name(ref_name("refs/heads/main")?.as_ref())

@@ -84,6 +84,7 @@ mod headers {
     mod try_from_commit {
         use but_core::commit::Headers;
         use gix::actor::Signature;
+        use snapbox::prelude::*;
 
         #[test]
         fn without_any_header_information() {
@@ -97,40 +98,58 @@ mod headers {
                 "gitbutler-change-id",
                 "96420be4-a3ed-4bea-b534-ff2160cbb848",
             )]);
-            insta::assert_debug_snapshot!(Headers::try_from_commit(&commit).expect("old change ids parse for compatibility"), @r#"
-            Headers {
-                change_id: Some(
-                    "96420be4-a3ed-4bea-b534-ff2160cbb848",
-                ),
-                conflicted: None,
-            }
-            "#);
+            snapbox::assert_data_eq!(
+                Headers::try_from_commit(&commit)
+                    .expect("old change ids parse for compatibility")
+                    .to_debug(),
+                snapbox::str![[r#"
+Headers {
+    change_id: Some(
+        "96420be4-a3ed-4bea-b534-ff2160cbb848",
+    ),
+    conflicted: None,
+}
+
+"#]]
+            );
         }
 
         #[test]
         fn with_reverse_hex_change_id() {
             let commit = commit_with_header([("change-id", "zxzxzxzxzxzxzxzxzxzxzxzxzxzxzxzx")]);
-            insta::assert_debug_snapshot!(Headers::try_from_commit(&commit).expect("reverse hex is parsed as well"), @r#"
-            Headers {
-                change_id: Some(
-                    "zxzxzxzxzxzxzxzxzxzxzxzxzxzxzxzx",
-                ),
-                conflicted: None,
-            }
-            "#);
+            snapbox::assert_data_eq!(
+                Headers::try_from_commit(&commit)
+                    .expect("reverse hex is parsed as well")
+                    .to_debug(),
+                snapbox::str![[r#"
+Headers {
+    change_id: Some(
+        "zxzxzxzxzxzxzxzxzxzxzxzxzxzxzxzx",
+    ),
+    conflicted: None,
+}
+
+"#]]
+            );
         }
 
         #[test]
         fn with_conflict_header() {
             let commit = commit_with_header([("gitbutler-conflicted", "128")]);
-            insta::assert_debug_snapshot!(Headers::try_from_commit(&commit).expect("a single conflict header is enough to parse as header"), @"
-            Headers {
-                change_id: None,
-                conflicted: Some(
-                    128,
-                ),
-            }
-            ");
+            snapbox::assert_data_eq!(
+                Headers::try_from_commit(&commit)
+                    .expect("a single conflict header is enough to parse as header")
+                    .to_debug(),
+                snapbox::str![[r#"
+Headers {
+    change_id: None,
+    conflicted: Some(
+        128,
+    ),
+}
+
+"#]]
+            );
         }
 
         #[test]
@@ -139,30 +158,42 @@ mod headers {
                 ("change-id", "zxzxzxzxzxzxzxzxzxzxzxzxzxzxzxzx"),
                 ("gitbutler-conflicted", "128"),
             ]);
-            insta::assert_debug_snapshot!(Headers::try_from_commit(&commit).expect("both fields are parsed"), @r#"
-            Headers {
-                change_id: Some(
-                    "zxzxzxzxzxzxzxzxzxzxzxzxzxzxzxzx",
-                ),
-                conflicted: Some(
-                    128,
-                ),
-            }
-            "#);
+            snapbox::assert_data_eq!(
+                Headers::try_from_commit(&commit)
+                    .expect("both fields are parsed")
+                    .to_debug(),
+                snapbox::str![[r#"
+Headers {
+    change_id: Some(
+        "zxzxzxzxzxzxzxzxzxzxzxzxzxzxzxzx",
+    ),
+    conflicted: Some(
+        128,
+    ),
+}
+
+"#]]
+            );
         }
 
         #[test]
         fn with_arbitrary_change_id_in_new_change_id_field() {
             let commit =
                 commit_with_header([("change-id", "something-special-that-we-dont-produce")]);
-            insta::assert_debug_snapshot!(Headers::try_from_commit(&commit).expect("the arbitrary change id is kept in the new field"), @r#"
-            Headers {
-                change_id: Some(
-                    "something-special-that-we-dont-produce",
-                ),
-                conflicted: None,
-            }
-            "#);
+            snapbox::assert_data_eq!(
+                Headers::try_from_commit(&commit)
+                    .expect("the arbitrary change id is kept in the new field")
+                    .to_debug(),
+                snapbox::str![[r#"
+Headers {
+    change_id: Some(
+        "something-special-that-we-dont-produce",
+    ),
+    conflicted: None,
+}
+
+"#]]
+            );
         }
 
         #[test]
@@ -171,14 +202,20 @@ mod headers {
                 "gitbutler-change-id",
                 "something-special-that-we-dont-produce",
             )]);
-            insta::assert_debug_snapshot!(Headers::try_from_commit(&commit).expect("the arbitrary change id is kept in the old field"), @r#"
-            Headers {
-                change_id: Some(
-                    "something-special-that-we-dont-produce",
-                ),
-                conflicted: None,
-            }
-            "#);
+            snapbox::assert_data_eq!(
+                Headers::try_from_commit(&commit)
+                    .expect("the arbitrary change id is kept in the old field")
+                    .to_debug(),
+                snapbox::str![[r#"
+Headers {
+    change_id: Some(
+        "something-special-that-we-dont-produce",
+    ),
+    conflicted: None,
+}
+
+"#]]
+            );
         }
 
         #[test]
@@ -190,14 +227,20 @@ mod headers {
                     "this one isn't used and it's fine that it's invalid",
                 ),
             ]);
-            insta::assert_debug_snapshot!(Headers::try_from_commit(&commit).expect("the new change-id field takes precedence"), @r#"
-            Headers {
-                change_id: Some(
-                    "the new change-id takes precedence",
-                ),
-                conflicted: None,
-            }
-            "#);
+            snapbox::assert_data_eq!(
+                Headers::try_from_commit(&commit)
+                    .expect("the new change-id field takes precedence")
+                    .to_debug(),
+                snapbox::str![[r#"
+Headers {
+    change_id: Some(
+        "the new change-id takes precedence",
+    ),
+    conflicted: None,
+}
+
+"#]]
+            );
         }
 
         fn commit_with_header(

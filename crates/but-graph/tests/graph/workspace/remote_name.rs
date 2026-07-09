@@ -50,10 +50,14 @@ fn returns_none_when_no_target_and_no_push_remote() -> anyhow::Result<()> {
 fn target_local_tracking_ref_exists_when_other_branch_metadata_names_the_same_tip()
 -> anyhow::Result<()> {
     let (repo, mut meta) = read_only_in_memory_scenario("ws/no-ws-ref-no-ws-commit-two-branches")?;
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * bce0c5e (HEAD -> gitbutler/workspace, origin/main, main, B, A) M2
-    * 3183e43 M1
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* bce0c5e (HEAD -> gitbutler/workspace, origin/main, main, B, A) M2
+* 3183e43 M1
+
+"#]]
+    );
 
     add_workspace(&mut meta);
     // This is the state left by unapplying the last workspace stack: the branch
@@ -67,15 +71,20 @@ fn target_local_tracking_ref_exists_when_other_branch_metadata_names_the_same_ti
     let ws = Graph::from_head(&repo, &*meta, project_meta(&*meta), standard_options())?
         .validated()?
         .into_workspace()?;
-    insta::assert_snapshot!(graph_tree(&ws.graph), "the target remote and its local tracking branch get sibling links even when another branch owns the shared commit", @"
+    // the target remote and its local tracking branch get sibling links even when another branch owns the shared commit
+    snapbox::assert_data_eq!(
+        graph_tree(&ws.graph).to_string(),
+        snapbox::str![[r#"
 
-    ├── 👉📕►►►:0[0]:gitbutler/workspace[🌳]
-    │   └── 📙►:2[2]:A
-    │       └── ✂·bce0c5e (⌂|🏘|✓|1) ►B
-    └── ►:1[0]:origin/main →:3:
-        └── ►:3[1]:main <> origin/main →:1:
-            └── →:2: (A)
-    ");
+├── 👉📕►►►:0[0]:gitbutler/workspace[🌳]
+│   └── 📙►:2[2]:A
+│       └── ✂·bce0c5e (⌂|🏘|✓|1) ►B
+└── ►:1[0]:origin/main →:3:
+    └── ►:3[1]:main <> origin/main →:1:
+        └── →:2: (A)
+
+"#]]
+    );
 
     assert_eq!(
         ws.target_ref_name().map(|rn| rn.as_bstr()),

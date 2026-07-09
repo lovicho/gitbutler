@@ -9,11 +9,15 @@ use crate::ref_info::with_workspace_commit::utils::named_writable_scenario_with_
 fn reword_head_commit() -> Result<()> {
     let (_tmp, graph, repo, mut _meta, _description) =
         writable_scenario("reword-three-commits", |_| {})?;
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * c9f444c (HEAD -> three) commit three
-    * 16fd221 (origin/two, two) commit two
-    * 8b426d0 (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* c9f444c (HEAD -> three) commit three
+* 16fd221 (origin/two, two) commit two
+* 8b426d0 (one) commit one
+
+"#]]
+    );
 
     let head_tree = repo.head_tree_id()?;
     let id = repo.rev_parse_single("three")?;
@@ -23,11 +27,15 @@ fn reword_head_commit() -> Result<()> {
         .0
         .materialize()?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * f0a8655 (HEAD -> three) New name
-    * 16fd221 (origin/two, two) commit two
-    * 8b426d0 (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* f0a8655 (HEAD -> three) New name
+* 16fd221 (origin/two, two) commit two
+* 8b426d0 (one) commit one
+
+"#]]
+    );
 
     assert_eq!(head_tree, repo.head_tree_id()?);
 
@@ -38,11 +46,15 @@ fn reword_head_commit() -> Result<()> {
 fn reword_middle_commit() -> Result<()> {
     let (_tmp, graph, repo, mut _meta, _description) =
         writable_scenario("reword-three-commits", |_| {})?;
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * c9f444c (HEAD -> three) commit three
-    * 16fd221 (origin/two, two) commit two
-    * 8b426d0 (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* c9f444c (HEAD -> three) commit three
+* 16fd221 (origin/two, two) commit two
+* 8b426d0 (one) commit one
+
+"#]]
+    );
 
     let head_tree = repo.head_tree_id()?;
     let id = repo.rev_parse_single("two")?;
@@ -52,13 +64,17 @@ fn reword_middle_commit() -> Result<()> {
         .0
         .materialize()?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * d8b7d8a (HEAD -> three) commit three
-    * ada51de (two) New name
-    | * 16fd221 (origin/two) commit two
-    |/  
-    * 8b426d0 (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* d8b7d8a (HEAD -> three) commit three
+* ada51de (two) New name
+| * 16fd221 (origin/two) commit two
+|/  
+* 8b426d0 (one) commit one
+
+"#]]
+    );
 
     assert_eq!(head_tree, repo.head_tree_id()?);
 
@@ -69,11 +85,15 @@ fn reword_middle_commit() -> Result<()> {
 fn reword_base_commit() -> Result<()> {
     let (_tmp, graph, repo, mut _meta, _description) =
         writable_scenario("reword-three-commits", |_| {})?;
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * c9f444c (HEAD -> three) commit three
-    * 16fd221 (origin/two, two) commit two
-    * 8b426d0 (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* c9f444c (HEAD -> three) commit three
+* 16fd221 (origin/two, two) commit two
+* 8b426d0 (one) commit one
+
+"#]]
+    );
 
     let head_tree = repo.head_tree_id()?;
     let id = repo.rev_parse_single("one")?;
@@ -85,13 +105,17 @@ fn reword_base_commit() -> Result<()> {
 
     // We end up with two divergent histories here. This is to be expected if we
     // rewrite the very bottom commit in a repository.
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * 9a3264d (HEAD -> three) commit three
-    * 86c4bef (two) commit two
-    * 1121ebc (one) New name
-    * 16fd221 (origin/two) commit two
-    * 8b426d0 commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 9a3264d (HEAD -> three) commit three
+* 86c4bef (two) commit two
+* 1121ebc (one) New name
+* 16fd221 (origin/two) commit two
+* 8b426d0 commit one
+
+"#]]
+    );
 
     assert_eq!(head_tree, repo.head_tree_id()?);
 

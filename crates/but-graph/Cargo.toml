@@ -33,7 +33,7 @@ but-meta = { workspace = true, features = ["legacy"] }
 but-testsupport.workspace = true
 
 gitbutler-reference.workspace = true
-insta = "1.47.2"
+snapbox.workspace = true
 
 [lints]
 workspace = true

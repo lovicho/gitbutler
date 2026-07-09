@@ -4,6 +4,7 @@ use but_core::ref_metadata::StackId;
 use but_graph::workspace::Stack;
 use but_hunk_assignment::HunkAssignment;
 use but_testsupport::{hex_to_id, hunk_header};
+use snapbox::prelude::*;
 
 use crate::{CliId, IdMap, id::id_usage::UintId};
 
@@ -48,10 +49,15 @@ fn commit_id_works_with_two_or_more_characters() -> anyhow::Result<()> {
     let id1 = id(1);
     let stacks = vec![stack([segment("not-important", [id1], None, [])])];
     let id_map = IdMap::new(stacks, Vec::new())?;
-    insta::assert_debug_snapshot!(id_map.debug_state(), @"
-    workspace_and_remote_commits_count: 1
-    branches: [ no ]
-    ");
+    snapbox::assert_data_eq!(
+        id_map.debug_state().to_debug(),
+        snapbox::str![[r#"
+workspace_and_remote_commits_count: 1
+branches: [ no ]
+
+
+"#]]
+    );
     let changed_paths_fn = |commit_id: gix::ObjectId,
                             parent_id: Option<gix::ObjectId>|
      -> anyhow::Result<Vec<but_core::TreeChange>> {
@@ -90,15 +96,18 @@ fn commit_id_appearing_multiple_times() -> anyhow::Result<()> {
     };
 
     // The commit should only appear once with a short ID.
-    insta::assert_debug_snapshot!(
-        id_map.parse("01", Box::new(changed_paths_fn))?, @r#"
-    [
-        Commit {
-            commit_id: Sha1(0101010101010101010101010101010101010101),
-            id: "01",
-        },
-    ]
-    "#);
+    snapbox::assert_data_eq!(
+        id_map.parse("01", Box::new(changed_paths_fn))?.to_debug(),
+        snapbox::str![[r#"
+[
+    Commit {
+        commit_id: Sha1(0101010101010101010101010101010101010101),
+        id: "01",
+    },
+]
+
+"#]]
+    );
     Ok(())
 }
 
@@ -109,44 +118,57 @@ fn commit_ids_become_longer_if_ambiguous() -> anyhow::Result<()> {
     let id3 = hex_to_id("21bccccccccccccccccccccccccccccccccccccc");
     let stacks = vec![stack([segment("not-important", [id1, id2, id3], None, [])])];
     let id_map = IdMap::new(stacks, Vec::new())?;
-    insta::assert_debug_snapshot!(id_map.debug_state(), @"
-    workspace_and_remote_commits_count: 3
-    branches: [ no ]
-    ");
-    insta::assert_debug_snapshot!(id_map.all_ids(), @r#"
-    [
-        Commit {
-            commit_id: Sha1(21aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa),
-            id: "21a",
-        },
-        Commit {
-            commit_id: Sha1(21bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb),
-            id: "21bb",
-        },
-        Commit {
-            commit_id: Sha1(21bccccccccccccccccccccccccccccccccccccc),
-            id: "21bc",
-        },
-        Branch {
-            name: "not-important",
-            id: "no",
-            stack_id: None,
-        },
-    ]
-    "#);
+    snapbox::assert_data_eq!(
+        id_map.debug_state().to_debug(),
+        snapbox::str![[r#"
+workspace_and_remote_commits_count: 3
+branches: [ no ]
+
+
+"#]]
+    );
+    snapbox::assert_data_eq!(
+        id_map.all_ids().to_debug(),
+        snapbox::str![[r#"
+[
+    Commit {
+        commit_id: Sha1(21aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa),
+        id: "21a",
+    },
+    Commit {
+        commit_id: Sha1(21bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb),
+        id: "21bb",
+    },
+    Commit {
+        commit_id: Sha1(21bccccccccccccccccccccccccccccccccccccc),
+        id: "21bc",
+    },
+    Branch {
+        name: "not-important",
+        id: "no",
+        stack_id: None,
+    },
+]
+
+"#]]
+    );
     let ids_as_shown_by_consumers = id_map
         .all_ids()
         .iter()
         .map(|id| id.to_short_string())
         .collect::<Vec<_>>();
-    insta::assert_debug_snapshot!(ids_as_shown_by_consumers, @r#"
-    [
-        "21a",
-        "21bb",
-        "21bc",
-        "no",
-    ]
-    "#);
+    snapbox::assert_data_eq!(
+        ids_as_shown_by_consumers.to_debug(),
+        snapbox::str![[r#"
+[
+    "21a",
+    "21bb",
+    "21bc",
+    "no",
+]
+
+"#]]
+    );
     Ok(())
 }
 
@@ -159,10 +181,15 @@ fn branches_work_with_single_character() -> anyhow::Result<()> {
      -> anyhow::Result<Vec<but_core::TreeChange>> {
         bail!("unexpected IDs {commit_id} {parent_id:?}");
     };
-    insta::assert_debug_snapshot!(id_map.debug_state(), @"
-    workspace_and_remote_commits_count: 1
-    branches: [ g0 ]
-    ");
+    snapbox::assert_data_eq!(
+        id_map.debug_state().to_debug(),
+        snapbox::str![[r#"
+workspace_and_remote_commits_count: 1
+branches: [ g0 ]
+
+
+"#]]
+    );
 
     let expected = [CliId::Branch {
         name: "f".into(),
@@ -191,10 +218,15 @@ fn branches_avoid_uncommitted_area_id() -> anyhow::Result<()> {
      -> anyhow::Result<Vec<but_core::TreeChange>> {
         bail!("unexpected IDs {commit_id} {parent_id:?}");
     };
-    insta::assert_debug_snapshot!(id_map.debug_state(), @"
-    workspace_and_remote_commits_count: 1
-    branches: [ za ]
-    ");
+    snapbox::assert_data_eq!(
+        id_map.debug_state().to_debug(),
+        snapbox::str![[r#"
+workspace_and_remote_commits_count: 1
+branches: [ za ]
+
+
+"#]]
+    );
 
     let expected = [CliId::Branch {
         name: "zza".into(),
@@ -216,10 +248,15 @@ fn branches_avoid_invalid_ids() -> anyhow::Result<()> {
         segment("0ax", [id(2)], None, []),
     ])];
     let id_map = IdMap::new(stacks, Vec::new())?;
-    insta::assert_debug_snapshot!(id_map.debug_state(), @"
-    workspace_and_remote_commits_count: 2
-    branches: [ ax, yz ]
-    ");
+    snapbox::assert_data_eq!(
+        id_map.debug_state().to_debug(),
+        snapbox::str![[r#"
+workspace_and_remote_commits_count: 2
+branches: [ ax, yz ]
+
+
+"#]]
+    );
     let changed_paths_fn = |commit_id: gix::ObjectId,
                             parent_id: Option<gix::ObjectId>|
      -> anyhow::Result<Vec<but_core::TreeChange>> {
@@ -259,12 +296,17 @@ fn branches_avoid_uncommitted_filenames() -> anyhow::Result<()> {
      -> anyhow::Result<Vec<but_core::TreeChange>> {
         bail!("unexpected IDs {commit_id} {parent_id:?}");
     };
-    insta::assert_debug_snapshot!(id_map.debug_state(), @"
-    workspace_and_remote_commits_count: 1
-    branches: [ ij ]
-    uncommitted_files: [ nx, yz ]
-    uncommitted_hunks: [ nx:q, yz:q ]
-    ");
+    snapbox::assert_data_eq!(
+        id_map.debug_state().to_debug(),
+        snapbox::str![[r#"
+workspace_and_remote_commits_count: 1
+branches: [ ij ]
+uncommitted_files: [ nx, yz ]
+uncommitted_hunks: [ nx:q, yz:q ]
+
+
+"#]]
+    );
 
     let expected = [CliId::Branch {
         name: "ghij".into(),
@@ -291,10 +333,15 @@ fn branch_cannot_generate_id() -> anyhow::Result<()> {
      -> anyhow::Result<Vec<but_core::TreeChange>> {
         bail!("unexpected IDs {commit_id} {parent_id:?}");
     };
-    insta::assert_debug_snapshot!(id_map.debug_state(), @"
-    workspace_and_remote_commits_count: 2
-    branches: [ g0, up ]
-    ");
+    snapbox::assert_data_eq!(
+        id_map.debug_state().to_debug(),
+        snapbox::str![[r#"
+workspace_and_remote_commits_count: 2
+branches: [ g0, up ]
+
+
+"#]]
+    );
 
     let expected = [CliId::Branch {
         name: "substring".into(),
@@ -337,133 +384,96 @@ fn non_commit_ids_do_not_collide() -> anyhow::Result<()> {
         hunk_assignment("uncommitted2.txt", None),
     ];
     let id_map = IdMap::new(stacks, hunk_assignments)?;
-    insta::assert_debug_snapshot!(id_map.debug_state(), @"
-    workspace_and_remote_commits_count: 1
-    branches: [ h0 ]
-    uncommitted_files: [ kv, ro ]
-    uncommitted_hunks: [ kv:q, ro:q#0-2, ro:q#1-2 ]
-    stacks: [ j0 ]
-    ");
-    insta::assert_debug_snapshot!(id_map.all_ids(), @r#"
-    [
-        Commit {
-            commit_id: Sha1(0202020202020202020202020202020202020202),
-            id: "02",
+    snapbox::assert_data_eq!(
+        id_map.debug_state().to_debug(),
+        snapbox::str![[r#"
+workspace_and_remote_commits_count: 1
+branches: [ h0 ]
+uncommitted_files: [ kv, ro ]
+uncommitted_hunks: [ kv:q, ro:q#0-2, ro:q#1-2 ]
+stacks: [ j0 ]
+
+
+"#]]
+    );
+    snapbox::assert_data_eq!(
+        id_map.all_ids().to_debug(),
+        snapbox::str![[r#"
+[
+    Commit {
+        commit_id: Sha1(0202020202020202020202020202020202020202),
+        id: "02",
+    },
+    Branch {
+        name: "h0",
+        id: "h0",
+        stack_id: Some(
+            00000000-0000-0000-0000-000000000001,
+        ),
+    },
+    Stack {
+        id: "j0",
+        stack_id: 00000000-0000-0000-0000-000000000001,
+    },
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "kv",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: None,
+                    path: "",
+                    path_bytes: "uncommitted2.txt",
+                    stack_id: None,
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: None,
+                },
+                tail: [],
+            },
+            is_entire_file: true,
         },
-        Branch {
-            name: "h0",
-            id: "h0",
-            stack_id: Some(
-                00000000-0000-0000-0000-000000000001,
-            ),
+    ),
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "kv:q",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: None,
+                    path: "",
+                    path_bytes: "uncommitted2.txt",
+                    stack_id: None,
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: None,
+                },
+                tail: [],
+            },
+            is_entire_file: false,
         },
-        Stack {
-            id: "j0",
-            stack_id: 00000000-0000-0000-0000-000000000001,
-        },
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "kv",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
-                        id: None,
-                        hunk_header: None,
-                        path: "",
-                        path_bytes: "uncommitted2.txt",
-                        stack_id: None,
-                        branch_ref_bytes: None,
-                        line_nums_added: None,
-                        line_nums_removed: None,
-                        diff: None,
-                    },
-                    tail: [],
+    ),
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "ro",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: Some(
+                        HunkHeader("-1,2", "+1,2"),
+                    ),
+                    path: "",
+                    path_bytes: "uncommitted1.txt",
+                    stack_id: None,
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: None,
                 },
-                is_entire_file: true,
-            },
-        ),
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "kv:q",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
-                        id: None,
-                        hunk_header: None,
-                        path: "",
-                        path_bytes: "uncommitted2.txt",
-                        stack_id: None,
-                        branch_ref_bytes: None,
-                        line_nums_added: None,
-                        line_nums_removed: None,
-                        diff: None,
-                    },
-                    tail: [],
-                },
-                is_entire_file: false,
-            },
-        ),
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "ro",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
-                        id: None,
-                        hunk_header: Some(
-                            HunkHeader("-1,2", "+1,2"),
-                        ),
-                        path: "",
-                        path_bytes: "uncommitted1.txt",
-                        stack_id: None,
-                        branch_ref_bytes: None,
-                        line_nums_added: None,
-                        line_nums_removed: None,
-                        diff: None,
-                    },
-                    tail: [
-                        HunkAssignment {
-                            id: None,
-                            hunk_header: Some(
-                                HunkHeader("-3,2", "+3,2"),
-                            ),
-                            path: "",
-                            path_bytes: "uncommitted1.txt",
-                            stack_id: None,
-                            branch_ref_bytes: None,
-                            line_nums_added: None,
-                            line_nums_removed: None,
-                            diff: None,
-                        },
-                    ],
-                },
-                is_entire_file: true,
-            },
-        ),
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "ro:q#0-2",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
-                        id: None,
-                        hunk_header: Some(
-                            HunkHeader("-1,2", "+1,2"),
-                        ),
-                        path: "",
-                        path_bytes: "uncommitted1.txt",
-                        stack_id: None,
-                        branch_ref_bytes: None,
-                        line_nums_added: None,
-                        line_nums_removed: None,
-                        diff: None,
-                    },
-                    tail: [],
-                },
-                is_entire_file: false,
-            },
-        ),
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "ro:q#1-2",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
+                tail: [
+                    HunkAssignment {
                         id: None,
                         hunk_header: Some(
                             HunkHeader("-3,2", "+3,2"),
@@ -476,13 +486,59 @@ fn non_commit_ids_do_not_collide() -> anyhow::Result<()> {
                         line_nums_removed: None,
                         diff: None,
                     },
-                    tail: [],
-                },
-                is_entire_file: false,
+                ],
             },
-        ),
-    ]
-    "#);
+            is_entire_file: true,
+        },
+    ),
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "ro:q#0-2",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: Some(
+                        HunkHeader("-1,2", "+1,2"),
+                    ),
+                    path: "",
+                    path_bytes: "uncommitted1.txt",
+                    stack_id: None,
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: None,
+                },
+                tail: [],
+            },
+            is_entire_file: false,
+        },
+    ),
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "ro:q#1-2",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: Some(
+                        HunkHeader("-3,2", "+3,2"),
+                    ),
+                    path: "",
+                    path_bytes: "uncommitted1.txt",
+                    stack_id: None,
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: None,
+                },
+                tail: [],
+            },
+            is_entire_file: false,
+        },
+    ),
+]
+
+"#]]
+    );
 
     Ok(())
 }
@@ -501,81 +557,104 @@ fn ids_are_case_sensitive() -> anyhow::Result<()> {
             bail!("unexpected IDs {commit_id} {parent_id:?}");
         })
     };
-    insta::assert_debug_snapshot!(id_map.debug_state(), @"
-    workspace_and_remote_commits_count: 1
-    branches: [ h0 ]
-    uncommitted_files: [ ln ]
-    uncommitted_hunks: [ ln:q ]
-    ");
+    snapbox::assert_data_eq!(
+        id_map.debug_state().to_debug(),
+        snapbox::str![[r#"
+workspace_and_remote_commits_count: 1
+branches: [ h0 ]
+uncommitted_files: [ ln ]
+uncommitted_hunks: [ ln:q ]
 
-    insta::assert_debug_snapshot!(id_map.parse("0a", Box::new(changed_paths_fn))?, @r#"
-    [
-        Commit {
-            commit_id: Sha1(0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a),
-            id: "0a",
-        },
-    ]
-    "#);
+
+"#]]
+    );
+
+    snapbox::assert_data_eq!(
+        id_map.parse("0a", Box::new(changed_paths_fn))?.to_debug(),
+        snapbox::str![[r#"
+[
+    Commit {
+        commit_id: Sha1(0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a),
+        id: "0a",
+    },
+]
+
+"#]]
+    );
     assert_eq!(
         id_map.parse("0A", Box::new(changed_paths_fn))?,
         [],
         "the case matters for commits"
     );
 
-    insta::assert_debug_snapshot!(id_map.parse("h0", Box::new(changed_paths_fn))?, @r#"
-    [
-        Branch {
-            name: "h0",
-            id: "h0",
-            stack_id: None,
-        },
-    ]
-    "#);
+    snapbox::assert_data_eq!(
+        id_map.parse("h0", Box::new(changed_paths_fn))?.to_debug(),
+        snapbox::str![[r#"
+[
+    Branch {
+        name: "h0",
+        id: "h0",
+        stack_id: None,
+    },
+]
+
+"#]]
+    );
     assert_eq!(
         id_map.parse("H0", Box::new(changed_paths_fn))?,
         [],
         "the case matters for branches"
     );
 
-    insta::assert_debug_snapshot!(id_map.parse("ln", Box::new(changed_paths_fn))?, @r#"
-    [
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "ln",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
-                        id: None,
-                        hunk_header: None,
-                        path: "",
-                        path_bytes: "uncommitted.txt",
-                        stack_id: None,
-                        branch_ref_bytes: None,
-                        line_nums_added: None,
-                        line_nums_removed: None,
-                        diff: None,
-                    },
-                    tail: [],
+    snapbox::assert_data_eq!(
+        id_map.parse("ln", Box::new(changed_paths_fn))?.to_debug(),
+        snapbox::str![[r#"
+[
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "ln",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: None,
+                    path: "",
+                    path_bytes: "uncommitted.txt",
+                    stack_id: None,
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: None,
                 },
-                is_entire_file: true,
+                tail: [],
             },
-        ),
-    ]
-    "#);
+            is_entire_file: true,
+        },
+    ),
+]
+
+"#]]
+    );
     assert_eq!(
         id_map.parse("LN", Box::new(changed_paths_fn))?,
         [],
         "the case matters for uncommitted files"
     );
 
-    insta::assert_debug_snapshot!(id_map.parse("0a:zt", Box::new(changed_paths_fn))?, @r#"
-    [
-        CommittedFile {
-            commit_id: Sha1(0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a),
-            path: "committed.txt",
-            id: "0a:zt",
-        },
-    ]
-    "#);
+    snapbox::assert_data_eq!(
+        id_map
+            .parse("0a:zt", Box::new(changed_paths_fn))?
+            .to_debug(),
+        snapbox::str![[r#"
+[
+    CommittedFile {
+        commit_id: Sha1(0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a),
+        path: "committed.txt",
+        id: "0a:zt",
+    },
+]
+
+"#]]
+    );
     assert_eq!(
         id_map.parse("0a:ZT", Box::new(changed_paths_fn))?,
         [],
@@ -604,99 +683,111 @@ fn uncommitted_files_disambiguate_between_themselves() -> anyhow::Result<()> {
     };
 
     // Ambiguous ID returns every possible match
-    insta::assert_debug_snapshot!(id_map.parse("kp", Box::new(changed_paths_fn))?, @r#"
-    [
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "kpo",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
-                        id: None,
-                        hunk_header: None,
-                        path: "",
-                        path_bytes: "foo242",
-                        stack_id: None,
-                        branch_ref_bytes: None,
-                        line_nums_added: None,
-                        line_nums_removed: None,
-                        diff: None,
-                    },
-                    tail: [],
+    snapbox::assert_data_eq!(
+        id_map.parse("kp", Box::new(changed_paths_fn))?.to_debug(),
+        snapbox::str![[r#"
+[
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "kpo",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: None,
+                    path: "",
+                    path_bytes: "foo242",
+                    stack_id: None,
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: None,
                 },
-                is_entire_file: true,
+                tail: [],
             },
-        ),
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "kpr",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
-                        id: None,
-                        hunk_header: None,
-                        path: "",
-                        path_bytes: "foo23",
-                        stack_id: None,
-                        branch_ref_bytes: None,
-                        line_nums_added: None,
-                        line_nums_removed: None,
-                        diff: None,
-                    },
-                    tail: [],
+            is_entire_file: true,
+        },
+    ),
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "kpr",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: None,
+                    path: "",
+                    path_bytes: "foo23",
+                    stack_id: None,
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: None,
                 },
-                is_entire_file: true,
+                tail: [],
             },
-        ),
-    ]
-    "#);
+            is_entire_file: true,
+        },
+    ),
+]
 
-    insta::assert_debug_snapshot!(id_map.parse("kpo", Box::new(changed_paths_fn))?, @r#"
-    [
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "kpo",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
-                        id: None,
-                        hunk_header: None,
-                        path: "",
-                        path_bytes: "foo242",
-                        stack_id: None,
-                        branch_ref_bytes: None,
-                        line_nums_added: None,
-                        line_nums_removed: None,
-                        diff: None,
-                    },
-                    tail: [],
+"#]]
+    );
+
+    snapbox::assert_data_eq!(
+        id_map.parse("kpo", Box::new(changed_paths_fn))?.to_debug(),
+        snapbox::str![[r#"
+[
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "kpo",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: None,
+                    path: "",
+                    path_bytes: "foo242",
+                    stack_id: None,
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: None,
                 },
-                is_entire_file: true,
+                tail: [],
             },
-        ),
-    ]
-    "#);
-    insta::assert_debug_snapshot!(id_map.parse("kpr", Box::new(changed_paths_fn))?, @r#"
-    [
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "kpr",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
-                        id: None,
-                        hunk_header: None,
-                        path: "",
-                        path_bytes: "foo23",
-                        stack_id: None,
-                        branch_ref_bytes: None,
-                        line_nums_added: None,
-                        line_nums_removed: None,
-                        diff: None,
-                    },
-                    tail: [],
+            is_entire_file: true,
+        },
+    ),
+]
+
+"#]]
+    );
+    snapbox::assert_data_eq!(
+        id_map.parse("kpr", Box::new(changed_paths_fn))?.to_debug(),
+        snapbox::str![[r#"
+[
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "kpr",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: None,
+                    path: "",
+                    path_bytes: "foo23",
+                    stack_id: None,
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: None,
                 },
-                is_entire_file: true,
+                tail: [],
             },
-        ),
-    ]
-    "#);
+            is_entire_file: true,
+        },
+    ),
+]
+
+"#]]
+    );
 
     Ok(())
 }
@@ -725,52 +816,64 @@ fn uncommitted_files_disambiguate_with_branch() -> anyhow::Result<()> {
     };
 
     // Only the branch is returned when querying by short ID
-    insta::assert_debug_snapshot!(id_map.parse("qs", Box::new(changed_paths_fn))?, @r#"
-    [
-        Branch {
-            name: "qsy",
-            id: "qs",
-            stack_id: None,
-        },
-    ]
-    "#);
+    snapbox::assert_data_eq!(
+        id_map.parse("qs", Box::new(changed_paths_fn))?.to_debug(),
+        snapbox::str![[r#"
+[
+    Branch {
+        name: "qsy",
+        id: "qs",
+        stack_id: None,
+    },
+]
+
+"#]]
+    );
 
     // Still only the branch when querying by full name
-    insta::assert_debug_snapshot!(id_map.parse("qsy", Box::new(changed_paths_fn))?, @r#"
-    [
-        Branch {
-            name: "qsy",
-            id: "qs",
-            stack_id: None,
-        },
-    ]
-    "#);
+    snapbox::assert_data_eq!(
+        id_map.parse("qsy", Box::new(changed_paths_fn))?.to_debug(),
+        snapbox::str![[r#"
+[
+    Branch {
+        name: "qsy",
+        id: "qs",
+        stack_id: None,
+    },
+]
+
+"#]]
+    );
 
     // More characters must be specified to get the file
-    insta::assert_debug_snapshot!(id_map.parse("qsyn", Box::new(changed_paths_fn))?, @r#"
-    [
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "qsyn",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
-                        id: None,
-                        hunk_header: None,
-                        path: "",
-                        path_bytes: "file",
-                        stack_id: None,
-                        branch_ref_bytes: None,
-                        line_nums_added: None,
-                        line_nums_removed: None,
-                        diff: None,
-                    },
-                    tail: [],
+    snapbox::assert_data_eq!(
+        id_map.parse("qsyn", Box::new(changed_paths_fn))?.to_debug(),
+        snapbox::str![[r#"
+[
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "qsyn",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: None,
+                    path: "",
+                    path_bytes: "file",
+                    stack_id: None,
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: None,
                 },
-                is_entire_file: true,
+                tail: [],
             },
-        ),
-    ]
-    "#);
+            is_entire_file: true,
+        },
+    ),
+]
+
+"#]]
+    );
 
     Ok(())
 }
@@ -791,30 +894,34 @@ fn longer_id_is_ok() -> anyhow::Result<()> {
     };
 
     // "kp" would be sufficient (see the "id" field in the output), but "kpr" works too
-    insta::assert_debug_snapshot!(id_map.parse("kpr", Box::new(changed_paths_fn))?, @r#"
-    [
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "kp",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
-                        id: None,
-                        hunk_header: None,
-                        path: "",
-                        path_bytes: "foo23",
-                        stack_id: None,
-                        branch_ref_bytes: None,
-                        line_nums_added: None,
-                        line_nums_removed: None,
-                        diff: None,
-                    },
-                    tail: [],
+    snapbox::assert_data_eq!(
+        id_map.parse("kpr", Box::new(changed_paths_fn))?.to_debug(),
+        snapbox::str![[r#"
+[
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "kp",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: None,
+                    path: "",
+                    path_bytes: "foo23",
+                    stack_id: None,
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: None,
                 },
-                is_entire_file: true,
+                tail: [],
             },
-        ),
-    ]
-    "#);
+            is_entire_file: true,
+        },
+    ),
+]
+
+"#]]
+    );
 
     Ok(())
 }
@@ -835,30 +942,34 @@ fn reverse_hex_filename_is_its_own_id() -> anyhow::Result<()> {
     };
 
     // "klmxyz" does not have an autogenerated ID
-    insta::assert_debug_snapshot!(id_map.parse("kl", Box::new(changed_paths_fn))?, @r#"
-    [
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "kl",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
-                        id: None,
-                        hunk_header: None,
-                        path: "",
-                        path_bytes: "klmxyz",
-                        stack_id: None,
-                        branch_ref_bytes: None,
-                        line_nums_added: None,
-                        line_nums_removed: None,
-                        diff: None,
-                    },
-                    tail: [],
+    snapbox::assert_data_eq!(
+        id_map.parse("kl", Box::new(changed_paths_fn))?.to_debug(),
+        snapbox::str![[r#"
+[
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "kl",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: None,
+                    path: "",
+                    path_bytes: "klmxyz",
+                    stack_id: None,
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: None,
                 },
-                is_entire_file: true,
+                tail: [],
             },
-        ),
-    ]
-    "#);
+            is_entire_file: true,
+        },
+    ),
+]
+
+"#]]
+    );
 
     Ok(())
 }
@@ -881,35 +992,39 @@ fn branch_and_file_by_name() -> anyhow::Result<()> {
     // Both branches and uncommitted, uncommitted files match by name, and none
     // have priority over the other (i.e. if there is both a branch and a file
     // that matches, the result is ambiguous).
-    insta::assert_debug_snapshot!(id_map.parse("foo", Box::new(changed_paths_fn))?, @r#"
-    [
-        Branch {
-            name: "foo",
-            id: "fo",
-            stack_id: None,
-        },
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "zo",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
-                        id: None,
-                        hunk_header: None,
-                        path: "",
-                        path_bytes: "foo",
-                        stack_id: None,
-                        branch_ref_bytes: None,
-                        line_nums_added: None,
-                        line_nums_removed: None,
-                        diff: None,
-                    },
-                    tail: [],
+    snapbox::assert_data_eq!(
+        id_map.parse("foo", Box::new(changed_paths_fn))?.to_debug(),
+        snapbox::str![[r#"
+[
+    Branch {
+        name: "foo",
+        id: "fo",
+        stack_id: None,
+    },
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "zo",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: None,
+                    path: "",
+                    path_bytes: "foo",
+                    stack_id: None,
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: None,
                 },
-                is_entire_file: true,
+                tail: [],
             },
-        ),
-    ]
-    "#);
+            is_entire_file: true,
+        },
+    ),
+]
+
+"#]]
+    );
 
     Ok(())
 }
@@ -932,86 +1047,104 @@ fn colon_uncommitted_filename() -> anyhow::Result<()> {
     };
 
     // Short branch works
-    insta::assert_debug_snapshot!(id_map.parse("gg@{stack}:assigned", Box::new(changed_paths_fn))?, @r#"
-    [
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "mv",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
-                        id: None,
-                        hunk_header: None,
-                        path: "",
-                        path_bytes: "assigned",
-                        stack_id: Some(
-                            00000000-0000-0000-0000-000000000001,
-                        ),
-                        branch_ref_bytes: None,
-                        line_nums_added: None,
-                        line_nums_removed: None,
-                        diff: None,
-                    },
-                    tail: [],
+    snapbox::assert_data_eq!(
+        id_map
+            .parse("gg@{stack}:assigned", Box::new(changed_paths_fn))?
+            .to_debug(),
+        snapbox::str![[r#"
+[
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "mv",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: None,
+                    path: "",
+                    path_bytes: "assigned",
+                    stack_id: Some(
+                        00000000-0000-0000-0000-000000000001,
+                    ),
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: None,
                 },
-                is_entire_file: true,
+                tail: [],
             },
-        ),
-    ]
-    "#);
+            is_entire_file: true,
+        },
+    ),
+]
+
+"#]]
+    );
 
     // Long branch works
-    insta::assert_debug_snapshot!(id_map.parse("gggg@{stack}:assigned", Box::new(changed_paths_fn))?, @r#"
-    [
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "mv",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
-                        id: None,
-                        hunk_header: None,
-                        path: "",
-                        path_bytes: "assigned",
-                        stack_id: Some(
-                            00000000-0000-0000-0000-000000000001,
-                        ),
-                        branch_ref_bytes: None,
-                        line_nums_added: None,
-                        line_nums_removed: None,
-                        diff: None,
-                    },
-                    tail: [],
+    snapbox::assert_data_eq!(
+        id_map
+            .parse("gggg@{stack}:assigned", Box::new(changed_paths_fn))?
+            .to_debug(),
+        snapbox::str![[r#"
+[
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "mv",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: None,
+                    path: "",
+                    path_bytes: "assigned",
+                    stack_id: Some(
+                        00000000-0000-0000-0000-000000000001,
+                    ),
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: None,
                 },
-                is_entire_file: true,
+                tail: [],
             },
-        ),
-    ]
-    "#);
+            is_entire_file: true,
+        },
+    ),
+]
+
+"#]]
+    );
 
     // Uncommitted works
-    insta::assert_debug_snapshot!(id_map.parse("zz:uncommitted", Box::new(changed_paths_fn))?, @r#"
-    [
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "pv",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
-                        id: None,
-                        hunk_header: None,
-                        path: "",
-                        path_bytes: "uncommitted",
-                        stack_id: None,
-                        branch_ref_bytes: None,
-                        line_nums_added: None,
-                        line_nums_removed: None,
-                        diff: None,
-                    },
-                    tail: [],
+    snapbox::assert_data_eq!(
+        id_map
+            .parse("zz:uncommitted", Box::new(changed_paths_fn))?
+            .to_debug(),
+        snapbox::str![[r#"
+[
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "pv",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: None,
+                    path: "",
+                    path_bytes: "uncommitted",
+                    stack_id: None,
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: None,
                 },
-                is_entire_file: true,
+                tail: [],
             },
-        ),
-    ]
-    "#);
+            is_entire_file: true,
+        },
+    ),
+]
+
+"#]]
+    );
 
     Ok(())
 }
@@ -1032,18 +1165,37 @@ fn uncommitted_path() -> anyhow::Result<()> {
     };
 
     // Returns one ID with all hunk assignments
-    insta::assert_debug_snapshot!(id_map.parse("prefix/", Box::new(changed_paths_fn))?, @r#"
-    [
-        PathPrefix {
-            id: "prefix/",
-            hunk_assignments: NonEmpty {
-                head: (
-                    "yz:q",
+    snapbox::assert_data_eq!(
+        id_map
+            .parse("prefix/", Box::new(changed_paths_fn))?
+            .to_debug(),
+        snapbox::str![[r#"
+[
+    PathPrefix {
+        id: "prefix/",
+        hunk_assignments: NonEmpty {
+            head: (
+                "yz:q",
+                HunkAssignment {
+                    id: None,
+                    hunk_header: None,
+                    path: "",
+                    path_bytes: "prefix/a",
+                    stack_id: None,
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: None,
+                },
+            ),
+            tail: [
+                (
+                    "uo:q",
                     HunkAssignment {
                         id: None,
                         hunk_header: None,
                         path: "",
-                        path_bytes: "prefix/a",
+                        path_bytes: "prefix/b",
                         stack_id: None,
                         branch_ref_bytes: None,
                         line_nums_added: None,
@@ -1051,29 +1203,24 @@ fn uncommitted_path() -> anyhow::Result<()> {
                         diff: None,
                     },
                 ),
-                tail: [
-                    (
-                        "uo:q",
-                        HunkAssignment {
-                            id: None,
-                            hunk_header: None,
-                            path: "",
-                            path_bytes: "prefix/b",
-                            stack_id: None,
-                            branch_ref_bytes: None,
-                            line_nums_added: None,
-                            line_nums_removed: None,
-                            diff: None,
-                        },
-                    ),
-                ],
-            },
+            ],
         },
-    ]
-    "#);
+    },
+]
+
+"#]]
+    );
 
     // If nothing matches, returns no ID
-    insta::assert_debug_snapshot!(id_map.parse("doesnotmatch/", Box::new(changed_paths_fn))?, @"[]");
+    snapbox::assert_data_eq!(
+        id_map
+            .parse("doesnotmatch/", Box::new(changed_paths_fn))?
+            .to_debug(),
+        snapbox::str![[r#"
+[]
+
+"#]]
+    );
 
     Ok(())
 }
@@ -1137,80 +1284,92 @@ fn short_uncommitted_files_are_properly_reverse_hexed() -> anyhow::Result<()> {
         })
     };
 
-    insta::assert_debug_snapshot!(id_map.parse("k", Box::new(changed_paths_fn))?, @r#"
-    [
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "ky",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
-                        id: None,
-                        hunk_header: None,
-                        path: "",
-                        path_bytes: "k",
-                        stack_id: None,
-                        branch_ref_bytes: None,
-                        line_nums_added: None,
-                        line_nums_removed: None,
-                        diff: None,
-                    },
-                    tail: [],
+    snapbox::assert_data_eq!(
+        id_map.parse("k", Box::new(changed_paths_fn))?.to_debug(),
+        snapbox::str![[r#"
+[
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "ky",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: None,
+                    path: "",
+                    path_bytes: "k",
+                    stack_id: None,
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: None,
                 },
-                is_entire_file: true,
+                tail: [],
             },
-        ),
-    ]
-    "#);
+            is_entire_file: true,
+        },
+    ),
+]
 
-    insta::assert_debug_snapshot!(id_map.parse("kl", Box::new(changed_paths_fn))?, @r#"
-    [
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "klx",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
-                        id: None,
-                        hunk_header: None,
-                        path: "",
-                        path_bytes: "kl",
-                        stack_id: None,
-                        branch_ref_bytes: None,
-                        line_nums_added: None,
-                        line_nums_removed: None,
-                        diff: None,
-                    },
-                    tail: [],
-                },
-                is_entire_file: true,
-            },
-        ),
-    ]
-    "#);
+"#]]
+    );
 
-    insta::assert_debug_snapshot!(id_map.parse("klm", Box::new(changed_paths_fn))?, @r#"
-    [
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "klml",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
-                        id: None,
-                        hunk_header: None,
-                        path: "",
-                        path_bytes: "klm",
-                        stack_id: None,
-                        branch_ref_bytes: None,
-                        line_nums_added: None,
-                        line_nums_removed: None,
-                        diff: None,
-                    },
-                    tail: [],
+    snapbox::assert_data_eq!(
+        id_map.parse("kl", Box::new(changed_paths_fn))?.to_debug(),
+        snapbox::str![[r#"
+[
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "klx",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: None,
+                    path: "",
+                    path_bytes: "kl",
+                    stack_id: None,
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: None,
                 },
-                is_entire_file: true,
+                tail: [],
             },
-        ),
-    ]
-    "#);
+            is_entire_file: true,
+        },
+    ),
+]
+
+"#]]
+    );
+
+    snapbox::assert_data_eq!(
+        id_map.parse("klm", Box::new(changed_paths_fn))?.to_debug(),
+        snapbox::str![[r#"
+[
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "klml",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: None,
+                    path: "",
+                    path_bytes: "klm",
+                    stack_id: None,
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: None,
+                },
+                tail: [],
+            },
+            is_entire_file: true,
+        },
+    ),
+]
+
+"#]]
+    );
     Ok(())
 }
 
@@ -1238,86 +1397,104 @@ fn uncommitted_hunks_by_numeric_index() -> anyhow::Result<()> {
         bail!("unexpected IDs {commit_id} {parent_id:?}");
     };
 
-    insta::assert_debug_snapshot!(id_map.parse("uncommitted1.txt:#0", Box::new(changed_paths_fn))?, @r#"
-    [
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "ro:q#0-2",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
-                        id: None,
-                        hunk_header: Some(
-                            HunkHeader("-1,2", "+1,2"),
-                        ),
-                        path: "",
-                        path_bytes: "uncommitted1.txt",
-                        stack_id: None,
-                        branch_ref_bytes: None,
-                        line_nums_added: None,
-                        line_nums_removed: None,
-                        diff: None,
-                    },
-                    tail: [],
+    snapbox::assert_data_eq!(
+        id_map
+            .parse("uncommitted1.txt:#0", Box::new(changed_paths_fn))?
+            .to_debug(),
+        snapbox::str![[r#"
+[
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "ro:q#0-2",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: Some(
+                        HunkHeader("-1,2", "+1,2"),
+                    ),
+                    path: "",
+                    path_bytes: "uncommitted1.txt",
+                    stack_id: None,
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: None,
                 },
-                is_entire_file: false,
+                tail: [],
             },
-        ),
-    ]
-    "#);
+            is_entire_file: false,
+        },
+    ),
+]
+
+"#]]
+    );
     // Short IDs for the filename part also work; should return exactly the same as above
-    insta::assert_debug_snapshot!(id_map.parse("ro:#0", Box::new(changed_paths_fn))?, @r#"
-    [
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "ro:q#0-2",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
-                        id: None,
-                        hunk_header: Some(
-                            HunkHeader("-1,2", "+1,2"),
-                        ),
-                        path: "",
-                        path_bytes: "uncommitted1.txt",
-                        stack_id: None,
-                        branch_ref_bytes: None,
-                        line_nums_added: None,
-                        line_nums_removed: None,
-                        diff: None,
-                    },
-                    tail: [],
+    snapbox::assert_data_eq!(
+        id_map
+            .parse("ro:#0", Box::new(changed_paths_fn))?
+            .to_debug(),
+        snapbox::str![[r#"
+[
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "ro:q#0-2",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: Some(
+                        HunkHeader("-1,2", "+1,2"),
+                    ),
+                    path: "",
+                    path_bytes: "uncommitted1.txt",
+                    stack_id: None,
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: None,
                 },
-                is_entire_file: false,
+                tail: [],
             },
-        ),
-    ]
-    "#);
+            is_entire_file: false,
+        },
+    ),
+]
+
+"#]]
+    );
     // Files can also be accessed through zz
-    insta::assert_debug_snapshot!(id_map.parse("zz:uncommitted1.txt:#0", Box::new(changed_paths_fn))?, @r#"
-    [
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "ro:q#0-2",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
-                        id: None,
-                        hunk_header: Some(
-                            HunkHeader("-1,2", "+1,2"),
-                        ),
-                        path: "",
-                        path_bytes: "uncommitted1.txt",
-                        stack_id: None,
-                        branch_ref_bytes: None,
-                        line_nums_added: None,
-                        line_nums_removed: None,
-                        diff: None,
-                    },
-                    tail: [],
+    snapbox::assert_data_eq!(
+        id_map
+            .parse("zz:uncommitted1.txt:#0", Box::new(changed_paths_fn))?
+            .to_debug(),
+        snapbox::str![[r#"
+[
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "ro:q#0-2",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: Some(
+                        HunkHeader("-1,2", "+1,2"),
+                    ),
+                    path: "",
+                    path_bytes: "uncommitted1.txt",
+                    stack_id: None,
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: None,
                 },
-                is_entire_file: false,
+                tail: [],
             },
-        ),
-    ]
-    "#);
+            is_entire_file: false,
+        },
+    ),
+]
+
+"#]]
+    );
 
     Ok(())
 }
@@ -1368,118 +1545,139 @@ fn uncommitted_hunks_by_id() -> anyhow::Result<()> {
         bail!("unexpected IDs {commit_id} {parent_id:?}");
     };
 
-    insta::assert_debug_snapshot!(id_map.parse("ro:3", Box::new(changed_paths_fn))?, @r#"
-    [
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "ro:3",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
-                        id: None,
-                        hunk_header: Some(
-                            HunkHeader("-1,6", "+1,7"),
-                        ),
-                        path: "",
-                        path_bytes: "uncommitted1.txt",
-                        stack_id: None,
-                        branch_ref_bytes: None,
-                        line_nums_added: None,
-                        line_nums_removed: None,
-                        diff: Some(
-                            "@@ -1,6 +1,7 @@\n 1\n 2\n 3\n+hello\n 4\n 5\n 6\n",
-                        ),
-                    },
-                    tail: [],
+    snapbox::assert_data_eq!(
+        id_map.parse("ro:3", Box::new(changed_paths_fn))?.to_debug(),
+        snapbox::str![[r#"
+[
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "ro:3",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: Some(
+                        HunkHeader("-1,6", "+1,7"),
+                    ),
+                    path: "",
+                    path_bytes: "uncommitted1.txt",
+                    stack_id: None,
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: Some(
+                        "@@ -1,6 +1,7 @@\n 1\n 2\n 3\n+hello\n 4\n 5\n 6\n",
+                    ),
                 },
-                is_entire_file: false,
+                tail: [],
             },
-        ),
-    ]
-    "#);
+            is_entire_file: false,
+        },
+    ),
+]
 
-    insta::assert_debug_snapshot!(id_map.parse("ro:f", Box::new(changed_paths_fn))?, @r#"
-    [
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "ro:f",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
-                        id: None,
-                        hunk_header: Some(
-                            HunkHeader("-23,6", "+24,7"),
-                        ),
-                        path: "",
-                        path_bytes: "uncommitted1.txt",
-                        stack_id: None,
-                        branch_ref_bytes: None,
-                        line_nums_added: None,
-                        line_nums_removed: None,
-                        diff: Some(
-                            "@@ -23,6 +24,7 @@\n 1\n 2\n 3\n+there\n 4\n 5\n 6\n",
-                        ),
-                    },
-                    tail: [],
-                },
-                is_entire_file: false,
-            },
-        ),
-    ]
-    "#);
+"#]]
+        .raw()
+    );
 
-    insta::assert_debug_snapshot!(id_map.parse("ro:1", Box::new(changed_paths_fn))?, @r#"
-    [
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "ro:1",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
-                        id: None,
-                        hunk_header: Some(
-                            HunkHeader("-60,6", "+62,7"),
-                        ),
-                        path: "",
-                        path_bytes: "uncommitted1.txt",
-                        stack_id: None,
-                        branch_ref_bytes: None,
-                        line_nums_added: None,
-                        line_nums_removed: None,
-                        diff: Some(
-                            "@@ -60,6 +62,7 @@\n 46\n 47\n 48\n+hello\n 49\n 50\n 51\n",
-                        ),
-                    },
-                    tail: [],
+    snapbox::assert_data_eq!(
+        id_map.parse("ro:f", Box::new(changed_paths_fn))?.to_debug(),
+        snapbox::str![[r#"
+[
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "ro:f",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: Some(
+                        HunkHeader("-23,6", "+24,7"),
+                    ),
+                    path: "",
+                    path_bytes: "uncommitted1.txt",
+                    stack_id: None,
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: Some(
+                        "@@ -23,6 +24,7 @@\n 1\n 2\n 3\n+there\n 4\n 5\n 6\n",
+                    ),
                 },
-                is_entire_file: false,
+                tail: [],
             },
-        ),
-    ]
-    "#);
+            is_entire_file: false,
+        },
+    ),
+]
+
+"#]]
+        .raw()
+    );
+
+    snapbox::assert_data_eq!(
+        id_map.parse("ro:1", Box::new(changed_paths_fn))?.to_debug(),
+        snapbox::str![[r#"
+[
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "ro:1",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: Some(
+                        HunkHeader("-60,6", "+62,7"),
+                    ),
+                    path: "",
+                    path_bytes: "uncommitted1.txt",
+                    stack_id: None,
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: Some(
+                        "@@ -60,6 +62,7 @@\n 46\n 47\n 48\n+hello\n 49\n 50\n 51\n",
+                    ),
+                },
+                tail: [],
+            },
+            is_entire_file: false,
+        },
+    ),
+]
+
+"#]]
+        .raw()
+    );
 
     // hunk without diff gets q identifier
-    insta::assert_debug_snapshot!(id_map.parse("hunk_without_diff.txt:q", Box::new(changed_paths_fn))?, @r#"
-    [
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "wp:q",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
-                        id: None,
-                        hunk_header: None,
-                        path: "",
-                        path_bytes: "hunk_without_diff.txt",
-                        stack_id: None,
-                        branch_ref_bytes: None,
-                        line_nums_added: None,
-                        line_nums_removed: None,
-                        diff: None,
-                    },
-                    tail: [],
+    snapbox::assert_data_eq!(
+        id_map
+            .parse("hunk_without_diff.txt:q", Box::new(changed_paths_fn))?
+            .to_debug(),
+        snapbox::str![[r#"
+[
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "wp:q",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: None,
+                    path: "",
+                    path_bytes: "hunk_without_diff.txt",
+                    stack_id: None,
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: None,
                 },
-                is_entire_file: false,
+                tail: [],
             },
-        ),
-    ]
-    "#);
+            is_entire_file: false,
+        },
+    ),
+]
+
+"#]]
+    );
 
     Ok(())
 }
@@ -1518,63 +1716,77 @@ fn uncommitted_hunks_by_id_increase_id_length_as_necessary() -> anyhow::Result<(
         bail!("unexpected IDs {commit_id} {parent_id:?}");
     };
 
-    insta::assert_debug_snapshot!(id_map.parse("ro:78", Box::new(changed_paths_fn))?, @r#"
-    [
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "ro:78",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
-                        id: None,
-                        hunk_header: Some(
-                            HunkHeader("-1,6", "+1,7"),
-                        ),
-                        path: "",
-                        path_bytes: "uncommitted1.txt",
-                        stack_id: None,
-                        branch_ref_bytes: None,
-                        line_nums_added: None,
-                        line_nums_removed: None,
-                        diff: Some(
-                            "@@ -1,6 +1,7 @@\n 1\n 2\n 3\n+hellooooo\n 4\n 5\n 6\n",
-                        ),
-                    },
-                    tail: [],
+    snapbox::assert_data_eq!(
+        id_map
+            .parse("ro:78", Box::new(changed_paths_fn))?
+            .to_debug(),
+        snapbox::str![[r#"
+[
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "ro:78",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: Some(
+                        HunkHeader("-1,6", "+1,7"),
+                    ),
+                    path: "",
+                    path_bytes: "uncommitted1.txt",
+                    stack_id: None,
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: Some(
+                        "@@ -1,6 +1,7 @@\n 1\n 2\n 3\n+hellooooo\n 4\n 5\n 6\n",
+                    ),
                 },
-                is_entire_file: false,
+                tail: [],
             },
-        ),
-    ]
-    "#);
+            is_entire_file: false,
+        },
+    ),
+]
 
-    insta::assert_debug_snapshot!(id_map.parse("ro:79", Box::new(changed_paths_fn))?, @r#"
-    [
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "ro:79",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
-                        id: None,
-                        hunk_header: Some(
-                            HunkHeader("-23,6", "+24,7"),
-                        ),
-                        path: "",
-                        path_bytes: "uncommitted1.txt",
-                        stack_id: None,
-                        branch_ref_bytes: None,
-                        line_nums_added: None,
-                        line_nums_removed: None,
-                        diff: Some(
-                            "@@ -23,6 +24,7 @@\n 1\n 2\n 3\n+hellooo\n 4\n 5\n 6\n",
-                        ),
-                    },
-                    tail: [],
+"#]]
+        .raw()
+    );
+
+    snapbox::assert_data_eq!(
+        id_map
+            .parse("ro:79", Box::new(changed_paths_fn))?
+            .to_debug(),
+        snapbox::str![[r#"
+[
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "ro:79",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: Some(
+                        HunkHeader("-23,6", "+24,7"),
+                    ),
+                    path: "",
+                    path_bytes: "uncommitted1.txt",
+                    stack_id: None,
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: Some(
+                        "@@ -23,6 +24,7 @@\n 1\n 2\n 3\n+hellooo\n 4\n 5\n 6\n",
+                    ),
                 },
-                is_entire_file: false,
+                tail: [],
             },
-        ),
-    ]
-    "#);
+            is_entire_file: false,
+        },
+    ),
+]
+
+"#]]
+        .raw()
+    );
 
     Ok(())
 }
@@ -1611,34 +1823,41 @@ fn uncommitted_hunks_overspecifying_id_prefix() -> anyhow::Result<()> {
         bail!("unexpected IDs {commit_id} {parent_id:?}");
     };
 
-    insta::assert_debug_snapshot!(id_map.parse("ro:78", Box::new(changed_paths_fn))?, @r#"
-    [
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "ro:7",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
-                        id: None,
-                        hunk_header: Some(
-                            HunkHeader("-1,6", "+1,7"),
-                        ),
-                        path: "",
-                        path_bytes: "uncommitted1.txt",
-                        stack_id: None,
-                        branch_ref_bytes: None,
-                        line_nums_added: None,
-                        line_nums_removed: None,
-                        diff: Some(
-                            "@@ -1,6 +1,7 @@\n 1\n 2\n 3\n+hellooooo\n 4\n 5\n 6\n",
-                        ),
-                    },
-                    tail: [],
+    snapbox::assert_data_eq!(
+        id_map
+            .parse("ro:78", Box::new(changed_paths_fn))?
+            .to_debug(),
+        snapbox::str![[r#"
+[
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "ro:7",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: Some(
+                        HunkHeader("-1,6", "+1,7"),
+                    ),
+                    path: "",
+                    path_bytes: "uncommitted1.txt",
+                    stack_id: None,
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: Some(
+                        "@@ -1,6 +1,7 @@\n 1\n 2\n 3\n+hellooooo\n 4\n 5\n 6\n",
+                    ),
                 },
-                is_entire_file: false,
+                tail: [],
             },
-        ),
-    ]
-    "#);
+            is_entire_file: false,
+        },
+    ),
+]
+
+"#]]
+        .raw()
+    );
 
     Ok(())
 }
@@ -1681,34 +1900,41 @@ fn uncommitted_hunks_overspecifying_id_prefix_with_collision_disambiguation() ->
         bail!("unexpected IDs {commit_id} {parent_id:?}");
     };
 
-    insta::assert_debug_snapshot!(id_map.parse("ro:3eeb#0-2", Box::new(changed_paths_fn))?, @r#"
-    [
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "ro:3#0-2",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
-                        id: None,
-                        hunk_header: Some(
-                            HunkHeader("-1,6", "+1,7"),
-                        ),
-                        path: "",
-                        path_bytes: "uncommitted1.txt",
-                        stack_id: None,
-                        branch_ref_bytes: None,
-                        line_nums_added: None,
-                        line_nums_removed: None,
-                        diff: Some(
-                            "@@ -1,6 +1,7 @@\n 1\n 2\n 3\n+hello\n 4\n 5\n 6\n",
-                        ),
-                    },
-                    tail: [],
+    snapbox::assert_data_eq!(
+        id_map
+            .parse("ro:3eeb#0-2", Box::new(changed_paths_fn))?
+            .to_debug(),
+        snapbox::str![[r#"
+[
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "ro:3#0-2",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: Some(
+                        HunkHeader("-1,6", "+1,7"),
+                    ),
+                    path: "",
+                    path_bytes: "uncommitted1.txt",
+                    stack_id: None,
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: Some(
+                        "@@ -1,6 +1,7 @@\n 1\n 2\n 3\n+hello\n 4\n 5\n 6\n",
+                    ),
                 },
-                is_entire_file: false,
+                tail: [],
             },
-        ),
-    ]
-    "#);
+            is_entire_file: false,
+        },
+    ),
+]
+
+"#]]
+        .raw()
+    );
 
     Ok(())
 }
@@ -1757,119 +1983,145 @@ fn underspecifying_hunk_ids() -> anyhow::Result<()> {
     };
 
     // Underspecifying with just first character finds all hunks
-    insta::assert_debug_snapshot!(id_map.parse("ro:7", Box::new(changed_paths_fn))?, @r#"
-    [
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "ro:78#0-2",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
-                        id: None,
-                        hunk_header: Some(
-                            HunkHeader("-1,6", "+1,7"),
-                        ),
-                        path: "",
-                        path_bytes: "uncommitted1.txt",
-                        stack_id: None,
-                        branch_ref_bytes: None,
-                        line_nums_added: None,
-                        line_nums_removed: None,
-                        diff: Some(
-                            "@@ -1,6 +1,7 @@\n 1\n 2\n 3\n+hellooooo\n 4\n 5\n 6\n",
-                        ),
-                    },
-                    tail: [],
+    snapbox::assert_data_eq!(
+        id_map.parse("ro:7", Box::new(changed_paths_fn))?.to_debug(),
+        snapbox::str![[r#"
+[
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "ro:78#0-2",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: Some(
+                        HunkHeader("-1,6", "+1,7"),
+                    ),
+                    path: "",
+                    path_bytes: "uncommitted1.txt",
+                    stack_id: None,
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: Some(
+                        "@@ -1,6 +1,7 @@\n 1\n 2\n 3\n+hellooooo\n 4\n 5\n 6\n",
+                    ),
                 },
-                is_entire_file: false,
+                tail: [],
             },
-        ),
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "ro:79",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
-                        id: None,
-                        hunk_header: Some(
-                            HunkHeader("-23,6", "+24,7"),
-                        ),
-                        path: "",
-                        path_bytes: "uncommitted1.txt",
-                        stack_id: None,
-                        branch_ref_bytes: None,
-                        line_nums_added: None,
-                        line_nums_removed: None,
-                        diff: Some(
-                            "@@ -23,6 +24,7 @@\n 1\n 2\n 3\n+hellooo\n 4\n 5\n 6\n",
-                        ),
-                    },
-                    tail: [],
+            is_entire_file: false,
+        },
+    ),
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "ro:79",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: Some(
+                        HunkHeader("-23,6", "+24,7"),
+                    ),
+                    path: "",
+                    path_bytes: "uncommitted1.txt",
+                    stack_id: None,
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: Some(
+                        "@@ -23,6 +24,7 @@\n 1\n 2\n 3\n+hellooo\n 4\n 5\n 6\n",
+                    ),
                 },
-                is_entire_file: false,
+                tail: [],
             },
-        ),
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "ro:78#1-2",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
-                        id: None,
-                        hunk_header: Some(
-                            HunkHeader("-33,6", "+35,7"),
-                        ),
-                        path: "",
-                        path_bytes: "uncommitted1.txt",
-                        stack_id: None,
-                        branch_ref_bytes: None,
-                        line_nums_added: None,
-                        line_nums_removed: None,
-                        diff: Some(
-                            "@@ -33,6 +35,7 @@\n 1\n 2\n 3\n+hellooooo\n 4\n 5\n 6\n",
-                        ),
-                    },
-                    tail: [],
+            is_entire_file: false,
+        },
+    ),
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "ro:78#1-2",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: Some(
+                        HunkHeader("-33,6", "+35,7"),
+                    ),
+                    path: "",
+                    path_bytes: "uncommitted1.txt",
+                    stack_id: None,
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: Some(
+                        "@@ -33,6 +35,7 @@\n 1\n 2\n 3\n+hellooooo\n 4\n 5\n 6\n",
+                    ),
                 },
-                is_entire_file: false,
+                tail: [],
             },
-        ),
-    ]
-    "#);
+            is_entire_file: false,
+        },
+    ),
+]
+
+"#]]
+        .raw()
+    );
 
     // Underspecifying with collision index only finds hunk with precisely matching collision index.
-    insta::assert_debug_snapshot!(id_map.parse("ro:7#0-2", Box::new(changed_paths_fn))?, @r#"
-    [
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "ro:78#0-2",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
-                        id: None,
-                        hunk_header: Some(
-                            HunkHeader("-1,6", "+1,7"),
-                        ),
-                        path: "",
-                        path_bytes: "uncommitted1.txt",
-                        stack_id: None,
-                        branch_ref_bytes: None,
-                        line_nums_added: None,
-                        line_nums_removed: None,
-                        diff: Some(
-                            "@@ -1,6 +1,7 @@\n 1\n 2\n 3\n+hellooooo\n 4\n 5\n 6\n",
-                        ),
-                    },
-                    tail: [],
+    snapbox::assert_data_eq!(
+        id_map
+            .parse("ro:7#0-2", Box::new(changed_paths_fn))?
+            .to_debug(),
+        snapbox::str![[r#"
+[
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "ro:78#0-2",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: Some(
+                        HunkHeader("-1,6", "+1,7"),
+                    ),
+                    path: "",
+                    path_bytes: "uncommitted1.txt",
+                    stack_id: None,
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: Some(
+                        "@@ -1,6 +1,7 @@\n 1\n 2\n 3\n+hellooooo\n 4\n 5\n 6\n",
+                    ),
                 },
-                is_entire_file: false,
+                tail: [],
             },
-        ),
-    ]
-    "#);
+            is_entire_file: false,
+        },
+    ),
+]
+
+"#]]
+        .raw()
+    );
 
     // An entirely empty prefix matches nothing
-    insta::assert_debug_snapshot!(id_map.parse("ro:", Box::new(changed_paths_fn))?, @"[]");
+    snapbox::assert_data_eq!(
+        id_map.parse("ro:", Box::new(changed_paths_fn))?.to_debug(),
+        snapbox::str![[r#"
+[]
+
+"#]]
+    );
 
     // Omitting only specifying collision index matches nothing - we don't allow omitting the prefix
     // unless you are explicitly indexing into the file's hunks
-    insta::assert_debug_snapshot!(id_map.parse("ro:#0-2", Box::new(changed_paths_fn))?, @"[]");
+    snapbox::assert_data_eq!(
+        id_map
+            .parse("ro:#0-2", Box::new(changed_paths_fn))?
+            .to_debug(),
+        snapbox::str![[r#"
+[]
+
+"#]]
+    );
 
     Ok(())
 }
@@ -1908,63 +2160,77 @@ fn uncommitted_hunks_by_id_collision_handling() -> anyhow::Result<()> {
         bail!("unexpected IDs {commit_id} {parent_id:?}");
     };
 
-    insta::assert_debug_snapshot!(id_map.parse("ro:3#0-2", Box::new(changed_paths_fn))?, @r#"
-    [
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "ro:3#0-2",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
-                        id: None,
-                        hunk_header: Some(
-                            HunkHeader("-1,6", "+1,7"),
-                        ),
-                        path: "",
-                        path_bytes: "uncommitted1.txt",
-                        stack_id: None,
-                        branch_ref_bytes: None,
-                        line_nums_added: None,
-                        line_nums_removed: None,
-                        diff: Some(
-                            "@@ -1,6 +1,7 @@\n 1\n 2\n 3\n+hello\n 4\n 5\n 6\n",
-                        ),
-                    },
-                    tail: [],
+    snapbox::assert_data_eq!(
+        id_map
+            .parse("ro:3#0-2", Box::new(changed_paths_fn))?
+            .to_debug(),
+        snapbox::str![[r#"
+[
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "ro:3#0-2",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: Some(
+                        HunkHeader("-1,6", "+1,7"),
+                    ),
+                    path: "",
+                    path_bytes: "uncommitted1.txt",
+                    stack_id: None,
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: Some(
+                        "@@ -1,6 +1,7 @@\n 1\n 2\n 3\n+hello\n 4\n 5\n 6\n",
+                    ),
                 },
-                is_entire_file: false,
+                tail: [],
             },
-        ),
-    ]
-    "#);
+            is_entire_file: false,
+        },
+    ),
+]
 
-    insta::assert_debug_snapshot!(id_map.parse("ro:3#1-2", Box::new(changed_paths_fn))?, @r#"
-    [
-        UncommittedHunkOrFile(
-            UncommittedHunkOrFile {
-                id: "ro:3#1-2",
-                hunk_assignments: NonEmpty {
-                    head: HunkAssignment {
-                        id: None,
-                        hunk_header: Some(
-                            HunkHeader("-23,6", "+24,7"),
-                        ),
-                        path: "",
-                        path_bytes: "uncommitted1.txt",
-                        stack_id: None,
-                        branch_ref_bytes: None,
-                        line_nums_added: None,
-                        line_nums_removed: None,
-                        diff: Some(
-                            "@@ -23,6 +24,7 @@\n 1\n 2\n 3\n+hello\n 4\n 5\n 6\n",
-                        ),
-                    },
-                    tail: [],
+"#]]
+        .raw()
+    );
+
+    snapbox::assert_data_eq!(
+        id_map
+            .parse("ro:3#1-2", Box::new(changed_paths_fn))?
+            .to_debug(),
+        snapbox::str![[r#"
+[
+    UncommittedHunkOrFile(
+        UncommittedHunkOrFile {
+            id: "ro:3#1-2",
+            hunk_assignments: NonEmpty {
+                head: HunkAssignment {
+                    id: None,
+                    hunk_header: Some(
+                        HunkHeader("-23,6", "+24,7"),
+                    ),
+                    path: "",
+                    path_bytes: "uncommitted1.txt",
+                    stack_id: None,
+                    branch_ref_bytes: None,
+                    line_nums_added: None,
+                    line_nums_removed: None,
+                    diff: Some(
+                        "@@ -23,6 +24,7 @@\n 1\n 2\n 3\n+hello\n 4\n 5\n 6\n",
+                    ),
                 },
-                is_entire_file: false,
+                tail: [],
             },
-        ),
-    ]
-    "#);
+            is_entire_file: false,
+        },
+    ),
+]
+
+"#]]
+        .raw()
+    );
 
     Ok(())
 }

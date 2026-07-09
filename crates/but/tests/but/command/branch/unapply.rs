@@ -1,4 +1,5 @@
 use bstr::ByteSlice;
+use snapbox::IntoData;
 use snapbox::str;
 use utils::create_local_branch_with_commit;
 
@@ -10,11 +11,15 @@ use crate::{
 #[test]
 fn single_branch() {
     let env = Sandbox::open_or_init_scenario_with_target_and_default_settings("one-stack");
-    insta::assert_snapshot!(env.git_log(), @"
-    * edd3eb7 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 9477ae7 (A) add A
-    * 0dc3733 (origin/main, origin/HEAD, main) add M
-    ");
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* edd3eb7 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 9477ae7 (A) add A
+* 0dc3733 (origin/main, origin/HEAD, main) add M
+
+"#]]
+    );
 
     env.setup_metadata(&["A"]);
 
@@ -24,14 +29,19 @@ fn single_branch() {
     // First apply the branch
     env.but("apply").arg(branch_name).assert().success();
 
-    insta::assert_snapshot!(env.git_log(), @r"
-    *   9d5d9e5 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    | * 9f9d5a6 (feature-branch) Add feature
-    * | 9477ae7 (A) add A
-    |/  
-    * 0dc3733 (origin/main, origin/HEAD, main, gitbutler/target) add M
-    ");
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+*   9d5d9e5 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+| * 9f9d5a6 (feature-branch) Add feature
+* | 9477ae7 (A) add A
+|/  
+* 0dc3733 (origin/main, origin/HEAD, main, gitbutler/target) add M
+
+"#]]
+        .raw()
+    );
 
     // Now unapply the branch using the new `but unapply` command
     env.but("unapply")
@@ -45,23 +55,31 @@ Unapplied stack with branches 'feature-branch' from workspace
 "#]]);
 
     // Verify the branch is removed from workspace
-    insta::assert_snapshot!(env.git_log(), @"
-    * 9f9d5a6 (feature-branch) Add feature
-    | * 0bbfbfd (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    | * 9477ae7 (A) add A
-    |/  
-    * 0dc3733 (origin/main, origin/HEAD, main, gitbutler/target) add M
-    ");
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* 9f9d5a6 (feature-branch) Add feature
+| * 0bbfbfd (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+| * 9477ae7 (A) add A
+|/  
+* 0dc3733 (origin/main, origin/HEAD, main, gitbutler/target) add M
+
+"#]]
+    );
 }
 
 #[test]
 fn unapply_with_json_output() {
     let env = Sandbox::open_or_init_scenario_with_target_and_default_settings("one-stack");
-    insta::assert_snapshot!(env.git_log(), @"
-    * edd3eb7 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 9477ae7 (A) add A
-    * 0dc3733 (origin/main, origin/HEAD, main) add M
-    ");
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* edd3eb7 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 9477ae7 (A) add A
+* 0dc3733 (origin/main, origin/HEAD, main) add M
+
+"#]]
+    );
 
     env.setup_metadata(&["A"]);
 
@@ -79,13 +97,17 @@ fn unapply_with_json_output() {
         .success()
         .stderr_eq(str![]);
 
-    insta::assert_snapshot!(env.git_log(), @"
-    * 9f9d5a6 (feature-branch) Add feature
-    | * 0bbfbfd (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    | * 9477ae7 (A) add A
-    |/  
-    * 0dc3733 (origin/main, origin/HEAD, main, gitbutler/target) add M
-    ");
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* 9f9d5a6 (feature-branch) Add feature
+| * 0bbfbfd (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+| * 9477ae7 (A) add A
+|/  
+* 0dc3733 (origin/main, origin/HEAD, main, gitbutler/target) add M
+
+"#]]
+    );
 }
 
 #[test]
@@ -187,11 +209,15 @@ Failed to unapply branch. Branch 'feature-branch' not found in any applied stack
 #[test]
 fn unapply_remote_tracking_branch() {
     let env = Sandbox::open_or_init_scenario_with_target_and_default_settings("one-stack");
-    insta::assert_snapshot!(env.git_log(), @"
-    * edd3eb7 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 9477ae7 (A) add A
-    * 0dc3733 (origin/main, origin/HEAD, main) add M
-    ");
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* edd3eb7 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 9477ae7 (A) add A
+* 0dc3733 (origin/main, origin/HEAD, main) add M
+
+"#]]
+    );
 
     env.setup_metadata(&["A"]);
 
@@ -208,14 +234,19 @@ fn unapply_remote_tracking_branch() {
     // Apply the remote branch
     env.but("apply origin/remote-feature").assert().success();
 
-    insta::assert_snapshot!(env.git_log(), @r"
-    *   1bb7daf (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    | * ba02e5f (origin/remote-feature, remote-feature) Add remote feature
-    * | 9477ae7 (A) add A
-    |/  
-    * 0dc3733 (origin/main, origin/HEAD, main, gitbutler/target) add M
-    ");
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+*   1bb7daf (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+| * ba02e5f (origin/remote-feature, remote-feature) Add remote feature
+* | 9477ae7 (A) add A
+|/  
+* 0dc3733 (origin/main, origin/HEAD, main, gitbutler/target) add M
+
+"#]]
+        .raw()
+    );
 
     // Unapply the remote branch by its local name (remote-feature, not origin/remote-feature)
     env.but("unapply remote-feature")
@@ -228,13 +259,17 @@ Unapplied stack with branches 'remote-feature' from workspace
 "#]]);
 
     // Verify it was removed from workspace
-    insta::assert_snapshot!(env.git_log(), @"
-    * 0bbfbfd (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 9477ae7 (A) add A
-    | * ba02e5f (origin/remote-feature, remote-feature) Add remote feature
-    |/  
-    * 0dc3733 (origin/main, origin/HEAD, main, gitbutler/target) add M
-    ");
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* 0bbfbfd (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 9477ae7 (A) add A
+| * ba02e5f (origin/remote-feature, remote-feature) Add remote feature
+|/  
+* 0dc3733 (origin/main, origin/HEAD, main, gitbutler/target) add M
+
+"#]]
+    );
 }
 
 #[test]

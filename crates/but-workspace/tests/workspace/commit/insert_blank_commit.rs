@@ -12,11 +12,15 @@ use crate::ref_info::with_workspace_commit::utils::named_writable_scenario_with_
 fn insert_below_commit() -> Result<()> {
     let (_tmp, graph, repo, mut _meta, _description) =
         writable_scenario("reword-three-commits", |_| {})?;
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * c9f444c (HEAD -> three) commit three
-    * 16fd221 (origin/two, two) commit two
-    * 8b426d0 (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* c9f444c (HEAD -> three) commit three
+* 16fd221 (origin/two, two) commit two
+* 8b426d0 (one) commit one
+
+"#]]
+    );
 
     let head_tree = repo.head_tree_id()?;
     let id = repo.rev_parse_single("two")?;
@@ -31,14 +35,18 @@ fn insert_below_commit() -> Result<()> {
     .0
     .materialize()?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * 1b97135 (HEAD -> three) commit three
-    * 5f398b2 (two) commit two
-    * b3b14c2 
-    | * 16fd221 (origin/two) commit two
-    |/  
-    * 8b426d0 (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 1b97135 (HEAD -> three) commit three
+* 5f398b2 (two) commit two
+* b3b14c2 
+| * 16fd221 (origin/two) commit two
+|/  
+* 8b426d0 (one) commit one
+
+"#]]
+    );
 
     assert_eq!(head_tree, repo.head_tree_id()?);
 
@@ -49,11 +57,15 @@ fn insert_below_commit() -> Result<()> {
 fn insert_above_commit() -> Result<()> {
     let (_tmp, graph, repo, mut _meta, _description) =
         writable_scenario("reword-three-commits", |_| {})?;
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * c9f444c (HEAD -> three) commit three
-    * 16fd221 (origin/two, two) commit two
-    * 8b426d0 (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* c9f444c (HEAD -> three) commit three
+* 16fd221 (origin/two, two) commit two
+* 8b426d0 (one) commit one
+
+"#]]
+    );
 
     let head_tree = repo.head_tree_id()?;
     let id = repo.rev_parse_single("two")?;
@@ -68,12 +80,16 @@ fn insert_above_commit() -> Result<()> {
     .0
     .materialize()?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * 2b11859 (HEAD -> three) commit three
-    * 024b774 (two) 
-    * 16fd221 (origin/two) commit two
-    * 8b426d0 (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 2b11859 (HEAD -> three) commit three
+* 024b774 (two) 
+* 16fd221 (origin/two) commit two
+* 8b426d0 (one) commit one
+
+"#]]
+    );
 
     assert_eq!(head_tree, repo.head_tree_id()?);
 
@@ -84,11 +100,15 @@ fn insert_above_commit() -> Result<()> {
 fn insert_below_reference() -> Result<()> {
     let (_tmp, graph, repo, mut _meta, _description) =
         writable_scenario("reword-three-commits", |_| {})?;
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * c9f444c (HEAD -> three) commit three
-    * 16fd221 (origin/two, two) commit two
-    * 8b426d0 (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* c9f444c (HEAD -> three) commit three
+* 16fd221 (origin/two, two) commit two
+* 8b426d0 (one) commit one
+
+"#]]
+    );
 
     let head_tree = repo.head_tree_id()?;
     let reference = repo.find_reference("two")?;
@@ -103,12 +123,16 @@ fn insert_below_reference() -> Result<()> {
     .0
     .materialize()?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * 2b11859 (HEAD -> three) commit three
-    * 024b774 (two) 
-    * 16fd221 (origin/two) commit two
-    * 8b426d0 (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 2b11859 (HEAD -> three) commit three
+* 024b774 (two) 
+* 16fd221 (origin/two) commit two
+* 8b426d0 (one) commit one
+
+"#]]
+    );
 
     assert_eq!(head_tree, repo.head_tree_id()?);
 
@@ -119,11 +143,15 @@ fn insert_below_reference() -> Result<()> {
 fn insert_above_reference() -> Result<()> {
     let (_tmp, graph, repo, mut _meta, _description) =
         writable_scenario("reword-three-commits", |_| {})?;
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * c9f444c (HEAD -> three) commit three
-    * 16fd221 (origin/two, two) commit two
-    * 8b426d0 (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* c9f444c (HEAD -> three) commit three
+* 16fd221 (origin/two, two) commit two
+* 8b426d0 (one) commit one
+
+"#]]
+    );
 
     let head_tree = repo.head_tree_id()?;
     let reference = repo.find_reference("two")?;
@@ -138,12 +166,16 @@ fn insert_above_reference() -> Result<()> {
     .0
     .materialize()?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * 2b11859 (HEAD -> three) commit three
-    * 024b774 
-    * 16fd221 (origin/two, two) commit two
-    * 8b426d0 (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 2b11859 (HEAD -> three) commit three
+* 024b774 
+* 16fd221 (origin/two, two) commit two
+* 8b426d0 (one) commit one
+
+"#]]
+    );
 
     assert_eq!(head_tree, repo.head_tree_id()?);
 

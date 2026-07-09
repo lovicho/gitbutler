@@ -5,11 +5,15 @@ use crate::utils::{CommandExt, Sandbox};
 #[test]
 fn outputs_branch_name() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    insta::assert_snapshot!(env.git_log(), @"
-    * edd3eb7 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 9477ae7 (A) add A
-    * 0dc3733 (origin/main, origin/HEAD, main) add M
-    ");
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* edd3eb7 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 9477ae7 (A) add A
+* 0dc3733 (origin/main, origin/HEAD, main) add M
+
+"#]]
+    );
 
     env.setup_metadata(&["A"]);
 
@@ -114,11 +118,15 @@ Error: A branch named 'A' exists but is not applied
 #[test]
 fn with_json_output() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    insta::assert_snapshot!(env.git_log(), @"
-    * edd3eb7 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 9477ae7 (A) add A
-    * 0dc3733 (origin/main, origin/HEAD, main) add M
-    ");
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* edd3eb7 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 9477ae7 (A) add A
+* 0dc3733 (origin/main, origin/HEAD, main) add M
+
+"#]]
+    );
 
     env.setup_metadata(&["A"]);
 

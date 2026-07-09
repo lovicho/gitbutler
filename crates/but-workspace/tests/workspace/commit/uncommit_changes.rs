@@ -6,6 +6,7 @@ use but_workspace::commit::{
     UncommitChangesSource, uncommit_changes, uncommit_changes_from_commits,
 };
 use gix::prelude::ObjectIdExt;
+use snapbox::IntoData;
 use std::collections::HashMap;
 
 use crate::ref_info::with_workspace_commit::utils::named_writable_scenario_with_description_and_graph as writable_scenario;
@@ -109,22 +110,31 @@ fn assert_worktree_file(repo: &gix::Repository, path: &str, expected: &str) {
 fn uncommit_file_from_head() -> Result<()> {
     let (_tmp, graph, repo, mut _meta, _description) =
         writable_scenario("reword-three-commits", |_| {})?;
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * c9f444c (HEAD -> three) commit three
-    * 16fd221 (origin/two, two) commit two
-    * 8b426d0 (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* c9f444c (HEAD -> three) commit three
+* 16fd221 (origin/two, two) commit two
+* 8b426d0 (one) commit one
+
+"#]]
+    );
 
     // Verify initial tree contents
     let three_id = repo.rev_parse_single("three")?.detach();
 
-    insta::assert_snapshot!(visualize_tree(three_id.attach(&repo).object()?.peel_to_tree()?.id()), @r#"
-    e0495e9
-    ├── .gitignore:100644:f4ec724 "/remote/\n"
-    ├── one.txt:100644:257cc56 "foo\n"
-    ├── three.txt:100644:257cc56 "foo\n"
-    └── two.txt:100644:257cc56 "foo\n"
-    "#);
+    snapbox::assert_data_eq!(
+        visualize_tree(three_id.attach(&repo).object()?.peel_to_tree()?.id()).to_string(),
+        snapbox::str![[r#"
+e0495e9
+├── .gitignore:100644:f4ec724 "/remote/\n"
+├── one.txt:100644:257cc56 "foo\n"
+├── three.txt:100644:257cc56 "foo\n"
+└── two.txt:100644:257cc56 "foo\n"
+
+"#]]
+        .raw()
+    );
 
     // Uncommit three.txt from commit three
     let mut ws = graph.into_workspace()?;
@@ -135,19 +145,28 @@ fn uncommit_file_from_head() -> Result<()> {
     let new_commit_id = materialized.lookup_pick(outcome.commit_selector)?;
 
     // Graph structure should be maintained (commit hash will change)
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * 832a93c (HEAD -> three) commit three
-    * 16fd221 (origin/two, two) commit two
-    * 8b426d0 (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 832a93c (HEAD -> three) commit three
+* 16fd221 (origin/two, two) commit two
+* 8b426d0 (one) commit one
+
+"#]]
+    );
 
     // Verify new tree contents - three.txt should no longer be in commit three's tree
-    insta::assert_snapshot!(visualize_tree(new_commit_id.attach(&repo).object()?.peel_to_tree()?.id()), @r#"
-    aac5238
-    ├── .gitignore:100644:f4ec724 "/remote/\n"
-    ├── one.txt:100644:257cc56 "foo\n"
-    └── two.txt:100644:257cc56 "foo\n"
-    "#);
+    snapbox::assert_data_eq!(
+        visualize_tree(new_commit_id.attach(&repo).object()?.peel_to_tree()?.id()).to_string(),
+        snapbox::str![[r#"
+aac5238
+├── .gitignore:100644:f4ec724 "/remote/\n"
+├── one.txt:100644:257cc56 "foo\n"
+└── two.txt:100644:257cc56 "foo\n"
+
+"#]]
+        .raw()
+    );
 
     Ok(())
 }
@@ -156,21 +175,30 @@ fn uncommit_file_from_head() -> Result<()> {
 fn uncommit_file_from_parent() -> Result<()> {
     let (_tmp, graph, repo, mut _meta, _description) =
         writable_scenario("reword-three-commits", |_| {})?;
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * c9f444c (HEAD -> three) commit three
-    * 16fd221 (origin/two, two) commit two
-    * 8b426d0 (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* c9f444c (HEAD -> three) commit three
+* 16fd221 (origin/two, two) commit two
+* 8b426d0 (one) commit one
+
+"#]]
+    );
 
     let two_id = repo.rev_parse_single("two")?.detach();
 
     // Verify initial tree of commit two
-    insta::assert_snapshot!(visualize_tree(two_id.attach(&repo).object()?.peel_to_tree()?.id()), @r#"
-    aac5238
-    ├── .gitignore:100644:f4ec724 "/remote/\n"
-    ├── one.txt:100644:257cc56 "foo\n"
-    └── two.txt:100644:257cc56 "foo\n"
-    "#);
+    snapbox::assert_data_eq!(
+        visualize_tree(two_id.attach(&repo).object()?.peel_to_tree()?.id()).to_string(),
+        snapbox::str![[r#"
+aac5238
+├── .gitignore:100644:f4ec724 "/remote/\n"
+├── one.txt:100644:257cc56 "foo\n"
+└── two.txt:100644:257cc56 "foo\n"
+
+"#]]
+        .raw()
+    );
 
     // Uncommit two.txt from commit two
     let mut ws = graph.into_workspace()?;
@@ -181,29 +209,43 @@ fn uncommit_file_from_parent() -> Result<()> {
     let new_commit_id = materialized.lookup_pick(outcome.commit_selector)?;
 
     // Graph structure should be maintained
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * 300f366 (HEAD -> three) commit three
-    * 0f198e0 (two) commit two
-    | * 16fd221 (origin/two) commit two
-    |/  
-    * 8b426d0 (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 300f366 (HEAD -> three) commit three
+* 0f198e0 (two) commit two
+| * 16fd221 (origin/two) commit two
+|/  
+* 8b426d0 (one) commit one
+
+"#]]
+    );
 
     // Verify commit two no longer has two.txt
-    insta::assert_snapshot!(visualize_tree(new_commit_id.attach(&repo).object()?.peel_to_tree()?.id()), @r#"
-    6820889
-    ├── .gitignore:100644:f4ec724 "/remote/\n"
-    └── one.txt:100644:257cc56 "foo\n"
-    "#);
+    snapbox::assert_data_eq!(
+        visualize_tree(new_commit_id.attach(&repo).object()?.peel_to_tree()?.id()).to_string(),
+        snapbox::str![[r#"
+6820889
+├── .gitignore:100644:f4ec724 "/remote/\n"
+└── one.txt:100644:257cc56 "foo\n"
+
+"#]]
+        .raw()
+    );
 
     // Verify commit three still has all files (two.txt reappears from three's perspective)
     let new_three_id = repo.rev_parse_single("three")?.detach();
-    insta::assert_snapshot!(visualize_tree(new_three_id.attach(&repo).object()?.peel_to_tree()?.id()), @r#"
-    c97666c
-    ├── .gitignore:100644:f4ec724 "/remote/\n"
-    ├── one.txt:100644:257cc56 "foo\n"
-    └── three.txt:100644:257cc56 "foo\n"
-    "#);
+    snapbox::assert_data_eq!(
+        visualize_tree(new_three_id.attach(&repo).object()?.peel_to_tree()?.id()).to_string(),
+        snapbox::str![[r#"
+c97666c
+├── .gitignore:100644:f4ec724 "/remote/\n"
+├── one.txt:100644:257cc56 "foo\n"
+└── three.txt:100644:257cc56 "foo\n"
+
+"#]]
+        .raw()
+    );
 
     Ok(())
 }
@@ -212,20 +254,29 @@ fn uncommit_file_from_parent() -> Result<()> {
 fn uncommit_file_from_root_commit() -> Result<()> {
     let (_tmp, graph, repo, mut _meta, _description) =
         writable_scenario("reword-three-commits", |_| {})?;
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * c9f444c (HEAD -> three) commit three
-    * 16fd221 (origin/two, two) commit two
-    * 8b426d0 (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* c9f444c (HEAD -> three) commit three
+* 16fd221 (origin/two, two) commit two
+* 8b426d0 (one) commit one
+
+"#]]
+    );
 
     let one_id = repo.rev_parse_single("one")?.detach();
 
     // Verify initial tree of commit one
-    insta::assert_snapshot!(visualize_tree(one_id.attach(&repo).object()?.peel_to_tree()?.id()), @r#"
-    6820889
-    ├── .gitignore:100644:f4ec724 "/remote/\n"
-    └── one.txt:100644:257cc56 "foo\n"
-    "#);
+    snapbox::assert_data_eq!(
+        visualize_tree(one_id.attach(&repo).object()?.peel_to_tree()?.id()).to_string(),
+        snapbox::str![[r#"
+6820889
+├── .gitignore:100644:f4ec724 "/remote/\n"
+└── one.txt:100644:257cc56 "foo\n"
+
+"#]]
+        .raw()
+    );
 
     // Uncommit one.txt from commit one (the root commit)
     let mut ws = graph.into_workspace()?;
@@ -236,19 +287,28 @@ fn uncommit_file_from_root_commit() -> Result<()> {
     let new_commit_id = materialized.lookup_pick(outcome.commit_selector)?;
 
     // Graph structure should be maintained
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * 95fb0e5 (HEAD -> three) commit three
-    * 910d5b1 (two) commit two
-    * 7fcda42 (one) commit one
-    * 16fd221 (origin/two) commit two
-    * 8b426d0 commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 95fb0e5 (HEAD -> three) commit three
+* 910d5b1 (two) commit two
+* 7fcda42 (one) commit one
+* 16fd221 (origin/two) commit two
+* 8b426d0 commit one
+
+"#]]
+    );
 
     // Verify commit one no longer has one.txt
-    insta::assert_snapshot!(visualize_tree(new_commit_id.attach(&repo).object()?.peel_to_tree()?.id()), @r#"
-    f2ff419
-    └── .gitignore:100644:f4ec724 "/remote/\n"
-    "#);
+    snapbox::assert_data_eq!(
+        visualize_tree(new_commit_id.attach(&repo).object()?.peel_to_tree()?.id()).to_string(),
+        snapbox::str![[r#"
+f2ff419
+└── .gitignore:100644:f4ec724 "/remote/\n"
+
+"#]]
+        .raw()
+    );
 
     Ok(())
 }
@@ -285,11 +345,15 @@ fn error_when_changes_not_found() -> Result<()> {
 fn uncommit_empty_changes_is_noop() -> Result<()> {
     let (_tmp, graph, repo, mut _meta, _description) =
         writable_scenario("reword-three-commits", |_| {})?;
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * c9f444c (HEAD -> three) commit three
-    * 16fd221 (origin/two, two) commit two
-    * 8b426d0 (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* c9f444c (HEAD -> three) commit three
+* 16fd221 (origin/two, two) commit two
+* 8b426d0 (one) commit one
+
+"#]]
+    );
 
     let three_id = repo.rev_parse_single("three")?.detach();
 
@@ -301,11 +365,15 @@ fn uncommit_empty_changes_is_noop() -> Result<()> {
     outcome.rebase.materialize()?;
 
     // Graph should be unchanged
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * fbb2bd1 (HEAD -> three) commit three
-    * 16fd221 (origin/two, two) commit two
-    * 8b426d0 (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* fbb2bd1 (HEAD -> three) commit three
+* 16fd221 (origin/two, two) commit two
+* 8b426d0 (one) commit one
+
+"#]]
+    );
 
     Ok(())
 }
@@ -344,23 +412,38 @@ fn uncommit_changes_from_commits_groups_and_orders_sources() -> Result<()> {
     rebase.materialize_without_checkout()?;
     let graph_after = visualize_commit_graph_all(&repo)?;
 
-    insta::assert_snapshot!(graph_diff(&graph_before, &graph_after), @r"
-    --- before
-    -* [C1] (HEAD -> three) commit three
-    -* [C2] (origin/two, two) commit two
-    -* [C3] (one) commit one
-    +++ after
-    +* [C4] (HEAD -> three) commit three
-    +* [C5] (two) commit two
-    +* [C6] (one) commit one
-    +* [C2] (origin/two) commit two
-    +* [C3] commit one
-    ");
+    snapbox::assert_data_eq!(
+        graph_diff(&graph_before, &graph_after),
+        snapbox::str![[r#"
+--- before
+-* [C1] (HEAD -> three) commit three
+-* [C2] (origin/two, two) commit two
+-* [C3] (one) commit one
++++ after
++* [C4] (HEAD -> three) commit three
++* [C5] (two) commit two
++* [C6] (one) commit one
++* [C2] (origin/two) commit two
++* [C3] commit one
 
-    insta::assert_snapshot!(visualize_tree(repo.rev_parse_single("three")?.object()?.peel_to_tree()?.id()), @r#"
-    f2ff419
-    └── .gitignore:100644:f4ec724 "/remote/\n"
-    "#);
+"#]]
+    );
+
+    snapbox::assert_data_eq!(
+        visualize_tree(
+            repo.rev_parse_single("three")?
+                .object()?
+                .peel_to_tree()?
+                .id()
+        )
+        .to_string(),
+        snapbox::str![[r#"
+f2ff419
+└── .gitignore:100644:f4ec724 "/remote/\n"
+
+"#]]
+        .raw()
+    );
     assert_worktree_file(&repo, "one.txt", "foo\n");
     assert_worktree_file(&repo, "two.txt", "foo\n");
     assert_worktree_file(&repo, "three.txt", "foo\n");
@@ -397,20 +480,30 @@ fn uncommit_changes_from_commits_removes_multiple_changes_from_one_source() -> R
     rebase.materialize_without_checkout()?;
     let graph_after = visualize_commit_graph_all(&repo)?;
 
-    insta::assert_snapshot!(graph_diff(&graph_before, &graph_after), @r"
-    --- before
-    -* [C1] (HEAD -> three) commit three
-    -* [C2] (origin/two, two) commit two
-    -* [C3] (one) commit one
-    +++ after
-    +* [C4] (HEAD -> three) commit three
-    +* [C5] (two) commit two
-    +* [C6] (one) commit one
-    +* [C2] (origin/two) commit two
-    +* [C3] commit one
-    ");
+    snapbox::assert_data_eq!(
+        graph_diff(&graph_before, &graph_after),
+        snapbox::str![[r#"
+--- before
+-* [C1] (HEAD -> three) commit three
+-* [C2] (origin/two, two) commit two
+-* [C3] (one) commit one
++++ after
++* [C4] (HEAD -> three) commit three
++* [C5] (two) commit two
++* [C6] (one) commit one
++* [C2] (origin/two) commit two
++* [C3] commit one
 
-    insta::assert_snapshot!(visualize_tree(repo.rev_parse_single("one")?.object()?.peel_to_tree()?.id()), @"4b825dc");
+"#]]
+    );
+
+    snapbox::assert_data_eq!(
+        visualize_tree(repo.rev_parse_single("one")?.object()?.peel_to_tree()?.id()).to_string(),
+        snapbox::str![[r#"
+4b825dc
+
+"#]]
+    );
     assert_worktree_file(&repo, ".gitignore", "/remote/\n");
     assert_worktree_file(&repo, "one.txt", "foo\n");
 
@@ -447,20 +540,30 @@ fn uncommit_changes_from_commits_groups_duplicate_commit_ids() -> Result<()> {
     rebase.materialize_without_checkout()?;
     let graph_after = visualize_commit_graph_all(&repo)?;
 
-    insta::assert_snapshot!(graph_diff(&graph_before, &graph_after), @r"
-    --- before
-    -* [C1] (HEAD -> three) commit three
-    -* [C2] (origin/two, two) commit two
-    -* [C3] (one) commit one
-    +++ after
-    +* [C4] (HEAD -> three) commit three
-    +* [C5] (two) commit two
-    +* [C6] (one) commit one
-    +* [C2] (origin/two) commit two
-    +* [C3] commit one
-    ");
+    snapbox::assert_data_eq!(
+        graph_diff(&graph_before, &graph_after),
+        snapbox::str![[r#"
+--- before
+-* [C1] (HEAD -> three) commit three
+-* [C2] (origin/two, two) commit two
+-* [C3] (one) commit one
++++ after
++* [C4] (HEAD -> three) commit three
++* [C5] (two) commit two
++* [C6] (one) commit one
++* [C2] (origin/two) commit two
++* [C3] commit one
 
-    insta::assert_snapshot!(visualize_tree(repo.rev_parse_single("one")?.object()?.peel_to_tree()?.id()), @"4b825dc");
+"#]]
+    );
+
+    snapbox::assert_data_eq!(
+        visualize_tree(repo.rev_parse_single("one")?.object()?.peel_to_tree()?.id()).to_string(),
+        snapbox::str![[r#"
+4b825dc
+
+"#]]
+    );
     assert_worktree_file(&repo, ".gitignore", "/remote/\n");
     assert_worktree_file(&repo, "one.txt", "foo\n");
 
@@ -503,23 +606,38 @@ fn uncommit_changes_from_commits_reports_failures_and_materializes_successes() -
     rebase.materialize_without_checkout()?;
     let graph_after = visualize_commit_graph_all(&repo)?;
 
-    insta::assert_snapshot!(graph_diff(&graph_before, &graph_after), @r"
-    --- before
-    -* [C1] (HEAD -> three) commit three
-    -* [C2] (origin/two, two) commit two
-    -* [C3] (one) commit one
-    +++ after
-    +* [C4] (HEAD -> three) commit three
-    +* [C2] (origin/two, two) commit two
-    +* [C3] (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        graph_diff(&graph_before, &graph_after),
+        snapbox::str![[r#"
+--- before
+-* [C1] (HEAD -> three) commit three
+-* [C2] (origin/two, two) commit two
+-* [C3] (one) commit one
++++ after
++* [C4] (HEAD -> three) commit three
++* [C2] (origin/two, two) commit two
++* [C3] (one) commit one
 
-    insta::assert_snapshot!(visualize_tree(repo.rev_parse_single("three")?.object()?.peel_to_tree()?.id()), @r#"
-    aac5238
-    ├── .gitignore:100644:f4ec724 "/remote/\n"
-    ├── one.txt:100644:257cc56 "foo\n"
-    └── two.txt:100644:257cc56 "foo\n"
-    "#);
+"#]]
+    );
+
+    snapbox::assert_data_eq!(
+        visualize_tree(
+            repo.rev_parse_single("three")?
+                .object()?
+                .peel_to_tree()?
+                .id()
+        )
+        .to_string(),
+        snapbox::str![[r#"
+aac5238
+├── .gitignore:100644:f4ec724 "/remote/\n"
+├── one.txt:100644:257cc56 "foo\n"
+└── two.txt:100644:257cc56 "foo\n"
+
+"#]]
+        .raw()
+    );
     assert_worktree_file(&repo, "three.txt", "foo\n");
 
     Ok(())
@@ -590,18 +708,33 @@ fn uncommit_changes_from_commits_can_uncommit_selected_lines() -> Result<()> {
     rebase.materialize_without_checkout()?;
     let graph_after = visualize_commit_graph_all(&repo)?;
 
-    insta::assert_snapshot!(graph_diff(&graph_before, &graph_after), @r"
-    --- before
-    -* [C1] (HEAD -> branch) edit story
-    -* [C2] (main) base story
-    +++ after
-    +* [C3] (HEAD -> branch) edit story
-    +* [C2] (main) base story
-    ");
-    insta::assert_snapshot!(visualize_tree(repo.rev_parse_single("branch")?.object()?.peel_to_tree()?.id()), @r#"
-    12a9d5c
-    └── story.txt:100644:35f45fd "base-1\nbase-2\nkeep-1\nkeep-2\n"
-    "#);
+    snapbox::assert_data_eq!(
+        graph_diff(&graph_before, &graph_after),
+        snapbox::str![[r#"
+--- before
+-* [C1] (HEAD -> branch) edit story
+-* [C2] (main) base story
++++ after
++* [C3] (HEAD -> branch) edit story
++* [C2] (main) base story
+
+"#]]
+    );
+    snapbox::assert_data_eq!(
+        visualize_tree(
+            repo.rev_parse_single("branch")?
+                .object()?
+                .peel_to_tree()?
+                .id()
+        )
+        .to_string(),
+        snapbox::str![[r#"
+12a9d5c
+└── story.txt:100644:35f45fd "base-1\nbase-2\nkeep-1\nkeep-2\n"
+
+"#]]
+        .raw()
+    );
     assert_worktree_file(
         &repo,
         "story.txt",
@@ -645,14 +778,18 @@ fn uncommit_changes_from_commits_merges_multiple_specs_for_same_file() -> Result
     rebase.materialize_without_checkout()?;
     let graph_after = visualize_commit_graph_all(&repo)?;
 
-    insta::assert_snapshot!(graph_diff(&graph_before, &graph_after), @r"
-    --- before
-    -* [C1] (HEAD -> branch) edit story
-    -* [C2] (main) base story
-    +++ after
-    +* [C3] (HEAD -> branch) edit story
-    +* [C2] (main) base story
-    ");
+    snapbox::assert_data_eq!(
+        graph_diff(&graph_before, &graph_after),
+        snapbox::str![[r#"
+--- before
+-* [C1] (HEAD -> branch) edit story
+-* [C2] (main) base story
++++ after
++* [C3] (HEAD -> branch) edit story
++* [C2] (main) base story
+
+"#]]
+    );
 
     // Both edits were removed from the commit, so its tree matches the base story.
     let committed = repo
@@ -756,30 +893,46 @@ fn uncommit_changes_from_commits_handles_parallel_stacks() -> Result<()> {
     rebase.materialize_without_checkout()?;
     let graph_after = visualize_commit_graph_all(&repo)?;
 
-    insta::assert_snapshot!(graph_diff(&graph_before, &graph_after), @r"
-    --- before
-    -*-.   [C1] (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    -|\ \
-    -| | * [C2] (stack-b) stack B adds file
-    -| |/
-    -|/|
-    -| * [C3] (stack-a) stack A adds file
-    -|/
-    -* [C4] (main) base
-    +++ after
-    +*-.   [C5] (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    +|\ \
-    +| | * [C6] (stack-b) stack B adds file
-    +| |/
-    +|/|
-    +| * [C7] (stack-a) stack A adds file
-    +|/
-    +* [C4] (main) base
-    ");
-    insta::assert_snapshot!(visualize_tree(repo.rev_parse_single("gitbutler/workspace")?.object()?.peel_to_tree()?.id()), @r#"
-    4b36dfd
-    └── base.txt:100644:df967b9 "base\n"
-    "#);
+    snapbox::assert_data_eq!(
+        graph_diff(&graph_before, &graph_after),
+        snapbox::str![[r#"
+--- before
+-*-.   [C1] (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+-|\ \
+-| | * [C2] (stack-b) stack B adds file
+-| |/
+-|/|
+-| * [C3] (stack-a) stack A adds file
+-|/
+-* [C4] (main) base
++++ after
++*-.   [C5] (HEAD -> gitbutler/workspace) GitButler Workspace Commit
++|\ \
++| | * [C6] (stack-b) stack B adds file
++| |/
++|/|
++| * [C7] (stack-a) stack A adds file
++|/
++* [C4] (main) base
+
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(
+        visualize_tree(
+            repo.rev_parse_single("gitbutler/workspace")?
+                .object()?
+                .peel_to_tree()?
+                .id()
+        )
+        .to_string(),
+        snapbox::str![[r#"
+4b36dfd
+└── base.txt:100644:df967b9 "base\n"
+
+"#]]
+        .raw()
+    );
     assert_worktree_file(&repo, "a.txt", "a\n");
     assert_worktree_file(&repo, "b.txt", "b\n");
 
@@ -820,22 +973,37 @@ fn uncommit_changes_from_commits_handles_unordered_overwrites_of_same_file() -> 
     rebase.materialize_without_checkout()?;
     let graph_after = visualize_commit_graph_all(&repo)?;
 
-    insta::assert_snapshot!(graph_diff(&graph_before, &graph_after), @r"
-    --- before
-    -* [C1] (HEAD -> branch) write three
-    -* [C2] write two
-    -* [C3] write one
-    -* [C4] (main) base
-    +++ after
-    +* [C5] (HEAD -> branch) write three
-    +* [C6] write two
-    +* [C7] write one
-    +* [C4] (main) base
-    ");
-    insta::assert_snapshot!(visualize_tree(repo.rev_parse_single("branch")?.object()?.peel_to_tree()?.id()), @r#"
-    7bee507
-    └── file.txt:100644:df967b9 "base\n"
-    "#);
+    snapbox::assert_data_eq!(
+        graph_diff(&graph_before, &graph_after),
+        snapbox::str![[r#"
+--- before
+-* [C1] (HEAD -> branch) write three
+-* [C2] write two
+-* [C3] write one
+-* [C4] (main) base
++++ after
++* [C5] (HEAD -> branch) write three
++* [C6] write two
++* [C7] write one
++* [C4] (main) base
+
+"#]]
+    );
+    snapbox::assert_data_eq!(
+        visualize_tree(
+            repo.rev_parse_single("branch")?
+                .object()?
+                .peel_to_tree()?
+                .id()
+        )
+        .to_string(),
+        snapbox::str![[r#"
+7bee507
+└── file.txt:100644:df967b9 "base\n"
+
+"#]]
+        .raw()
+    );
     assert_worktree_file(&repo, "file.txt", "three\n");
 
     Ok(())

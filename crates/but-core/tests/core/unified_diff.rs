@@ -1,5 +1,6 @@
 use but_core::{ChangeState, UnifiedPatch, unified_diff};
 use gix::object::tree::EntryKind;
+use snapbox::prelude::*;
 
 #[test]
 fn file_added_in_worktree() -> anyhow::Result<()> {
@@ -16,13 +17,17 @@ fn file_added_in_worktree() -> anyhow::Result<()> {
         3,
     )?);
 
-    insta::assert_debug_snapshot!(actual, @r#"
-    [
-        DiffHunk("@@ -1,0 +1,1 @@
-        +change
-        "),
-    ]
-    "#);
+    snapbox::assert_data_eq!(
+        actual.to_debug(),
+        snapbox::str![[r#"
+[
+    DiffHunk("@@ -1,0 +1,1 @@
+    +change
+    "),
+]
+
+"#]]
+    );
     Ok(())
 }
 
@@ -63,13 +68,17 @@ fn binary_text_in_unborn() -> anyhow::Result<()> {
         3,
     )?);
 
-    insta::assert_debug_snapshot!(actual, @r#"
-    [
-        DiffHunk("@@ -1,0 +1,1 @@
-        +hi
-        "),
-    ]
-    "#);
+    snapbox::assert_data_eq!(
+        actual.to_debug(),
+        snapbox::str![[r#"
+[
+    DiffHunk("@@ -1,0 +1,1 @@
+    +hi
+    "),
+]
+
+"#]]
+    );
     Ok(())
 }
 
@@ -92,14 +101,18 @@ fn binary_text_renamed_unborn() -> anyhow::Result<()> {
         3,
     )?);
 
-    insta::assert_debug_snapshot!(actual, @r#"
-    [
-        DiffHunk("@@ -1,1 +1,1 @@
-        -hi
-        +ho
-        "),
-    ]
-    "#);
+    snapbox::assert_data_eq!(
+        actual.to_debug(),
+        snapbox::str![[r#"
+[
+    DiffHunk("@@ -1,1 +1,1 @@
+    -hi
+    +ho
+    "),
+]
+
+"#]]
+    );
     Ok(())
 }
 
@@ -121,13 +134,17 @@ fn file_deleted_in_worktree() -> anyhow::Result<()> {
         3,
     )?);
 
-    insta::assert_debug_snapshot!(actual, @r#"
-    [
-        DiffHunk("@@ -1,1 +1,0 @@
-        -something
-        "),
-    ]
-    "#);
+    snapbox::assert_data_eq!(
+        actual.to_debug(),
+        snapbox::str![[r#"
+[
+    DiffHunk("@@ -1,1 +1,0 @@
+    -something
+    "),
+]
+
+"#]]
+    );
     Ok(())
 }
 
@@ -207,14 +224,18 @@ fn symlink_modified_in_worktree() -> anyhow::Result<()> {
         3,
     )?);
 
-    insta::assert_debug_snapshot!(actual, @r#"
-    [
-        DiffHunk("@@ -1,1 +1,1 @@
-        -target-to-be-changed
-        +changed-target
-        "),
-    ]
-    "#);
+    snapbox::assert_data_eq!(
+        actual.to_debug(),
+        snapbox::str![[r#"
+[
+    DiffHunk("@@ -1,1 +1,1 @@
+    -target-to-be-changed
+    +changed-target
+    "),
+]
+
+"#]]
+    );
     Ok(())
 }
 
@@ -222,30 +243,34 @@ fn symlink_modified_in_worktree() -> anyhow::Result<()> {
 fn submodule_added() -> anyhow::Result<()> {
     let repo = crate::diff::worktree_changes::repo("submodule-added-unborn")?;
     let changes = but_core::diff::worktree_changes(&repo)?.changes;
-    insta::assert_debug_snapshot!(&changes, @r#"
-    [
-        TreeChange {
-            path: ".gitmodules",
-            status: Addition {
-                state: ChangeState {
-                    id: Sha1(46f8c8b821d79a888a1ea0b30ec9f5d7e90821b0),
-                    kind: Blob,
-                },
-                is_untracked: false,
+    snapbox::assert_data_eq!(
+        changes.to_debug(),
+        snapbox::str![[r#"
+[
+    TreeChange {
+        path: ".gitmodules",
+        status: Addition {
+            state: ChangeState {
+                id: Sha1(46f8c8b821d79a888a1ea0b30ec9f5d7e90821b0),
+                kind: Blob,
             },
+            is_untracked: false,
         },
-        TreeChange {
-            path: "submodule",
-            status: Addition {
-                state: ChangeState {
-                    id: Sha1(e95516bd2f49a83a6cdb98cfec40b2717fbc2c1b),
-                    kind: Commit,
-                },
-                is_untracked: false,
+    },
+    TreeChange {
+        path: "submodule",
+        status: Addition {
+            state: ChangeState {
+                id: Sha1(e95516bd2f49a83a6cdb98cfec40b2717fbc2c1b),
+                kind: Commit,
             },
+            is_untracked: false,
         },
-    ]
-    "#);
+    },
+]
+
+"#]]
+    );
     assert!(
         changes[1].unified_patch(&repo, 3)?.is_none(),
         "submodules produce no diffs"

@@ -236,15 +236,15 @@ mod tests {
             },
         };
 
-        insta::assert_snapshot!(
+        // graph output should stay stable because the CLI and frontend consume it directly
+        snapbox::assert_data_eq!(
             display.to_string(),
-            "graph output should stay stable because the CLI and frontend consume it directly",
-            @r"
-        * 1111111 (feature) local tip
-        | * 2222222 (origin/feature) remote tip
-        |/
-        * 3333333 base
-        "
+            snapbox::str![[r#"
+* 1111111 (feature) local tip
+| * 2222222 (origin/feature) remote tip
+|/
+* 3333333 base
+"#]]
         );
     }
 

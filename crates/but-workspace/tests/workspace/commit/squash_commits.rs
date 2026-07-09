@@ -3,6 +3,7 @@ use bstr::ByteSlice as _;
 use but_rebase::graph_rebase::{Editor, LookupStep};
 use but_testsupport::{graph_workspace, visualize_commit_graph_all};
 use but_workspace::commit::squash_commits;
+use snapbox::IntoData;
 
 use crate::ref_info::with_workspace_commit::utils::{
     StackState, add_stack_with_segments,
@@ -14,11 +15,15 @@ fn squash_top_commit_into_parent() -> Result<()> {
     let (_tmp, graph, repo, mut _meta, _description) =
         writable_scenario("reword-three-commits", |_| {})?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * c9f444c (HEAD -> three) commit three
-    * 16fd221 (origin/two, two) commit two
-    * 8b426d0 (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* c9f444c (HEAD -> three) commit three
+* 16fd221 (origin/two, two) commit two
+* 8b426d0 (one) commit one
+
+"#]]
+    );
 
     let subject_id = repo.rev_parse_single("three")?.detach();
     let target_id = repo.rev_parse_single("two")?.detach();
@@ -59,12 +64,16 @@ fn squash_top_commit_into_parent() -> Result<()> {
         "subject reference should be reconnected to squashed commit"
     );
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * 655b033 (HEAD -> three, two) commit two
-    | * 16fd221 (origin/two) commit two
-    |/  
-    * 8b426d0 (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 655b033 (HEAD -> three, two) commit two
+| * 16fd221 (origin/two) commit two
+|/  
+* 8b426d0 (one) commit one
+
+"#]]
+    );
 
     Ok(())
 }
@@ -74,11 +83,15 @@ fn squash_top_commit_into_parent_keeping_target_message() -> Result<()> {
     let (_tmp, graph, repo, mut _meta, _description) =
         writable_scenario("reword-three-commits", |_| {})?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * c9f444c (HEAD -> three) commit three
-    * 16fd221 (origin/two, two) commit two
-    * 8b426d0 (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* c9f444c (HEAD -> three) commit three
+* 16fd221 (origin/two, two) commit two
+* 8b426d0 (one) commit one
+
+"#]]
+    );
 
     let subject_id = repo.rev_parse_single("three")?.detach();
     let target_id = repo.rev_parse_single("two")?.detach();
@@ -110,11 +123,15 @@ fn squash_top_commit_into_parent_keeping_subject_message() -> Result<()> {
     let (_tmp, graph, repo, mut _meta, _description) =
         writable_scenario("reword-three-commits", |_| {})?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * c9f444c (HEAD -> three) commit three
-    * 16fd221 (origin/two, two) commit two
-    * 8b426d0 (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* c9f444c (HEAD -> three) commit three
+* 16fd221 (origin/two, two) commit two
+* 8b426d0 (one) commit one
+
+"#]]
+    );
 
     let subject_id = repo.rev_parse_single("three")?.detach();
     let target_id = repo.rev_parse_single("two")?.detach();
@@ -146,11 +163,15 @@ fn squash_reorders_when_subject_is_not_on_top() -> Result<()> {
     let (_tmp, graph, repo, mut _meta, _description) =
         writable_scenario("reword-three-commits", |_| {})?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * c9f444c (HEAD -> three) commit three
-    * 16fd221 (origin/two, two) commit two
-    * 8b426d0 (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* c9f444c (HEAD -> three) commit three
+* 16fd221 (origin/two, two) commit two
+* 8b426d0 (one) commit one
+
+"#]]
+    );
 
     // Explicitly place the subject below the target before squashing.
     let subject_id = repo.rev_parse_single("two")?.detach();
@@ -181,12 +202,16 @@ fn squash_reorders_when_subject_is_not_on_top() -> Result<()> {
         "when subject is above target in ancestry, the target tree is top-most and must be kept"
     );
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * 6426178 (HEAD -> three) commit three
-    | * 16fd221 (origin/two) commit two
-    |/  
-    * 8b426d0 (two, one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 6426178 (HEAD -> three) commit three
+| * 16fd221 (origin/two) commit two
+|/  
+* 8b426d0 (two, one) commit one
+
+"#]]
+    );
 
     Ok(())
 }
@@ -226,11 +251,15 @@ fn squash_same_commit_is_rejected() -> Result<()> {
     let (_tmp, graph, repo, mut _meta, _description) =
         writable_scenario("reword-three-commits", |_| {})?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * c9f444c (HEAD -> three) commit three
-    * 16fd221 (origin/two, two) commit two
-    * 8b426d0 (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* c9f444c (HEAD -> three) commit three
+* 16fd221 (origin/two, two) commit two
+* 8b426d0 (one) commit one
+
+"#]]
+    );
 
     let commit_id = repo.rev_parse_single("two")?.detach();
 
@@ -250,11 +279,15 @@ fn squash_same_commit_is_rejected() -> Result<()> {
         "error should make same-commit squash invalid"
     );
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * c9f444c (HEAD -> three) commit three
-    * 16fd221 (origin/two, two) commit two
-    * 8b426d0 (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* c9f444c (HEAD -> three) commit three
+* 16fd221 (origin/two, two) commit two
+* 8b426d0 (one) commit one
+
+"#]]
+    );
 
     Ok(())
 }
@@ -291,11 +324,15 @@ fn squash_down_keeps_topmost_tree_for_shared_file_lineage() -> Result<()> {
     let (_tmp, graph, repo, mut _meta, _description) =
         writable_scenario("squash-shared-file-three-commits", |_| {})?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * a209f1b (HEAD -> three) commit three
-    * c0570de (two) commit two
-    * 8df0fa3 (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* a209f1b (HEAD -> three) commit three
+* c0570de (two) commit two
+* 8df0fa3 (one) commit one
+
+"#]]
+    );
 
     let subject_id = repo.rev_parse_single("three")?.detach();
     let target_id = repo.rev_parse_single("two")?.detach();
@@ -316,10 +353,14 @@ fn squash_down_keeps_topmost_tree_for_shared_file_lineage() -> Result<()> {
     let object = repo.rev_parse_single(spec.as_str())?.object()?;
     assert_eq!(object.data.as_bstr(), "v3\n");
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * 69e6e54 (HEAD -> three, two) commit two
-    * 8df0fa3 (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 69e6e54 (HEAD -> three, two) commit two
+* 8df0fa3 (one) commit one
+
+"#]]
+    );
 
     Ok(())
 }
@@ -329,11 +370,15 @@ fn squash_move_subject_below_target_for_shared_file_lineage() -> Result<()> {
     let (_tmp, graph, repo, mut _meta, _description) =
         writable_scenario("squash-shared-file-three-commits", |_| {})?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * a209f1b (HEAD -> three) commit three
-    * c0570de (two) commit two
-    * 8df0fa3 (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* a209f1b (HEAD -> three) commit three
+* c0570de (two) commit two
+* 8df0fa3 (one) commit one
+
+"#]]
+    );
 
     let subject_id = repo.rev_parse_single("two")?.detach();
     let target_id = repo.rev_parse_single("three")?.detach();
@@ -360,10 +405,14 @@ fn squash_move_subject_below_target_for_shared_file_lineage() -> Result<()> {
         "commit three\n\ncommit two\n"
     );
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * 4fbac4b (HEAD -> three) commit three
-    * 8df0fa3 (two, one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 4fbac4b (HEAD -> three) commit three
+* 8df0fa3 (two, one) commit one
+
+"#]]
+    );
 
     Ok(())
 }
@@ -373,11 +422,15 @@ fn squash_move_subject_above_target_out_of_order_for_shared_file_lineage() -> Re
     let (_tmp, graph, repo, mut _meta, _description) =
         writable_scenario("squash-shared-file-three-commits", |_| {})?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * a209f1b (HEAD -> three) commit three
-    * c0570de (two) commit two
-    * 8df0fa3 (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* a209f1b (HEAD -> three) commit three
+* c0570de (two) commit two
+* 8df0fa3 (one) commit one
+
+"#]]
+    );
 
     let subject_id = repo.rev_parse_single("three")?.detach();
     let target_id = repo.rev_parse_single("one")?.detach();
@@ -396,11 +449,15 @@ fn squash_move_subject_above_target_out_of_order_for_shared_file_lineage() -> Re
         "Cannot squash commits that would result in merge conflicts"
     );
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * a209f1b (HEAD -> three) commit three
-    * c0570de (two) commit two
-    * 8df0fa3 (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* a209f1b (HEAD -> three) commit three
+* c0570de (two) commit two
+* 8df0fa3 (one) commit one
+
+"#]]
+    );
 
     Ok(())
 }
@@ -415,23 +472,32 @@ fn squash_across_stacks_subject_into_target() -> Result<()> {
 
     let mut ws = graph.into_workspace()?;
     let normalized = visualize_commit_graph_all(&repo)?.replace("  \n", "\n");
-    insta::assert_snapshot!(normalized, @r"
-    *   c49e4d8 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\
-    | * 09d8e52 (A) A
-    * | c813d8d (B) B
-    |/
-    * 85efbe4 (origin/main, main) M
-    ");
-    insta::assert_snapshot!(graph_workspace(&ws), @"
-    📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on 85efbe4
-    ├── ≡📙:3:A on 85efbe4 {1}
-    │   └── 📙:3:A
-    │       └── ·09d8e52 (🏘️)
-    └── ≡📙:4:B on 85efbe4 {2}
-        └── 📙:4:B
-            └── ·c813d8d (🏘️)
-    ");
+    snapbox::assert_data_eq!(
+        normalized,
+        snapbox::str![[r#"
+*   c49e4d8 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\
+| * 09d8e52 (A) A
+* | c813d8d (B) B
+|/
+* 85efbe4 (origin/main, main) M
+
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(
+        graph_workspace(&ws).to_string(),
+        snapbox::str![[r#"
+📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on 85efbe4
+├── ≡📙:3:A on 85efbe4 {1}
+│   └── 📙:3:A
+│       └── ·09d8e52 (🏘️)
+└── ≡📙:4:B on 85efbe4 {2}
+    └── 📙:4:B
+        └── ·c813d8d (🏘️)
+
+"#]]
+    );
 
     let subject_id = repo.rev_parse_single("A")?.detach();
     let target_id = repo.rev_parse_single("B")?.detach();
@@ -452,21 +518,30 @@ fn squash_across_stacks_subject_into_target() -> Result<()> {
     assert_eq!(squashed_commit.message_raw()?, "B\n\nA\n");
     assert_eq!(squashed_commit.tree_id()?.detach(), subject_tree);
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *   e9ad17f (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    * | 82d6f41 (B) B
-    |/  
-    * 85efbe4 (origin/main, main, A) M
-    ");
-    insta::assert_snapshot!(graph_workspace(&ws), @"
-    📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on 85efbe4
-    ├── ≡📙:4:A on 85efbe4 {1}
-    │   └── 📙:4:A
-    └── ≡📙:3:B on 85efbe4 {2}
-        └── 📙:3:B
-            └── ·82d6f41 (🏘️)
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   e9ad17f (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+* | 82d6f41 (B) B
+|/  
+* 85efbe4 (origin/main, main, A) M
+
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(
+        graph_workspace(&ws).to_string(),
+        snapbox::str![[r#"
+📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on 85efbe4
+├── ≡📙:4:A on 85efbe4 {1}
+│   └── 📙:4:A
+└── ≡📙:3:B on 85efbe4 {2}
+    └── 📙:3:B
+        └── ·82d6f41 (🏘️)
+
+"#]]
+    );
 
     Ok(())
 }
@@ -482,24 +557,33 @@ fn squash_across_stacks_target_into_subject() -> Result<()> {
     let mut ws = graph.into_workspace()?;
 
     let normalized = visualize_commit_graph_all(&repo)?.replace("  \n", "\n");
-    insta::assert_snapshot!(normalized, @r"
-    *   c49e4d8 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\
-    | * 09d8e52 (A) A
-    * | c813d8d (B) B
-    |/
-    * 85efbe4 (origin/main, main) M
-    ");
+    snapbox::assert_data_eq!(
+        normalized,
+        snapbox::str![[r#"
+*   c49e4d8 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\
+| * 09d8e52 (A) A
+* | c813d8d (B) B
+|/
+* 85efbe4 (origin/main, main) M
 
-    insta::assert_snapshot!(graph_workspace(&ws), @"
-    📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on 85efbe4
-    ├── ≡📙:3:A on 85efbe4 {1}
-    │   └── 📙:3:A
-    │       └── ·09d8e52 (🏘️)
-    └── ≡📙:4:B on 85efbe4 {2}
-        └── 📙:4:B
-            └── ·c813d8d (🏘️)
-    ");
+"#]]
+        .raw()
+    );
+
+    snapbox::assert_data_eq!(
+        graph_workspace(&ws).to_string(),
+        snapbox::str![[r#"
+📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on 85efbe4
+├── ≡📙:3:A on 85efbe4 {1}
+│   └── 📙:3:A
+│       └── ·09d8e52 (🏘️)
+└── ≡📙:4:B on 85efbe4 {2}
+    └── 📙:4:B
+        └── ·c813d8d (🏘️)
+
+"#]]
+    );
 
     let subject_id = repo.rev_parse_single("B")?.detach();
     let target_id = repo.rev_parse_single("A")?.detach();
@@ -520,21 +604,30 @@ fn squash_across_stacks_target_into_subject() -> Result<()> {
     assert_eq!(squashed_commit.message_raw()?, "A\n\nB\n");
     assert_eq!(squashed_commit.tree_id()?.detach(), subject_tree);
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *   b7ec700 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    | * 17e27b0 (A) A
-    |/  
-    * 85efbe4 (origin/main, main, B) M
-    ");
-    insta::assert_snapshot!(graph_workspace(&ws), @"
-    📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on 85efbe4
-    ├── ≡📙:3:A on 85efbe4 {1}
-    │   └── 📙:3:A
-    │       └── ·17e27b0 (🏘️)
-    └── ≡📙:4:B on 85efbe4 {2}
-        └── 📙:4:B
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   b7ec700 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+| * 17e27b0 (A) A
+|/  
+* 85efbe4 (origin/main, main, B) M
+
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(
+        graph_workspace(&ws).to_string(),
+        snapbox::str![[r#"
+📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on 85efbe4
+├── ≡📙:3:A on 85efbe4 {1}
+│   └── 📙:3:A
+│       └── ·17e27b0 (🏘️)
+└── ≡📙:4:B on 85efbe4 {2}
+    └── 📙:4:B
+
+"#]]
+    );
 
     Ok(())
 }
@@ -548,15 +641,20 @@ fn squash_cross_stack_commit_does_not_pull_in_ancestor_tree_state() -> Result<()
         })?;
 
     let normalized = visualize_commit_graph_all(&repo)?.replace("  \n", "\n");
-    insta::assert_snapshot!(normalized, @r"
-    *   c47834b (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\
-    | * 26e45af (A) A
-    * | 356de85 (C) C
-    * | f25f65c (B) B
-    |/
-    * 893d602 (origin/main, main) M
-    ");
+    snapbox::assert_data_eq!(
+        normalized,
+        snapbox::str![[r#"
+*   c47834b (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\
+| * 26e45af (A) A
+* | 356de85 (C) C
+* | f25f65c (B) B
+|/
+* 893d602 (origin/main, main) M
+
+"#]]
+        .raw()
+    );
 
     let mut ws = graph.into_workspace()?;
     let subject_id = repo.rev_parse_single("C")?.detach();
@@ -612,17 +710,22 @@ fn squash_cross_stack_commit_with_deeper_stacks_does_not_pull_in_ancestor_tree_s
         })?;
 
     let normalized = visualize_commit_graph_all(&repo)?.replace("  \n", "\n");
-    insta::assert_snapshot!(normalized, @r"
-    *   8cf5961 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\
-    | * e352141 (D) D
-    | * 26e45af (A) A
-    * | b9b4be4 (E) E
-    * | 356de85 (C) C
-    * | f25f65c (B) B
-    |/
-    * 893d602 (origin/main, main) M
-    ");
+    snapbox::assert_data_eq!(
+        normalized,
+        snapbox::str![[r#"
+*   8cf5961 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\
+| * e352141 (D) D
+| * 26e45af (A) A
+* | b9b4be4 (E) E
+* | 356de85 (C) C
+* | f25f65c (B) B
+|/
+* 893d602 (origin/main, main) M
+
+"#]]
+        .raw()
+    );
 
     let a_id = repo.rev_parse_single("A")?.detach();
     let d_id = repo.rev_parse_single("D")?.detach();
@@ -643,16 +746,21 @@ fn squash_cross_stack_commit_with_deeper_stacks_does_not_pull_in_ancestor_tree_s
     let squashed_id = materialized.lookup_pick(outcome.commit_selector)?;
 
     let normalized = visualize_commit_graph_all(&repo)?.replace("  \n", "\n");
-    insta::assert_snapshot!(normalized, @r"
-    *   7dd4136 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\
-    | * 62c025c (D) D
-    | * 26e45af (A) A
-    * | 356de85 (E, C) C
-    * | f25f65c (B) B
-    |/
-    * 893d602 (origin/main, main) M
-    ");
+    snapbox::assert_data_eq!(
+        normalized,
+        snapbox::str![[r#"
+*   7dd4136 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\
+| * 62c025c (D) D
+| * 26e45af (A) A
+* | 356de85 (E, C) C
+* | f25f65c (B) B
+|/
+* 893d602 (origin/main, main) M
+
+"#]]
+        .raw()
+    );
 
     let file_a = repo
         .rev_parse_single(format!("{squashed_id}:file-a").as_str())
@@ -819,38 +927,42 @@ fn squash_all_c_commits_into_second_commit_of_b_keeps_new_file_content() -> Resu
     let new_file_blob = repo
         .rev_parse_single(format!("{squashed_id}:new-file").as_str())?
         .object()?;
-    insta::assert_snapshot!(new_file_blob.data.as_bstr(), @"
-    1
-    2
-    3
-    4
-    5
-    6
-    7
-    8
-    9
-    10
-    11
-    12
-    13
-    14
-    15
-    16
-    17
-    18
-    19
-    20
-    21
-    22
-    23
-    24
-    25
-    26
-    27
-    28
-    29
-    30
-    ");
+    snapbox::assert_data_eq!(
+        new_file_blob.data.as_bstr().to_string(),
+        snapbox::str![[r#"
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+
+"#]]
+    );
 
     Ok(())
 }

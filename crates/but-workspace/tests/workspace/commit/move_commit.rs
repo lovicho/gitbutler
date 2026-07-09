@@ -1,6 +1,7 @@
 use bstr::ByteSlice;
 use but_rebase::graph_rebase::{Editor, mutate::InsertSide};
 use but_testsupport::{graph_workspace, visualize_commit_graph_all};
+use snapbox::IntoData;
 
 use crate::ref_info::with_workspace_commit::utils::{
     StackState, add_stack_with_segments, named_writable_scenario_with_description_and_graph,
@@ -27,28 +28,37 @@ fn move_top_commit_to_top_of_another_stack() -> anyhow::Result<()> {
                 add_stack_with_segments(meta, 2, "C", StackState::InWorkspace, &["B"]);
             },
         )?;
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *   f3e1bf2 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    | * 09d8e52 (A) A
-    * | 09bc93e (C) C
-    * | c813d8d (B) B
-    |/  
-    * 85efbe4 (origin/main, main) M
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   f3e1bf2 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+| * 09d8e52 (A) A
+* | 09bc93e (C) C
+* | c813d8d (B) B
+|/  
+* 85efbe4 (origin/main, main) M
+
+"#]]
+        .raw()
+    );
 
     let mut ws = graph.into_workspace()?;
-    insta::assert_snapshot!(graph_workspace(&ws), @"
-    📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on 85efbe4
-    ├── ≡📙:3:A on 85efbe4 {1}
-    │   └── 📙:3:A
-    │       └── ·09d8e52 (🏘️)
-    └── ≡📙:4:C on 85efbe4 {2}
-        ├── 📙:4:C
-        │   └── ·09bc93e (🏘️)
-        └── 📙:5:B
-            └── ·c813d8d (🏘️)
-    ");
+    snapbox::assert_data_eq!(
+        graph_workspace(&ws).to_string(),
+        snapbox::str![[r#"
+📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on 85efbe4
+├── ≡📙:3:A on 85efbe4 {1}
+│   └── 📙:3:A
+│       └── ·09d8e52 (🏘️)
+└── ≡📙:4:C on 85efbe4 {2}
+    ├── 📙:4:C
+    │   └── ·09bc93e (🏘️)
+    └── 📙:5:B
+        └── ·c813d8d (🏘️)
+
+"#]]
+    );
 
     let editor = Editor::create(&mut ws, &mut meta, &repo)?;
     let a_commit = repo.rev_parse_single("A")?.detach();
@@ -86,27 +96,36 @@ fn move_top_commit_to_top_of_another_stack() -> anyhow::Result<()> {
         "The tip of C should be the B commit"
     );
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *   0ffeac6 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    | * f2cc60d (A) C
-    | * 09d8e52 A
-    * | c813d8d (C, B) B
-    |/  
-    * 85efbe4 (origin/main, main) M
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   0ffeac6 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+| * f2cc60d (A) C
+| * 09d8e52 A
+* | c813d8d (C, B) B
+|/  
+* 85efbe4 (origin/main, main) M
 
-    insta::assert_snapshot!(graph_workspace(&ws), @"
-    📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on 85efbe4
-    ├── ≡📙:3:A on 85efbe4 {1}
-    │   └── 📙:3:A
-    │       ├── ·f2cc60d (🏘️)
-    │       └── ·09d8e52 (🏘️)
-    └── ≡📙:5:C on 85efbe4 {2}
-        ├── 📙:5:C
-        └── 📙:6:B
-            └── ·c813d8d (🏘️)
-    ");
+"#]]
+        .raw()
+    );
+
+    snapbox::assert_data_eq!(
+        graph_workspace(&ws).to_string(),
+        snapbox::str![[r#"
+📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on 85efbe4
+├── ≡📙:3:A on 85efbe4 {1}
+│   └── 📙:3:A
+│       ├── ·f2cc60d (🏘️)
+│       └── ·09d8e52 (🏘️)
+└── ≡📙:5:C on 85efbe4 {2}
+    ├── 📙:5:C
+    └── 📙:6:B
+        └── ·c813d8d (🏘️)
+
+"#]]
+    );
 
     Ok(())
 }
@@ -121,28 +140,37 @@ fn move_bottom_commit_to_top_of_another_stack() -> anyhow::Result<()> {
                 add_stack_with_segments(meta, 2, "C", StackState::InWorkspace, &["B"]);
             },
         )?;
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *   f3e1bf2 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    | * 09d8e52 (A) A
-    * | 09bc93e (C) C
-    * | c813d8d (B) B
-    |/  
-    * 85efbe4 (origin/main, main) M
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   f3e1bf2 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+| * 09d8e52 (A) A
+* | 09bc93e (C) C
+* | c813d8d (B) B
+|/  
+* 85efbe4 (origin/main, main) M
+
+"#]]
+        .raw()
+    );
 
     let mut ws = graph.into_workspace()?;
-    insta::assert_snapshot!(graph_workspace(&ws), @"
-    📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on 85efbe4
-    ├── ≡📙:3:A on 85efbe4 {1}
-    │   └── 📙:3:A
-    │       └── ·09d8e52 (🏘️)
-    └── ≡📙:4:C on 85efbe4 {2}
-        ├── 📙:4:C
-        │   └── ·09bc93e (🏘️)
-        └── 📙:5:B
-            └── ·c813d8d (🏘️)
-    ");
+    snapbox::assert_data_eq!(
+        graph_workspace(&ws).to_string(),
+        snapbox::str![[r#"
+📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on 85efbe4
+├── ≡📙:3:A on 85efbe4 {1}
+│   └── 📙:3:A
+│       └── ·09d8e52 (🏘️)
+└── ≡📙:4:C on 85efbe4 {2}
+    ├── 📙:4:C
+    │   └── ·09bc93e (🏘️)
+    └── 📙:5:B
+        └── ·c813d8d (🏘️)
+
+"#]]
+    );
 
     let editor = Editor::create(&mut ws, &mut meta, &repo)?;
     let a_commit = repo.rev_parse_single("A")?.detach();
@@ -182,27 +210,36 @@ fn move_bottom_commit_to_top_of_another_stack() -> anyhow::Result<()> {
         "The tip of C should be the the rebased C commit"
     );
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *   9c6a201 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    | * f9061ed (A) B
-    | * 09d8e52 A
-    * | 8e00332 (C) C
-    |/  
-    * 85efbe4 (origin/main, main, B) M
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   9c6a201 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+| * f9061ed (A) B
+| * 09d8e52 A
+* | 8e00332 (C) C
+|/  
+* 85efbe4 (origin/main, main, B) M
 
-    insta::assert_snapshot!(graph_workspace(&ws), @"
-    📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on 85efbe4
-    ├── ≡📙:3:A on 85efbe4 {1}
-    │   └── 📙:3:A
-    │       ├── ·f9061ed (🏘️)
-    │       └── ·09d8e52 (🏘️)
-    └── ≡📙:4:C on 85efbe4 {2}
-        ├── 📙:4:C
-        │   └── ·8e00332 (🏘️)
-        └── 📙:5:B
-    ");
+"#]]
+        .raw()
+    );
+
+    snapbox::assert_data_eq!(
+        graph_workspace(&ws).to_string(),
+        snapbox::str![[r#"
+📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on 85efbe4
+├── ≡📙:3:A on 85efbe4 {1}
+│   └── 📙:3:A
+│       ├── ·f9061ed (🏘️)
+│       └── ·09d8e52 (🏘️)
+└── ≡📙:4:C on 85efbe4 {2}
+    ├── 📙:4:C
+    │   └── ·8e00332 (🏘️)
+    └── 📙:5:B
+
+"#]]
+    );
 
     Ok(())
 }
@@ -217,28 +254,37 @@ fn move_top_commit_to_bottom_of_another_stack() -> anyhow::Result<()> {
                 add_stack_with_segments(meta, 2, "C", StackState::InWorkspace, &["B"]);
             },
         )?;
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *   f3e1bf2 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    | * 09d8e52 (A) A
-    * | 09bc93e (C) C
-    * | c813d8d (B) B
-    |/  
-    * 85efbe4 (origin/main, main) M
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   f3e1bf2 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+| * 09d8e52 (A) A
+* | 09bc93e (C) C
+* | c813d8d (B) B
+|/  
+* 85efbe4 (origin/main, main) M
+
+"#]]
+        .raw()
+    );
 
     let mut ws = graph.into_workspace()?;
-    insta::assert_snapshot!(graph_workspace(&ws), @"
-    📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on 85efbe4
-    ├── ≡📙:3:A on 85efbe4 {1}
-    │   └── 📙:3:A
-    │       └── ·09d8e52 (🏘️)
-    └── ≡📙:4:C on 85efbe4 {2}
-        ├── 📙:4:C
-        │   └── ·09bc93e (🏘️)
-        └── 📙:5:B
-            └── ·c813d8d (🏘️)
-    ");
+    snapbox::assert_data_eq!(
+        graph_workspace(&ws).to_string(),
+        snapbox::str![[r#"
+📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on 85efbe4
+├── ≡📙:3:A on 85efbe4 {1}
+│   └── 📙:3:A
+│       └── ·09d8e52 (🏘️)
+└── ≡📙:4:C on 85efbe4 {2}
+    ├── 📙:4:C
+    │   └── ·09bc93e (🏘️)
+    └── 📙:5:B
+        └── ·c813d8d (🏘️)
+
+"#]]
+    );
 
     let editor = Editor::create(&mut ws, &mut meta, &repo)?;
     let a_commit = repo.rev_parse_single("A")?.detach();
@@ -276,27 +322,36 @@ fn move_top_commit_to_bottom_of_another_stack() -> anyhow::Result<()> {
         "The tip of C should be the B commit"
     );
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *   b3f0cfc (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    | * 2506923 (A) A
-    | * 8e00332 C
-    * | c813d8d (C, B) B
-    |/  
-    * 85efbe4 (origin/main, main) M
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   b3f0cfc (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+| * 2506923 (A) A
+| * 8e00332 C
+* | c813d8d (C, B) B
+|/  
+* 85efbe4 (origin/main, main) M
 
-    insta::assert_snapshot!(graph_workspace(&ws), @"
-    📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on 85efbe4
-    ├── ≡📙:3:A on 85efbe4 {1}
-    │   └── 📙:3:A
-    │       ├── ·2506923 (🏘️)
-    │       └── ·8e00332 (🏘️)
-    └── ≡📙:5:C on 85efbe4 {2}
-        ├── 📙:5:C
-        └── 📙:6:B
-            └── ·c813d8d (🏘️)
-    ");
+"#]]
+        .raw()
+    );
+
+    snapbox::assert_data_eq!(
+        graph_workspace(&ws).to_string(),
+        snapbox::str![[r#"
+📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on 85efbe4
+├── ≡📙:3:A on 85efbe4 {1}
+│   └── 📙:3:A
+│       ├── ·2506923 (🏘️)
+│       └── ·8e00332 (🏘️)
+└── ≡📙:5:C on 85efbe4 {2}
+    ├── 📙:5:C
+    └── 📙:6:B
+        └── ·c813d8d (🏘️)
+
+"#]]
+    );
 
     Ok(())
 }
@@ -311,28 +366,37 @@ fn move_bottom_commit_to_bottom_of_another_stack() -> anyhow::Result<()> {
                 add_stack_with_segments(meta, 2, "C", StackState::InWorkspace, &["B"]);
             },
         )?;
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *   f3e1bf2 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    | * 09d8e52 (A) A
-    * | 09bc93e (C) C
-    * | c813d8d (B) B
-    |/  
-    * 85efbe4 (origin/main, main) M
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   f3e1bf2 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+| * 09d8e52 (A) A
+* | 09bc93e (C) C
+* | c813d8d (B) B
+|/  
+* 85efbe4 (origin/main, main) M
+
+"#]]
+        .raw()
+    );
 
     let mut ws = graph.into_workspace()?;
-    insta::assert_snapshot!(graph_workspace(&ws), @"
-    📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on 85efbe4
-    ├── ≡📙:3:A on 85efbe4 {1}
-    │   └── 📙:3:A
-    │       └── ·09d8e52 (🏘️)
-    └── ≡📙:4:C on 85efbe4 {2}
-        ├── 📙:4:C
-        │   └── ·09bc93e (🏘️)
-        └── 📙:5:B
-            └── ·c813d8d (🏘️)
-    ");
+    snapbox::assert_data_eq!(
+        graph_workspace(&ws).to_string(),
+        snapbox::str![[r#"
+📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on 85efbe4
+├── ≡📙:3:A on 85efbe4 {1}
+│   └── 📙:3:A
+│       └── ·09d8e52 (🏘️)
+└── ≡📙:4:C on 85efbe4 {2}
+    ├── 📙:4:C
+    │   └── ·09bc93e (🏘️)
+    └── 📙:5:B
+        └── ·c813d8d (🏘️)
+
+"#]]
+    );
 
     let editor = Editor::create(&mut ws, &mut meta, &repo)?;
     let a_commit = repo.rev_parse_single("A")?.detach();
@@ -372,27 +436,36 @@ fn move_bottom_commit_to_bottom_of_another_stack() -> anyhow::Result<()> {
         "The tip of C should be the the rebased C commit"
     );
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *   2410103 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    | * 4dfe841 (A) A
-    | * c813d8d B
-    * | 8e00332 (C) C
-    |/  
-    * 85efbe4 (origin/main, main, B) M
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   2410103 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+| * 4dfe841 (A) A
+| * c813d8d B
+* | 8e00332 (C) C
+|/  
+* 85efbe4 (origin/main, main, B) M
 
-    insta::assert_snapshot!(graph_workspace(&ws), @"
-    📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on 85efbe4
-    ├── ≡📙:3:A on 85efbe4 {1}
-    │   └── 📙:3:A
-    │       ├── ·4dfe841 (🏘️)
-    │       └── ·c813d8d (🏘️)
-    └── ≡📙:4:C on 85efbe4 {2}
-        ├── 📙:4:C
-        │   └── ·8e00332 (🏘️)
-        └── 📙:5:B
-    ");
+"#]]
+        .raw()
+    );
+
+    snapbox::assert_data_eq!(
+        graph_workspace(&ws).to_string(),
+        snapbox::str![[r#"
+📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on 85efbe4
+├── ≡📙:3:A on 85efbe4 {1}
+│   └── 📙:3:A
+│       ├── ·4dfe841 (🏘️)
+│       └── ·c813d8d (🏘️)
+└── ≡📙:4:C on 85efbe4 {2}
+    ├── 📙:4:C
+    │   └── ·8e00332 (🏘️)
+    └── 📙:5:B
+
+"#]]
+    );
 
     Ok(())
 }
@@ -407,28 +480,37 @@ fn move_single_commit_to_the_top_of_another_branch() -> anyhow::Result<()> {
                 add_stack_with_segments(meta, 2, "C", StackState::InWorkspace, &["B"]);
             },
         )?;
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *   f3e1bf2 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    | * 09d8e52 (A) A
-    * | 09bc93e (C) C
-    * | c813d8d (B) B
-    |/  
-    * 85efbe4 (origin/main, main) M
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   f3e1bf2 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+| * 09d8e52 (A) A
+* | 09bc93e (C) C
+* | c813d8d (B) B
+|/  
+* 85efbe4 (origin/main, main) M
+
+"#]]
+        .raw()
+    );
 
     let mut ws = graph.into_workspace()?;
-    insta::assert_snapshot!(graph_workspace(&ws), @"
-    📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on 85efbe4
-    ├── ≡📙:3:A on 85efbe4 {1}
-    │   └── 📙:3:A
-    │       └── ·09d8e52 (🏘️)
-    └── ≡📙:4:C on 85efbe4 {2}
-        ├── 📙:4:C
-        │   └── ·09bc93e (🏘️)
-        └── 📙:5:B
-            └── ·c813d8d (🏘️)
-    ");
+    snapbox::assert_data_eq!(
+        graph_workspace(&ws).to_string(),
+        snapbox::str![[r#"
+📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on 85efbe4
+├── ≡📙:3:A on 85efbe4 {1}
+│   └── 📙:3:A
+│       └── ·09d8e52 (🏘️)
+└── ≡📙:4:C on 85efbe4 {2}
+    ├── 📙:4:C
+    │   └── ·09bc93e (🏘️)
+    └── 📙:5:B
+        └── ·c813d8d (🏘️)
+
+"#]]
+    );
 
     let editor = Editor::create(&mut ws, &mut meta, &repo)?;
     let a_commit = repo.rev_parse_single("A")?.detach();
@@ -459,27 +541,36 @@ fn move_single_commit_to_the_top_of_another_branch() -> anyhow::Result<()> {
         "The tip of C should be the rebased A commit"
     );
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *   3f51cff (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    * | 148f8f3 (C) A
-    * | 09bc93e C
-    * | c813d8d (B) B
-    |/  
-    * 85efbe4 (origin/main, main, A) M
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   3f51cff (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+* | 148f8f3 (C) A
+* | 09bc93e C
+* | c813d8d (B) B
+|/  
+* 85efbe4 (origin/main, main, A) M
 
-    insta::assert_snapshot!(graph_workspace(&ws), @"
-    📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on 85efbe4
-    ├── ≡📙:5:A on 85efbe4 {1}
-    │   └── 📙:5:A
-    └── ≡📙:3:C on 85efbe4 {2}
-        ├── 📙:3:C
-        │   ├── ·148f8f3 (🏘️)
-        │   └── ·09bc93e (🏘️)
-        └── 📙:4:B
-            └── ·c813d8d (🏘️)
-    ");
+"#]]
+        .raw()
+    );
+
+    snapbox::assert_data_eq!(
+        graph_workspace(&ws).to_string(),
+        snapbox::str![[r#"
+📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on 85efbe4
+├── ≡📙:5:A on 85efbe4 {1}
+│   └── 📙:5:A
+└── ≡📙:3:C on 85efbe4 {2}
+    ├── 📙:3:C
+    │   ├── ·148f8f3 (🏘️)
+    │   └── ·09bc93e (🏘️)
+    └── 📙:4:B
+        └── ·c813d8d (🏘️)
+
+"#]]
+    );
 
     Ok(())
 }
@@ -494,28 +585,37 @@ fn move_single_commit_to_the_bottom_of_another_branch() -> anyhow::Result<()> {
                 add_stack_with_segments(meta, 2, "C", StackState::InWorkspace, &["B"]);
             },
         )?;
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *   f3e1bf2 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    | * 09d8e52 (A) A
-    * | 09bc93e (C) C
-    * | c813d8d (B) B
-    |/  
-    * 85efbe4 (origin/main, main) M
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   f3e1bf2 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+| * 09d8e52 (A) A
+* | 09bc93e (C) C
+* | c813d8d (B) B
+|/  
+* 85efbe4 (origin/main, main) M
+
+"#]]
+        .raw()
+    );
 
     let mut ws = graph.into_workspace()?;
-    insta::assert_snapshot!(graph_workspace(&ws), @"
-    📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on 85efbe4
-    ├── ≡📙:3:A on 85efbe4 {1}
-    │   └── 📙:3:A
-    │       └── ·09d8e52 (🏘️)
-    └── ≡📙:4:C on 85efbe4 {2}
-        ├── 📙:4:C
-        │   └── ·09bc93e (🏘️)
-        └── 📙:5:B
-            └── ·c813d8d (🏘️)
-    ");
+    snapbox::assert_data_eq!(
+        graph_workspace(&ws).to_string(),
+        snapbox::str![[r#"
+📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on 85efbe4
+├── ≡📙:3:A on 85efbe4 {1}
+│   └── 📙:3:A
+│       └── ·09d8e52 (🏘️)
+└── ≡📙:4:C on 85efbe4 {2}
+    ├── 📙:4:C
+    │   └── ·09bc93e (🏘️)
+    └── 📙:5:B
+        └── ·c813d8d (🏘️)
+
+"#]]
+    );
 
     let editor = Editor::create(&mut ws, &mut meta, &repo)?;
     let a_commit = repo.rev_parse_single("A")?.detach();
@@ -555,27 +655,36 @@ fn move_single_commit_to_the_bottom_of_another_branch() -> anyhow::Result<()> {
         "The tip of C should be the rebased C commit"
     );
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *   61c8521 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    * | ad476a8 (C) C
-    * | f9061ed (B) B
-    * | 09d8e52 A
-    |/  
-    * 85efbe4 (origin/main, main, A) M
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   61c8521 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+* | ad476a8 (C) C
+* | f9061ed (B) B
+* | 09d8e52 A
+|/  
+* 85efbe4 (origin/main, main, A) M
 
-    insta::assert_snapshot!(graph_workspace(&ws), @"
-    📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on 85efbe4
-    ├── ≡📙:5:A on 85efbe4 {1}
-    │   └── 📙:5:A
-    └── ≡📙:3:C on 85efbe4 {2}
-        ├── 📙:3:C
-        │   └── ·ad476a8 (🏘️)
-        └── 📙:4:B
-            ├── ·f9061ed (🏘️)
-            └── ·09d8e52 (🏘️)
-    ");
+"#]]
+        .raw()
+    );
+
+    snapbox::assert_data_eq!(
+        graph_workspace(&ws).to_string(),
+        snapbox::str![[r#"
+📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on 85efbe4
+├── ≡📙:5:A on 85efbe4 {1}
+│   └── 📙:5:A
+└── ≡📙:3:C on 85efbe4 {2}
+    ├── 📙:3:C
+    │   └── ·ad476a8 (🏘️)
+    └── 📙:4:B
+        ├── ·f9061ed (🏘️)
+        └── ·09d8e52 (🏘️)
+
+"#]]
+    );
 
     Ok(())
 }
@@ -587,23 +696,32 @@ fn move_commit_to_empty_branch() -> anyhow::Result<()> {
             add_stack_with_segments(meta, 1, "A", StackState::InWorkspace, &[]);
             add_stack_with_segments(meta, 2, "B", StackState::InWorkspace, &["B"]);
         })?;
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *   6d5c23e (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    | * 09d8e52 (A) A
-    |/  
-    * 85efbe4 (origin/main, main, B) M
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   6d5c23e (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+| * 09d8e52 (A) A
+|/  
+* 85efbe4 (origin/main, main, B) M
+
+"#]]
+        .raw()
+    );
 
     let mut ws = graph.into_workspace()?;
-    insta::assert_snapshot!(graph_workspace(&ws), @"
-    📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on 85efbe4
-    ├── ≡📙:3:A on 85efbe4 {1}
-    │   └── 📙:3:A
-    │       └── ·09d8e52 (🏘️)
-    └── ≡📙:4:B on 85efbe4 {2}
-        └── 📙:4:B
-    ");
+    snapbox::assert_data_eq!(
+        graph_workspace(&ws).to_string(),
+        snapbox::str![[r#"
+📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on 85efbe4
+├── ≡📙:3:A on 85efbe4 {1}
+│   └── 📙:3:A
+│       └── ·09d8e52 (🏘️)
+└── ≡📙:4:B on 85efbe4 {2}
+    └── 📙:4:B
+
+"#]]
+    );
 
     let editor = Editor::create(&mut ws, &mut meta, &repo)?;
     let a_commit = repo.rev_parse_single("A")?.detach();
@@ -631,22 +749,31 @@ fn move_commit_to_empty_branch() -> anyhow::Result<()> {
         "The tip of B should be the rebased A commit"
     );
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *   e16ce30 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    * | 09d8e52 (B) A
-    |/  
-    * 85efbe4 (origin/main, main, A) M
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   e16ce30 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+* | 09d8e52 (B) A
+|/  
+* 85efbe4 (origin/main, main, A) M
 
-    insta::assert_snapshot!(graph_workspace(&ws), @"
-    📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on 85efbe4
-    ├── ≡📙:4:A on 85efbe4 {1}
-    │   └── 📙:4:A
-    └── ≡📙:3:B on 85efbe4 {2}
-        └── 📙:3:B
-            └── ·09d8e52 (🏘️)
-    ");
+"#]]
+        .raw()
+    );
+
+    snapbox::assert_data_eq!(
+        graph_workspace(&ws).to_string(),
+        snapbox::str![[r#"
+📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on 85efbe4
+├── ≡📙:4:A on 85efbe4 {1}
+│   └── 📙:4:A
+└── ≡📙:3:B on 85efbe4 {2}
+    └── 📙:3:B
+        └── ·09d8e52 (🏘️)
+
+"#]]
+    );
 
     Ok(())
 }
@@ -656,23 +783,31 @@ fn move_commit_in_non_managed_workspace() -> anyhow::Result<()> {
     let (_tmp, graph, repo, mut meta, _description) =
         named_writable_scenario_with_description_and_graph("reword-three-commits", |_| {})?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * c9f444c (HEAD -> three) commit three
-    * 16fd221 (origin/two, two) commit two
-    * 8b426d0 (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* c9f444c (HEAD -> three) commit three
+* 16fd221 (origin/two, two) commit two
+* 8b426d0 (one) commit one
+
+"#]]
+    );
 
     let mut ws = graph.into_workspace()?;
-    insta::assert_snapshot!(graph_workspace(&ws), @"
-    ⌂:0:three[🌳] <> ✓!
-    └── ≡:0:three[🌳] {1}
-        ├── :0:three[🌳]
-        │   └── ·c9f444c
-        ├── :1:two <> origin/two →:2:
-        │   └── ❄️16fd221
-        └── :3:one
-            └── ❄8b426d0
-    ");
+    snapbox::assert_data_eq!(
+        graph_workspace(&ws).to_string(),
+        snapbox::str![[r#"
+⌂:0:three[🌳] <> ✓!
+└── ≡:0:three[🌳] {1}
+    ├── :0:three[🌳]
+    │   └── ·c9f444c
+    ├── :1:two <> origin/two →:2:
+    │   └── ❄️16fd221
+    └── :3:one
+        └── ❄8b426d0
+
+"#]]
+    );
 
     let editor = Editor::create(&mut ws, &mut meta, &repo)?;
     let three_commit = repo.rev_parse_single("three")?.detach();
@@ -706,21 +841,29 @@ fn move_commit_in_non_managed_workspace() -> anyhow::Result<()> {
         "The tip of 'two' should be the three commit"
     );
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * c9f444c (HEAD -> three, two) commit three
-    * 16fd221 (origin/two) commit two
-    * 8b426d0 (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* c9f444c (HEAD -> three, two) commit three
+* 16fd221 (origin/two) commit two
+* 8b426d0 (one) commit one
 
-    insta::assert_snapshot!(graph_workspace(&ws), @"
-    ⌂:0:three[🌳] <> ✓!
-    └── ≡:0:three[🌳] {1}
-        ├── :0:three[🌳]
-        │   ├── ·c9f444c ►two
-        │   └── ·16fd221
-        └── :3:one
-            └── ·8b426d0
-    ");
+"#]]
+    );
+
+    snapbox::assert_data_eq!(
+        graph_workspace(&ws).to_string(),
+        snapbox::str![[r#"
+⌂:0:three[🌳] <> ✓!
+└── ≡:0:three[🌳] {1}
+    ├── :0:three[🌳]
+    │   ├── ·c9f444c ►two
+    │   └── ·16fd221
+    └── :3:one
+        └── ·8b426d0
+
+"#]]
+    );
 
     Ok(())
 }
@@ -730,30 +873,39 @@ fn reorder_merge_commit_above_keeps_child_commits_visible() -> anyhow::Result<()
     let (_tmp, graph, repo, mut meta, _description) =
         named_writable_scenario_with_description_and_graph("gb-1525-reorder-merge-commit", |_| {})?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    * 32c8bda (HEAD -> child-stack, C2) C2: add other.txt
-    * 64dace5 (C1) C1: add child-1.txt
-    *   197bdf1 (M) M: merge feature-parent
-    |\  
-    | * b54108c (feature-parent) update parent.txt (2)
-    | * 1b1a64f update parent.txt (1)
-    | * 40bcd70 add parent.txt
-    * | aa67ae0 (origin/main, main-advanced, main) update main.txt (1)
-    |/  
-    * 7674a5e (tag: base) base
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 32c8bda (HEAD -> child-stack, C2) C2: add other.txt
+* 64dace5 (C1) C1: add child-1.txt
+*   197bdf1 (M) M: merge feature-parent
+|\  
+| * b54108c (feature-parent) update parent.txt (2)
+| * 1b1a64f update parent.txt (1)
+| * 40bcd70 add parent.txt
+* | aa67ae0 (origin/main, main-advanced, main) update main.txt (1)
+|/  
+* 7674a5e (tag: base) base
+
+"#]]
+        .raw()
+    );
 
     let mut ws = graph.into_workspace()?;
-    insta::assert_snapshot!(graph_workspace(&ws), @"
-    ⌂:0:child-stack[🌳] <> ✓refs/remotes/origin/main on aa67ae0
-    └── ≡:0:child-stack[🌳] on aa67ae0 {1}
-        ├── :0:child-stack[🌳]
-        │   └── ·32c8bda ►C2
-        ├── :3:C1
-        │   └── ·64dace5
-        └── :4:M
-            └── ·197bdf1
-    ");
+    snapbox::assert_data_eq!(
+        graph_workspace(&ws).to_string(),
+        snapbox::str![[r#"
+⌂:0:child-stack[🌳] <> ✓refs/remotes/origin/main on aa67ae0
+└── ≡:0:child-stack[🌳] on aa67ae0 {1}
+    ├── :0:child-stack[🌳]
+    │   └── ·32c8bda ►C2
+    ├── :3:C1
+    │   └── ·64dace5
+    └── :4:M
+        └── ·197bdf1
+
+"#]]
+    );
 
     let editor = Editor::create(&mut ws, &mut meta, &repo)?;
     let merge_commit = repo.rev_parse_single("M")?.detach();
@@ -781,18 +933,23 @@ fn reorder_merge_commit_above_keeps_child_commits_visible() -> anyhow::Result<()
         ],
         "moving the merge commit above C1 should preserve the visible first-parent lane"
     );
-    insta::assert_snapshot!(post_move_graph, @r"
-    * 1fa67f9 (HEAD -> child-stack, C2) C2: add other.txt
-    *   88f8bb5 (C1) M: merge feature-parent
-    |\  
-    | * b54108c (feature-parent) update parent.txt (2)
-    | * 1b1a64f update parent.txt (1)
-    | * 40bcd70 add parent.txt
-    * | 40eca7d C1: add child-1.txt
-    * | aa67ae0 (origin/main, main-advanced, main, M) update main.txt (1)
-    |/  
-    * 7674a5e (tag: base) base
-    ");
+    snapbox::assert_data_eq!(
+        post_move_graph,
+        snapbox::str![[r#"
+* 1fa67f9 (HEAD -> child-stack, C2) C2: add other.txt
+*   88f8bb5 (C1) M: merge feature-parent
+|\  
+| * b54108c (feature-parent) update parent.txt (2)
+| * 1b1a64f update parent.txt (1)
+| * 40bcd70 add parent.txt
+* | 40eca7d C1: add child-1.txt
+* | aa67ae0 (origin/main, main-advanced, main, M) update main.txt (1)
+|/  
+* 7674a5e (tag: base) base
+
+"#]]
+        .raw()
+    );
 
     Ok(())
 }
@@ -802,30 +959,39 @@ fn reorder_merge_commit_below_keeps_child_commits_visible() -> anyhow::Result<()
     let (_tmp, graph, repo, mut meta, _description) =
         named_writable_scenario_with_description_and_graph("gb-1525-reorder-merge-commit", |_| {})?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    * 32c8bda (HEAD -> child-stack, C2) C2: add other.txt
-    * 64dace5 (C1) C1: add child-1.txt
-    *   197bdf1 (M) M: merge feature-parent
-    |\  
-    | * b54108c (feature-parent) update parent.txt (2)
-    | * 1b1a64f update parent.txt (1)
-    | * 40bcd70 add parent.txt
-    * | aa67ae0 (origin/main, main-advanced, main) update main.txt (1)
-    |/  
-    * 7674a5e (tag: base) base
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 32c8bda (HEAD -> child-stack, C2) C2: add other.txt
+* 64dace5 (C1) C1: add child-1.txt
+*   197bdf1 (M) M: merge feature-parent
+|\  
+| * b54108c (feature-parent) update parent.txt (2)
+| * 1b1a64f update parent.txt (1)
+| * 40bcd70 add parent.txt
+* | aa67ae0 (origin/main, main-advanced, main) update main.txt (1)
+|/  
+* 7674a5e (tag: base) base
+
+"#]]
+        .raw()
+    );
 
     let mut ws = graph.into_workspace()?;
-    insta::assert_snapshot!(graph_workspace(&ws), @"
-    ⌂:0:child-stack[🌳] <> ✓refs/remotes/origin/main on aa67ae0
-    └── ≡:0:child-stack[🌳] on aa67ae0 {1}
-        ├── :0:child-stack[🌳]
-        │   └── ·32c8bda ►C2
-        ├── :3:C1
-        │   └── ·64dace5
-        └── :4:M
-            └── ·197bdf1
-    ");
+    snapbox::assert_data_eq!(
+        graph_workspace(&ws).to_string(),
+        snapbox::str![[r#"
+⌂:0:child-stack[🌳] <> ✓refs/remotes/origin/main on aa67ae0
+└── ≡:0:child-stack[🌳] on aa67ae0 {1}
+    ├── :0:child-stack[🌳]
+    │   └── ·32c8bda ►C2
+    ├── :3:C1
+    │   └── ·64dace5
+    └── :4:M
+        └── ·197bdf1
+
+"#]]
+    );
 
     let editor = Editor::create(&mut ws, &mut meta, &repo)?;
     let merge_commit = repo.rev_parse_single("M")?.detach();
@@ -850,20 +1016,25 @@ fn reorder_merge_commit_below_keeps_child_commits_visible() -> anyhow::Result<()
         vec!["base".to_string(), "update parent.txt (2)".to_string()],
         "moving the merge commit below main should make main's first parent the merge commit's first parent"
     );
-    insta::assert_snapshot!(post_move_graph, @r"
-    * 3cf4ba4 (HEAD -> child-stack, C2) C2: add other.txt
-    * 7673ad4 (C1) C1: add child-1.txt
-    * 8a192c0 (main-advanced, main, M) update main.txt (1)
-    *   ed12786 M: merge feature-parent
-    |\  
-    | * b54108c (feature-parent) update parent.txt (2)
-    | * 1b1a64f update parent.txt (1)
-    | * 40bcd70 add parent.txt
-    |/  
-    | * aa67ae0 (origin/main) update main.txt (1)
-    |/  
-    * 7674a5e (tag: base) base
-    ");
+    snapbox::assert_data_eq!(
+        post_move_graph,
+        snapbox::str![[r#"
+* 3cf4ba4 (HEAD -> child-stack, C2) C2: add other.txt
+* 7673ad4 (C1) C1: add child-1.txt
+* 8a192c0 (main-advanced, main, M) update main.txt (1)
+*   ed12786 M: merge feature-parent
+|\  
+| * b54108c (feature-parent) update parent.txt (2)
+| * 1b1a64f update parent.txt (1)
+| * 40bcd70 add parent.txt
+|/  
+| * aa67ae0 (origin/main) update main.txt (1)
+|/  
+* 7674a5e (tag: base) base
+
+"#]]
+        .raw()
+    );
 
     Ok(())
 }
@@ -873,23 +1044,31 @@ fn reorder_commit_in_non_managed_workspace() -> anyhow::Result<()> {
     let (_tmp, graph, repo, mut meta, _description) =
         named_writable_scenario_with_description_and_graph("reword-three-commits", |_| {})?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * c9f444c (HEAD -> three) commit three
-    * 16fd221 (origin/two, two) commit two
-    * 8b426d0 (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* c9f444c (HEAD -> three) commit three
+* 16fd221 (origin/two, two) commit two
+* 8b426d0 (one) commit one
+
+"#]]
+    );
 
     let mut ws = graph.into_workspace()?;
-    insta::assert_snapshot!(graph_workspace(&ws), @"
-    ⌂:0:three[🌳] <> ✓!
-    └── ≡:0:three[🌳] {1}
-        ├── :0:three[🌳]
-        │   └── ·c9f444c
-        ├── :1:two <> origin/two →:2:
-        │   └── ❄️16fd221
-        └── :3:one
-            └── ❄8b426d0
-    ");
+    snapbox::assert_data_eq!(
+        graph_workspace(&ws).to_string(),
+        snapbox::str![[r#"
+⌂:0:three[🌳] <> ✓!
+└── ≡:0:three[🌳] {1}
+    ├── :0:three[🌳]
+    │   └── ·c9f444c
+    ├── :1:two <> origin/two →:2:
+    │   └── ❄️16fd221
+    └── :3:one
+        └── ❄8b426d0
+
+"#]]
+    );
 
     let editor = Editor::create(&mut ws, &mut meta, &repo)?;
     let three_commit = repo.rev_parse_single("three")?.detach();
@@ -930,23 +1109,31 @@ fn reorder_commit_in_non_managed_workspace() -> anyhow::Result<()> {
     // Branches 'three' and 'two' now point to the updated 'two' commit,
     // which is now a child of three.
     // The origin two branch has not been yet updated and still points to the original 'two' commit.
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * 09ad3ca (HEAD -> three, two) commit two
-    * 0c38dd9 commit three
-    | * 16fd221 (origin/two) commit two
-    |/  
-    * 8b426d0 (one) commit one
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 09ad3ca (HEAD -> three, two) commit two
+* 0c38dd9 commit three
+| * 16fd221 (origin/two) commit two
+|/  
+* 8b426d0 (one) commit one
 
-    insta::assert_snapshot!(graph_workspace(&ws), @"
-    ⌂:0:three[🌳] <> ✓!
-    └── ≡:0:three[🌳] {1}
-        ├── :0:three[🌳]
-        │   ├── ·09ad3ca ►two
-        │   └── ·0c38dd9
-        └── :2:one
-            └── ·8b426d0
-    ");
+"#]]
+    );
+
+    snapbox::assert_data_eq!(
+        graph_workspace(&ws).to_string(),
+        snapbox::str![[r#"
+⌂:0:three[🌳] <> ✓!
+└── ≡:0:three[🌳] {1}
+    ├── :0:three[🌳]
+    │   ├── ·09ad3ca ►two
+    │   └── ·0c38dd9
+    └── :2:one
+        └── ·8b426d0
+
+"#]]
+    );
 
     Ok(())
 }

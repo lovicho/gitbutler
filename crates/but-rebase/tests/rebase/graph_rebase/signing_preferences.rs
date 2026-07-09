@@ -13,12 +13,16 @@ fn commits_maintain_state_if_not_cherry_picked() -> Result<()> {
     let (repo, _tmpdir, mut meta) = fixture_writable_with_signing("four-commits-signed")?;
 
     let before = visualize_commit_graph_all(&repo)?;
-    insta::assert_snapshot!(before, @"
-    * dd72792 (HEAD -> main, c) c
-    * e5aa7b5 (b) b
-    * 3bfeb52 (a) a
-    * b6e2f57 (base) base
-    ");
+    snapbox::assert_data_eq!(
+        &before,
+        snapbox::str![[r#"
+* dd72792 (HEAD -> main, c) c
+* e5aa7b5 (b) b
+* 3bfeb52 (a) a
+* b6e2f57 (base) base
+
+"#]]
+    );
 
     let graph = Graph::from_head(
         &repo,
@@ -39,17 +43,21 @@ fn commits_maintain_state_if_not_cherry_picked() -> Result<()> {
 
     let outcome = editor.rebase()?;
     let overlayed = graph_tree(&outcome.overlayed_graph()?).to_string();
-    insta::assert_snapshot!(overlayed, @"
+    snapbox::assert_data_eq!(
+        &overlayed,
+        snapbox::str![[r#"
 
-    └── 👉►:0[0]:main[🌳]
-        └── ·dd72792 (⌂|1) ►c
-            └── ►:1[1]:b
-                └── ·e5aa7b5 (⌂|1)
-                    └── ►:2[2]:a
-                        └── ·3bfeb52 (⌂|1)
-                            └── ►:3[3]:base
-                                └── 🏁·b6e2f57 (⌂|1)
-    ");
+└── 👉►:0[0]:main[🌳]
+    └── ·dd72792 (⌂|1) ►c
+        └── ►:1[1]:b
+            └── ·e5aa7b5 (⌂|1)
+                └── ►:2[2]:a
+                    └── ·3bfeb52 (⌂|1)
+                        └── ►:3[3]:base
+                            └── 🏁·b6e2f57 (⌂|1)
+
+"#]]
+    );
     let outcome = outcome.materialize()?;
     assert_eq!(overlayed, graph_tree(&outcome.workspace.graph).to_string());
 
@@ -63,12 +71,16 @@ fn commits_are_signed_by_default() -> Result<()> {
     let (repo, _tmpdir, mut meta) = fixture_writable_with_signing("four-commits-signed")?;
 
     let before = visualize_commit_graph_all(&repo)?;
-    insta::assert_snapshot!(before, @"
-    * dd72792 (HEAD -> main, c) c
-    * e5aa7b5 (b) b
-    * 3bfeb52 (a) a
-    * b6e2f57 (base) base
-    ");
+    snapbox::assert_data_eq!(
+        &before,
+        snapbox::str![[r#"
+* dd72792 (HEAD -> main, c) c
+* e5aa7b5 (b) b
+* 3bfeb52 (a) a
+* b6e2f57 (base) base
+
+"#]]
+    );
 
     let graph = Graph::from_head(
         &repo,
@@ -87,47 +99,59 @@ fn commits_are_signed_by_default() -> Result<()> {
 
     let outcome = editor.rebase()?;
     let overlayed = graph_tree(&outcome.overlayed_graph()?).to_string();
-    insta::assert_snapshot!(overlayed, @"
+    snapbox::assert_data_eq!(
+        &overlayed,
+        snapbox::str![[r#"
 
-    └── 👉►:0[0]:main[🌳]
-        ├── ·06106c2 (⌂|1) ►c
-        └── ·3bfeb52 (⌂|1) ►a, ►b
-            └── ►:1[1]:base
-                └── 🏁·b6e2f57 (⌂|1)
-    ");
+└── 👉►:0[0]:main[🌳]
+    ├── ·06106c2 (⌂|1) ►c
+    └── ·3bfeb52 (⌂|1) ►a, ►b
+        └── ►:1[1]:base
+            └── 🏁·b6e2f57 (⌂|1)
+
+"#]]
+    );
     let outcome = outcome.materialize()?;
     assert_eq!(overlayed, graph_tree(&outcome.workspace.graph).to_string());
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * 06106c2 (HEAD -> main, c) c
-    * 3bfeb52 (b, a) a
-    * b6e2f57 (base) base
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 06106c2 (HEAD -> main, c) c
+* 3bfeb52 (b, a) a
+* b6e2f57 (base) base
 
-    insta::assert_snapshot!(cat_commit(&repo, "c")?, @"
-    tree ea0372ea78d32151cb4c2b6a05a084817947c8f3
-    parent 3bfeb524461f65f82bf5027fc895fe9fd5f36203
-    author author <author@example.com> 946684800 +0000
-    committer Committer (Memory Override) <committer@example.com> 946771200 +0000
-    gitbutler-headers-version 2
-    change-id npznqkxwqsymyowwmpltqqvnvuqqrsoy
-    gpgsig -----BEGIN SSH SIGNATURE-----
-     U1NIU0lHAAAAAQAAARcAAAAHc3NoLXJzYQAAAAMBAAEAAAEBALgYZ0wtPvJyZ40qWRIe8A
-     bAYhKYgt0bWX3Z16PyZjWEF+FFx9bRSThY0Bc45TNzon133/aaTWMBnO9RDPw50wZH2ULI
-     xF8Q90BkBq9GI4lcliz8ovpwn3ezN6TQu+Ub1LbTWD2GOaCyUKpuQH96AsmOT5KNASfbdJ
-     jf8ezbO+kZg8+J1HMS83gOxhxj15Gwf1cCJAInXr/phYX8BmAZWSHZHu8foy6IG1g1dutr
-     2QyAGFddwDKObsrbejsOhwbF7u7PTEGWWO63ZlKS5/QfXg4hCoyWsrTW7lVqI6Xgxk4zOa
-     U+EnrNSr2BBXGSSgAqe1vo8TVWggNh/ACdnZa4Y6EAAAADZ2l0AAAAAAAAAAZzaGE1MTIA
-     AAEUAAAADHJzYS1zaGEyLTUxMgAAAQBPEv21QjFZJ+/CxMSCs1zb3yxEjqvPo181qaioTw
-     BFjDsJgnNLj5H9Uw/uCoTrXkmvOFpdbCJMb0iuf4aiDxqP7Q8wonC66tmdgbkyNQxJyl8T
-     CexJ8bhSrTFGu5vX9E2xdcYt5dCpUrD49w3a4hCAcoLAXrNFuGu9LDRRFfh8Bmp6zjXgYC
-     XZ0tI4iFDutMulDhmQZicFYPomb0TgHOzpDwr9+zX7pJOhX2xbeM3wbgj0hIfCDb2W81Rn
-     A5coj4FSlkXqpYC8mg/jwO54d4cfn2/y2oXesKAY5yxrZPIPlb7vmiLwiEcEh9YQhTT0c0
-     3KOol2J6bRKScwko1nMzSz
-     -----END SSH SIGNATURE-----
+"#]]
+    );
 
-    c
-    ");
+    snapbox::assert_data_eq!(
+        cat_commit(&repo, "c")?,
+        snapbox::str![[r#"
+tree ea0372ea78d32151cb4c2b6a05a084817947c8f3
+parent 3bfeb524461f65f82bf5027fc895fe9fd5f36203
+author author <author@example.com> 946684800 +0000
+committer Committer (Memory Override) <committer@example.com> 946771200 +0000
+gitbutler-headers-version 2
+change-id npznqkxwqsymyowwmpltqqvnvuqqrsoy
+gpgsig -----BEGIN SSH SIGNATURE-----
+ U1NIU0lHAAAAAQAAARcAAAAHc3NoLXJzYQAAAAMBAAEAAAEBALgYZ0wtPvJyZ40qWRIe8A
+ bAYhKYgt0bWX3Z16PyZjWEF+FFx9bRSThY0Bc45TNzon133/aaTWMBnO9RDPw50wZH2ULI
+ xF8Q90BkBq9GI4lcliz8ovpwn3ezN6TQu+Ub1LbTWD2GOaCyUKpuQH96AsmOT5KNASfbdJ
+ jf8ezbO+kZg8+J1HMS83gOxhxj15Gwf1cCJAInXr/phYX8BmAZWSHZHu8foy6IG1g1dutr
+ 2QyAGFddwDKObsrbejsOhwbF7u7PTEGWWO63ZlKS5/QfXg4hCoyWsrTW7lVqI6Xgxk4zOa
+ U+EnrNSr2BBXGSSgAqe1vo8TVWggNh/ACdnZa4Y6EAAAADZ2l0AAAAAAAAAAZzaGE1MTIA
+ AAEUAAAADHJzYS1zaGEyLTUxMgAAAQBPEv21QjFZJ+/CxMSCs1zb3yxEjqvPo181qaioTw
+ BFjDsJgnNLj5H9Uw/uCoTrXkmvOFpdbCJMb0iuf4aiDxqP7Q8wonC66tmdgbkyNQxJyl8T
+ CexJ8bhSrTFGu5vX9E2xdcYt5dCpUrD49w3a4hCAcoLAXrNFuGu9LDRRFfh8Bmp6zjXgYC
+ XZ0tI4iFDutMulDhmQZicFYPomb0TgHOzpDwr9+zX7pJOhX2xbeM3wbgj0hIfCDb2W81Rn
+ A5coj4FSlkXqpYC8mg/jwO54d4cfn2/y2oXesKAY5yxrZPIPlb7vmiLwiEcEh9YQhTT0c0
+ 3KOol2J6bRKScwko1nMzSz
+ -----END SSH SIGNATURE-----
+
+c
+
+"#]]
+    );
 
     Ok(())
 }
@@ -137,12 +161,16 @@ fn when_cherry_picking_dont_resign_if_not_set() -> Result<()> {
     let (repo, _tmpdir, mut meta) = fixture_writable_with_signing("four-commits-signed")?;
 
     let before = visualize_commit_graph_all(&repo)?;
-    insta::assert_snapshot!(before, @"
-    * dd72792 (HEAD -> main, c) c
-    * e5aa7b5 (b) b
-    * 3bfeb52 (a) a
-    * b6e2f57 (base) base
-    ");
+    snapbox::assert_data_eq!(
+        &before,
+        snapbox::str![[r#"
+* dd72792 (HEAD -> main, c) c
+* e5aa7b5 (b) b
+* 3bfeb52 (a) a
+* b6e2f57 (base) base
+
+"#]]
+    );
 
     let graph = Graph::from_head(
         &repo,
@@ -168,33 +196,45 @@ fn when_cherry_picking_dont_resign_if_not_set() -> Result<()> {
 
     let outcome = editor.rebase()?;
     let overlayed = graph_tree(&outcome.overlayed_graph()?).to_string();
-    insta::assert_snapshot!(overlayed, @"
+    snapbox::assert_data_eq!(
+        &overlayed,
+        snapbox::str![[r#"
 
-    └── 👉►:0[0]:main[🌳]
-        ├── ·a773b84 (⌂|1) ►c
-        └── ·3bfeb52 (⌂|1) ►a, ►b
-            └── ►:1[1]:base
-                └── 🏁·b6e2f57 (⌂|1)
-    ");
+└── 👉►:0[0]:main[🌳]
+    ├── ·a773b84 (⌂|1) ►c
+    └── ·3bfeb52 (⌂|1) ►a, ►b
+        └── ►:1[1]:base
+            └── 🏁·b6e2f57 (⌂|1)
+
+"#]]
+    );
     let outcome = outcome.materialize()?;
     assert_eq!(overlayed, graph_tree(&outcome.workspace.graph).to_string());
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * a773b84 (HEAD -> main, c) c
-    * 3bfeb52 (b, a) a
-    * b6e2f57 (base) base
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* a773b84 (HEAD -> main, c) c
+* 3bfeb52 (b, a) a
+* b6e2f57 (base) base
 
-    insta::assert_snapshot!(cat_commit(&repo, "c")?, @"
-    tree ea0372ea78d32151cb4c2b6a05a084817947c8f3
-    parent 3bfeb524461f65f82bf5027fc895fe9fd5f36203
-    author author <author@example.com> 946684800 +0000
-    committer Committer (Memory Override) <committer@example.com> 946771200 +0000
-    gitbutler-headers-version 2
-    change-id npznqkxwqsymyowwmpltqqvnvuqqrsoy
+"#]]
+    );
 
-    c
-    ");
+    snapbox::assert_data_eq!(
+        cat_commit(&repo, "c")?,
+        snapbox::str![[r#"
+tree ea0372ea78d32151cb4c2b6a05a084817947c8f3
+parent 3bfeb524461f65f82bf5027fc895fe9fd5f36203
+author author <author@example.com> 946684800 +0000
+committer Committer (Memory Override) <committer@example.com> 946771200 +0000
+gitbutler-headers-version 2
+change-id npznqkxwqsymyowwmpltqqvnvuqqrsoy
+
+c
+
+"#]]
+    );
 
     Ok(())
 }
@@ -208,11 +248,15 @@ fn force_picked_commit_with_sign_yes_is_signed_when_otherwise_unchanged() -> Res
     )?;
 
     let before = visualize_commit_graph_all(&repo)?;
-    insta::assert_snapshot!(before, @"
-    * ea8caac (HEAD -> main, top) top
-    * 135e6ba (mid) mid
-    * 7a5aacf (base) base
-    ");
+    snapbox::assert_data_eq!(
+        &before,
+        snapbox::str![[r#"
+* ea8caac (HEAD -> main, top) top
+* 135e6ba (mid) mid
+* 7a5aacf (base) base
+
+"#]]
+    );
 
     let graph = Graph::from_head(
         &repo,
@@ -244,11 +288,15 @@ fn force_picked_commit_with_sign_yes_is_signed_when_otherwise_unchanged() -> Res
     let materialize_outcome = outcome.materialize()?;
 
     let after = visualize_commit_graph_all(&repo)?;
-    insta::assert_snapshot!(after, @"
-    * a120c22 (HEAD -> main, top) top
-    * 135e6ba (mid) mid
-    * 7a5aacf (base) base
-    ");
+    snapbox::assert_data_eq!(
+        after,
+        snapbox::str![[r#"
+* a120c22 (HEAD -> main, top) top
+* 135e6ba (mid) mid
+* 7a5aacf (base) base
+
+"#]]
+    );
 
     let commit_mappings = materialize_outcome.history.commit_mappings();
     assert_eq!(
@@ -282,11 +330,15 @@ fn force_picked_ancestor_does_not_sign_descendants_picked_with_sign_commit_no() 
     )?;
 
     let before = visualize_commit_graph_all(&repo)?;
-    insta::assert_snapshot!(before, @"
-    * ea8caac (HEAD -> main, top) top
-    * 135e6ba (mid) mid
-    * 7a5aacf (base) base
-    ");
+    snapbox::assert_data_eq!(
+        &before,
+        snapbox::str![[r#"
+* ea8caac (HEAD -> main, top) top
+* 135e6ba (mid) mid
+* 7a5aacf (base) base
+
+"#]]
+    );
 
     let graph = Graph::from_head(
         &repo,
@@ -321,11 +373,15 @@ fn force_picked_ancestor_does_not_sign_descendants_picked_with_sign_commit_no() 
     let materialize_outcome = outcome.materialize()?;
 
     let after = visualize_commit_graph_all(&repo)?;
-    insta::assert_snapshot!(after, @"
-    * ddf9e11 (HEAD -> main, top) top
-    * 70ea083 (mid) mid
-    * 7a5aacf (base) base
-    ");
+    snapbox::assert_data_eq!(
+        after,
+        snapbox::str![[r#"
+* ddf9e11 (HEAD -> main, top) top
+* 70ea083 (mid) mid
+* 7a5aacf (base) base
+
+"#]]
+    );
 
     let commit_mappings = materialize_outcome.history.commit_mappings();
     assert_eq!(
@@ -375,11 +431,15 @@ fn force_picked_ancestor_triggers_cascading_signatures_on_descendants_picked_wit
     )?;
 
     let before = visualize_commit_graph_all(&repo)?;
-    insta::assert_snapshot!(before, @"
-    * ea8caac (HEAD -> main, top) top
-    * 135e6ba (mid) mid
-    * 7a5aacf (base) base
-    ");
+    snapbox::assert_data_eq!(
+        &before,
+        snapbox::str![[r#"
+* ea8caac (HEAD -> main, top) top
+* 135e6ba (mid) mid
+* 7a5aacf (base) base
+
+"#]]
+    );
 
     let graph = Graph::from_head(
         &repo,
@@ -414,11 +474,15 @@ fn force_picked_ancestor_triggers_cascading_signatures_on_descendants_picked_wit
     let materialize_outcome = outcome.materialize()?;
 
     let after = visualize_commit_graph_all(&repo)?;
-    insta::assert_snapshot!(after, @"
-    * 0ceb853 (HEAD -> main, top) top
-    * 70ea083 (mid) mid
-    * 7a5aacf (base) base
-    ");
+    snapbox::assert_data_eq!(
+        after,
+        snapbox::str![[r#"
+* 0ceb853 (HEAD -> main, top) top
+* 70ea083 (mid) mid
+* 7a5aacf (base) base
+
+"#]]
+    );
 
     let commit_mappings = materialize_outcome.history.commit_mappings();
     assert_eq!(
@@ -465,11 +529,15 @@ fn commit_picked_with_sign_if_enabled_is_not_signed_when_signing_config_is_disab
     )?;
 
     let before = visualize_commit_graph_all(&repo)?;
-    insta::assert_snapshot!(before, @"
-    * ea8caac (HEAD -> main, top) top
-    * 135e6ba (mid) mid
-    * 7a5aacf (base) base
-    ");
+    snapbox::assert_data_eq!(
+        &before,
+        snapbox::str![[r#"
+* ea8caac (HEAD -> main, top) top
+* 135e6ba (mid) mid
+* 7a5aacf (base) base
+
+"#]]
+    );
 
     let graph = Graph::from_head(
         &repo,
@@ -502,10 +570,14 @@ fn commit_picked_with_sign_if_enabled_is_not_signed_when_signing_config_is_disab
     let materialize_outcome = outcome.materialize()?;
 
     let after = visualize_commit_graph_all(&repo)?;
-    insta::assert_snapshot!(after, @"
-    * de73d4b (HEAD -> main, top) top
-    * 7a5aacf (mid, base) base
-    ");
+    snapbox::assert_data_eq!(
+        after,
+        snapbox::str![[r#"
+* de73d4b (HEAD -> main, top) top
+* 7a5aacf (mid, base) base
+
+"#]]
+    );
 
     let commit_mappings = materialize_outcome.history.commit_mappings();
     assert_eq!(
@@ -539,11 +611,15 @@ fn parentless_commit_force_picked_with_sign_yes_is_signed() -> Result<()> {
     )?;
 
     let before = visualize_commit_graph_all(&repo)?;
-    insta::assert_snapshot!(before, @"
-    * ea8caac (HEAD -> main, top) top
-    * 135e6ba (mid) mid
-    * 7a5aacf (base) base
-    ");
+    snapbox::assert_data_eq!(
+        &before,
+        snapbox::str![[r#"
+* ea8caac (HEAD -> main, top) top
+* 135e6ba (mid) mid
+* 7a5aacf (base) base
+
+"#]]
+    );
 
     let graph = Graph::from_head(
         &repo,

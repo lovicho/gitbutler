@@ -39,7 +39,7 @@ but-schemars = { workspace = true, optional = true }
 
 [dev-dependencies]
 but-testsupport.workspace = true
-insta = "1.47.2"
+snapbox.workspace = true
 but-meta = { workspace = true, features = ["legacy"] }
 
 gitbutler-reference.workspace = true

@@ -6,76 +6,119 @@ use but_testsupport::{
     writable_scenario, writable_scenario_slow,
 };
 use gix::object::tree::EntryKind;
+use snapbox::prelude::*;
 
 use crate::worktree::utils::build_commit;
 
 #[test]
 fn update_unborn_head() -> anyhow::Result<()> {
     let (repo, _tmp) = writable_scenario("unborn-empty");
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"");
-    insta::assert_snapshot!(git_status(&repo)?, @"");
+    snapbox::assert_data_eq!(visualize_commit_graph_all(&repo)?, snapbox::str![""]);
+    snapbox::assert_data_eq!(git_status(&repo)?, snapbox::str![""]);
 
     let empty_tree = repo.empty_tree().id;
     let head_commit = repo.new_commit("init", empty_tree, None::<gix::ObjectId>)?;
 
     let out = safe_checkout_from_head(head_commit.id, &repo, Default::default())?;
-    insta::assert_debug_snapshot!(out, @r#"
-    Outcome {
-        num_deleted_files: 0,
-        num_added_or_updated_files: 0,
-        head_update: "Update refs/heads/main to Some(Object(Sha1(31ec8eacfba4051fd673e4fe23c775e87896a463)))",
-    }
-    "#);
+    snapbox::assert_data_eq!(
+        out.to_debug(),
+        snapbox::str![[r#"
+Outcome {
+    num_deleted_files: 0,
+    num_added_or_updated_files: 0,
+    head_update: "Update refs/heads/main to Some(Object(Sha1(31ec8eacfba4051fd673e4fe23c775e87896a463)))",
+}
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"* 31ec8ea (HEAD -> main) init");
-    insta::assert_snapshot!(git_status(&repo)?, @"");
+"#]]
+    );
+
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 31ec8ea (HEAD -> main) init
+
+"#]]
+    );
+    snapbox::assert_data_eq!(git_status(&repo)?, snapbox::str![""]);
     Ok(())
 }
 
 #[test]
 fn no_op_trees_never_touch_worktree() -> anyhow::Result<()> {
     let repo = read_only_in_memory_scenario("all-file-types-renamed-and-modified")?;
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"* 4e26689 (HEAD -> main) init");
-    insta::assert_snapshot!(visualize_index(&*repo.index()?), @r"
-    100755:01e79c3 executable
-    100644:3aac70f file
-    120000:c4c364c link
-    ");
-    insta::assert_snapshot!(git_status(&repo)?, @r"
-     D executable
-     D file
-     D link
-    ?? executable-renamed
-    ?? file-renamed
-    ?? link-renamed
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 4e26689 (HEAD -> main) init
+
+"#]]
+    );
+    snapbox::assert_data_eq!(
+        visualize_index(&*repo.index()?),
+        snapbox::str![[r#"
+100755:01e79c3 executable
+100644:3aac70f file
+120000:c4c364c link
+
+"#]]
+    );
+    snapbox::assert_data_eq!(
+        git_status(&repo)?,
+        snapbox::str![[r#"
+ D executable
+ D file
+ D link
+?? executable-renamed
+?? file-renamed
+?? link-renamed
+
+"#]]
+    );
 
     let a_commit = repo.head_commit()?;
 
     let out = safe_checkout_from_head(a_commit.id, &repo, Default::default())?;
-    insta::assert_debug_snapshot!(out, @r#"
-    Outcome {
-        num_deleted_files: 0,
-        num_added_or_updated_files: 0,
-        head_update: "None",
-    }
-    "#);
+    snapbox::assert_data_eq!(
+        out.to_debug(),
+        snapbox::str![[r#"
+Outcome {
+    num_deleted_files: 0,
+    num_added_or_updated_files: 0,
+    head_update: "None",
+}
+
+"#]]
+    );
 
     // Nothing changed
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"* 4e26689 (HEAD -> main) init");
-    insta::assert_snapshot!(visualize_index(&*repo.index()?), @r"
-    100755:01e79c3 executable
-    100644:3aac70f file
-    120000:c4c364c link
-    ");
-    insta::assert_snapshot!(git_status(&repo)?, @r"
-     D executable
-     D file
-     D link
-    ?? executable-renamed
-    ?? file-renamed
-    ?? link-renamed
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 4e26689 (HEAD -> main) init
+
+"#]]
+    );
+    snapbox::assert_data_eq!(
+        visualize_index(&*repo.index()?),
+        snapbox::str![[r#"
+100755:01e79c3 executable
+100644:3aac70f file
+120000:c4c364c link
+
+"#]]
+    );
+    snapbox::assert_data_eq!(
+        git_status(&repo)?,
+        snapbox::str![[r#"
+ D executable
+ D file
+ D link
+?? executable-renamed
+?? file-renamed
+?? link-renamed
+
+"#]]
+    );
     Ok(())
 }
 
@@ -107,20 +150,28 @@ fn conflicted_commits_cannot_be_checked_out() -> anyhow::Result<()> {
 #[test]
 fn pure_deletion_checkout_does_not_restore_unrelated_worktree_deletions() -> anyhow::Result<()> {
     let (repo, _tmp) = writable_scenario_slow("all-file-types-renamed-and-modified");
-    insta::assert_snapshot!(git_status(&repo)?, @r"
-     D executable
-     D file
-     D link
-    ?? executable-renamed
-    ?? file-renamed
-    ?? link-renamed
-    ");
+    snapbox::assert_data_eq!(
+        git_status(&repo)?,
+        snapbox::str![[r#"
+ D executable
+ D file
+ D link
+?? executable-renamed
+?? file-renamed
+?? link-renamed
 
-    insta::assert_snapshot!(visualize_index(&*repo.index()?), @"
-    100755:01e79c3 executable
-    100644:3aac70f file
-    120000:c4c364c link
-    ");
+"#]]
+    );
+
+    snapbox::assert_data_eq!(
+        visualize_index(&*repo.index()?),
+        snapbox::str![[r#"
+100755:01e79c3 executable
+100644:3aac70f file
+120000:c4c364c link
+
+"#]]
+    );
 
     let new_commit = build_commit(
         &repo,
@@ -132,24 +183,36 @@ fn pure_deletion_checkout_does_not_restore_unrelated_worktree_deletions() -> any
     )?;
 
     let out = safe_checkout_from_head(new_commit.id, &repo, Default::default())?;
-    insta::assert_debug_snapshot!(out, @r#"
-    Outcome {
-        num_deleted_files: 1,
-        num_added_or_updated_files: 0,
-        head_update: "Update refs/heads/main to Some(Object(Sha1(5eedd314adfb480212989a303c7651717062a9b2)))",
-    }
-    "#);
-    insta::assert_snapshot!(visualize_index(&*repo.index()?), @r"
-    100644:3aac70f file
-    120000:c4c364c link
-    ");
-    insta::assert_snapshot!(git_status(&repo)?, @r"
-     D file
-     D link
-    ?? executable-renamed
-    ?? file-renamed
-    ?? link-renamed
-    ");
+    snapbox::assert_data_eq!(
+        out.to_debug(),
+        snapbox::str![[r#"
+Outcome {
+    num_deleted_files: 1,
+    num_added_or_updated_files: 0,
+    head_update: "Update refs/heads/main to Some(Object(Sha1(5eedd314adfb480212989a303c7651717062a9b2)))",
+}
+
+"#]]
+    );
+    snapbox::assert_data_eq!(
+        visualize_index(&*repo.index()?),
+        snapbox::str![[r#"
+100644:3aac70f file
+120000:c4c364c link
+
+"#]]
+    );
+    snapbox::assert_data_eq!(
+        git_status(&repo)?,
+        snapbox::str![[r#"
+ D file
+ D link
+?? executable-renamed
+?? file-renamed
+?? link-renamed
+
+"#]]
+    );
 
     Ok(())
 }
@@ -168,7 +231,13 @@ fn pure_deletion_checkout_keeps_non_intersecting_worktree_deletion() -> anyhow::
     safe_checkout_from_head(initial_commit.id, &repo, Default::default())?;
 
     std::fs::remove_file(repo.workdir_path("b.txt").expect("non-bare repository"))?;
-    insta::assert_snapshot!(git_status(&repo)?, @" D b.txt");
+    snapbox::assert_data_eq!(
+        git_status(&repo)?,
+        snapbox::str![[r#"
+ D b.txt
+
+"#]]
+    );
 
     let new_commit = build_commit(
         &repo,
@@ -186,7 +255,13 @@ fn pure_deletion_checkout_keeps_non_intersecting_worktree_deletion() -> anyhow::
     assert!(!repo.workdir_path("a.txt").unwrap().exists());
     assert!(!repo.workdir_path("b.txt").unwrap().exists());
     assert!(repo.workdir_path("c.txt").unwrap().exists());
-    insta::assert_snapshot!(git_status(&repo)?, @" D b.txt");
+    snapbox::assert_data_eq!(
+        git_status(&repo)?,
+        snapbox::str![[r#"
+ D b.txt
+
+"#]]
+    );
 
     Ok(())
 }
@@ -220,11 +295,15 @@ fn pure_deletion_checkout_keeps_empty_worktree_root() -> anyhow::Result<()> {
     let initial_commit = repo.new_commit("init", initial_tree_id, None::<gix::ObjectId>)?;
     safe_checkout_from_head(initial_commit.id, &repo, Default::default())?;
 
-    insta::assert_snapshot!(visualize_disk_tree_skip_dot_git(&worktree)?, @r"
-    .
-    └── nested:40755
-        └── only.txt:100644
-    ");
+    snapbox::assert_data_eq!(
+        visualize_disk_tree_skip_dot_git(&worktree)?.to_string(),
+        snapbox::str![[r#"
+.
+└── nested:40755
+    └── only.txt:100644
+
+"#]]
+    );
 
     let new_commit = build_commit(
         &repo,
@@ -241,9 +320,13 @@ fn pure_deletion_checkout_keeps_empty_worktree_root() -> anyhow::Result<()> {
         worktree.is_dir(),
         "safe checkout must not delete the worktree root while cleaning up empty parents"
     );
-    insta::assert_snapshot!(visualize_disk_tree_skip_dot_git(&worktree)?, @r"
-    .
-    ");
+    snapbox::assert_data_eq!(
+        visualize_disk_tree_skip_dot_git(&worktree)?.to_string(),
+        snapbox::str![[r#"
+.
+
+"#]]
+    );
 
     Ok(())
 }
@@ -251,17 +334,31 @@ fn pure_deletion_checkout_keeps_empty_worktree_root() -> anyhow::Result<()> {
 #[test]
 fn worktree_and_index_deletions_are_ignored_in_snapshots() -> anyhow::Result<()> {
     let (repo, _tmp) = writable_scenario("deletion-addition-untracked");
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"* 226d5ea (HEAD -> main) init");
-    insta::assert_snapshot!(visualize_index(&*repo.index()?), @r"
-    100644:3e75765 added-to-index
-    100644:d95f3ad to-be-deleted
-    ");
-    insta::assert_snapshot!(git_status(&repo)?, @r"
-    A  added-to-index
-     D to-be-deleted
-    D  to-be-deleted-in-index
-    ?? untracked
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 226d5ea (HEAD -> main) init
+
+"#]]
+    );
+    snapbox::assert_data_eq!(
+        visualize_index(&*repo.index()?),
+        snapbox::str![[r#"
+100644:3e75765 added-to-index
+100644:d95f3ad to-be-deleted
+
+"#]]
+    );
+    snapbox::assert_data_eq!(
+        git_status(&repo)?,
+        snapbox::str![[r#"
+A  added-to-index
+ D to-be-deleted
+D  to-be-deleted-in-index
+?? untracked
+
+"#]]
+    );
 
     // Turn deleted files into directory - these won't conflict no matter what they were in the index.
     let new_commit = build_commit(
@@ -279,30 +376,46 @@ fn worktree_and_index_deletions_are_ignored_in_snapshots() -> anyhow::Result<()>
     )?;
 
     let out = safe_checkout_from_head(new_commit.id, &repo, Default::default())?;
-    insta::assert_debug_snapshot!(out, @r#"
-    Outcome {
-        num_deleted_files: 1,
-        num_added_or_updated_files: 1,
-        head_update: "Update refs/heads/main to Some(Object(Sha1(24f802a1250d2f84e1f49094e3b8bb1e5c0d29ad)))",
-    }
-    "#);
+    snapbox::assert_data_eq!(
+        out.to_debug(),
+        snapbox::str![[r#"
+Outcome {
+    num_deleted_files: 1,
+    num_added_or_updated_files: 1,
+    head_update: "Update refs/heads/main to Some(Object(Sha1(24f802a1250d2f84e1f49094e3b8bb1e5c0d29ad)))",
+}
+
+"#]]
+    );
 
     // Nothing changed as the checkout was aborted.
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    * 24f802a (HEAD -> main) turn changed file into a directory
-    * 226d5ea init
-    ");
-    insta::assert_snapshot!(visualize_index(&*repo.index()?), @r"
-    100644:3e75765 added-to-index
-    100644:e69de29 to-be-deleted/a
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 24f802a (HEAD -> main) turn changed file into a directory
+* 226d5ea init
+
+"#]]
+    );
+    snapbox::assert_data_eq!(
+        visualize_index(&*repo.index()?),
+        snapbox::str![[r#"
+100644:3e75765 added-to-index
+100644:e69de29 to-be-deleted/a
+
+"#]]
+    );
     // `to-be-deleted-in-index` was staged for deletion (`git rm`) and is no longer
     // restored by the checkout — the checkout only touches `to-be-deleted` → `to-be-deleted/a`.
-    insta::assert_snapshot!(git_status(&repo)?, @r"
-    A  added-to-index
-    D  to-be-deleted-in-index
-    ?? untracked
-    ");
+    snapbox::assert_data_eq!(
+        git_status(&repo)?,
+        snapbox::str![[r#"
+A  added-to-index
+D  to-be-deleted-in-index
+?? untracked
+
+"#]]
+    );
 
     Ok(())
 }
@@ -310,23 +423,44 @@ fn worktree_and_index_deletions_are_ignored_in_snapshots() -> anyhow::Result<()>
 #[test]
 fn worktree_changes_do_not_cause_conflict_markers_but_fail() -> anyhow::Result<()> {
     let (repo, _tmp) = writable_scenario("mixed-hunk-modifications");
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"* 647cc94 (HEAD -> main) init");
-    insta::assert_snapshot!(visualize_index(&*repo.index()?), @r"
-    100755:3d3b36f file
-    100755:cb89473 file-in-index
-    100644:3d3b36f file-renamed-in-index
-    100644:3d3b36f file-to-be-renamed
-    ");
-    insta::assert_snapshot!(git_status(&repo)?, @r"
-     M file
-    M  file-in-index
-    RM file-to-be-renamed-in-index -> file-renamed-in-index
-     D file-to-be-renamed
-    ?? file-renamed
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 647cc94 (HEAD -> main) init
+
+"#]]
+    );
+    snapbox::assert_data_eq!(
+        visualize_index(&*repo.index()?),
+        snapbox::str![[r#"
+100755:3d3b36f file
+100755:cb89473 file-in-index
+100644:3d3b36f file-renamed-in-index
+100644:3d3b36f file-to-be-renamed
+
+"#]]
+    );
+    snapbox::assert_data_eq!(
+        git_status(&repo)?,
+        snapbox::str![[r#"
+ M file
+M  file-in-index
+RM file-to-be-renamed-in-index -> file-renamed-in-index
+ D file-to-be-renamed
+?? file-renamed
+
+"#]]
+    );
     let file_path = repo.workdir_path("file").unwrap();
     let actual = std::fs::read_to_string(&file_path)?;
-    insta::assert_debug_snapshot!(actual, @r#""1\n2\n3\n4\n5\n6-7\n8\n9\nten\neleven\n12\n20\n21\n22\n15\n16\n""#);
+    snapbox::assert_data_eq!(
+        actual.to_debug(),
+        snapbox::str![[r#"
+"1\n2\n3\n4\n5\n6-7\n8\n9\nten\neleven\n12\n20\n21\n22\n15\n16\n"
+
+"#]]
+        .raw()
+    );
 
     // In the target tree, make a surgical edit (one changed line) so the changes should still apply cleany
     let new_commit = build_commit(
@@ -364,22 +498,43 @@ this will cause a conflict
     );
     // Nothing else changes
     let actual = std::fs::read_to_string(&file_path)?;
-    insta::assert_debug_snapshot!(actual, @r#""1\n2\n3\n4\n5\n6-7\n8\n9\nten\neleven\n12\n20\n21\n22\n15\n16\n""#);
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"* 647cc94 (HEAD -> main) init");
-    insta::assert_snapshot!(visualize_index(&*repo.index()?), @r"
-    100755:3d3b36f file
-    100755:cb89473 file-in-index
-    100644:3d3b36f file-renamed-in-index
-    100644:3d3b36f file-to-be-renamed
-    ");
+    snapbox::assert_data_eq!(
+        actual.to_debug(),
+        snapbox::str![[r#"
+"1\n2\n3\n4\n5\n6-7\n8\n9\nten\neleven\n12\n20\n21\n22\n15\n16\n"
 
-    insta::assert_snapshot!(git_status(&repo)?, @r"
-     M file
-    M  file-in-index
-    RM file-to-be-renamed-in-index -> file-renamed-in-index
-     D file-to-be-renamed
-    ?? file-renamed
-    ");
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 647cc94 (HEAD -> main) init
+
+"#]]
+    );
+    snapbox::assert_data_eq!(
+        visualize_index(&*repo.index()?),
+        snapbox::str![[r#"
+100755:3d3b36f file
+100755:cb89473 file-in-index
+100644:3d3b36f file-renamed-in-index
+100644:3d3b36f file-to-be-renamed
+
+"#]]
+    );
+
+    snapbox::assert_data_eq!(
+        git_status(&repo)?,
+        snapbox::str![[r#"
+ M file
+M  file-in-index
+RM file-to-be-renamed-in-index -> file-renamed-in-index
+ D file-to-be-renamed
+?? file-renamed
+
+"#]]
+    );
 
     Ok(())
 }
@@ -387,40 +542,58 @@ this will cause a conflict
 #[test]
 fn worktree_snapshot_reapplies_with_hunk_granularity() -> anyhow::Result<()> {
     let (repo, _tmp) = writable_scenario("mixed-hunk-modifications");
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"* 647cc94 (HEAD -> main) init");
-    insta::assert_snapshot!(visualize_index(&*repo.index()?), @r"
-    100755:3d3b36f file
-    100755:cb89473 file-in-index
-    100644:3d3b36f file-renamed-in-index
-    100644:3d3b36f file-to-be-renamed
-    ");
-    insta::assert_snapshot!(git_status(&repo)?, @r"
-     M file
-    M  file-in-index
-    RM file-to-be-renamed-in-index -> file-renamed-in-index
-     D file-to-be-renamed
-    ?? file-renamed
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 647cc94 (HEAD -> main) init
+
+"#]]
+    );
+    snapbox::assert_data_eq!(
+        visualize_index(&*repo.index()?),
+        snapbox::str![[r#"
+100755:3d3b36f file
+100755:cb89473 file-in-index
+100644:3d3b36f file-renamed-in-index
+100644:3d3b36f file-to-be-renamed
+
+"#]]
+    );
+    snapbox::assert_data_eq!(
+        git_status(&repo)?,
+        snapbox::str![[r#"
+ M file
+M  file-in-index
+RM file-to-be-renamed-in-index -> file-renamed-in-index
+ D file-to-be-renamed
+?? file-renamed
+
+"#]]
+    );
     let file_path = repo.workdir_path("file").unwrap();
     let actual = std::fs::read_to_string(&file_path)?;
-    insta::assert_snapshot!(actual, @r"
-    1
-    2
-    3
-    4
-    5
-    6-7
-    8
-    9
-    ten
-    eleven
-    12
-    20
-    21
-    22
-    15
-    16
-    ");
+    snapbox::assert_data_eq!(
+        actual,
+        snapbox::str![[r#"
+1
+2
+3
+4
+5
+6-7
+8
+9
+ten
+eleven
+12
+20
+21
+22
+15
+16
+
+"#]]
+    );
 
     // In the target tree, make a surgical edit (one changed line) so the changes should still apply cleany
     let new_commit = build_commit(
@@ -454,55 +627,75 @@ inserted in new tree
         .expect("no error as we keep the snapshot for later");
     // File is still changed, after all we re-applied the worktree changes.
     let actual = std::fs::read_to_string(&file_path)?;
-    insta::assert_snapshot!(actual, @r"
-    1
-    2
-    3
-    4
-    5
-    6-7
-    8
-    inserted in new tree
-    9
-    ten
-    eleven
-    12
-    20
-    21
-    22
-    15
-    16
-    ");
+    snapbox::assert_data_eq!(
+        actual,
+        snapbox::str![[r#"
+1
+2
+3
+4
+5
+6-7
+8
+inserted in new tree
+9
+ten
+eleven
+12
+20
+21
+22
+15
+16
 
-    insta::assert_debug_snapshot!(out, @r#"
-    Outcome {
-        num_deleted_files: 0,
-        num_added_or_updated_files: 1,
-        head_update: "Update refs/heads/main to Some(Object(Sha1(89b113aeae66a3cb1116bb23a195422edbd6af27)))",
-    }
-    "#);
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    * 89b113a (HEAD -> main) edited 'file' (add single line)
-    * 647cc94 init
-    ");
+"#]]
+    );
+
+    snapbox::assert_data_eq!(
+        out.to_debug(),
+        snapbox::str![[r#"
+Outcome {
+    num_deleted_files: 0,
+    num_added_or_updated_files: 1,
+    head_update: "Update refs/heads/main to Some(Object(Sha1(89b113aeae66a3cb1116bb23a195422edbd6af27)))",
+}
+
+"#]]
+    );
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 89b113a (HEAD -> main) edited 'file' (add single line)
+* 647cc94 init
+
+"#]]
+    );
     // `file-to-be-renamed-in-index` is no longer restored by the checkout — the checkout
     // only touches `file`, so the index rename (`RM file-to-be-renamed-in-index -> …`) is preserved.
-    insta::assert_snapshot!(visualize_index(&*repo.index()?), @r"
-    100644:832f532 file
-    100755:cb89473 file-in-index
-    100644:3d3b36f file-renamed-in-index
-    100644:3d3b36f file-to-be-renamed
-    ");
+    snapbox::assert_data_eq!(
+        visualize_index(&*repo.index()?),
+        snapbox::str![[r#"
+100644:832f532 file
+100755:cb89473 file-in-index
+100644:3d3b36f file-renamed-in-index
+100644:3d3b36f file-to-be-renamed
+
+"#]]
+    );
     // Notably, 'file' is not in the index anymore, as that now always matches the worktree.
     // The rename of `file-to-be-renamed-in-index` and deletion of `file-to-be-renamed` are
     // preserved — the checkout only touched `file`.
-    insta::assert_snapshot!(git_status(&repo)?, @r"
-    M  file
-    M  file-in-index
-    RM file-to-be-renamed-in-index -> file-renamed-in-index
-     D file-to-be-renamed
-    ?? file-renamed
-    ");
+    snapbox::assert_data_eq!(
+        git_status(&repo)?,
+        snapbox::str![[r#"
+M  file
+M  file-in-index
+RM file-to-be-renamed-in-index -> file-renamed-in-index
+ D file-to-be-renamed
+?? file-renamed
+
+"#]]
+    );
 
     Ok(())
 }
@@ -544,13 +737,17 @@ fn worktree_snapshot_of_legacy_crlf_blob_merges_cleanly_with_independent_target_
     // onto the `new_commit` to be transferred by merge. That snapshot now normalizes line endings correctly,
     // so the independent edits merge cleanly instead of being treated as a whole-file conflict.
     let out = safe_checkout_from_head(new_commit.id, &repo, Default::default())?;
-    insta::assert_debug_snapshot!(out, @r#"
-    Outcome {
-        num_deleted_files: 0,
-        num_added_or_updated_files: 1,
-        head_update: "Update refs/heads/main to Some(Object(Sha1(a530b145a2513ba5b2a4418bbb74920d3967f8fb)))",
-    }
-    "#);
+    snapbox::assert_data_eq!(
+        out.to_debug(),
+        snapbox::str![[r#"
+Outcome {
+    num_deleted_files: 0,
+    num_added_or_updated_files: 1,
+    head_update: "Update refs/heads/main to Some(Object(Sha1(a530b145a2513ba5b2a4418bbb74920d3967f8fb)))",
+}
+
+"#]]
+    );
 
     assert_eq!(
         std::fs::read(&file_path)?.as_bstr(),
@@ -576,16 +773,27 @@ fn checkout_handles_directory_and_file_replacements() -> anyhow::Result<()> {
         return Ok(());
     }
     let (repo, _tmp) = writable_scenario("merge-with-two-branches-line-offset");
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *   2a6d103 (HEAD -> merge) Merge branch 'A' into merge
-    |\  
-    | * 7f389ed (A) add 10 to the beginning
-    * | 91ef6f6 (B) add 10 to the end
-    |/  
-    * ff045ef (main) init
-    ");
-    insta::assert_snapshot!(visualize_index(&*repo.index()?), @"100644:e8823e1 file");
-    insta::assert_snapshot!(git_status(&repo)?, @"");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   2a6d103 (HEAD -> merge) Merge branch 'A' into merge
+|\  
+| * 7f389ed (A) add 10 to the beginning
+* | 91ef6f6 (B) add 10 to the end
+|/  
+* ff045ef (main) init
+
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(
+        visualize_index(&*repo.index()?),
+        snapbox::str![[r#"
+100644:e8823e1 file
+
+"#]]
+    );
+    snapbox::assert_data_eq!(git_status(&repo)?, snapbox::str![""]);
 
     // Turn file into directory
     let new_commit = build_commit(
@@ -600,29 +808,42 @@ fn checkout_handles_directory_and_file_replacements() -> anyhow::Result<()> {
         "turn file into a directory",
     )?;
     let out = safe_checkout_from_head(new_commit.id, &repo, Default::default())?;
-    insta::assert_debug_snapshot!(out, @r#"
-    Outcome {
-        num_deleted_files: 1,
-        num_added_or_updated_files: 3,
-        head_update: "Update refs/heads/merge to Some(Object(Sha1(df178e3012ac0862407185ae7dd8d634a6cde677)))",
-    }
-    "#);
+    snapbox::assert_data_eq!(
+        out.to_debug(),
+        snapbox::str![[r#"
+Outcome {
+    num_deleted_files: 1,
+    num_added_or_updated_files: 3,
+    head_update: "Update refs/heads/merge to Some(Object(Sha1(df178e3012ac0862407185ae7dd8d634a6cde677)))",
+}
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    * df178e3 (HEAD -> merge) turn file into a directory
-    *   2a6d103 Merge branch 'A' into merge
-    |\  
-    | * 7f389ed (A) add 10 to the beginning
-    * | 91ef6f6 (B) add 10 to the end
-    |/  
-    * ff045ef (main) init
-    ");
-    insta::assert_snapshot!(visualize_index(&*repo.index()?), @r"
-    100644:e69de29 file/c
-    100644:e69de29 file/sub/a
-    100644:e69de29 file/sub2/b
-    ");
-    insta::assert_snapshot!(git_status(&repo)?, @"");
+"#]]
+    );
+
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* df178e3 (HEAD -> merge) turn file into a directory
+*   2a6d103 Merge branch 'A' into merge
+|\  
+| * 7f389ed (A) add 10 to the beginning
+* | 91ef6f6 (B) add 10 to the end
+|/  
+* ff045ef (main) init
+
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(
+        visualize_index(&*repo.index()?),
+        snapbox::str![[r#"
+100644:e69de29 file/c
+100644:e69de29 file/sub/a
+100644:e69de29 file/sub2/b
+
+"#]]
+    );
+    snapbox::assert_data_eq!(git_status(&repo)?, snapbox::str![""]);
 
     let new_commit = build_commit(
         &repo,
@@ -634,26 +855,41 @@ fn checkout_handles_directory_and_file_replacements() -> anyhow::Result<()> {
         "turn a directory back into a file",
     )?;
     let out = safe_checkout_from_head(new_commit.id, &repo, Default::default())?;
-    insta::assert_debug_snapshot!(out, @r#"
-    Outcome {
-        num_deleted_files: 3,
-        num_added_or_updated_files: 1,
-        head_update: "Update refs/heads/merge to Some(Object(Sha1(94cc54fa25411ad51e319a9895d031d8da97b7ab)))",
-    }
-    "#);
+    snapbox::assert_data_eq!(
+        out.to_debug(),
+        snapbox::str![[r#"
+Outcome {
+    num_deleted_files: 3,
+    num_added_or_updated_files: 1,
+    head_update: "Update refs/heads/merge to Some(Object(Sha1(94cc54fa25411ad51e319a9895d031d8da97b7ab)))",
+}
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    * 94cc54f (HEAD -> merge) turn a directory back into a file
-    * df178e3 turn file into a directory
-    *   2a6d103 Merge branch 'A' into merge
-    |\  
-    | * 7f389ed (A) add 10 to the beginning
-    * | 91ef6f6 (B) add 10 to the end
-    |/  
-    * ff045ef (main) init
-    ");
-    insta::assert_snapshot!(visualize_index(&*repo.index()?), @"100644:e69de29 file");
-    insta::assert_snapshot!(git_status(&repo)?, @"");
+"#]]
+    );
+
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 94cc54f (HEAD -> merge) turn a directory back into a file
+* df178e3 turn file into a directory
+*   2a6d103 Merge branch 'A' into merge
+|\  
+| * 7f389ed (A) add 10 to the beginning
+* | 91ef6f6 (B) add 10 to the end
+|/  
+* ff045ef (main) init
+
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(
+        visualize_index(&*repo.index()?),
+        snapbox::str![[r#"
+100644:e69de29 file
+
+"#]]
+    );
+    snapbox::assert_data_eq!(git_status(&repo)?, snapbox::str![""]);
 
     Ok(())
 }
@@ -661,20 +897,34 @@ fn checkout_handles_directory_and_file_replacements() -> anyhow::Result<()> {
 #[test]
 fn unrelated_additions_do_not_affect_worktree_changes() -> anyhow::Result<()> {
     let (repo, _tmp) = writable_scenario_slow("all-file-types-renamed-and-modified");
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"* 4e26689 (HEAD -> main) init");
-    insta::assert_snapshot!(visualize_index(&*repo.index()?), @r"
-    100755:01e79c3 executable
-    100644:3aac70f file
-    120000:c4c364c link
-    ");
-    insta::assert_snapshot!(git_status(&repo)?, @r"
-     D executable
-     D file
-     D link
-    ?? executable-renamed
-    ?? file-renamed
-    ?? link-renamed
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 4e26689 (HEAD -> main) init
+
+"#]]
+    );
+    snapbox::assert_data_eq!(
+        visualize_index(&*repo.index()?),
+        snapbox::str![[r#"
+100755:01e79c3 executable
+100644:3aac70f file
+120000:c4c364c link
+
+"#]]
+    );
+    snapbox::assert_data_eq!(
+        git_status(&repo)?,
+        snapbox::str![[r#"
+ D executable
+ D file
+ D link
+?? executable-renamed
+?? file-renamed
+?? link-renamed
+
+"#]]
+    );
 
     let new_commit = build_commit(
         &repo,
@@ -685,36 +935,52 @@ fn unrelated_additions_do_not_affect_worktree_changes() -> anyhow::Result<()> {
         "add unrelated file",
     )?;
     let out = safe_checkout_from_head(new_commit.id, &repo, Default::default())?;
-    insta::assert_debug_snapshot!(out, @r#"
-    Outcome {
-        num_deleted_files: 0,
-        num_added_or_updated_files: 1,
-        head_update: "Update refs/heads/main to Some(Object(Sha1(7add6cadcf636e5b3a6c15c75e82abbec97d6eef)))",
-    }
-    "#);
+    snapbox::assert_data_eq!(
+        out.to_debug(),
+        snapbox::str![[r#"
+Outcome {
+    num_deleted_files: 0,
+    num_added_or_updated_files: 1,
+    head_update: "Update refs/heads/main to Some(Object(Sha1(7add6cadcf636e5b3a6c15c75e82abbec97d6eef)))",
+}
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    * 7add6ca (HEAD -> main) add unrelated file
-    * 4e26689 init
-    ");
+"#]]
+    );
+
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 7add6ca (HEAD -> main) add unrelated file
+* 4e26689 init
+
+"#]]
+    );
     // Only the unrelated file was added, only visible in the index.
-    insta::assert_snapshot!(visualize_index(&*repo.index()?), @r"
-    100755:01e79c3 executable
-    100644:3aac70f file
-    120000:c4c364c link
-    100644:e69de29 unrelated
-    ");
+    snapbox::assert_data_eq!(
+        visualize_index(&*repo.index()?),
+        snapbox::str![[r#"
+100755:01e79c3 executable
+100644:3aac70f file
+120000:c4c364c link
+100644:e69de29 unrelated
+
+"#]]
+    );
 
     // Deleted files stay deleted — the checkout only adds `unrelated`, which
     // doesn't intersect with the worktree deletions.
-    insta::assert_snapshot!(git_status(&repo)?, @r"
-     D executable
-     D file
-     D link
-    ?? executable-renamed
-    ?? file-renamed
-    ?? link-renamed
-    ");
+    snapbox::assert_data_eq!(
+        git_status(&repo)?,
+        snapbox::str![[r#"
+ D executable
+ D file
+ D link
+?? executable-renamed
+?? file-renamed
+?? link-renamed
+
+"#]]
+    );
     Ok(())
 }
 

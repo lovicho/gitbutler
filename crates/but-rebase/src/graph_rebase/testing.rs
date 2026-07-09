@@ -370,13 +370,16 @@ mod tests {
         add_edge(&mut graph, d, none, 0);
 
         let output = render_ascii_graph(&graph, |_| None);
-        insta::assert_snapshot!(output, @"
-        ◎  refs/heads/main
-        ●  1111111
-        ●  2222222
-        ●  3333333
-        ◌  no-op
-        ");
+        snapbox::assert_data_eq!(
+            output,
+            snapbox::str![[r#"
+◎  refs/heads/main
+●  1111111
+●  2222222
+●  3333333
+◌  no-op
+"#]]
+        );
     }
 
     #[test]
@@ -401,14 +404,17 @@ mod tests {
         add_edge(&mut graph, b, c, 0);
 
         let output = render_ascii_graph(&graph, |_| None);
-        insta::assert_snapshot!(output, @"
-        ◎    refs/heads/main
-        ├─╮
-        ● │  aaaaaaa
-        │ ●  bbbbbbb
-        ├─╯
-        ●  ccccccc
-        ");
+        snapbox::assert_data_eq!(
+            output,
+            snapbox::str![[r#"
+◎    refs/heads/main
+├─╮
+● │  aaaaaaa
+│ ●  bbbbbbb
+├─╯
+●  ccccccc
+"#]]
+        );
     }
 
     #[test]
@@ -436,16 +442,19 @@ mod tests {
         add_edge(&mut graph, c, d, 0);
 
         let output = render_ascii_graph(&graph, |_| None);
-        insta::assert_snapshot!(output, @"
-        ◎      refs/heads/main
-        ├─┬─╮
-        ● │ │  aaaaaaa
-        │ ● │  bbbbbbb
-        ├─╯ │
-        │   ●  ccccccc
-        ├───╯
-        ●  ddddddd
-        ");
+        snapbox::assert_data_eq!(
+            output,
+            snapbox::str![[r#"
+◎      refs/heads/main
+├─┬─╮
+● │ │  aaaaaaa
+│ ● │  bbbbbbb
+├─╯ │
+│   ●  ccccccc
+├───╯
+●  ddddddd
+"#]]
+        );
     }
 
     #[test]
@@ -485,20 +494,23 @@ mod tests {
         add_edge(&mut graph, b, c, 0);
 
         let output = render_ascii_graph(&graph, |_| None);
-        insta::assert_snapshot!(output, @"
-        ◎    refs/heads/main
-        ├─╮
-        ● │      fffffff
-        ├───┬─╮
-        ● │ │ │  1111111
-        │ │ ● │  2222222
-        ├───╯ │
-        │ │   ●  3333333
-        ├─────╯
-        │ ●  bbbbbbb
-        ├─╯
-        ●  ccccccc
-        ");
+        snapbox::assert_data_eq!(
+            output,
+            snapbox::str![[r#"
+◎    refs/heads/main
+├─╮
+● │      fffffff
+├───┬─╮
+● │ │ │  1111111
+│ │ ● │  2222222
+├───╯ │
+│ │   ●  3333333
+├─────╯
+│ ●  bbbbbbb
+├─╯
+●  ccccccc
+"#]]
+        );
     }
 
     #[test]
@@ -523,18 +535,21 @@ mod tests {
         add_edge(&mut graph, d, base, 0);
 
         let output = render_ascii_graph(&graph, |_| None);
-        insta::assert_snapshot!(output, @"
-        ◎        refs/heads/main
-        ├─┬─┬─╮
-        ● │ │ │  aaaaaaa
-        │ ● │ │  bbbbbbb
-        ├─╯ │ │
-        │   ● │  ccccccc
-        ├───╯ │
-        │     ●  ddddddd
-        ├─────╯
-        ●  eeeeeee
-        ");
+        snapbox::assert_data_eq!(
+            output,
+            snapbox::str![[r#"
+◎        refs/heads/main
+├─┬─┬─╮
+● │ │ │  aaaaaaa
+│ ● │ │  bbbbbbb
+├─╯ │ │
+│   ● │  ccccccc
+├───╯ │
+│     ●  ddddddd
+├─────╯
+●  eeeeeee
+"#]]
+        );
     }
 
     #[test]
@@ -565,16 +580,19 @@ mod tests {
         add_edge(&mut graph, b, c, 0);
 
         let output = render_ascii_graph(&graph, |_| None);
-        insta::assert_snapshot!(output, @"
-        ◎    refs/heads/main
-        ├─╮
-        ● │  a1a1a1a
-        ● │  a2a2a2a
-        ● │  a3a3a3a
-        │ ●  bbbbbbb
-        ├─╯
-        ●  ccccccc
-        ");
+        snapbox::assert_data_eq!(
+            output,
+            snapbox::str![[r#"
+◎    refs/heads/main
+├─╮
+● │  a1a1a1a
+● │  a2a2a2a
+● │  a3a3a3a
+│ ●  bbbbbbb
+├─╯
+●  ccccccc
+"#]]
+        );
     }
 
     #[test]
@@ -609,18 +627,21 @@ mod tests {
         add_edge(&mut graph, c, f, 0);
 
         let output = render_ascii_graph(&graph, |_| None);
-        insta::assert_snapshot!(output, @"
-        ◎    refs/heads/main
-        ├─╮
-        ● │    bbbbbbb
-        ├───╮
-        ● │ │  ddddddd
-        │ │ ●  eeeeeee
-        ├───╯
-        │ ●  ccccccc
-        ├─╯
-        ●  fffffff
-        ");
+        snapbox::assert_data_eq!(
+            output,
+            snapbox::str![[r#"
+◎    refs/heads/main
+├─╮
+● │    bbbbbbb
+├───╮
+● │ │  ddddddd
+│ │ ●  eeeeeee
+├───╯
+│ ●  ccccccc
+├─╯
+●  fffffff
+"#]]
+        );
     }
 
     #[test]
@@ -662,22 +683,25 @@ mod tests {
         add_edge(&mut graph, c, d, 0);
 
         let output = render_ascii_graph(&graph, |_| None);
-        insta::assert_snapshot!(output, @"
-        ◎      refs/heads/main
-        ├─┬─╮
-        ● │ │      fffffff
-        ├─────┬─╮
-        ● │ │ │ │  1111111
-        │ │ │ ● │  2222222
-        ├─────╯ │
-        │ │ │   ●  3333333
-        ├───────╯
-        │ ● │  bbbbbbb
-        ├─╯ │
-        │   ●  ccccccc
-        ├───╯
-        ●  ddddddd
-        ");
+        snapbox::assert_data_eq!(
+            output,
+            snapbox::str![[r#"
+◎      refs/heads/main
+├─┬─╮
+● │ │      fffffff
+├─────┬─╮
+● │ │ │ │  1111111
+│ │ │ ● │  2222222
+├─────╯ │
+│ │ │   ●  3333333
+├───────╯
+│ ● │  bbbbbbb
+├─╯ │
+│   ●  ccccccc
+├───╯
+●  ddddddd
+"#]]
+        );
     }
 
     #[test]
@@ -725,21 +749,24 @@ mod tests {
         add_edge(&mut graph, f, base, 0);
 
         let output = render_ascii_graph(&graph, |_| None);
-        insta::assert_snapshot!(output, @"
-        ◎      refs/heads/main
-        ├─┬─╮
-        ● │ │  aaaaaaa
-        ● │ │    ddddddd
-        ├─────╮
-        ● │ │ │  eeeeeee
-        │ ● │ │  bbbbbbb
-        ├─╯ │ │
-        │   ● │  ccccccc
-        │   ├─╯
-        │   ●  fffffff
-        ├───╯
-        ●  0000000
-        ");
+        snapbox::assert_data_eq!(
+            output,
+            snapbox::str![[r#"
+◎      refs/heads/main
+├─┬─╮
+● │ │  aaaaaaa
+● │ │    ddddddd
+├─────╮
+● │ │ │  eeeeeee
+│ ● │ │  bbbbbbb
+├─╯ │ │
+│   ● │  ccccccc
+│   ├─╯
+│   ●  fffffff
+├───╯
+●  0000000
+"#]]
+        );
     }
 
     #[test]
@@ -790,21 +817,24 @@ mod tests {
         add_edge(&mut graph, g, f, 0);
 
         let output = render_ascii_graph(&graph, |_| None);
-        insta::assert_snapshot!(output, @"
-        ◎      refs/heads/main
-        ├─┬─╮
-        ● │ │  aaaaaaa
-        ● │ │    ddddddd
-        ├─────╮
-        ● │ │ │  eeeeeee
-        │ ● │ │  bbbbbbb
-        │ ├───╯
-        │ │ ●  ccccccc
-        │ ├─╯
-        │ ●  9999999
-        ├─╯
-        ●  fffffff
-        ");
+        snapbox::assert_data_eq!(
+            output,
+            snapbox::str![[r#"
+◎      refs/heads/main
+├─┬─╮
+● │ │  aaaaaaa
+● │ │    ddddddd
+├─────╮
+● │ │ │  eeeeeee
+│ ● │ │  bbbbbbb
+│ ├───╯
+│ │ ●  ccccccc
+│ ├─╯
+│ ●  9999999
+├─╯
+●  fffffff
+"#]]
+        );
     }
 
     #[test]
@@ -854,22 +884,25 @@ mod tests {
         add_edge(&mut graph, shared, base, 0);
 
         let output = render_ascii_graph(&graph, |_| None);
-        insta::assert_snapshot!(output, @"
-        ◎      refs/heads/main
-        ├─┬─╮
-        ● │ │  aaaaaaa
-        ● │ │      ddddddd
-        ├─────┬─╮
-        ● │ │ │ │  eeeeeee
-        │ │ │ ● │  fffffff
-        ├─────╯ │
-        │ ● │   │  bbbbbbb
-        │   ●   │  ccccccc
-        │   ├───╯
-        │   ●  1111111
-        ├───╯
-        ●  0000000
-        ");
+        snapbox::assert_data_eq!(
+            output,
+            snapbox::str![[r#"
+◎      refs/heads/main
+├─┬─╮
+● │ │  aaaaaaa
+● │ │      ddddddd
+├─────┬─╮
+● │ │ │ │  eeeeeee
+│ │ │ ● │  fffffff
+├─────╯ │
+│ ● │   │  bbbbbbb
+│   ●   │  ccccccc
+│   ├───╯
+│   ●  1111111
+├───╯
+●  0000000
+"#]]
+        );
     }
 
     #[test]
@@ -889,9 +922,12 @@ mod tests {
 
         let nodes: HashSet<StepGraphIndex> = [a, b].into_iter().collect();
         let output = render_step_graph(&graph, &nodes, &[a], |_| None);
-        insta::assert_snapshot!(output, @"
-        ●  aaaaaaa
-        ●  bbbbbbb
-        ");
+        snapbox::assert_data_eq!(
+            output,
+            snapbox::str![[r#"
+●  aaaaaaa
+●  bbbbbbb
+"#]]
+        );
     }
 }

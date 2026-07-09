@@ -72,12 +72,15 @@ fn it_considers_remote_tracking_branches_even_if_unregistered() -> anyhow::Resul
 #[test]
 fn registered_remotes_help_deal_with_slashed_remote_names() -> anyhow::Result<()> {
     let repo = read_only_in_memory_scenario("multiple-remotes-with-tracking-branches")?;
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, 
-        @"
-    * 14f7926 (nested/remote-b/main, nested/remote-b/in-nested-remote-b, nested/remote-b/HEAD) init-c
-    * 5efb67f (nested/remote/main, nested/remote/in-nested-remote, nested/remote/HEAD) init-b
-    * 263500f (origin/normal-remote, origin/main, origin/HEAD) init-a
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 14f7926 (nested/remote-b/main, nested/remote-b/in-nested-remote-b, nested/remote-b/HEAD) init-c
+* 5efb67f (nested/remote/main, nested/remote/in-nested-remote, nested/remote/HEAD) init-b
+* 263500f (origin/normal-remote, origin/main, origin/HEAD) init-a
+
+"#]]
+    );
 
     let unique = find_unique_refname(&repo, "refs/heads/in-nested-remote".try_into()?)?;
     assert_eq!(

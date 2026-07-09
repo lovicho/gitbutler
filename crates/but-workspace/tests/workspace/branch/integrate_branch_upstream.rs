@@ -1,3 +1,4 @@
+use snapbox::IntoData;
 use std::vec;
 
 use anyhow::{Result, bail};
@@ -265,14 +266,18 @@ fn errors_when_branch_has_no_tracking_branch() -> Result<()> {
     let repo = read_only_in_memory_scenario("merge-with-two-branches-line-offset")
         .expect("fixture repo should be available");
 
-    insta::assert_snapshot!(normalized_graph_snapshot(&repo)?, @r"
-    *   2a6d103 (HEAD -> merge) Merge branch 'A' into merge
-    |\
-    | * 7f389ed (A) add 10 to the beginning
-    * | 91ef6f6 (B) add 10 to the end
-    |/
-    * ff045ef (main) init
-    ");
+    snapbox::assert_data_eq!(
+        normalized_graph_snapshot(&repo)?,
+        snapbox::str![[r#"
+*   2a6d103 (HEAD -> merge) Merge branch 'A' into merge
+|\
+| * 7f389ed (A) add 10 to the beginning
+* | 91ef6f6 (B) add 10 to the end
+|/
+* ff045ef (main) init
+"#]]
+        .raw()
+    );
 
     let err = initial_integration_for_branch(r("refs/heads/A"), &repo, None)
         .expect_err("branch without tracking must fail");
@@ -290,13 +295,16 @@ fn partitions_diverged_branch_into_application_order() -> Result<()> {
     let mut repo =
         read_only_in_memory_scenario_named("with-remotes-no-workspace", "remote-diverged")?;
 
-    insta::assert_snapshot!(normalized_graph_snapshot(&repo)?, @"
-    * 1a265a4 (HEAD -> A) local change in A
-    | * 89cc2d3 (origin/A) change in A
-    |/
-    * d79bba9 new file in A
-    * c166d42 (origin/main, origin/HEAD, main) init-integration
-    ");
+    snapbox::assert_data_eq!(
+        normalized_graph_snapshot(&repo)?,
+        snapbox::str![[r#"
+* 1a265a4 (HEAD -> A) local change in A
+| * 89cc2d3 (origin/A) change in A
+|/
+* d79bba9 new file in A
+* c166d42 (origin/main, origin/HEAD, main) init-integration
+"#]]
+    );
 
     let local_tip = repo.rev_parse_single("A")?.detach();
     let upstream_tip = repo.rev_parse_single("origin/A")?.detach();
@@ -309,7 +317,7 @@ fn partitions_diverged_branch_into_application_order() -> Result<()> {
         Some(r("refs/remotes/origin/main")),
     )?;
 
-    insta::assert_snapshot!(
+    snapbox::assert_data_eq!(
         labeled_integration_snapshot(
             &initial.integration,
             &[
@@ -318,14 +326,14 @@ fn partitions_diverged_branch_into_application_order() -> Result<()> {
                 (upstream_tip, "upstream-tip"),
             ]
         ),
-        @"
-    merge-base merge-base
-    pick upstream-tip
-    pick local-tip
-    "
+        snapbox::str![[r#"
+merge-base merge-base
+pick upstream-tip
+pick local-tip
+"#]]
     );
 
-    insta::assert_snapshot!(
+    snapbox::assert_data_eq!(
         labeled_divergence_snapshot(
             &initial,
             &[
@@ -334,12 +342,12 @@ fn partitions_diverged_branch_into_application_order() -> Result<()> {
                 (upstream_tip, "upstream-tip"),
             ]
         ),
-        @"
-        * local-tip (A) local change in A
-        | * upstream-tip (origin/A) change in A
-        |/
-        * merge-base new file in A
-        "
+        snapbox::str![[r#"
+* local-tip (A) local change in A
+| * upstream-tip (origin/A) change in A
+|/
+* merge-base new file in A
+"#]]
     );
 
     let step_ids = pick_step_ids(&initial.integration.steps);
@@ -362,7 +370,7 @@ fn falls_back_to_unique_remote_branch_without_tracking_config() -> Result<()> {
 
     let initial = initial_integration_for_branch(r("refs/heads/A"), &repo, None)?;
 
-    insta::assert_snapshot!(
+    snapbox::assert_data_eq!(
         labeled_integration_snapshot(
             &initial.integration,
             &[
@@ -371,14 +379,14 @@ fn falls_back_to_unique_remote_branch_without_tracking_config() -> Result<()> {
                 (upstream_tip, "upstream-tip"),
             ]
         ),
-        @"
-    merge-base merge-base
-    pick upstream-tip
-    pick local-tip
-    "
+        snapbox::str![[r#"
+merge-base merge-base
+pick upstream-tip
+pick local-tip
+"#]]
     );
 
-    insta::assert_snapshot!(
+    snapbox::assert_data_eq!(
         labeled_divergence_snapshot(
             &initial,
             &[
@@ -387,12 +395,12 @@ fn falls_back_to_unique_remote_branch_without_tracking_config() -> Result<()> {
                 (upstream_tip, "upstream-tip"),
             ]
         ),
-        @"
-        * local-tip (A) local change in A
-        | * upstream-tip (origin/A) change in A
-        |/
-        * merge-base new file in A
-        "
+        snapbox::str![[r#"
+* local-tip (A) local change in A
+| * upstream-tip (origin/A) change in A
+|/
+* merge-base new file in A
+"#]]
     );
 
     Ok(())
@@ -405,15 +413,18 @@ fn keeps_graph_truth_even_when_change_ids_match() -> Result<()> {
         "01-rewritten-local-commit-is-paired-with-remote",
     )?;
     configure_tracking_for_branch_a(&mut repo)?;
-    insta::assert_snapshot!(normalized_graph_snapshot(&repo)?, @"
-    * 0b1ed50 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * e9c9d74 (A) A2
-    * 550b6ac A1
-    | * ad92cce (origin/A) A2
-    | * e1f216e A1
-    |/
-    * fafd9d0 (origin/main, main) init
-    ");
+    snapbox::assert_data_eq!(
+        normalized_graph_snapshot(&repo)?,
+        snapbox::str![[r#"
+* 0b1ed50 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* e9c9d74 (A) A2
+* 550b6ac A1
+| * ad92cce (origin/A) A2
+| * e1f216e A1
+|/
+* fafd9d0 (origin/main, main) init
+"#]]
+    );
 
     let local_only = repo.rev_parse_single("A~1")?.detach();
     let remote_only = repo.rev_parse_single("origin/A~1")?.detach();
@@ -428,7 +439,7 @@ fn keeps_graph_truth_even_when_change_ids_match() -> Result<()> {
         Some(r("refs/remotes/origin/main")),
     )?;
 
-    insta::assert_snapshot!(
+    snapbox::assert_data_eq!(
         labeled_integration_snapshot(
             &initial.integration,
             &[
@@ -439,16 +450,16 @@ fn keeps_graph_truth_even_when_change_ids_match() -> Result<()> {
                 (remote_tip, "remote-tip"),
             ]
         ),
-        @"
-    merge-base merge-base
-    pick remote-only
-    pick remote-tip
-    pick local-only
-    pick local-tip
-    "
+        snapbox::str![[r#"
+merge-base merge-base
+pick remote-only
+pick remote-tip
+pick local-only
+pick local-tip
+"#]]
     );
 
-    insta::assert_snapshot!(
+    snapbox::assert_data_eq!(
         labeled_divergence_snapshot(
             &initial,
             &[
@@ -459,14 +470,14 @@ fn keeps_graph_truth_even_when_change_ids_match() -> Result<()> {
                 (remote_tip, "remote-tip"),
             ]
         ),
-        @"
-    * local-tip (A) A2
-    * local-only A1
-    | * remote-tip (origin/A) A2
-    | * remote-only A1
-    |/
-    * merge-base [historically-integrated:merge-base] init
-    "
+        snapbox::str![[r#"
+* local-tip (A) A2
+* local-only A1
+| * remote-tip (origin/A) A2
+| * remote-only A1
+|/
+* merge-base [historically-integrated:merge-base] init
+"#]]
     );
 
     let step_ids = pick_step_ids(&initial.integration.steps);
@@ -518,28 +529,28 @@ fn initial_steps_strategy_variants_are_distinct_presets() -> Result<()> {
         snapshot.push_str("\n\n");
     }
 
-    insta::assert_snapshot!(
+    // strategy presets should remain distinct and ordered for editable integration
+    snapbox::assert_data_eq!(
         snapshot.trim_end(),
-        "strategy presets should remain distinct and ordered for editable integration",
-        @"
-    pull-rebase
-    merge-base merge-base
-    pick remote-only
-    pick remote-tip
-    pick local-only
-    pick local-tip
+        snapbox::str![[r#"
+pull-rebase
+merge-base merge-base
+pick remote-only
+pick remote-tip
+pick local-only
+pick local-tip
 
-    merge
-    merge-base merge-base
-    pick local-only
-    pick local-tip
-    merge remote-tip
+merge
+merge-base merge-base
+pick local-only
+pick local-tip
+merge remote-tip
 
-    pick-remote
-    merge-base merge-base
-    pick remote-only
-    pick remote-tip
-    "
+pick-remote
+merge-base merge-base
+pick remote-only
+pick remote-tip
+"#]]
     );
 
     Ok(())
@@ -578,7 +589,8 @@ fn initial_steps_smart_squash_folds_matching_upstream_commits_into_child_most_lo
         BranchIntegrationStrategy::SmartSquash,
     )?;
 
-    insta::assert_snapshot!(
+    // smart-squash should fold matched upstream commits into the child-most matching local commit
+    snapbox::assert_data_eq!(
         labeled_integration_snapshot(
             &initial.integration,
             &[
@@ -589,12 +601,11 @@ fn initial_steps_smart_squash_folds_matching_upstream_commits_into_child_most_lo
                 (remote_tip, "remote-tip"),
             ]
         ),
-        "smart-squash should fold matched upstream commits into the child-most matching local commit",
-        @"
-    merge-base merge-base
-    pick local-parent
-    squash local-tip remote-parent remote-tip
-    "
+        snapbox::str![[r#"
+merge-base merge-base
+pick local-parent
+squash local-tip remote-parent remote-tip
+"#]]
     );
 
     assert_eq!(
@@ -662,16 +673,16 @@ fn initial_steps_smart_squash_falls_back_to_pull_rebase_without_matching_explici
         BranchIntegrationStrategy::SmartSquash,
     )?;
 
-    insta::assert_snapshot!(
+    // smart-squash should match pull-rebase when there are no explicit Change-Id headers
+    snapbox::assert_data_eq!(
         labeled_integration_snapshot(&smart_squash.integration, &labels),
-        "smart-squash should match pull-rebase when there are no explicit Change-Id headers",
-        @"
-    merge-base merge-base
-    pick remote-parent
-    pick remote-tip
-    pick local-parent
-    pick local-tip
-    "
+        snapbox::str![[r#"
+merge-base merge-base
+pick remote-parent
+pick remote-tip
+pick local-parent
+pick local-tip
+"#]]
     );
     assert_eq!(
         labeled_integration_snapshot(&smart_squash.integration, &labels),
@@ -715,16 +726,16 @@ fn initial_steps_smart_squash_falls_back_to_pull_rebase_without_matching_explici
         BranchIntegrationStrategy::SmartSquash,
     )?;
 
-    insta::assert_snapshot!(
+    // smart-squash should match pull-rebase when explicit Change-Ids do not match
+    snapbox::assert_data_eq!(
         labeled_integration_snapshot(&smart_squash.integration, &labels),
-        "smart-squash should match pull-rebase when explicit Change-Ids do not match",
-        @"
-    merge-base merge-base
-    pick remote-parent
-    pick remote-tip
-    pick local-parent
-    pick local-tip
-    "
+        snapbox::str![[r#"
+merge-base merge-base
+pick remote-parent
+pick remote-tip
+pick local-parent
+pick local-tip
+"#]]
     );
 
     Ok(())
@@ -771,7 +782,8 @@ fn initial_steps_smart_squash_does_not_target_integrated_local_commits() -> Resu
         BranchIntegrationStrategy::SmartSquash,
     )?;
 
-    insta::assert_snapshot!(
+    // smart-squash should not squash into local commits already integrated into the target
+    snapbox::assert_data_eq!(
         labeled_integration_snapshot(
             &initial.integration,
             &[
@@ -781,12 +793,11 @@ fn initial_steps_smart_squash_does_not_target_integrated_local_commits() -> Resu
                 (upstream, "upstream"),
             ]
         ),
-        "smart-squash should not squash into local commits already integrated into the target",
-        @"
-    merge-base merge-base
-    pick upstream
-    pick editable-local
-    "
+        snapbox::str![[r#"
+merge-base merge-base
+pick upstream
+pick editable-local
+"#]]
     );
 
     Ok(())
@@ -809,7 +820,7 @@ fn initial_steps_merge_strategy_picks_local_commits_then_merges_upstream_tip() -
         BranchIntegrationStrategy::Merge,
     )?;
 
-    insta::assert_snapshot!(
+    snapbox::assert_data_eq!(
         labeled_integration_snapshot(
             &initial.integration,
             &[
@@ -818,11 +829,11 @@ fn initial_steps_merge_strategy_picks_local_commits_then_merges_upstream_tip() -
                 (upstream_tip, "upstream-tip"),
             ]
         ),
-        @"
-    merge-base merge-base
-    pick local-tip
-    merge upstream-tip
-    "
+        snapbox::str![[r#"
+merge-base merge-base
+pick local-tip
+merge upstream-tip
+"#]]
     );
 
     Ok(())
@@ -847,13 +858,16 @@ fn initial_steps_merge_strategy_skips_integrated_local_commits() -> Result<()> {
         BranchIntegrationStrategy::Merge,
     )?;
 
-    insta::assert_snapshot!(
-        labeled_integration_snapshot(&initial.integration, &[(a, "A"), (b, "B"), (c, "C"), (d, "D")]),
-        @"
-    merge-base A
-    pick C
-    merge D
-    "
+    snapbox::assert_data_eq!(
+        labeled_integration_snapshot(
+            &initial.integration,
+            &[(a, "A"), (b, "B"), (c, "C"), (d, "D")]
+        ),
+        snapbox::str![[r#"
+merge-base A
+pick C
+merge D
+"#]]
     );
 
     assert!(
@@ -885,7 +899,7 @@ fn initial_steps_pick_remote_strategy_picks_only_upstream_commits() -> Result<()
         BranchIntegrationStrategy::PickRemote,
     )?;
 
-    insta::assert_snapshot!(
+    snapbox::assert_data_eq!(
         labeled_integration_snapshot(
             &initial.integration,
             &[
@@ -896,11 +910,11 @@ fn initial_steps_pick_remote_strategy_picks_only_upstream_commits() -> Result<()
                 (remote_tip, "remote-tip"),
             ]
         ),
-        @"
-    merge-base merge-base
-    pick remote-only
-    pick remote-tip
-    "
+        snapbox::str![[r#"
+merge-base merge-base
+pick remote-only
+pick remote-tip
+"#]]
     );
 
     assert_eq!(
@@ -923,15 +937,19 @@ fn integrate_branch_with_steps_empty_errors_early() -> Result<()> {
             },
         )?;
 
-    insta::assert_snapshot!(normalized_graph_snapshot(&repo)?, @r"
-    *   f3e1bf2 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\
-    | * 09d8e52 (A) A
-    * | 09bc93e (C) C
-    * | c813d8d (B) B
-    |/
-    * 85efbe4 (origin/main, main) M
-    ");
+    snapbox::assert_data_eq!(
+        normalized_graph_snapshot(&repo)?,
+        snapbox::str![[r#"
+*   f3e1bf2 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\
+| * 09d8e52 (A) A
+* | 09bc93e (C) C
+* | c813d8d (B) B
+|/
+* 85efbe4 (origin/main, main) M
+"#]]
+        .raw()
+    );
 
     let mut ws = graph.into_workspace()?;
     let merge_base = repo.rev_parse_single("main")?.detach();
@@ -965,16 +983,19 @@ fn integrate_branch_with_merge_step_does_not_require_preceding_commit() -> Resul
             },
         )?;
 
-    insta::assert_snapshot!(normalized_graph_snapshot(&repo)?, @"
-    * a7060f8 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 8347946 (A) local change in A 2
-    * 86838ae local change in A 1
-    | * 6a17628 (origin/A) remote change in A 2
-    | * 715d7b0 remote change in A 1
-    |/
-    * 621b98a shared local/remote
-    * cfbcc20 (origin/main, main) init-integration
-    ");
+    snapbox::assert_data_eq!(
+        normalized_graph_snapshot(&repo)?,
+        snapbox::str![[r#"
+* a7060f8 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 8347946 (A) local change in A 2
+* 86838ae local change in A 1
+| * 6a17628 (origin/A) remote change in A 2
+| * 715d7b0 remote change in A 1
+|/
+* 621b98a shared local/remote
+* cfbcc20 (origin/main, main) init-integration
+"#]]
+    );
 
     let mut ws = graph.into_workspace()?;
 
@@ -996,18 +1017,22 @@ fn integrate_branch_with_merge_step_does_not_require_preceding_commit() -> Resul
         integrate_branch_with_steps(r("refs/heads/A"), integration, &mut ws, &mut meta, &repo)?;
     rebase.materialize()?;
 
-    insta::assert_snapshot!(normalized_graph_snapshot(&repo)?, @r"
-    * 1934603 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    *   dc8c3e4 (A) Merge 715d7b0b14844b459ef031a7332283932e99a6a5 into previous commit
-    |\
-    | | * 6a17628 (origin/A) remote change in A 2
-    | |/
-    |/|
-    * | 715d7b0 remote change in A 1
-    |/
-    * 621b98a shared local/remote
-    * cfbcc20 (origin/main, main) init-integration
-    ");
+    snapbox::assert_data_eq!(
+        normalized_graph_snapshot(&repo)?,
+        snapbox::str![[r#"
+* 1934603 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+*   dc8c3e4 (A) Merge 715d7b0b14844b459ef031a7332283932e99a6a5 into previous commit
+|\
+| | * 6a17628 (origin/A) remote change in A 2
+| |/
+|/|
+* | 715d7b0 remote change in A 1
+|/
+* 621b98a shared local/remote
+* cfbcc20 (origin/main, main) init-integration
+"#]]
+        .raw()
+    );
 
     assert_eq!(
         repo.rev_parse_single("origin/A")?.detach(),
@@ -1027,16 +1052,19 @@ fn integrate_upstream_commits_into_local() -> Result<()> {
             },
         )?;
 
-    insta::assert_snapshot!(normalized_graph_snapshot(&repo)?, @"
-    * a7060f8 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 8347946 (A) local change in A 2
-    * 86838ae local change in A 1
-    | * 6a17628 (origin/A) remote change in A 2
-    | * 715d7b0 remote change in A 1
-    |/
-    * 621b98a shared local/remote
-    * cfbcc20 (origin/main, main) init-integration
-    ");
+    snapbox::assert_data_eq!(
+        normalized_graph_snapshot(&repo)?,
+        snapbox::str![[r#"
+* a7060f8 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 8347946 (A) local change in A 2
+* 86838ae local change in A 1
+| * 6a17628 (origin/A) remote change in A 2
+| * 715d7b0 remote change in A 1
+|/
+* 621b98a shared local/remote
+* cfbcc20 (origin/main, main) init-integration
+"#]]
+    );
 
     let mut ws = graph.into_workspace()?;
 
@@ -1073,15 +1101,19 @@ fn integrate_upstream_commits_into_local() -> Result<()> {
         integrate_branch_with_steps(r("refs/heads/A"), integration, &mut ws, &mut meta, &repo)?;
     rebase.materialize()?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * 455d393 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 298d472 (A) local change in A 2
-    * 422a07d local change in A 1
-    * 6a17628 (origin/A) remote change in A 2
-    * 715d7b0 remote change in A 1
-    * 621b98a shared local/remote
-    * cfbcc20 (origin/main, main) init-integration
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 455d393 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 298d472 (A) local change in A 2
+* 422a07d local change in A 1
+* 6a17628 (origin/A) remote change in A 2
+* 715d7b0 remote change in A 1
+* 621b98a shared local/remote
+* cfbcc20 (origin/main, main) init-integration
+
+"#]]
+    );
 
     assert_eq!(
         repo.rev_parse_single("origin/A")?.detach(),
@@ -1101,16 +1133,19 @@ fn integrate_upstream_commits_into_local_with_merge_step() -> Result<()> {
             },
         )?;
 
-    insta::assert_snapshot!(normalized_graph_snapshot(&repo)?, @"
-    * a7060f8 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 8347946 (A) local change in A 2
-    * 86838ae local change in A 1
-    | * 6a17628 (origin/A) remote change in A 2
-    | * 715d7b0 remote change in A 1
-    |/
-    * 621b98a shared local/remote
-    * cfbcc20 (origin/main, main) init-integration
-    ");
+    snapbox::assert_data_eq!(
+        normalized_graph_snapshot(&repo)?,
+        snapbox::str![[r#"
+* a7060f8 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 8347946 (A) local change in A 2
+* 86838ae local change in A 1
+| * 6a17628 (origin/A) remote change in A 2
+| * 715d7b0 remote change in A 1
+|/
+* 621b98a shared local/remote
+* cfbcc20 (origin/main, main) init-integration
+"#]]
+    );
 
     let mut ws = graph.into_workspace()?;
 
@@ -1140,19 +1175,23 @@ fn integrate_upstream_commits_into_local_with_merge_step() -> Result<()> {
         integrate_branch_with_steps(r("refs/heads/A"), integration, &mut ws, &mut meta, &repo)?;
     rebase.materialize()?;
 
-    insta::assert_snapshot!(normalized_graph_snapshot(&repo)?, @r"
-    * a74b8e3 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * fdc285b (A) local change in A 2
-    *   0d584c5 Merge 715d7b0b14844b459ef031a7332283932e99a6a5 into previous commit
-    |\
-    * | 86838ae local change in A 1
-    | | * 6a17628 (origin/A) remote change in A 2
-    | |/
-    | * 715d7b0 remote change in A 1
-    |/
-    * 621b98a shared local/remote
-    * cfbcc20 (origin/main, main) init-integration
-    ");
+    snapbox::assert_data_eq!(
+        normalized_graph_snapshot(&repo)?,
+        snapbox::str![[r#"
+* a74b8e3 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* fdc285b (A) local change in A 2
+*   0d584c5 Merge 715d7b0b14844b459ef031a7332283932e99a6a5 into previous commit
+|\
+* | 86838ae local change in A 1
+| | * 6a17628 (origin/A) remote change in A 2
+| |/
+| * 715d7b0 remote change in A 1
+|/
+* 621b98a shared local/remote
+* cfbcc20 (origin/main, main) init-integration
+"#]]
+        .raw()
+    );
 
     let branch_tip = repo.find_commit(repo.rev_parse_single("A")?.detach())?;
     let branch_tip_parents = branch_tip.parent_ids().collect::<Vec<_>>();
@@ -1185,7 +1224,13 @@ fn integrate_upstream_commits_into_local_with_merge_step() -> Result<()> {
     let merged_previous = repo.find_commit(merged_previous_commit)?;
     assert_eq!(merged_previous.message_raw()?, "local change in A 1\n");
 
-    insta::assert_snapshot!(visualize_tree(merge_commit.tree_id()?), @"4b825dc");
+    snapbox::assert_data_eq!(
+        visualize_tree(merge_commit.tree_id()?).to_string(),
+        snapbox::str![[r#"
+4b825dc
+
+"#]]
+    );
 
     Ok(())
 }
@@ -1228,18 +1273,22 @@ fn integrate_upstream_commits_into_local_with_all_locals_then_merge_second_remot
         integrate_branch_with_steps(r("refs/heads/A"), integration, &mut ws, &mut meta, &repo)?;
     rebase.materialize()?;
 
-    insta::assert_snapshot!(normalized_graph_snapshot(&repo)?, @r"
-    * a11c807 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    *   93bbd52 (A) Merge 6a176285f918d0e4249373b102abe662d4eeeb29 into previous commit
-    |\
-    | * 6a17628 (origin/A) remote change in A 2
-    | * 715d7b0 remote change in A 1
-    * | 8347946 local change in A 2
-    * | 86838ae local change in A 1
-    |/
-    * 621b98a shared local/remote
-    * cfbcc20 (origin/main, main) init-integration
-    ");
+    snapbox::assert_data_eq!(
+        normalized_graph_snapshot(&repo)?,
+        snapbox::str![[r#"
+* a11c807 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+*   93bbd52 (A) Merge 6a176285f918d0e4249373b102abe662d4eeeb29 into previous commit
+|\
+| * 6a17628 (origin/A) remote change in A 2
+| * 715d7b0 remote change in A 1
+* | 8347946 local change in A 2
+* | 86838ae local change in A 1
+|/
+* 621b98a shared local/remote
+* cfbcc20 (origin/main, main) init-integration
+"#]]
+        .raw()
+    );
 
     let branch_tip = repo.find_commit(repo.rev_parse_single("A")?.detach())?;
     assert_eq!(
@@ -1299,20 +1348,24 @@ fn integrate_upstream_commits_into_local_with_two_merges_in_sequence() -> Result
         integrate_branch_with_steps(r("refs/heads/A"), integration, &mut ws, &mut meta, &repo)?;
     rebase.materialize()?;
 
-    insta::assert_snapshot!(normalized_graph_snapshot(&repo)?, @r"
-    * d69c4de (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    *   ab7f588 (A) Merge 6a176285f918d0e4249373b102abe662d4eeeb29 into previous commit
-    |\
-    | * 6a17628 (origin/A) remote change in A 2
-    * | fdc285b local change in A 2
-    * | 0d584c5 Merge 715d7b0b14844b459ef031a7332283932e99a6a5 into previous commit
-    |\|
-    | * 715d7b0 remote change in A 1
-    * | 86838ae local change in A 1
-    |/
-    * 621b98a shared local/remote
-    * cfbcc20 (origin/main, main) init-integration
-    ");
+    snapbox::assert_data_eq!(
+        normalized_graph_snapshot(&repo)?,
+        snapbox::str![[r#"
+* d69c4de (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+*   ab7f588 (A) Merge 6a176285f918d0e4249373b102abe662d4eeeb29 into previous commit
+|\
+| * 6a17628 (origin/A) remote change in A 2
+* | fdc285b local change in A 2
+* | 0d584c5 Merge 715d7b0b14844b459ef031a7332283932e99a6a5 into previous commit
+|\|
+| * 715d7b0 remote change in A 1
+* | 86838ae local change in A 1
+|/
+* 621b98a shared local/remote
+* cfbcc20 (origin/main, main) init-integration
+"#]]
+        .raw()
+    );
 
     let branch_tip = repo.find_commit(repo.rev_parse_single("A")?.detach())?;
     assert_eq!(
@@ -1356,16 +1409,19 @@ fn integrate_upstream_commits_into_local_with_remote_on_top() -> Result<()> {
             },
         )?;
 
-    insta::assert_snapshot!(normalized_graph_snapshot(&repo)?, @"
-    * a7060f8 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 8347946 (A) local change in A 2
-    * 86838ae local change in A 1
-    | * 6a17628 (origin/A) remote change in A 2
-    | * 715d7b0 remote change in A 1
-    |/
-    * 621b98a shared local/remote
-    * cfbcc20 (origin/main, main) init-integration
-    ");
+    snapbox::assert_data_eq!(
+        normalized_graph_snapshot(&repo)?,
+        snapbox::str![[r#"
+* a7060f8 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 8347946 (A) local change in A 2
+* 86838ae local change in A 1
+| * 6a17628 (origin/A) remote change in A 2
+| * 715d7b0 remote change in A 1
+|/
+* 621b98a shared local/remote
+* cfbcc20 (origin/main, main) init-integration
+"#]]
+    );
 
     let mut ws = graph.into_workspace()?;
 
@@ -1401,18 +1457,21 @@ fn integrate_upstream_commits_into_local_with_remote_on_top() -> Result<()> {
         integrate_branch_with_steps(r("refs/heads/A"), integration, &mut ws, &mut meta, &repo)?;
     rebase.materialize()?;
 
-    insta::assert_snapshot!(normalized_graph_snapshot(&repo)?, @"
-    * fb437fd (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 85ce57b (A) remote change in A 2
-    * 01b7a91 remote change in A 1
-    * 8347946 local change in A 2
-    * 86838ae local change in A 1
-    | * 6a17628 (origin/A) remote change in A 2
-    | * 715d7b0 remote change in A 1
-    |/
-    * 621b98a shared local/remote
-    * cfbcc20 (origin/main, main) init-integration
-    ");
+    snapbox::assert_data_eq!(
+        normalized_graph_snapshot(&repo)?,
+        snapbox::str![[r#"
+* fb437fd (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 85ce57b (A) remote change in A 2
+* 01b7a91 remote change in A 1
+* 8347946 local change in A 2
+* 86838ae local change in A 1
+| * 6a17628 (origin/A) remote change in A 2
+| * 715d7b0 remote change in A 1
+|/
+* 621b98a shared local/remote
+* cfbcc20 (origin/main, main) init-integration
+"#]]
+    );
 
     Ok(())
 }
@@ -1427,16 +1486,19 @@ fn integrate_upstream_commits_into_local_with_remote_interlaced() -> Result<()> 
             },
         )?;
 
-    insta::assert_snapshot!(normalized_graph_snapshot(&repo)?, @"
-    * a7060f8 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 8347946 (A) local change in A 2
-    * 86838ae local change in A 1
-    | * 6a17628 (origin/A) remote change in A 2
-    | * 715d7b0 remote change in A 1
-    |/
-    * 621b98a shared local/remote
-    * cfbcc20 (origin/main, main) init-integration
-    ");
+    snapbox::assert_data_eq!(
+        normalized_graph_snapshot(&repo)?,
+        snapbox::str![[r#"
+* a7060f8 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 8347946 (A) local change in A 2
+* 86838ae local change in A 1
+| * 6a17628 (origin/A) remote change in A 2
+| * 715d7b0 remote change in A 1
+|/
+* 621b98a shared local/remote
+* cfbcc20 (origin/main, main) init-integration
+"#]]
+    );
 
     let mut ws = graph.into_workspace()?;
 
@@ -1472,17 +1534,20 @@ fn integrate_upstream_commits_into_local_with_remote_interlaced() -> Result<()> 
         integrate_branch_with_steps(r("refs/heads/A"), integration, &mut ws, &mut meta, &repo)?;
     rebase.materialize()?;
 
-    insta::assert_snapshot!(normalized_graph_snapshot(&repo)?, @"
-    * 0ce7098 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * ad12639 (A) local change in A 2
-    * a6a4994 remote change in A 2
-    * 593d2d6 local change in A 1
-    | * 6a17628 (origin/A) remote change in A 2
-    |/
-    * 715d7b0 remote change in A 1
-    * 621b98a shared local/remote
-    * cfbcc20 (origin/main, main) init-integration
-    ");
+    snapbox::assert_data_eq!(
+        normalized_graph_snapshot(&repo)?,
+        snapbox::str![[r#"
+* 0ce7098 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* ad12639 (A) local change in A 2
+* a6a4994 remote change in A 2
+* 593d2d6 local change in A 1
+| * 6a17628 (origin/A) remote change in A 2
+|/
+* 715d7b0 remote change in A 1
+* 621b98a shared local/remote
+* cfbcc20 (origin/main, main) init-integration
+"#]]
+    );
 
     Ok(())
 }
@@ -1497,16 +1562,19 @@ fn integrate_upstream_commits_into_local_with_remote_one_local_one_remote() -> R
             },
         )?;
 
-    insta::assert_snapshot!(normalized_graph_snapshot(&repo)?, @"
-    * a7060f8 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 8347946 (A) local change in A 2
-    * 86838ae local change in A 1
-    | * 6a17628 (origin/A) remote change in A 2
-    | * 715d7b0 remote change in A 1
-    |/
-    * 621b98a shared local/remote
-    * cfbcc20 (origin/main, main) init-integration
-    ");
+    snapbox::assert_data_eq!(
+        normalized_graph_snapshot(&repo)?,
+        snapbox::str![[r#"
+* a7060f8 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 8347946 (A) local change in A 2
+* 86838ae local change in A 1
+| * 6a17628 (origin/A) remote change in A 2
+| * 715d7b0 remote change in A 1
+|/
+* 621b98a shared local/remote
+* cfbcc20 (origin/main, main) init-integration
+"#]]
+    );
 
     let mut ws = graph.into_workspace()?;
 
@@ -1534,16 +1602,19 @@ fn integrate_upstream_commits_into_local_with_remote_one_local_one_remote() -> R
         integrate_branch_with_steps(r("refs/heads/A"), integration, &mut ws, &mut meta, &repo)?;
     rebase.materialize()?;
 
-    insta::assert_snapshot!(normalized_graph_snapshot(&repo)?, @"
-    * ab8c010 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 801c92f (A) remote change in A 2
-    * 86838ae local change in A 1
-    | * 6a17628 (origin/A) remote change in A 2
-    | * 715d7b0 remote change in A 1
-    |/
-    * 621b98a shared local/remote
-    * cfbcc20 (origin/main, main) init-integration
-    ");
+    snapbox::assert_data_eq!(
+        normalized_graph_snapshot(&repo)?,
+        snapbox::str![[r#"
+* ab8c010 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 801c92f (A) remote change in A 2
+* 86838ae local change in A 1
+| * 6a17628 (origin/A) remote change in A 2
+| * 715d7b0 remote change in A 1
+|/
+* 621b98a shared local/remote
+* cfbcc20 (origin/main, main) init-integration
+"#]]
+    );
 
     Ok(())
 }
@@ -1561,16 +1632,19 @@ fn integrate_upstream_commits_into_local_with_remote_one_local_one_remote_and_ex
 
     add_local_ref_at_ref(&repo, "A-shadow", "A")?;
 
-    insta::assert_snapshot!(normalized_graph_snapshot(&repo)?, @"
-    * a7060f8 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 8347946 (A-shadow, A) local change in A 2
-    * 86838ae local change in A 1
-    | * 6a17628 (origin/A) remote change in A 2
-    | * 715d7b0 remote change in A 1
-    |/
-    * 621b98a shared local/remote
-    * cfbcc20 (origin/main, main) init-integration
-    ");
+    snapbox::assert_data_eq!(
+        normalized_graph_snapshot(&repo)?,
+        snapbox::str![[r#"
+* a7060f8 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 8347946 (A-shadow, A) local change in A 2
+* 86838ae local change in A 1
+| * 6a17628 (origin/A) remote change in A 2
+| * 715d7b0 remote change in A 1
+|/
+* 621b98a shared local/remote
+* cfbcc20 (origin/main, main) init-integration
+"#]]
+    );
 
     let mut ws = graph.into_workspace()?;
 
@@ -1598,18 +1672,21 @@ fn integrate_upstream_commits_into_local_with_remote_one_local_one_remote_and_ex
         integrate_branch_with_steps(r("refs/heads/A"), integration, &mut ws, &mut meta, &repo)?;
     rebase.materialize()?;
 
-    insta::assert_snapshot!(normalized_graph_snapshot(&repo)?, @"
-    * 8347946 (A-shadow) local change in A 2
-    | * ab8c010 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    | * 801c92f (A) remote change in A 2
-    |/
-    * 86838ae local change in A 1
-    | * 6a17628 (origin/A) remote change in A 2
-    | * 715d7b0 remote change in A 1
-    |/
-    * 621b98a shared local/remote
-    * cfbcc20 (origin/main, main) init-integration
-    ");
+    snapbox::assert_data_eq!(
+        normalized_graph_snapshot(&repo)?,
+        snapbox::str![[r#"
+* 8347946 (A-shadow) local change in A 2
+| * ab8c010 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+| * 801c92f (A) remote change in A 2
+|/
+* 86838ae local change in A 1
+| * 6a17628 (origin/A) remote change in A 2
+| * 715d7b0 remote change in A 1
+|/
+* 621b98a shared local/remote
+* cfbcc20 (origin/main, main) init-integration
+"#]]
+    );
 
     Ok(())
 }
@@ -1624,16 +1701,19 @@ fn integrate_upstream_commits_into_local_with_only_remote_commits() -> Result<()
             },
         )?;
 
-    insta::assert_snapshot!(normalized_graph_snapshot(&repo)?, @"
-    * a7060f8 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 8347946 (A) local change in A 2
-    * 86838ae local change in A 1
-    | * 6a17628 (origin/A) remote change in A 2
-    | * 715d7b0 remote change in A 1
-    |/
-    * 621b98a shared local/remote
-    * cfbcc20 (origin/main, main) init-integration
-    ");
+    snapbox::assert_data_eq!(
+        normalized_graph_snapshot(&repo)?,
+        snapbox::str![[r#"
+* a7060f8 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 8347946 (A) local change in A 2
+* 86838ae local change in A 1
+| * 6a17628 (origin/A) remote change in A 2
+| * 715d7b0 remote change in A 1
+|/
+* 621b98a shared local/remote
+* cfbcc20 (origin/main, main) init-integration
+"#]]
+    );
 
     let mut ws = graph.into_workspace()?;
 
@@ -1662,13 +1742,16 @@ fn integrate_upstream_commits_into_local_with_only_remote_commits() -> Result<()
         integrate_branch_with_steps(r("refs/heads/A"), integration, &mut ws, &mut meta, &repo)?;
     rebase.materialize()?;
 
-    insta::assert_snapshot!(normalized_graph_snapshot(&repo)?, @"
-    * b3d4566 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 6a17628 (origin/A, A) remote change in A 2
-    * 715d7b0 remote change in A 1
-    * 621b98a shared local/remote
-    * cfbcc20 (origin/main, main) init-integration
-    ");
+    snapbox::assert_data_eq!(
+        normalized_graph_snapshot(&repo)?,
+        snapbox::str![[r#"
+* b3d4566 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 6a17628 (origin/A, A) remote change in A 2
+* 715d7b0 remote change in A 1
+* 621b98a shared local/remote
+* cfbcc20 (origin/main, main) init-integration
+"#]]
+    );
 
     Ok(())
 }
@@ -1683,14 +1766,17 @@ fn integrate_upstream_commits_when_remote_is_ahead_of_local() -> Result<()> {
             },
         )?;
 
-    insta::assert_snapshot!(normalized_graph_snapshot(&repo)?, @"
-    * 2e72271 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    | * f15e6ab (origin/A) remote change in A 3
-    |/
-    * 220cc98 (A) local change in A 2
-    * f01c4f5 local change in A 1
-    * cfbcc20 (origin/main, main) init-integration
-    ");
+    snapbox::assert_data_eq!(
+        normalized_graph_snapshot(&repo)?,
+        snapbox::str![[r#"
+* 2e72271 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+| * f15e6ab (origin/A) remote change in A 3
+|/
+* 220cc98 (A) local change in A 2
+* f01c4f5 local change in A 1
+* cfbcc20 (origin/main, main) init-integration
+"#]]
+    );
 
     let mut ws = graph.into_workspace()?;
     configure_tracking_for_branch_a(&mut repo)?;
@@ -1714,20 +1800,20 @@ fn integrate_upstream_commits_when_remote_is_ahead_of_local() -> Result<()> {
         (base, "base"),
     ];
 
-    insta::assert_snapshot!(
+    snapbox::assert_data_eq!(
         labeled_divergence_snapshot(&initial, &labels),
-        @"
-    * remote-commit (origin/A) remote change in A 3
-    * local-commit-2 (A) local change in A 2
-    "
+        snapbox::str![[r#"
+* remote-commit (origin/A) remote change in A 3
+* local-commit-2 (A) local change in A 2
+"#]]
     );
 
-    insta::assert_snapshot!(
+    snapbox::assert_data_eq!(
         labeled_integration_snapshot(&initial.integration, &labels),
-        @"
-    merge-base local-commit-2
-    pick remote-commit
-    "
+        snapbox::str![[r#"
+merge-base local-commit-2
+pick remote-commit
+"#]]
     );
 
     let rebase = integrate_branch_with_steps(
@@ -1739,15 +1825,15 @@ fn integrate_upstream_commits_when_remote_is_ahead_of_local() -> Result<()> {
     )?;
     rebase.materialize()?;
 
-    insta::assert_snapshot!(
+    snapbox::assert_data_eq!(
         labeled_graph_snapshot(&repo, &labels)?,
-        @"
-    * 59a02cd (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * remote-commit (origin/A, A) remote change in A 3
-    * local-commit-2 local change in A 2
-    * local-commit-1 local change in A 1
-    * base (origin/main, main) init-integration
-    "
+        snapbox::str![[r#"
+* 59a02cd (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* remote-commit (origin/A, A) remote change in A 3
+* local-commit-2 local change in A 2
+* local-commit-1 local change in A 1
+* base (origin/main, main) init-integration
+"#]]
     );
 
     Ok(())
@@ -1764,13 +1850,16 @@ fn integrate_remote_advanced_branch_with_parallel_empty_branch() -> Result<()> {
             },
         )?;
 
-    insta::assert_snapshot!(normalized_graph_snapshot(&repo)?, @"
-    * cd9798c (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    | * 412aade (origin/feature-foo) update foo.txt (remote)
-    |/
-    * f0c6d1c (feature-foo) add foo.txt
-    * da7bed3 (origin/main, main, empty-branch) add main.txt
-    ");
+    snapbox::assert_data_eq!(
+        normalized_graph_snapshot(&repo)?,
+        snapbox::str![[r#"
+* cd9798c (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+| * 412aade (origin/feature-foo) update foo.txt (remote)
+|/
+* f0c6d1c (feature-foo) add foo.txt
+* da7bed3 (origin/main, main, empty-branch) add main.txt
+"#]]
+    );
 
     let mut ws = graph.into_workspace()?;
     configure_tracking_for_branch(&mut repo, "feature-foo")?;
@@ -1790,12 +1879,12 @@ fn integrate_remote_advanced_branch_with_parallel_empty_branch() -> Result<()> {
         (local_commit, "local-commit"),
     ];
 
-    insta::assert_snapshot!(
+    snapbox::assert_data_eq!(
         labeled_integration_snapshot(&initial.integration, &labels),
-        @"
-    merge-base local-commit
-    pick remote-commit
-    "
+        snapbox::str![[r#"
+merge-base local-commit
+pick remote-commit
+"#]]
     );
 
     let rebase = integrate_branch_with_steps(
@@ -1807,16 +1896,17 @@ fn integrate_remote_advanced_branch_with_parallel_empty_branch() -> Result<()> {
     )?;
     rebase.materialize()?;
 
-    insta::assert_snapshot!(
+    snapbox::assert_data_eq!(
         labeled_graph_snapshot(&repo, &labels)?,
-        @"
-    *   abcd9a1 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\\
-    | * remote-commit (origin/feature-foo, feature-foo) update foo.txt (remote)
-    | * local-commit add foo.txt
-    |/
-    * da7bed3 (origin/main, main, empty-branch) add main.txt
-    "
+        snapbox::str![[r#"
+*   abcd9a1 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\
+| * remote-commit (origin/feature-foo, feature-foo) update foo.txt (remote)
+| * local-commit add foo.txt
+|/
+* da7bed3 (origin/main, main, empty-branch) add main.txt
+"#]]
+        .raw()
     );
 
     Ok(())
@@ -1832,15 +1922,18 @@ fn initial_pull_rebase_plan_includes_workspace_local_commits_above_branch_ref() 
             },
         )?;
 
-    insta::assert_snapshot!(normalized_graph_snapshot(&repo)?, @"
-    * ea0ece6 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 5ea7c50 local change in A 3
-    | * f15e6ab (origin/A) remote change in A 3
-    |/
-    * 220cc98 (A) local change in A 2
-    * f01c4f5 local change in A 1
-    * cfbcc20 (origin/main, main) init-integration
-    ");
+    snapbox::assert_data_eq!(
+        normalized_graph_snapshot(&repo)?,
+        snapbox::str![[r#"
+* ea0ece6 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 5ea7c50 local change in A 3
+| * f15e6ab (origin/A) remote change in A 3
+|/
+* 220cc98 (A) local change in A 2
+* f01c4f5 local change in A 1
+* cfbcc20 (origin/main, main) init-integration
+"#]]
+    );
 
     let mut ws = graph.into_workspace()?;
     configure_tracking_for_branch_a(&mut repo)?;
@@ -1866,23 +1959,23 @@ fn initial_pull_rebase_plan_includes_workspace_local_commits_above_branch_ref() 
         (base, "base"),
     ];
 
-    insta::assert_snapshot!(
+    snapbox::assert_data_eq!(
         labeled_divergence_snapshot(&initial, &labels),
-        @"
-    * local-commit-3 (A) local change in A 3
-    | * remote-commit (origin/A) remote change in A 3
-    |/
-    * local-commit-2 local change in A 2
-    "
+        snapbox::str![[r#"
+* local-commit-3 (A) local change in A 3
+| * remote-commit (origin/A) remote change in A 3
+|/
+* local-commit-2 local change in A 2
+"#]]
     );
 
-    insta::assert_snapshot!(
+    snapbox::assert_data_eq!(
         labeled_integration_snapshot(&initial.integration, &labels),
-        @"
-    merge-base local-commit-2
-    pick remote-commit
-    pick local-commit-3
-    "
+        snapbox::str![[r#"
+merge-base local-commit-2
+pick remote-commit
+pick local-commit-3
+"#]]
     );
 
     let rebase = integrate_branch_with_steps(
@@ -1894,16 +1987,16 @@ fn initial_pull_rebase_plan_includes_workspace_local_commits_above_branch_ref() 
     )?;
     rebase.materialize()?;
 
-    insta::assert_snapshot!(
+    snapbox::assert_data_eq!(
         labeled_graph_snapshot(&repo, &labels)?,
-        @"
-    * bf6f03c (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 705502a (A) local change in A 3
-    * remote-commit (origin/A) remote change in A 3
-    * local-commit-2 local change in A 2
-    * local-commit-1 local change in A 1
-    * base (origin/main, main) init-integration
-    "
+        snapbox::str![[r#"
+* bf6f03c (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 705502a (A) local change in A 3
+* remote-commit (origin/A) remote change in A 3
+* local-commit-2 local change in A 2
+* local-commit-1 local change in A 1
+* base (origin/main, main) init-integration
+"#]]
     );
 
     Ok(())
@@ -1943,15 +2036,15 @@ fn integrate_initial_pull_rebase_plan_for_one_local_and_one_remote_commit() -> R
         (base, "base"),
     ];
 
-    insta::assert_snapshot!(
+    snapbox::assert_data_eq!(
         labeled_integration_snapshot(&initial.integration, &labels),
-        @"
-    merge-base base
-    pick remote-commit-1
-    pick remote-tip
-    pick local-commit-1
-    pick local-tip
-    "
+        snapbox::str![[r#"
+merge-base base
+pick remote-commit-1
+pick remote-tip
+pick local-commit-1
+pick local-tip
+"#]]
     );
 
     let rebase = integrate_branch_with_steps(
@@ -1963,17 +2056,17 @@ fn integrate_initial_pull_rebase_plan_for_one_local_and_one_remote_commit() -> R
     )?;
     rebase.materialize()?;
 
-    insta::assert_snapshot!(
+    snapbox::assert_data_eq!(
         labeled_graph_snapshot(&repo, &labels)?,
-        @"
-    * 455d393 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 298d472 (A) local change in A 2
-    * 422a07d local change in A 1
-    * remote-tip (origin/A) remote change in A 2
-    * remote-commit-1 remote change in A 1
-    * base shared local/remote
-    * cfbcc20 (origin/main, main) init-integration
-    "
+        snapbox::str![[r#"
+* 455d393 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 298d472 (A) local change in A 2
+* 422a07d local change in A 1
+* remote-tip (origin/A) remote change in A 2
+* remote-commit-1 remote change in A 1
+* base shared local/remote
+* cfbcc20 (origin/main, main) init-integration
+"#]]
     );
 
     Ok(())
@@ -2021,14 +2114,17 @@ fn integrate_upstream_commits_into_local_with_squashed_local_commits() -> Result
         integrate_branch_with_steps(r("refs/heads/A"), integration, &mut ws, &mut meta, &repo)?;
     rebase.materialize()?;
 
-    insta::assert_snapshot!(normalized_graph_snapshot(&repo)?, @"
-    * 5ef31c2 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * c297225 (A) squashed local commits
-    * 6a17628 (origin/A) remote change in A 2
-    * 715d7b0 remote change in A 1
-    * 621b98a shared local/remote
-    * cfbcc20 (origin/main, main) init-integration
-    ");
+    snapbox::assert_data_eq!(
+        normalized_graph_snapshot(&repo)?,
+        snapbox::str![[r#"
+* 5ef31c2 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* c297225 (A) squashed local commits
+* 6a17628 (origin/A) remote change in A 2
+* 715d7b0 remote change in A 1
+* 621b98a shared local/remote
+* cfbcc20 (origin/main, main) init-integration
+"#]]
+    );
 
     let branch_tip = repo.find_commit(repo.rev_parse_single("A")?.detach())?;
     assert_eq!(branch_tip.message_raw()?, "squashed local commits");
@@ -2078,17 +2174,20 @@ fn integrate_upstream_commits_into_local_with_squashed_remote_commits() -> Resul
         integrate_branch_with_steps(r("refs/heads/A"), integration, &mut ws, &mut meta, &repo)?;
     rebase.materialize()?;
 
-    insta::assert_snapshot!(normalized_graph_snapshot(&repo)?, @"
-    * 3699070 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 3838b79 (A) squashed remote commits
-    * 8347946 local change in A 2
-    * 86838ae local change in A 1
-    | * 6a17628 (origin/A) remote change in A 2
-    | * 715d7b0 remote change in A 1
-    |/
-    * 621b98a shared local/remote
-    * cfbcc20 (origin/main, main) init-integration
-    ");
+    snapbox::assert_data_eq!(
+        normalized_graph_snapshot(&repo)?,
+        snapbox::str![[r#"
+* 3699070 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 3838b79 (A) squashed remote commits
+* 8347946 local change in A 2
+* 86838ae local change in A 1
+| * 6a17628 (origin/A) remote change in A 2
+| * 715d7b0 remote change in A 1
+|/
+* 621b98a shared local/remote
+* cfbcc20 (origin/main, main) init-integration
+"#]]
+    );
 
     let branch_tip = repo.find_commit(repo.rev_parse_single("A")?.detach())?;
     assert_eq!(branch_tip.message_raw()?, "squashed remote commits");
@@ -2136,16 +2235,19 @@ fn integrate_upstream_commits_into_local_with_squashed_remote_into_local_commits
         integrate_branch_with_steps(r("refs/heads/A"), integration, &mut ws, &mut meta, &repo)?;
     rebase.materialize()?;
 
-    insta::assert_snapshot!(normalized_graph_snapshot(&repo)?, @"
-    * 8a9dd44 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * c6b942b (A) squash commits 2
-    * a524f0a squash commits 1
-    | * 6a17628 (origin/A) remote change in A 2
-    | * 715d7b0 remote change in A 1
-    |/
-    * 621b98a shared local/remote
-    * cfbcc20 (origin/main, main) init-integration
-    ");
+    snapbox::assert_data_eq!(
+        normalized_graph_snapshot(&repo)?,
+        snapbox::str![[r#"
+* 8a9dd44 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* c6b942b (A) squash commits 2
+* a524f0a squash commits 1
+| * 6a17628 (origin/A) remote change in A 2
+| * 715d7b0 remote change in A 1
+|/
+* 621b98a shared local/remote
+* cfbcc20 (origin/main, main) init-integration
+"#]]
+    );
 
     Ok(())
 }
@@ -2160,13 +2262,16 @@ fn integrate_upstream_commits_into_local_with_squashed_remote_into_local_conflic
             },
         )?;
 
-    insta::assert_snapshot!(normalized_graph_snapshot(&repo)?, @"
-    * 8fd8fb6 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 61c4a24 (A) local change in A 1
-    | * f03fc2c (origin/A, new-origin) remote change in A 1
-    |/
-    * 2b73dee (origin/main, main) init-integration
-    ");
+    snapbox::assert_data_eq!(
+        normalized_graph_snapshot(&repo)?,
+        snapbox::str![[r#"
+* 8fd8fb6 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 61c4a24 (A) local change in A 1
+| * f03fc2c (origin/A, new-origin) remote change in A 1
+|/
+* 2b73dee (origin/main, main) init-integration
+"#]]
+    );
 
     let mut ws = graph.into_workspace()?;
 
@@ -2190,42 +2295,49 @@ fn integrate_upstream_commits_into_local_with_squashed_remote_into_local_conflic
         integrate_branch_with_steps(r("refs/heads/A"), integration, &mut ws, &mut meta, &repo)?;
     rebase.materialize()?;
 
-    insta::assert_snapshot!(normalized_graph_snapshot(&repo)?, @"
-    * f03fc2c (origin/A, new-origin) remote change in A 1
-    | * 1b052b4 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    | * 20ebfcc (A) [conflict] squashed conflicting commits
-    |/
-    * 2b73dee (origin/main, main) init-integration
-    ");
+    snapbox::assert_data_eq!(
+        normalized_graph_snapshot(&repo)?,
+        snapbox::str![[r#"
+* f03fc2c (origin/A, new-origin) remote change in A 1
+| * 1b052b4 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+| * 20ebfcc (A) [conflict] squashed conflicting commits
+|/
+* 2b73dee (origin/main, main) init-integration
+"#]]
+    );
 
     let branch_tip = repo.find_commit(repo.rev_parse_single("A")?.detach())?;
     assert!(Commit::from_id(branch_tip.id.attach(&repo))?.is_conflicted());
-    insta::assert_snapshot!(branch_tip.message_raw()?, @r#"
-    [conflict] squashed conflicting commits
+    snapbox::assert_data_eq!(
+        branch_tip.message_raw()?.to_string(),
+        snapbox::str![[r#"
+[conflict] squashed conflicting commits
 
-    GitButler-Conflict: This is a GitButler-managed conflicted commit. Files are auto-resolved
-       using the "ours" side. The commit tree contains additional directories:
-         .conflict-side-0  — our tree
-         .conflict-side-1  — their tree
-         .conflict-base-0  — the merge base tree
-         .auto-resolution  — the auto-resolved tree
-         .conflict-files   — metadata about conflicted files
-       To manually resolve, check out this commit, remove the directories
-       listed above, resolve the conflicts, and amend the commit.
-    "#);
-    insta::assert_snapshot!(normalized_tree_snapshot(branch_tip.tree_id()?.detach(), &repo)?, @r#"
-    450d676
-    ├── .auto-resolution:276d2b4
-    │   └── shared.txt:100644:4083037 "local\n"
-    ├── .conflict-base-0:48e531d
-    │   └── shared.txt:100644:df967b9 "base\n"
-    ├── .conflict-files:100644:d0a3da4 "ancestorEntries = [\"shared.txt\"]\nourEntries = [\"shared.txt\"]\ntheirEntries = [\"shared.txt\"]\n"
-    ├── .conflict-side-0:276d2b4
-    │   └── shared.txt:100644:4083037 "local\n"
-    ├── .conflict-side-1:cd74779
-    │   └── shared.txt:100644:9c998f7 "remote\n"
-    └── shared.txt:100644:4083037 "local\n"
-    "#);
+GitButler-Conflict: This is a GitButler-managed conflicted commit. Files are auto-resolved
+   using the "ours" side. The commit tree contains additional directories:
+     .conflict-side-0  — our tree
+     .conflict-side-1  — their tree
+     .conflict-base-0  — the merge base tree
+     .auto-resolution  — the auto-resolved tree
+     .conflict-files   — metadata about conflicted files
+   To manually resolve, check out this commit, remove the directories
+   listed above, resolve the conflicts, and amend the commit.
+
+"#]]
+    );
+    snapbox::assert_data_eq!(normalized_tree_snapshot(branch_tip.tree_id()?.detach(), &repo)?, snapbox::str![[r#"
+450d676
+├── .auto-resolution:276d2b4
+│   └── shared.txt:100644:4083037 "local\n"
+├── .conflict-base-0:48e531d
+│   └── shared.txt:100644:df967b9 "base\n"
+├── .conflict-files:100644:d0a3da4 "ancestorEntries = [\"shared.txt\"]\nourEntries = [\"shared.txt\"]\ntheirEntries = [\"shared.txt\"]\n"
+├── .conflict-side-0:276d2b4
+│   └── shared.txt:100644:4083037 "local\n"
+├── .conflict-side-1:cd74779
+│   └── shared.txt:100644:9c998f7 "remote\n"
+└── shared.txt:100644:4083037 "local\n"
+"#]].raw());
 
     Ok(())
 }
@@ -2240,13 +2352,16 @@ fn integrate_upstream_commits_into_local_with_merge_remote_into_local_conflicts(
             },
         )?;
 
-    insta::assert_snapshot!(normalized_graph_snapshot(&repo)?, @"
-    * 8fd8fb6 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 61c4a24 (A) local change in A 1
-    | * f03fc2c (origin/A, new-origin) remote change in A 1
-    |/
-    * 2b73dee (origin/main, main) init-integration
-    ");
+    snapbox::assert_data_eq!(
+        normalized_graph_snapshot(&repo)?,
+        snapbox::str![[r#"
+* 8fd8fb6 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 61c4a24 (A) local change in A 1
+| * f03fc2c (origin/A, new-origin) remote change in A 1
+|/
+* 2b73dee (origin/main, main) init-integration
+"#]]
+    );
 
     let mut ws = graph.into_workspace()?;
 
@@ -2272,15 +2387,19 @@ fn integrate_upstream_commits_into_local_with_merge_remote_into_local_conflicts(
         integrate_branch_with_steps(r("refs/heads/A"), integration, &mut ws, &mut meta, &repo)?;
     rebase.materialize()?;
 
-    insta::assert_snapshot!(normalized_graph_snapshot(&repo)?, @r"
-    * 9b44771 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    *   c813ff0 (A) [conflict] Merge f03fc2cb7251fb1707fa0f7bee28eb507ec1405c into previous commit
-    |\
-    | * f03fc2c (origin/A, new-origin) remote change in A 1
-    * | 61c4a24 local change in A 1
-    |/
-    * 2b73dee (origin/main, main) init-integration
-    ");
+    snapbox::assert_data_eq!(
+        normalized_graph_snapshot(&repo)?,
+        snapbox::str![[r#"
+* 9b44771 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+*   c813ff0 (A) [conflict] Merge f03fc2cb7251fb1707fa0f7bee28eb507ec1405c into previous commit
+|\
+| * f03fc2c (origin/A, new-origin) remote change in A 1
+* | 61c4a24 local change in A 1
+|/
+* 2b73dee (origin/main, main) init-integration
+"#]]
+        .raw()
+    );
 
     let branch_tip = repo.find_commit(repo.rev_parse_single("A")?.detach())?;
     assert!(
@@ -2314,19 +2433,19 @@ fn integrate_upstream_commits_into_local_with_merge_remote_into_local_conflicts(
         "merge integration should retain the local commit as first parent even when conflicted",
     );
 
-    insta::assert_snapshot!(normalized_tree_snapshot(branch_tip.tree_id()?.detach(), &repo)?, @r#"
-    450d676
-    ├── .auto-resolution:276d2b4
-    │   └── shared.txt:100644:4083037 "local\n"
-    ├── .conflict-base-0:48e531d
-    │   └── shared.txt:100644:df967b9 "base\n"
-    ├── .conflict-files:100644:d0a3da4 "ancestorEntries = [\"shared.txt\"]\nourEntries = [\"shared.txt\"]\ntheirEntries = [\"shared.txt\"]\n"
-    ├── .conflict-side-0:276d2b4
-    │   └── shared.txt:100644:4083037 "local\n"
-    ├── .conflict-side-1:cd74779
-    │   └── shared.txt:100644:9c998f7 "remote\n"
-    └── shared.txt:100644:4083037 "local\n"
-    "#);
+    snapbox::assert_data_eq!(normalized_tree_snapshot(branch_tip.tree_id()?.detach(), &repo)?, snapbox::str![[r#"
+450d676
+├── .auto-resolution:276d2b4
+│   └── shared.txt:100644:4083037 "local\n"
+├── .conflict-base-0:48e531d
+│   └── shared.txt:100644:df967b9 "base\n"
+├── .conflict-files:100644:d0a3da4 "ancestorEntries = [\"shared.txt\"]\nourEntries = [\"shared.txt\"]\ntheirEntries = [\"shared.txt\"]\n"
+├── .conflict-side-0:276d2b4
+│   └── shared.txt:100644:4083037 "local\n"
+├── .conflict-side-1:cd74779
+│   └── shared.txt:100644:9c998f7 "remote\n"
+└── shared.txt:100644:4083037 "local\n"
+"#]].raw());
 
     Ok(())
 }
@@ -2455,16 +2574,19 @@ fn initial_steps_remote_diverged_with_workspace_are_in_application_order() -> Re
         )?;
     configure_tracking_for_branch_a(&mut repo)?;
 
-    insta::assert_snapshot!(normalized_graph_snapshot(&repo)?, @"
-    * a7060f8 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 8347946 (A) local change in A 2
-    * 86838ae local change in A 1
-    | * 6a17628 (origin/A) remote change in A 2
-    | * 715d7b0 remote change in A 1
-    |/
-    * 621b98a shared local/remote
-    * cfbcc20 (origin/main, main) init-integration
-    ");
+    snapbox::assert_data_eq!(
+        normalized_graph_snapshot(&repo)?,
+        snapbox::str![[r#"
+* a7060f8 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 8347946 (A) local change in A 2
+* 86838ae local change in A 1
+| * 6a17628 (origin/A) remote change in A 2
+| * 715d7b0 remote change in A 1
+|/
+* 621b98a shared local/remote
+* cfbcc20 (origin/main, main) init-integration
+"#]]
+    );
 
     let local_commit_2 = repo.rev_parse_single("A")?.detach();
     let local_commit_1 = repo.rev_parse_single("A~1")?.detach();
@@ -2479,7 +2601,7 @@ fn initial_steps_remote_diverged_with_workspace_are_in_application_order() -> Re
         Some(r("refs/remotes/origin/main")),
     )?;
 
-    insta::assert_snapshot!(
+    snapbox::assert_data_eq!(
         labeled_integration_snapshot(
             &initial.integration,
             &[
@@ -2490,16 +2612,16 @@ fn initial_steps_remote_diverged_with_workspace_are_in_application_order() -> Re
                 (remote_commit_1, "remote-commit-1"),
             ]
         ),
-        @"
-    merge-base merge-base
-    pick remote-commit-1
-    pick remote-commit-2
-    pick local-commit-1
-    pick local-commit-2
-    "
+        snapbox::str![[r#"
+merge-base merge-base
+pick remote-commit-1
+pick remote-commit-2
+pick local-commit-1
+pick local-commit-2
+"#]]
     );
 
-    insta::assert_snapshot!(
+    snapbox::assert_data_eq!(
         labeled_divergence_snapshot(
             &initial,
             &[
@@ -2510,14 +2632,14 @@ fn initial_steps_remote_diverged_with_workspace_are_in_application_order() -> Re
                 (remote_commit_1, "remote-commit-1"),
             ]
         ),
-        @"
-        * local-commit-2 (A) local change in A 2
-        * local-commit-1 local change in A 1
-        | * remote-commit-2 (origin/A) remote change in A 2
-        | * remote-commit-1 remote change in A 1
-        |/
-        * merge-base shared local/remote
-        "
+        snapbox::str![[r#"
+* local-commit-2 (A) local change in A 2
+* local-commit-1 local change in A 1
+| * remote-commit-2 (origin/A) remote change in A 2
+| * remote-commit-1 remote change in A 1
+|/
+* merge-base shared local/remote
+"#]]
     );
 
     assert_eq!(
@@ -2552,22 +2674,22 @@ fn initial_steps_example_1_keep_integrated_target_history_out_of_divergence() ->
         Some(r("refs/remotes/origin/main")),
     )?;
 
-    insta::assert_snapshot!(
+    snapbox::assert_data_eq!(
         labeled_divergence_snapshot(&initial, &[(b, "B"), (c, "C"), (d, "D"), (x, "X")]),
-        @"
-        * C (A) C
-        | * D (origin/A) D
-        |/
-        * B [historically-integrated:B] B
-        "
+        snapbox::str![[r#"
+* C (A) C
+| * D (origin/A) D
+|/
+* B [historically-integrated:B] B
+"#]]
     );
-    insta::assert_snapshot!(
+    snapbox::assert_data_eq!(
         labeled_integration_snapshot(&initial.integration, &[(b, "B"), (c, "C"), (d, "D")]),
-        @"
-    merge-base B
-    pick D
-    pick C
-    "
+        snapbox::str![[r#"
+merge-base B
+pick D
+pick C
+"#]]
     );
 
     assert_eq!(
@@ -2646,18 +2768,15 @@ fn initial_steps_example_2_excludes_integrated_local_commits_but_keeps_them_visi
         vec![d, c],
         "example 2 should skip integrated local B while keeping local C editable",
     );
-    insta::assert_snapshot!(
-        labeled_divergence_snapshot(
-            &initial,
-            &[(a, "A"), (b, "B"), (c, "C"), (d, "D")]
-        ),
-        @"
-        * C (A) C
-        * B [historically-integrated:B] B
-        | * D (origin/A) D
-        |/
-        * A [historically-integrated:A] A
-        "
+    snapbox::assert_data_eq!(
+        labeled_divergence_snapshot(&initial, &[(a, "A"), (b, "B"), (c, "C"), (d, "D")]),
+        snapbox::str![[r#"
+* C (A) C
+* B [historically-integrated:B] B
+| * D (origin/A) D
+|/
+* A [historically-integrated:A] A
+"#]]
     );
     assert_eq!(
         initial.divergence.local_only[1].target_relation,
@@ -2764,15 +2883,15 @@ fn initial_steps_example_3_keeps_integrated_upstream_commits_editable() -> Resul
         vec![x, d, c],
         "example 3 should keep integrated upstream X editable before D and local C",
     );
-    insta::assert_snapshot!(
+    snapbox::assert_data_eq!(
         labeled_divergence_snapshot(&initial, &[(b, "B"), (c, "C"), (d, "D"), (x, "X")]),
-        @"
-        * C (A) C
-        | * D (origin/A) D
-        | * X [historically-integrated:X] X
-        |/
-        * B [historically-integrated:B] B
-        "
+        snapbox::str![[r#"
+* C (A) C
+| * D (origin/A) D
+| * X [historically-integrated:X] X
+|/
+* B [historically-integrated:B] B
+"#]]
     );
 
     Ok(())

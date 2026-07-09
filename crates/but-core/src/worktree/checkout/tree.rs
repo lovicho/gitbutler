@@ -125,6 +125,7 @@ pub fn push_component(path: &mut BString, component: &BStr) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use snapbox::prelude::*;
 
     #[test]
     fn journey() {
@@ -138,31 +139,47 @@ mod tests {
 
         lut.get_intersecting("d".into(), &mut out);
         // This one could not be found.
-        insta::assert_debug_snapshot!(out, @"{}");
+        snapbox::assert_data_eq!(
+            out.to_debug(),
+            snapbox::str![[r#"
+{}
+
+"#]]
+        );
 
         lut.get_intersecting("a".into(), &mut out);
         // Perfect match
-        insta::assert_compact_debug_snapshot!(out, @r#"{"a"}"#);
+        snapbox::assert_data_eq!(format!("{out:?}"), snapbox::str![r#"{"a"}"#]);
 
         out.clear();
         lut.get_intersecting("a/b".into(), &mut out);
         // indirect match, prefix, single item
-        insta::assert_compact_debug_snapshot!(out, @r#"{"a"}"#);
+        snapbox::assert_data_eq!(format!("{out:?}"), snapbox::str![r#"{"a"}"#]);
 
         out.clear();
         lut.get_intersecting("b".into(), &mut out);
         // indirect match, suffix/leafs
-        insta::assert_debug_snapshot!(out, @r#"
-        {
-            "b/c",
-            "b/d",
-        }
-        "#);
+        snapbox::assert_data_eq!(
+            out.to_debug(),
+            snapbox::str![[r#"
+{
+    "b/c",
+    "b/d",
+}
+
+"#]]
+        );
 
         out.clear();
         lut.get_intersecting("b/x/y".into(), &mut out);
         // No match, nothing in the way.
-        insta::assert_debug_snapshot!(out, @"{}");
+        snapbox::assert_data_eq!(
+            out.to_debug(),
+            snapbox::str![[r#"
+{}
+
+"#]]
+        );
     }
 
     #[test]
@@ -183,28 +200,36 @@ mod tests {
         let mut out = BTreeSet::new();
 
         lut.get_intersecting("a".into(), &mut out);
-        insta::assert_debug_snapshot!(out, @r#"
-        {
-            "a/1/2/3",
-            "a/1/2/4/5",
-            "a/2/3",
-            "a/3",
-        }
-        "#);
+        snapbox::assert_data_eq!(
+            out.to_debug(),
+            snapbox::str![[r#"
+{
+    "a/1/2/3",
+    "a/1/2/4/5",
+    "a/2/3",
+    "a/3",
+}
+
+"#]]
+        );
 
         // It's additive
         lut.get_intersecting("b".into(), &mut out);
-        insta::assert_debug_snapshot!(out, @r#"
-        {
-            "a/1/2/3",
-            "a/1/2/4/5",
-            "a/2/3",
-            "a/3",
-            "b/1",
-            "b/2/3",
-            "b/3/2/1",
-            "b/3/4/5",
-        }
-        "#);
+        snapbox::assert_data_eq!(
+            out.to_debug(),
+            snapbox::str![[r#"
+{
+    "a/1/2/3",
+    "a/1/2/4/5",
+    "a/2/3",
+    "a/3",
+    "b/1",
+    "b/2/3",
+    "b/3/2/1",
+    "b/3/4/5",
+}
+
+"#]]
+        );
     }
 }

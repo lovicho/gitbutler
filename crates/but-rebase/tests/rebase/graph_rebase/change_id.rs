@@ -4,6 +4,7 @@ use anyhow::Result;
 use but_graph::Graph;
 use but_rebase::graph_rebase::{Editor, LookupStep, Step, ToSelector};
 use gix::prelude::ObjectIdExt;
+use snapbox::prelude::*;
 
 use crate::utils::{fixture_writable, standard_options};
 
@@ -14,8 +15,17 @@ fn temporary_change_id_persisted() -> Result<()> {
     let target = repo.rev_parse_single("HEAD~")?;
     let target_parent = repo.rev_parse_single("HEAD~~")?;
     let target_commit = but_core::Commit::from_id(target)?;
-    insta::assert_snapshot!(target_commit.change_id(), @"uonoxlzsyllzwskypkxkwtqyzusvwpzp");
-    insta::assert_debug_snapshot!(target_commit.extra_headers, @"[]");
+    snapbox::assert_data_eq!(
+        target_commit.change_id().to_string(),
+        snapbox::str!["uonoxlzsyllzwskypkxkwtqyzusvwpzp"]
+    );
+    snapbox::assert_data_eq!(
+        target_commit.extra_headers.to_debug(),
+        snapbox::str![[r#"
+[]
+
+"#]]
+    );
 
     let graph = Graph::from_head(
         &repo,
@@ -35,18 +45,22 @@ fn temporary_change_id_persisted() -> Result<()> {
 
     let new_target = outcome.lookup_pick(target_selector)?;
     let new_target_commit = but_core::Commit::from_id(new_target.attach(outcome.repo()))?;
-    insta::assert_debug_snapshot!(new_target_commit.extra_headers, @r#"
-    [
-        (
-            "gitbutler-headers-version",
-            "2",
-        ),
-        (
-            "change-id",
-            "uonoxlzsyllzwskypkxkwtqyzusvwpzp",
-        ),
-    ]
-    "#);
+    snapbox::assert_data_eq!(
+        new_target_commit.extra_headers.to_debug(),
+        snapbox::str![[r#"
+[
+    (
+        "gitbutler-headers-version",
+        "2",
+    ),
+    (
+        "change-id",
+        "uonoxlzsyllzwskypkxkwtqyzusvwpzp",
+    ),
+]
+
+"#]]
+    );
 
     assert_eq!(
         new_target_commit.change_id(),
@@ -74,19 +88,23 @@ fn empty_commit_uses_default_change_id() -> Result<()> {
 
     let ec = editor.empty_commit()?;
 
-    insta::assert_snapshot!(ec.change_id(), @"1");
-    insta::assert_debug_snapshot!(ec.extra_headers, @r#"
-    [
-        (
-            "gitbutler-headers-version",
-            "2",
-        ),
-        (
-            "change-id",
-            "1",
-        ),
-    ]
-    "#);
+    snapbox::assert_data_eq!(ec.change_id().to_string(), snapbox::str!["1"]);
+    snapbox::assert_data_eq!(
+        ec.extra_headers.to_debug(),
+        snapbox::str![[r#"
+[
+    (
+        "gitbutler-headers-version",
+        "2",
+    ),
+    (
+        "change-id",
+        "1",
+    ),
+]
+
+"#]]
+    );
 
     Ok(())
 }

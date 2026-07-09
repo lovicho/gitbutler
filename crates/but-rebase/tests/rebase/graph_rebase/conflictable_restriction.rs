@@ -7,6 +7,7 @@ use but_rebase::{
     graph_rebase::{Editor, LookupStep, Step, mutate::InsertSide},
 };
 use but_testsupport::{cat_commit, graph_tree, visualize_commit_graph_all};
+use snapbox::prelude::*;
 
 use crate::utils::{fixture_writable, standard_options};
 
@@ -14,12 +15,16 @@ use crate::utils::{fixture_writable, standard_options};
 fn by_default_conflicts_are_allowed() -> Result<()> {
     let (repo, _tmpdir, mut meta) = fixture_writable("four-commits-one-file")?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * f37690f (HEAD -> main, c) c
-    * 3b3bd41 (b) b
-    * 5e0ba46 (a) a
-    * 6155f21 (base) base
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* f37690f (HEAD -> main, c) c
+* 3b3bd41 (b) b
+* 5e0ba46 (a) a
+* 6155f21 (base) base
+
+"#]]
+    );
 
     let graph = Graph::from_head(
         &repo,
@@ -39,38 +44,46 @@ fn by_default_conflicts_are_allowed() -> Result<()> {
 
     let outcome = editor.rebase()?;
     let overlayed = graph_tree(&outcome.overlayed_graph()?).to_string();
-    insta::assert_snapshot!(overlayed, @"
+    snapbox::assert_data_eq!(
+        &overlayed,
+        snapbox::str![[r#"
 
-    └── 👉►:0[0]:main[🌳]
-        ├── ·04d1892 (⌂|1) ►c
-        └── ·5e0ba46 (⌂|1) ►a, ►b
-            └── ►:1[1]:base
-                └── 🏁·6155f21 (⌂|1)
-    ");
+└── 👉►:0[0]:main[🌳]
+    ├── ·04d1892 (⌂|1) ►c
+    └── ·5e0ba46 (⌂|1) ►a, ►b
+        └── ►:1[1]:base
+            └── 🏁·6155f21 (⌂|1)
+
+"#]]
+    );
     let outcome = outcome.materialize()?;
     assert_eq!(overlayed, graph_tree(&outcome.workspace.graph).to_string());
 
     // We expect to see conflicted headers
-    insta::assert_snapshot!(cat_commit(&repo, "c")?, @r#"
-    tree d935c009623a61ebde94512baef22c76c5ccbaef
-    parent 5e0ba4636be91de6216903697b269915d3db6c53
-    author author <author@example.com> 946684800 +0000
-    committer Committer (Memory Override) <committer@example.com> 946771200 +0000
-    gitbutler-headers-version 2
-    change-id ulsktwtuywxwowluzmmxlqrqnyxktwuz
+    snapbox::assert_data_eq!(
+        cat_commit(&repo, "c")?,
+        snapbox::str![[r#"
+tree d935c009623a61ebde94512baef22c76c5ccbaef
+parent 5e0ba4636be91de6216903697b269915d3db6c53
+author author <author@example.com> 946684800 +0000
+committer Committer (Memory Override) <committer@example.com> 946771200 +0000
+gitbutler-headers-version 2
+change-id ulsktwtuywxwowluzmmxlqrqnyxktwuz
 
-    [conflict] c
+[conflict] c
 
-    GitButler-Conflict: This is a GitButler-managed conflicted commit. Files are auto-resolved
-       using the "ours" side. The commit tree contains additional directories:
-         .conflict-side-0  — our tree
-         .conflict-side-1  — their tree
-         .conflict-base-0  — the merge base tree
-         .auto-resolution  — the auto-resolved tree
-         .conflict-files   — metadata about conflicted files
-       To manually resolve, check out this commit, remove the directories
-       listed above, resolve the conflicts, and amend the commit.
-    "#);
+GitButler-Conflict: This is a GitButler-managed conflicted commit. Files are auto-resolved
+   using the "ours" side. The commit tree contains additional directories:
+     .conflict-side-0  — our tree
+     .conflict-side-1  — their tree
+     .conflict-base-0  — the merge base tree
+     .auto-resolution  — the auto-resolved tree
+     .conflict-files   — metadata about conflicted files
+   To manually resolve, check out this commit, remove the directories
+   listed above, resolve the conflicts, and amend the commit.
+
+"#]]
+    );
 
     Ok(())
 }
@@ -80,12 +93,16 @@ fn if_a_commit_has_been_configured_not_to_conflict_but_ends_up_conflicted_an_err
 -> Result<()> {
     let (repo, _tmpdir, mut meta) = fixture_writable("four-commits-one-file")?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * f37690f (HEAD -> main, c) c
-    * 3b3bd41 (b) b
-    * 5e0ba46 (a) a
-    * 6155f21 (base) base
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* f37690f (HEAD -> main, c) c
+* 3b3bd41 (b) b
+* 5e0ba46 (a) a
+* 6155f21 (base) base
+
+"#]]
+    );
 
     let graph = Graph::from_head(
         &repo,
@@ -113,11 +130,15 @@ fn if_a_commit_has_been_configured_not_to_conflict_but_ends_up_conflicted_an_err
     editor.replace(c_sel, Step::Pick(c_pick))?;
 
     // We should see an error given saying C ended up being conflicted
-    insta::assert_debug_snapshot!(editor.rebase(), @r#"
-    Err(
-        "Commit f37690fa0ac6f48391974bb0a7cdc4c8a6c6fe7a was marked as not conflictable, but resulted in a conflicted state",
-    )
-    "#);
+    snapbox::assert_data_eq!(
+        editor.rebase().to_debug(),
+        snapbox::str![[r#"
+Err(
+    "Commit f37690fa0ac6f48391974bb0a7cdc4c8a6c6fe7a was marked as not conflictable, but resulted in a conflicted state",
+)
+
+"#]]
+    );
 
     Ok(())
 }
@@ -127,12 +148,16 @@ fn if_a_commit_has_been_configured_not_to_conflict_and_doesnt_end_up_conflicted_
 -> Result<()> {
     let (repo, _tmpdir, mut meta) = fixture_writable("four-commits-one-file")?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * f37690f (HEAD -> main, c) c
-    * 3b3bd41 (b) b
-    * 5e0ba46 (a) a
-    * 6155f21 (base) base
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* f37690f (HEAD -> main, c) c
+* 3b3bd41 (b) b
+* 5e0ba46 (a) a
+* 6155f21 (base) base
+
+"#]]
+    );
 
     let graph = Graph::from_head(
         &repo,
@@ -164,29 +189,37 @@ fn if_a_commit_has_been_configured_not_to_conflict_and_doesnt_end_up_conflicted_
 
     let outcome = editor.rebase()?;
     let overlayed = graph_tree(&outcome.overlayed_graph()?).to_string();
-    insta::assert_snapshot!(overlayed, @"
+    snapbox::assert_data_eq!(
+        &overlayed,
+        snapbox::str![[r#"
 
-    └── 👉►:0[0]:main[🌳]
-        └── ·8b4d335 (⌂|1) ►c
-            └── ►:1[1]:b
-                ├── ·7762cf9 (⌂|1)
-                └── ·3b3bd41 (⌂|1)
-                    └── ►:2[2]:a
-                        └── ·5e0ba46 (⌂|1)
-                            └── ►:3[3]:base
-                                └── 🏁·6155f21 (⌂|1)
-    ");
+└── 👉►:0[0]:main[🌳]
+    └── ·8b4d335 (⌂|1) ►c
+        └── ►:1[1]:b
+            ├── ·7762cf9 (⌂|1)
+            └── ·3b3bd41 (⌂|1)
+                └── ►:2[2]:a
+                    └── ·5e0ba46 (⌂|1)
+                        └── ►:3[3]:base
+                            └── 🏁·6155f21 (⌂|1)
+
+"#]]
+    );
     let outcome = outcome.materialize()?;
     assert_eq!(overlayed, graph_tree(&outcome.workspace.graph).to_string());
 
     // The rebase is successful because `c` remained unconflicted
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * 8b4d335 (HEAD -> main, c) c
-    * 7762cf9 (b) I'm a new commit! Hello there
-    * 3b3bd41 b
-    * 5e0ba46 (a) a
-    * 6155f21 (base) base
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 8b4d335 (HEAD -> main, c) c
+* 7762cf9 (b) I'm a new commit! Hello there
+* 3b3bd41 b
+* 5e0ba46 (a) a
+* 6155f21 (base) base
+
+"#]]
+    );
 
     Ok(())
 }

@@ -366,11 +366,14 @@ mod test {
             graph.add_edge(a, b, Edge { order: 0 });
             graph.add_edge(b, c, Edge { order: 0 });
 
-            insta::assert_snapshot!(render_ascii_graph(&graph, |_| None), @"
-            ●  1000000
-            ●  2000000
-            ●  3000000
-            ");
+            snapbox::assert_data_eq!(
+                render_ascii_graph(&graph, |_| None),
+                snapbox::str![[r#"
+●  1000000
+●  2000000
+●  3000000
+"#]]
+            );
 
             let ordered_from_a = order_steps_picking(&graph, &[a]);
             assert_eq!(&ordered_from_a, &[c, b, a]);
@@ -428,20 +431,23 @@ mod test {
 
             graph.add_edge(i, j, Edge { order: 0 });
 
-            insta::assert_snapshot!(render_ascii_graph(&graph, |_| None), @"
-            ●  1000000
-            ●  2000000
-            │ ●  6000000
-            │ ●  7000000
-            ├─╯
-            ●  3000000
-            │ ●  8000000
-            ├─╯
-            ●  4000000
-            ●  5000000
-            ●  9000000
-            ●  1100000
-            ");
+            snapbox::assert_data_eq!(
+                render_ascii_graph(&graph, |_| None),
+                snapbox::str![[r#"
+●  1000000
+●  2000000
+│ ●  6000000
+│ ●  7000000
+├─╯
+●  3000000
+│ ●  8000000
+├─╯
+●  4000000
+●  5000000
+●  9000000
+●  1100000
+"#]]
+            );
 
             let ordered_from_a = order_steps_picking(&graph, &[f, h]);
             assert_eq!(&ordered_from_a, &[e, d, h, c, g, f]);
@@ -475,15 +481,18 @@ mod test {
             graph.add_edge(d, e, Edge { order: 0 });
             graph.add_edge(e, b, Edge { order: 0 });
 
-            insta::assert_snapshot!(render_ascii_graph(&graph, |_| None), @"
-            ●    1000000
-            ├─╮
-            │ ●  4000000
-            │ ●  5000000
-            ├─╯
-            ●  2000000
-            ●  3000000
-            ");
+            snapbox::assert_data_eq!(
+                render_ascii_graph(&graph, |_| None),
+                snapbox::str![[r#"
+●    1000000
+├─╮
+│ ●  4000000
+│ ●  5000000
+├─╯
+●  2000000
+●  3000000
+"#]]
+            );
 
             let ordered_from_a = order_steps_picking(&graph, &[a]);
             assert_eq!(&ordered_from_a, &[c, b, e, d, a]);
@@ -517,15 +526,18 @@ mod test {
 
             graph.add_edge(a, b, Edge { order: 1 });
 
-            insta::assert_snapshot!(render_ascii_graph(&graph, |_| None), @"
-            ●    1000000
-            ├─╮
-            ● │  4000000
-            ● │  5000000
-            ├─╯
-            ●  2000000
-            ●  3000000
-            ");
+            snapbox::assert_data_eq!(
+                render_ascii_graph(&graph, |_| None),
+                snapbox::str![[r#"
+●    1000000
+├─╮
+● │  4000000
+● │  5000000
+├─╯
+●  2000000
+●  3000000
+"#]]
+            );
 
             let ordered_from_a = order_steps_picking(&graph, &[a]);
             assert_eq!(&ordered_from_a, &[c, b, e, d, a]);

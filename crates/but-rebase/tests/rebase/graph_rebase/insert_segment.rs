@@ -4,6 +4,7 @@ use bstr::ByteSlice;
 use but_graph::Graph;
 use but_rebase::graph_rebase::{Editor, mutate};
 use but_testsupport::{git_status, graph_tree, visualize_commit_graph, visualize_commit_graph_all};
+use snapbox::IntoData;
 
 use crate::utils::{fixture_writable, standard_options};
 
@@ -28,20 +29,25 @@ fn parent_subjects(repo: &gix::Repository, rev: &str) -> Result<Vec<String>> {
 #[test]
 fn insert_single_node_segment_above() -> Result<()> {
     let (repo, _tmp, mut meta) = fixture_writable("three-branches-merged")?;
-    insta::assert_snapshot!(visualize_commit_graph(&repo, "@")?, @r"
-    *-.   1348870 (HEAD -> main) Merge branches 'A', 'B' and 'C'
-    |\ \  
-    | | * 930563a (C) C: add another 10 lines to new file
-    | | * 68a2fc3 C: add 10 lines to new file
-    | | * 984fd1c C: new file with 10 lines
-    | * | a748762 (B) B: another 10 lines at the bottom
-    | * | 62e05ba B: 10 lines at the bottom
-    | |/  
-    * / add59d2 (A) A: 10 lines on top
-    |/  
-    * 8f0d338 (tag: base) base
-    ");
-    insta::assert_snapshot!(git_status(&repo)?, @"");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph(&repo, "@")?,
+        snapbox::str![[r#"
+*-.   1348870 (HEAD -> main) Merge branches 'A', 'B' and 'C'
+|\ \  
+| | * 930563a (C) C: add another 10 lines to new file
+| | * 68a2fc3 C: add 10 lines to new file
+| | * 984fd1c C: new file with 10 lines
+| * | a748762 (B) B: another 10 lines at the bottom
+| * | 62e05ba B: 10 lines at the bottom
+| |/  
+* / add59d2 (A) A: 10 lines on top
+|/  
+* 8f0d338 (tag: base) base
+
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(git_status(&repo)?, snapbox::str![""]);
 
     let graph = Graph::from_head(
         &repo,
@@ -71,61 +77,75 @@ fn insert_single_node_segment_above() -> Result<()> {
 
     let outcome = editor.rebase()?;
     let overlayed = graph_tree(&outcome.overlayed_graph()?).to_string();
-    insta::assert_snapshot!(overlayed, @"
+    snapbox::assert_data_eq!(
+        &overlayed,
+        snapbox::str![[r#"
 
-    └── 👉►:0[0]:main[🌳]
-        └── ·ee7f107 (⌂|1)
-            ├── ►:1[1]:A
-            │   └── ·69221b4 (⌂|1)
-            │       ├── ►:3[2]:B
-            │       │   ├── ·a748762 (⌂|1)
-            │       │   └── ·62e05ba (⌂|1)
-            │       │       └── ►:4[3]:anon:
-            │       │           └── 🏁·8f0d338 (⌂|1) ►tags/base
-            │       └── →:4:
-            └── ►:2[1]:C
-                ├── ·930563a (⌂|1)
-                ├── ·68a2fc3 (⌂|1)
-                └── ·984fd1c (⌂|1)
-                    └── →:4:
-    ");
+└── 👉►:0[0]:main[🌳]
+    └── ·ee7f107 (⌂|1)
+        ├── ►:1[1]:A
+        │   └── ·69221b4 (⌂|1)
+        │       ├── ►:3[2]:B
+        │       │   ├── ·a748762 (⌂|1)
+        │       │   └── ·62e05ba (⌂|1)
+        │       │       └── ►:4[3]:anon:
+        │       │           └── 🏁·8f0d338 (⌂|1) ►tags/base
+        │       └── →:4:
+        └── ►:2[1]:C
+            ├── ·930563a (⌂|1)
+            ├── ·68a2fc3 (⌂|1)
+            └── ·984fd1c (⌂|1)
+                └── →:4:
+
+"#]]
+    );
     let outcome = outcome.materialize()?;
     assert_eq!(overlayed, graph_tree(&outcome.workspace.graph).to_string());
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *   ee7f107 (HEAD -> main) Merge branches 'A', 'B' and 'C'
-    |\  
-    | * 930563a (C) C: add another 10 lines to new file
-    | * 68a2fc3 C: add 10 lines to new file
-    | * 984fd1c C: new file with 10 lines
-    * | 69221b4 (A) A: 10 lines on top
-    |\| 
-    * | a748762 (B) B: another 10 lines at the bottom
-    * | 62e05ba B: 10 lines at the bottom
-    |/  
-    * 8f0d338 (tag: base) base
-    ");
-    insta::assert_snapshot!(git_status(&repo)?, @"");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   ee7f107 (HEAD -> main) Merge branches 'A', 'B' and 'C'
+|\  
+| * 930563a (C) C: add another 10 lines to new file
+| * 68a2fc3 C: add 10 lines to new file
+| * 984fd1c C: new file with 10 lines
+* | 69221b4 (A) A: 10 lines on top
+|\| 
+* | a748762 (B) B: another 10 lines at the bottom
+* | 62e05ba B: 10 lines at the bottom
+|/  
+* 8f0d338 (tag: base) base
+
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(git_status(&repo)?, snapbox::str![""]);
 
     Ok(())
 }
 #[test]
 fn insert_single_node_segment_below() -> Result<()> {
     let (repo, _tmp, mut meta) = fixture_writable("three-branches-merged")?;
-    insta::assert_snapshot!(visualize_commit_graph(&repo, "@")?, @r"
-    *-.   1348870 (HEAD -> main) Merge branches 'A', 'B' and 'C'
-    |\ \  
-    | | * 930563a (C) C: add another 10 lines to new file
-    | | * 68a2fc3 C: add 10 lines to new file
-    | | * 984fd1c C: new file with 10 lines
-    | * | a748762 (B) B: another 10 lines at the bottom
-    | * | 62e05ba B: 10 lines at the bottom
-    | |/  
-    * / add59d2 (A) A: 10 lines on top
-    |/  
-    * 8f0d338 (tag: base) base
-    ");
-    insta::assert_snapshot!(git_status(&repo)?, @"");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph(&repo, "@")?,
+        snapbox::str![[r#"
+*-.   1348870 (HEAD -> main) Merge branches 'A', 'B' and 'C'
+|\ \  
+| | * 930563a (C) C: add another 10 lines to new file
+| | * 68a2fc3 C: add 10 lines to new file
+| | * 984fd1c C: new file with 10 lines
+| * | a748762 (B) B: another 10 lines at the bottom
+| * | 62e05ba B: 10 lines at the bottom
+| |/  
+* / add59d2 (A) A: 10 lines on top
+|/  
+* 8f0d338 (tag: base) base
+
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(git_status(&repo)?, snapbox::str![""]);
 
     let graph = Graph::from_head(
         &repo,
@@ -155,64 +175,78 @@ fn insert_single_node_segment_below() -> Result<()> {
 
     let outcome = editor.rebase()?;
     let overlayed = graph_tree(&outcome.overlayed_graph()?).to_string();
-    insta::assert_snapshot!(overlayed, @"
+    snapbox::assert_data_eq!(
+        &overlayed,
+        snapbox::str![[r#"
 
-    └── 👉►:0[0]:main[🌳]
-        └── ·b005f3c (⌂|1)
-            ├── ►:1[2]:A
-            │   └── ·7f0cc55 (⌂|1)
-            │       ├── ►:4[3]:anon:
-            │       │   └── ·62e05ba (⌂|1)
-            │       │       └── ►:5[4]:anon:
-            │       │           └── 🏁·8f0d338 (⌂|1) ►tags/base
-            │       └── →:5:
-            ├── ►:2[1]:B
-            │   └── ·a3301fe (⌂|1)
-            │       └── →:1: (A)
-            └── ►:3[1]:C
-                ├── ·930563a (⌂|1)
-                ├── ·68a2fc3 (⌂|1)
-                └── ·984fd1c (⌂|1)
-                    └── →:5:
-    ");
+└── 👉►:0[0]:main[🌳]
+    └── ·b005f3c (⌂|1)
+        ├── ►:1[2]:A
+        │   └── ·7f0cc55 (⌂|1)
+        │       ├── ►:4[3]:anon:
+        │       │   └── ·62e05ba (⌂|1)
+        │       │       └── ►:5[4]:anon:
+        │       │           └── 🏁·8f0d338 (⌂|1) ►tags/base
+        │       └── →:5:
+        ├── ►:2[1]:B
+        │   └── ·a3301fe (⌂|1)
+        │       └── →:1: (A)
+        └── ►:3[1]:C
+            ├── ·930563a (⌂|1)
+            ├── ·68a2fc3 (⌂|1)
+            └── ·984fd1c (⌂|1)
+                └── →:5:
+
+"#]]
+    );
     let outcome = outcome.materialize()?;
     assert_eq!(overlayed, graph_tree(&outcome.workspace.graph).to_string());
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *-.   b005f3c (HEAD -> main) Merge branches 'A', 'B' and 'C'
-    |\ \  
-    | | * 930563a (C) C: add another 10 lines to new file
-    | | * 68a2fc3 C: add 10 lines to new file
-    | | * 984fd1c C: new file with 10 lines
-    | * | a3301fe (B) B: another 10 lines at the bottom
-    |/ /  
-    * | 7f0cc55 (A) A: 10 lines on top
-    |\| 
-    * | 62e05ba B: 10 lines at the bottom
-    |/  
-    * 8f0d338 (tag: base) base
-    ");
-    insta::assert_snapshot!(git_status(&repo)?, @"");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*-.   b005f3c (HEAD -> main) Merge branches 'A', 'B' and 'C'
+|\ \  
+| | * 930563a (C) C: add another 10 lines to new file
+| | * 68a2fc3 C: add 10 lines to new file
+| | * 984fd1c C: new file with 10 lines
+| * | a3301fe (B) B: another 10 lines at the bottom
+|/ /  
+* | 7f0cc55 (A) A: 10 lines on top
+|\| 
+* | 62e05ba B: 10 lines at the bottom
+|/  
+* 8f0d338 (tag: base) base
+
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(git_status(&repo)?, snapbox::str![""]);
 
     Ok(())
 }
 #[test]
 fn insert_multi_node_segment_above() -> Result<()> {
     let (repo, _tmp, mut meta) = fixture_writable("three-branches-merged")?;
-    insta::assert_snapshot!(visualize_commit_graph(&repo, "@")?, @r"
-    *-.   1348870 (HEAD -> main) Merge branches 'A', 'B' and 'C'
-    |\ \  
-    | | * 930563a (C) C: add another 10 lines to new file
-    | | * 68a2fc3 C: add 10 lines to new file
-    | | * 984fd1c C: new file with 10 lines
-    | * | a748762 (B) B: another 10 lines at the bottom
-    | * | 62e05ba B: 10 lines at the bottom
-    | |/  
-    * / add59d2 (A) A: 10 lines on top
-    |/  
-    * 8f0d338 (tag: base) base
-    ");
-    insta::assert_snapshot!(git_status(&repo)?, @"");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph(&repo, "@")?,
+        snapbox::str![[r#"
+*-.   1348870 (HEAD -> main) Merge branches 'A', 'B' and 'C'
+|\ \  
+| | * 930563a (C) C: add another 10 lines to new file
+| | * 68a2fc3 C: add 10 lines to new file
+| | * 984fd1c C: new file with 10 lines
+| * | a748762 (B) B: another 10 lines at the bottom
+| * | 62e05ba B: 10 lines at the bottom
+| |/  
+* / add59d2 (A) A: 10 lines on top
+|/  
+* 8f0d338 (tag: base) base
+
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(git_status(&repo)?, snapbox::str![""]);
 
     let graph = Graph::from_head(
         &repo,
@@ -246,42 +280,51 @@ fn insert_multi_node_segment_above() -> Result<()> {
 
     let outcome = editor.rebase()?;
     let overlayed = graph_tree(&outcome.overlayed_graph()?).to_string();
-    insta::assert_snapshot!(overlayed, @"
+    snapbox::assert_data_eq!(
+        &overlayed,
+        snapbox::str![[r#"
 
-    └── 👉►:0[0]:main[🌳]
-        └── ·61b2679 (⌂|1)
-            ├── ►:1[1]:anon:
-            │   └── ·758c8a3 (⌂|1) ►A, ►B
-            │       └── ►:3[2]:anon:
-            │           └── ·db40ffc (⌂|1)
-            │               ├── ►:4[3]:anon:
-            │               │   └── ·add59d2 (⌂|1)
-            │               │       └── ►:5[4]:anon:
-            │               │           └── 🏁·8f0d338 (⌂|1) ►tags/base
-            │               └── →:5:
-            └── ►:2[1]:C
-                ├── ·930563a (⌂|1)
-                ├── ·68a2fc3 (⌂|1)
-                └── ·984fd1c (⌂|1)
-                    └── →:5:
-    ");
+└── 👉►:0[0]:main[🌳]
+    └── ·61b2679 (⌂|1)
+        ├── ►:1[1]:anon:
+        │   └── ·758c8a3 (⌂|1) ►A, ►B
+        │       └── ►:3[2]:anon:
+        │           └── ·db40ffc (⌂|1)
+        │               ├── ►:4[3]:anon:
+        │               │   └── ·add59d2 (⌂|1)
+        │               │       └── ►:5[4]:anon:
+        │               │           └── 🏁·8f0d338 (⌂|1) ►tags/base
+        │               └── →:5:
+        └── ►:2[1]:C
+            ├── ·930563a (⌂|1)
+            ├── ·68a2fc3 (⌂|1)
+            └── ·984fd1c (⌂|1)
+                └── →:5:
+
+"#]]
+    );
     let outcome = outcome.materialize()?;
     assert_eq!(overlayed, graph_tree(&outcome.workspace.graph).to_string());
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *   61b2679 (HEAD -> main) Merge branches 'A', 'B' and 'C'
-    |\  
-    | * 930563a (C) C: add another 10 lines to new file
-    | * 68a2fc3 C: add 10 lines to new file
-    | * 984fd1c C: new file with 10 lines
-    * | 758c8a3 (B, A) B: another 10 lines at the bottom
-    * | db40ffc B: 10 lines at the bottom
-    |\| 
-    * | add59d2 A: 10 lines on top
-    |/  
-    * 8f0d338 (tag: base) base
-    ");
-    insta::assert_snapshot!(git_status(&repo)?, @"");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   61b2679 (HEAD -> main) Merge branches 'A', 'B' and 'C'
+|\  
+| * 930563a (C) C: add another 10 lines to new file
+| * 68a2fc3 C: add 10 lines to new file
+| * 984fd1c C: new file with 10 lines
+* | 758c8a3 (B, A) B: another 10 lines at the bottom
+* | db40ffc B: 10 lines at the bottom
+|\| 
+* | add59d2 A: 10 lines on top
+|/  
+* 8f0d338 (tag: base) base
+
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(git_status(&repo)?, snapbox::str![""]);
 
     Ok(())
 }
@@ -289,20 +332,25 @@ fn insert_multi_node_segment_above() -> Result<()> {
 #[test]
 fn insert_multi_node_segment_below() -> Result<()> {
     let (repo, _tmp, mut meta) = fixture_writable("three-branches-merged")?;
-    insta::assert_snapshot!(visualize_commit_graph(&repo, "@")?, @r"
-    *-.   1348870 (HEAD -> main) Merge branches 'A', 'B' and 'C'
-    |\ \  
-    | | * 930563a (C) C: add another 10 lines to new file
-    | | * 68a2fc3 C: add 10 lines to new file
-    | | * 984fd1c C: new file with 10 lines
-    | * | a748762 (B) B: another 10 lines at the bottom
-    | * | 62e05ba B: 10 lines at the bottom
-    | |/  
-    * / add59d2 (A) A: 10 lines on top
-    |/  
-    * 8f0d338 (tag: base) base
-    ");
-    insta::assert_snapshot!(git_status(&repo)?, @"");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph(&repo, "@")?,
+        snapbox::str![[r#"
+*-.   1348870 (HEAD -> main) Merge branches 'A', 'B' and 'C'
+|\ \  
+| | * 930563a (C) C: add another 10 lines to new file
+| | * 68a2fc3 C: add 10 lines to new file
+| | * 984fd1c C: new file with 10 lines
+| * | a748762 (B) B: another 10 lines at the bottom
+| * | 62e05ba B: 10 lines at the bottom
+| |/  
+* / add59d2 (A) A: 10 lines on top
+|/  
+* 8f0d338 (tag: base) base
+
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(git_status(&repo)?, snapbox::str![""]);
 
     let graph = Graph::from_head(
         &repo,
@@ -336,41 +384,50 @@ fn insert_multi_node_segment_below() -> Result<()> {
 
     let outcome = editor.rebase()?;
     let overlayed = graph_tree(&outcome.overlayed_graph()?).to_string();
-    insta::assert_snapshot!(overlayed, @"
+    snapbox::assert_data_eq!(
+        &overlayed,
+        snapbox::str![[r#"
 
-    └── 👉►:0[0]:main[🌳]
-        └── ·4db28a9 (⌂|1)
-            ├── ►:1[1]:A
-            │   └── ·71dfc8f (⌂|1)
-            │       └── ►:2[2]:B
-            │           ├── ·a748762 (⌂|1)
-            │           └── ·62e05ba (⌂|1)
-            │               └── ►:4[3]:anon:
-            │                   └── 🏁·8f0d338 (⌂|1) ►tags/base
-            ├── →:2: (B)
-            └── ►:3[1]:C
-                ├── ·930563a (⌂|1)
-                ├── ·68a2fc3 (⌂|1)
-                └── ·984fd1c (⌂|1)
-                    └── →:4:
-    ");
+└── 👉►:0[0]:main[🌳]
+    └── ·4db28a9 (⌂|1)
+        ├── ►:1[1]:A
+        │   └── ·71dfc8f (⌂|1)
+        │       └── ►:2[2]:B
+        │           ├── ·a748762 (⌂|1)
+        │           └── ·62e05ba (⌂|1)
+        │               └── ►:4[3]:anon:
+        │                   └── 🏁·8f0d338 (⌂|1) ►tags/base
+        ├── →:2: (B)
+        └── ►:3[1]:C
+            ├── ·930563a (⌂|1)
+            ├── ·68a2fc3 (⌂|1)
+            └── ·984fd1c (⌂|1)
+                └── →:4:
+
+"#]]
+    );
     let outcome = outcome.materialize()?;
     assert_eq!(overlayed, graph_tree(&outcome.workspace.graph).to_string());
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *-.   4db28a9 (HEAD -> main) Merge branches 'A', 'B' and 'C'
-    |\ \  
-    | | * 930563a (C) C: add another 10 lines to new file
-    | | * 68a2fc3 C: add 10 lines to new file
-    | | * 984fd1c C: new file with 10 lines
-    * | | 71dfc8f (A) A: 10 lines on top
-    |/ /  
-    * | a748762 (B) B: another 10 lines at the bottom
-    * | 62e05ba B: 10 lines at the bottom
-    |/  
-    * 8f0d338 (tag: base) base
-    ");
-    insta::assert_snapshot!(git_status(&repo)?, @"");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*-.   4db28a9 (HEAD -> main) Merge branches 'A', 'B' and 'C'
+|\ \  
+| | * 930563a (C) C: add another 10 lines to new file
+| | * 68a2fc3 C: add 10 lines to new file
+| | * 984fd1c C: new file with 10 lines
+* | | 71dfc8f (A) A: 10 lines on top
+|/ /  
+* | a748762 (B) B: another 10 lines at the bottom
+* | 62e05ba B: 10 lines at the bottom
+|/  
+* 8f0d338 (tag: base) base
+
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(git_status(&repo)?, snapbox::str![""]);
 
     Ok(())
 }
@@ -378,20 +435,25 @@ fn insert_multi_node_segment_below() -> Result<()> {
 #[test]
 fn insert_single_node_segment_above_with_explicit_children() -> Result<()> {
     let (repo, _tmp, mut meta) = fixture_writable("three-branches-merged")?;
-    insta::assert_snapshot!(visualize_commit_graph(&repo, "@")?, @r"
-    *-.   1348870 (HEAD -> main) Merge branches 'A', 'B' and 'C'
-    |\ \  
-    | | * 930563a (C) C: add another 10 lines to new file
-    | | * 68a2fc3 C: add 10 lines to new file
-    | | * 984fd1c C: new file with 10 lines
-    | * | a748762 (B) B: another 10 lines at the bottom
-    | * | 62e05ba B: 10 lines at the bottom
-    | |/  
-    * / add59d2 (A) A: 10 lines on top
-    |/  
-    * 8f0d338 (tag: base) base
-    ");
-    insta::assert_snapshot!(git_status(&repo)?, @"");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph(&repo, "@")?,
+        snapbox::str![[r#"
+*-.   1348870 (HEAD -> main) Merge branches 'A', 'B' and 'C'
+|\ \  
+| | * 930563a (C) C: add another 10 lines to new file
+| | * 68a2fc3 C: add 10 lines to new file
+| | * 984fd1c C: new file with 10 lines
+| * | a748762 (B) B: another 10 lines at the bottom
+| * | 62e05ba B: 10 lines at the bottom
+| |/  
+* / add59d2 (A) A: 10 lines on top
+|/  
+* 8f0d338 (tag: base) base
+
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(git_status(&repo)?, snapbox::str![""]);
 
     let graph = Graph::from_head(
         &repo,
@@ -431,50 +493,59 @@ fn insert_single_node_segment_above_with_explicit_children() -> Result<()> {
 
     let outcome = editor.rebase()?;
     let overlayed = graph_tree(&outcome.overlayed_graph()?).to_string();
-    insta::assert_snapshot!(overlayed, @"
+    snapbox::assert_data_eq!(
+        &overlayed,
+        snapbox::str![[r#"
 
-    └── 👉►:0[0]:main[🌳]
-        └── ·cca953f (⌂|1)
-            ├── ►:1[2]:A
-            │   └── ·69221b4 (⌂|1)
-            │       ├── ►:2[3]:B
-            │       │   ├── ·a748762 (⌂|1)
-            │       │   └── ·62e05ba (⌂|1)
-            │       │       └── ►:4[4]:anon:
-            │       │           └── 🏁·8f0d338 (⌂|1) ►tags/base
-            │       └── →:4:
-            ├── →:2: (B)
-            └── ►:3[1]:C
-                └── ·76e2160 (⌂|1)
-                    ├── ►:5[2]:anon:
-                    │   ├── ·68a2fc3 (⌂|1)
-                    │   └── ·984fd1c (⌂|1)
-                    │       └── →:4:
-                    └── →:1: (A)
-    ");
+└── 👉►:0[0]:main[🌳]
+    └── ·cca953f (⌂|1)
+        ├── ►:1[2]:A
+        │   └── ·69221b4 (⌂|1)
+        │       ├── ►:2[3]:B
+        │       │   ├── ·a748762 (⌂|1)
+        │       │   └── ·62e05ba (⌂|1)
+        │       │       └── ►:4[4]:anon:
+        │       │           └── 🏁·8f0d338 (⌂|1) ►tags/base
+        │       └── →:4:
+        ├── →:2: (B)
+        └── ►:3[1]:C
+            └── ·76e2160 (⌂|1)
+                ├── ►:5[2]:anon:
+                │   ├── ·68a2fc3 (⌂|1)
+                │   └── ·984fd1c (⌂|1)
+                │       └── →:4:
+                └── →:1: (A)
+
+"#]]
+    );
     let outcome = outcome.materialize()?;
     assert_eq!(overlayed, graph_tree(&outcome.workspace.graph).to_string());
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *-.   cca953f (HEAD -> main) Merge branches 'A', 'B' and 'C'
-    |\ \  
-    | | *   76e2160 (C) C: add another 10 lines to new file
-    | | |\  
-    | |_|/  
-    |/| |   
-    * | |   69221b4 (A) A: 10 lines on top
-    |\ \ \  
-    | |/ /  
-    |/| |   
-    * | | a748762 (B) B: another 10 lines at the bottom
-    * | | 62e05ba B: 10 lines at the bottom
-    |/ /  
-    | * 68a2fc3 C: add 10 lines to new file
-    | * 984fd1c C: new file with 10 lines
-    |/  
-    * 8f0d338 (tag: base) base
-    ");
-    insta::assert_snapshot!(git_status(&repo)?, @"");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*-.   cca953f (HEAD -> main) Merge branches 'A', 'B' and 'C'
+|\ \  
+| | *   76e2160 (C) C: add another 10 lines to new file
+| | |\  
+| |_|/  
+|/| |   
+* | |   69221b4 (A) A: 10 lines on top
+|\ \ \  
+| |/ /  
+|/| |   
+* | | a748762 (B) B: another 10 lines at the bottom
+* | | 62e05ba B: 10 lines at the bottom
+|/ /  
+| * 68a2fc3 C: add 10 lines to new file
+| * 984fd1c C: new file with 10 lines
+|/  
+* 8f0d338 (tag: base) base
+
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(git_status(&repo)?, snapbox::str![""]);
 
     Ok(())
 }
@@ -482,20 +553,25 @@ fn insert_single_node_segment_above_with_explicit_children() -> Result<()> {
 #[test]
 fn insert_single_node_segment_below_with_explicit_parents() -> Result<()> {
     let (repo, _tmp, mut meta) = fixture_writable("three-branches-merged")?;
-    insta::assert_snapshot!(visualize_commit_graph(&repo, "@")?, @r"
-    *-.   1348870 (HEAD -> main) Merge branches 'A', 'B' and 'C'
-    |\ \  
-    | | * 930563a (C) C: add another 10 lines to new file
-    | | * 68a2fc3 C: add 10 lines to new file
-    | | * 984fd1c C: new file with 10 lines
-    | * | a748762 (B) B: another 10 lines at the bottom
-    | * | 62e05ba B: 10 lines at the bottom
-    | |/  
-    * / add59d2 (A) A: 10 lines on top
-    |/  
-    * 8f0d338 (tag: base) base
-    ");
-    insta::assert_snapshot!(git_status(&repo)?, @"");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph(&repo, "@")?,
+        snapbox::str![[r#"
+*-.   1348870 (HEAD -> main) Merge branches 'A', 'B' and 'C'
+|\ \  
+| | * 930563a (C) C: add another 10 lines to new file
+| | * 68a2fc3 C: add 10 lines to new file
+| | * 984fd1c C: new file with 10 lines
+| * | a748762 (B) B: another 10 lines at the bottom
+| * | 62e05ba B: 10 lines at the bottom
+| |/  
+* / add59d2 (A) A: 10 lines on top
+|/  
+* 8f0d338 (tag: base) base
+
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(git_status(&repo)?, snapbox::str![""]);
 
     let graph = Graph::from_head(
         &repo,
@@ -535,27 +611,31 @@ fn insert_single_node_segment_below_with_explicit_parents() -> Result<()> {
 
     let outcome = editor.rebase()?;
     let overlayed = graph_tree(&outcome.overlayed_graph()?).to_string();
-    insta::assert_snapshot!(overlayed, @"
+    snapbox::assert_data_eq!(
+        &overlayed,
+        snapbox::str![[r#"
 
-    └── 👉►:0[0]:main[🌳]
-        └── ·54f9cab (⌂|1)
-            ├── ►:1[1]:A
-            │   └── ·9501727 (⌂|1)
-            │       ├── ►:4[4]:anon:
-            │       │   └── 🏁·8f0d338 (⌂|1) ►tags/base
-            │       └── ►:2[2]:B
-            │           └── ·347772f (⌂|1)
-            │               ├── ►:3[3]:C
-            │               │   ├── ·930563a (⌂|1)
-            │               │   ├── ·68a2fc3 (⌂|1)
-            │               │   └── ·984fd1c (⌂|1)
-            │               │       └── →:4:
-            │               └── ►:5[3]:anon:
-            │                   └── ·62e05ba (⌂|1)
-            │                       └── →:4:
-            ├── →:2: (B)
-            └── →:3: (C)
-    ");
+└── 👉►:0[0]:main[🌳]
+    └── ·54f9cab (⌂|1)
+        ├── ►:1[1]:A
+        │   └── ·9501727 (⌂|1)
+        │       ├── ►:4[4]:anon:
+        │       │   └── 🏁·8f0d338 (⌂|1) ►tags/base
+        │       └── ►:2[2]:B
+        │           └── ·347772f (⌂|1)
+        │               ├── ►:3[3]:C
+        │               │   ├── ·930563a (⌂|1)
+        │               │   ├── ·68a2fc3 (⌂|1)
+        │               │   └── ·984fd1c (⌂|1)
+        │               │       └── →:4:
+        │               └── ►:5[3]:anon:
+        │                   └── ·62e05ba (⌂|1)
+        │                       └── →:4:
+        ├── →:2: (B)
+        └── →:3: (C)
+
+"#]]
+    );
     let outcome = outcome.materialize()?;
     assert_eq!(overlayed, graph_tree(&outcome.workspace.graph).to_string());
     assert_eq!(
@@ -566,25 +646,30 @@ fn insert_single_node_segment_below_with_explicit_parents() -> Result<()> {
         ]
     );
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *-.   54f9cab (HEAD -> main) Merge branches 'A', 'B' and 'C'
-    |\ \  
-    * | | 9501727 (A) A: 10 lines on top
-    |\| | 
-    | * |   347772f (B) B: another 10 lines at the bottom
-    | |\ \  
-    | | |/  
-    | |/|   
-    | | * 62e05ba B: 10 lines at the bottom
-    | |/  
-    |/|   
-    | * 930563a (C) C: add another 10 lines to new file
-    | * 68a2fc3 C: add 10 lines to new file
-    | * 984fd1c C: new file with 10 lines
-    |/  
-    * 8f0d338 (tag: base) base
-    ");
-    insta::assert_snapshot!(git_status(&repo)?, @"");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*-.   54f9cab (HEAD -> main) Merge branches 'A', 'B' and 'C'
+|\ \  
+* | | 9501727 (A) A: 10 lines on top
+|\| | 
+| * |   347772f (B) B: another 10 lines at the bottom
+| |\ \  
+| | |/  
+| |/|   
+| | * 62e05ba B: 10 lines at the bottom
+| |/  
+|/|   
+| * 930563a (C) C: add another 10 lines to new file
+| * 68a2fc3 C: add 10 lines to new file
+| * 984fd1c C: new file with 10 lines
+|/  
+* 8f0d338 (tag: base) base
+
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(git_status(&repo)?, snapbox::str![""]);
 
     Ok(())
 }
@@ -637,7 +722,7 @@ fn insert_single_node_segment_below_can_append_reparented_parent() -> Result<()>
         ]
     );
 
-    insta::assert_snapshot!(git_status(&repo)?, @"");
+    snapbox::assert_data_eq!(git_status(&repo)?, snapbox::str![""]);
 
     Ok(())
 }

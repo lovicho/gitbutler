@@ -81,7 +81,7 @@ but-askpass.workspace = true
 # To name the renderdag geometry types (NodeLine/LinkLine) when rendering
 # `detailed_graph_workspace` rows to box-drawing in tests.
 sapling-renderdag.workspace = true
-insta = { version = "1.47.2", features = ["json"] }
+snapbox.workspace = true
 # for stable hashes in `gitbuter-` crates while we use them.
 # TODO: remove once `gitbutler-repo` isn't needed anymore.
 gitbutler-commit = { workspace = true, features = ["testing"] }

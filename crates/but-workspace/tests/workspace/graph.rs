@@ -20,6 +20,7 @@ use but_workspace::workspace::{
 };
 use gix::bstr::ByteSlice;
 use renderdag::{LinkLine, NodeLine};
+use snapbox::IntoData;
 
 use crate::ref_info::with_workspace_commit::utils::{
     StackState, add_stack, add_stack_with_segments, named_writable_scenario_with_description,
@@ -358,35 +359,42 @@ fn row_glyph_label(data: &GraphRowData) -> (&'static str, String) {
 #[test]
 fn single_stack_no_target() -> Result<()> {
     let (repo, detailed) = detailed("workspace-linear", None)?;
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * 6db951d (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 120e3a9 (main, c) c
-    * a96434e (b) b
-    * d591dfe (a) a
-    * 35b8235 (base) base
-    ");
-    insta::assert_snapshot!(render(&detailed), @"
-    # Stack 0
-    ◎  0 refs/heads/c
-    ◎  1 refs/heads/main
-    ●  2 120e3a9 c
-    ◎  3 refs/heads/b
-    ●  4 a96434e b
-    ◎  5 refs/heads/a
-    ●  6 d591dfe a
-    ◎  7 refs/heads/base
-    ●  8 35b8235 base
-      linear    ref=0  rows=[0]
-      linear    ref=1  rows=[1, 2]
-      linear    ref=3  rows=[3, 4]
-      linear    ref=5  rows=[5, 6]
-      linear    ref=7  rows=[7, 8]
-      reference ref=0  rows=[0]
-      reference ref=1  rows=[1, 2]
-      reference ref=3  rows=[3, 4]
-      reference ref=5  rows=[5, 6]
-      reference ref=7  rows=[7, 8]
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 6db951d (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 120e3a9 (main, c) c
+* a96434e (b) b
+* d591dfe (a) a
+* 35b8235 (base) base
+
+"#]]
+    );
+    snapbox::assert_data_eq!(
+        render(&detailed),
+        snapbox::str![[r#"
+# Stack 0
+◎  0 refs/heads/c
+◎  1 refs/heads/main
+●  2 120e3a9 c
+◎  3 refs/heads/b
+●  4 a96434e b
+◎  5 refs/heads/a
+●  6 d591dfe a
+◎  7 refs/heads/base
+●  8 35b8235 base
+  linear    ref=0  rows=[0]
+  linear    ref=1  rows=[1, 2]
+  linear    ref=3  rows=[3, 4]
+  linear    ref=5  rows=[5, 6]
+  linear    ref=7  rows=[7, 8]
+  reference ref=0  rows=[0]
+  reference ref=1  rows=[1, 2]
+  reference ref=3  rows=[3, 4]
+  reference ref=5  rows=[5, 6]
+  reference ref=7  rows=[7, 8]
+"#]]
+    );
     Ok(())
 }
 
@@ -394,27 +402,30 @@ fn single_stack_no_target() -> Result<()> {
 #[test]
 fn single_stack_with_target() -> Result<()> {
     let (_repo, detailed) = detailed("workspace-linear", Some("refs/heads/base"))?;
-    insta::assert_snapshot!(render(&detailed), @"
-    # Stack 0
-    ◎  0 refs/heads/c
-    ◎  1 refs/heads/main
-    ●  2 120e3a9 c
-    ◎  3 refs/heads/b
-    ●  4 a96434e b
-    ◎  5 refs/heads/a
-    ●  6 d591dfe a
-    ◎  7 refs/heads/base
-      linear    ref=0  rows=[0]
-      linear    ref=1  rows=[1, 2]
-      linear    ref=3  rows=[3, 4]
-      linear    ref=5  rows=[5, 6]
-      linear    ref=7  rows=[7]
-      reference ref=0  rows=[0]
-      reference ref=1  rows=[1, 2]
-      reference ref=3  rows=[3, 4]
-      reference ref=5  rows=[5, 6]
-      reference ref=7  rows=[7]
-    ");
+    snapbox::assert_data_eq!(
+        render(&detailed),
+        snapbox::str![[r#"
+# Stack 0
+◎  0 refs/heads/c
+◎  1 refs/heads/main
+●  2 120e3a9 c
+◎  3 refs/heads/b
+●  4 a96434e b
+◎  5 refs/heads/a
+●  6 d591dfe a
+◎  7 refs/heads/base
+  linear    ref=0  rows=[0]
+  linear    ref=1  rows=[1, 2]
+  linear    ref=3  rows=[3, 4]
+  linear    ref=5  rows=[5, 6]
+  linear    ref=7  rows=[7]
+  reference ref=0  rows=[0]
+  reference ref=1  rows=[1, 2]
+  reference ref=3  rows=[3, 4]
+  reference ref=5  rows=[5, 6]
+  reference ref=7  rows=[7]
+"#]]
+    );
     Ok(())
 }
 
@@ -423,32 +434,40 @@ fn single_stack_with_target() -> Result<()> {
 #[test]
 fn overlapping_stacks_merge_into_one() -> Result<()> {
     let (repo, detailed) = detailed("workspace-with-empty-stack", None)?;
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *   74bcc92 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    * | 2169646 (stack-1) Commit D
-    * | 46ef828 Commit C
-    |/  
-    | * a0f2ac5 (origin/main, main) Commit X
-    |/  
-    * f555940 (stack-2) Commit A
-    * d664be0 Commit B
-    * fafd9d0 init
-    ");
-    insta::assert_snapshot!(render(&detailed), @"
-    # Stack 0
-    ◎  0 refs/heads/stack-1
-    ●  1 2169646 Commit D
-    ●  2 46ef828 Commit C
-    ◎  3 refs/heads/stack-2
-    ●  4 f555940 Commit A
-    ●  5 d664be0 Commit B
-    ●  6 fafd9d0 init
-      linear    ref=0  rows=[0, 1, 2]
-      linear    ref=3  rows=[3, 4, 5, 6]
-      reference ref=0  rows=[0, 1, 2]
-      reference ref=3  rows=[3, 4, 5, 6]
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   74bcc92 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+* | 2169646 (stack-1) Commit D
+* | 46ef828 Commit C
+|/  
+| * a0f2ac5 (origin/main, main) Commit X
+|/  
+* f555940 (stack-2) Commit A
+* d664be0 Commit B
+* fafd9d0 init
+
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(
+        render(&detailed),
+        snapbox::str![[r#"
+# Stack 0
+◎  0 refs/heads/stack-1
+●  1 2169646 Commit D
+●  2 46ef828 Commit C
+◎  3 refs/heads/stack-2
+●  4 f555940 Commit A
+●  5 d664be0 Commit B
+●  6 fafd9d0 init
+  linear    ref=0  rows=[0, 1, 2]
+  linear    ref=3  rows=[3, 4, 5, 6]
+  reference ref=0  rows=[0, 1, 2]
+  reference ref=3  rows=[3, 4, 5, 6]
+"#]]
+    );
     Ok(())
 }
 
@@ -456,25 +475,32 @@ fn overlapping_stacks_merge_into_one() -> Result<()> {
 #[test]
 fn three_stacks_same_base_collapse() -> Result<()> {
     let (repo, detailed) = detailed("workspace-with-three-empty-stacks", None)?;
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * a26ae77 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    | * 1cf9cf4 (origin/main, main) Commit X
-    |/  
-    * fafd9d0 (stack-3, stack-2, stack-1) init
-    ");
-    insta::assert_snapshot!(render(&detailed), @"
-    # Stack 0
-    ◎  0 refs/heads/stack-1
-    ◎  1 refs/heads/stack-2
-    ◎  2 refs/heads/stack-3
-    ●  3 fafd9d0 init
-      linear    ref=0  rows=[0]
-      linear    ref=1  rows=[1]
-      linear    ref=2  rows=[2, 3]
-      reference ref=0  rows=[0]
-      reference ref=1  rows=[1]
-      reference ref=2  rows=[2, 3]
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* a26ae77 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+| * 1cf9cf4 (origin/main, main) Commit X
+|/  
+* fafd9d0 (stack-3, stack-2, stack-1) init
+
+"#]]
+    );
+    snapbox::assert_data_eq!(
+        render(&detailed),
+        snapbox::str![[r#"
+# Stack 0
+◎  0 refs/heads/stack-1
+◎  1 refs/heads/stack-2
+◎  2 refs/heads/stack-3
+●  3 fafd9d0 init
+  linear    ref=0  rows=[0]
+  linear    ref=1  rows=[1]
+  linear    ref=2  rows=[2, 3]
+  reference ref=0  rows=[0]
+  reference ref=1  rows=[1]
+  reference ref=2  rows=[2, 3]
+"#]]
+    );
     Ok(())
 }
 
@@ -484,34 +510,42 @@ fn three_stacks_same_base_collapse() -> Result<()> {
 #[test]
 fn divergent_stacks_sharing_base_merge() -> Result<()> {
     let (repo, detailed) = detailed("workspace-two-stacks", None)?;
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *   1162583 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    | * afc3f8f (stack-b) B2
-    | * b3ee99c B1
-    * | 49c06ff (stack-a) A2
-    * | ff76d2f A1
-    |/  
-    * 965998b (origin/main, main) base
-    ");
-    insta::assert_snapshot!(render(&detailed), @"
-    # Stack 0
-    ◎  0 refs/heads/stack-a
-    ●  1 49c06ff A2
-    ●  2 ff76d2f A1
-    │ ◎  3 refs/heads/stack-b
-    │ ●  4 afc3f8f B2
-    │ ●  5 b3ee99c B1
-    ├─╯
-    ◎  6 refs/heads/main
-    ●  7 965998b base
-      linear    ref=0  rows=[0, 1, 2]
-      linear    ref=3  rows=[3, 4, 5]
-      linear    ref=6  rows=[6, 7]
-      reference ref=0  rows=[0, 1, 2]
-      reference ref=3  rows=[3, 4, 5]
-      reference ref=6  rows=[6, 7]
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   1162583 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+| * afc3f8f (stack-b) B2
+| * b3ee99c B1
+* | 49c06ff (stack-a) A2
+* | ff76d2f A1
+|/  
+* 965998b (origin/main, main) base
+
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(
+        render(&detailed),
+        snapbox::str![[r#"
+# Stack 0
+◎  0 refs/heads/stack-a
+●  1 49c06ff A2
+●  2 ff76d2f A1
+│ ◎  3 refs/heads/stack-b
+│ ●  4 afc3f8f B2
+│ ●  5 b3ee99c B1
+├─╯
+◎  6 refs/heads/main
+●  7 965998b base
+  linear    ref=0  rows=[0, 1, 2]
+  linear    ref=3  rows=[3, 4, 5]
+  linear    ref=6  rows=[6, 7]
+  reference ref=0  rows=[0, 1, 2]
+  reference ref=3  rows=[3, 4, 5]
+  reference ref=6  rows=[6, 7]
+"#]]
+    );
     Ok(())
 }
 
@@ -520,23 +554,26 @@ fn divergent_stacks_sharing_base_merge() -> Result<()> {
 #[test]
 fn divergent_stacks_sharing_base_merge_with_target() -> Result<()> {
     let (_repo, detailed) = detailed("workspace-two-stacks", Some("refs/heads/main"))?;
-    insta::assert_snapshot!(render(&detailed), @"
-    # Stack 0
-    ◎  0 refs/heads/stack-a
-    ●  1 49c06ff A2
-    ●  2 ff76d2f A1
-    │ ◎  3 refs/heads/stack-b
-    │ ●  4 afc3f8f B2
-    │ ●  5 b3ee99c B1
-    ├─╯
-    ◎  6 refs/heads/main
-      linear    ref=0  rows=[0, 1, 2]
-      linear    ref=3  rows=[3, 4, 5]
-      linear    ref=6  rows=[6]
-      reference ref=0  rows=[0, 1, 2]
-      reference ref=3  rows=[3, 4, 5]
-      reference ref=6  rows=[6]
-    ");
+    snapbox::assert_data_eq!(
+        render(&detailed),
+        snapbox::str![[r#"
+# Stack 0
+◎  0 refs/heads/stack-a
+●  1 49c06ff A2
+●  2 ff76d2f A1
+│ ◎  3 refs/heads/stack-b
+│ ●  4 afc3f8f B2
+│ ●  5 b3ee99c B1
+├─╯
+◎  6 refs/heads/main
+  linear    ref=0  rows=[0, 1, 2]
+  linear    ref=3  rows=[3, 4, 5]
+  linear    ref=6  rows=[6]
+  reference ref=0  rows=[0, 1, 2]
+  reference ref=3  rows=[3, 4, 5]
+  reference ref=6  rows=[6]
+"#]]
+    );
     Ok(())
 }
 
@@ -545,22 +582,29 @@ fn divergent_stacks_sharing_base_merge_with_target() -> Result<()> {
 #[test]
 fn pegged_no_target() -> Result<()> {
     let (repo, detailed) = detailed("four-commits", None)?;
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * 120e3a9 (HEAD -> main) c
-    * a96434e b
-    * d591dfe a
-    * 35b8235 base
-    ");
-    insta::assert_snapshot!(render(&detailed), @"
-    # Stack 0
-    ◎  0 refs/heads/main
-    ●  1 120e3a9 c
-    ●  2 a96434e b
-    ●  3 d591dfe a
-    ●  4 35b8235 base
-      linear    ref=0  rows=[0, 1, 2, 3, 4]
-      reference ref=0  rows=[0, 1, 2, 3, 4]
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 120e3a9 (HEAD -> main) c
+* a96434e b
+* d591dfe a
+* 35b8235 base
+
+"#]]
+    );
+    snapbox::assert_data_eq!(
+        render(&detailed),
+        snapbox::str![[r#"
+# Stack 0
+◎  0 refs/heads/main
+●  1 120e3a9 c
+●  2 a96434e b
+●  3 d591dfe a
+●  4 35b8235 base
+  linear    ref=0  rows=[0, 1, 2, 3, 4]
+  reference ref=0  rows=[0, 1, 2, 3, 4]
+"#]]
+    );
     Ok(())
 }
 
@@ -568,34 +612,42 @@ fn pegged_no_target() -> Result<()> {
 #[test]
 fn disjoint_stacks_stay_separate() -> Result<()> {
     let (repo, detailed) = detailed("workspace-disjoint-stacks", None)?;
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *   f97c026 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    | * cb7021b (stack-b) B2
-    | * ce3278a B1
-    * 49c06ff (stack-a) A2
-    * ff76d2f A1
-    * 965998b (origin/main, main) base
-    ");
-    insta::assert_snapshot!(render(&detailed), @"
-    # Stack 0
-    ◎  0 refs/heads/stack-b
-    ●  1 cb7021b B2
-    ●  2 ce3278a B1
-      linear    ref=0  rows=[0, 1, 2]
-      reference ref=0  rows=[0, 1, 2]
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   f97c026 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+| * cb7021b (stack-b) B2
+| * ce3278a B1
+* 49c06ff (stack-a) A2
+* ff76d2f A1
+* 965998b (origin/main, main) base
 
-    # Stack 1
-    ◎  0 refs/heads/stack-a
-    ●  1 49c06ff A2
-    ●  2 ff76d2f A1
-    ◎  3 refs/heads/main
-    ●  4 965998b base
-      linear    ref=0  rows=[0, 1, 2]
-      linear    ref=3  rows=[3, 4]
-      reference ref=0  rows=[0, 1, 2]
-      reference ref=3  rows=[3, 4]
-    ");
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(
+        render(&detailed),
+        snapbox::str![[r#"
+# Stack 0
+◎  0 refs/heads/stack-b
+●  1 cb7021b B2
+●  2 ce3278a B1
+  linear    ref=0  rows=[0, 1, 2]
+  reference ref=0  rows=[0, 1, 2]
+
+# Stack 1
+◎  0 refs/heads/stack-a
+●  1 49c06ff A2
+●  2 ff76d2f A1
+◎  3 refs/heads/main
+●  4 965998b base
+  linear    ref=0  rows=[0, 1, 2]
+  linear    ref=3  rows=[3, 4]
+  reference ref=0  rows=[0, 1, 2]
+  reference ref=3  rows=[3, 4]
+"#]]
+    );
     Ok(())
 }
 
@@ -603,24 +655,27 @@ fn disjoint_stacks_stay_separate() -> Result<()> {
 #[test]
 fn disjoint_stacks_stay_separate_with_target() -> Result<()> {
     let (_repo, detailed) = detailed("workspace-disjoint-stacks", Some("refs/heads/main"))?;
-    insta::assert_snapshot!(render(&detailed), @"
-    # Stack 0
-    ◎  0 refs/heads/stack-b
-    ●  1 cb7021b B2
-    ●  2 ce3278a B1
-      linear    ref=0  rows=[0, 1, 2]
-      reference ref=0  rows=[0, 1, 2]
+    snapbox::assert_data_eq!(
+        render(&detailed),
+        snapbox::str![[r#"
+# Stack 0
+◎  0 refs/heads/stack-b
+●  1 cb7021b B2
+●  2 ce3278a B1
+  linear    ref=0  rows=[0, 1, 2]
+  reference ref=0  rows=[0, 1, 2]
 
-    # Stack 1
-    ◎  0 refs/heads/stack-a
-    ●  1 49c06ff A2
-    ●  2 ff76d2f A1
-    ◎  3 refs/heads/main
-      linear    ref=0  rows=[0, 1, 2]
-      linear    ref=3  rows=[3]
-      reference ref=0  rows=[0, 1, 2]
-      reference ref=3  rows=[3]
-    ");
+# Stack 1
+◎  0 refs/heads/stack-a
+●  1 49c06ff A2
+●  2 ff76d2f A1
+◎  3 refs/heads/main
+  linear    ref=0  rows=[0, 1, 2]
+  linear    ref=3  rows=[3]
+  reference ref=0  rows=[0, 1, 2]
+  reference ref=3  rows=[3]
+"#]]
+    );
     Ok(())
 }
 
@@ -631,31 +686,38 @@ fn disjoint_stacks_stay_separate_with_target() -> Result<()> {
 #[test]
 fn stacked_dependent_branches_partition_per_reference() -> Result<()> {
     let (repo, detailed) = detailed("workspace-stacked-branches", None)?;
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * bec4789 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 2fe462c (branch-top) top 2
-    * 2c08207 top 1
-    * d27b21f (branch-bottom) bottom 2
-    * a3a5a44 bottom 1
-    * 965998b (origin/main, main) base
-    ");
-    insta::assert_snapshot!(render(&detailed), @"
-    # Stack 0
-    ◎  0 refs/heads/branch-top
-    ●  1 2fe462c top 2
-    ●  2 2c08207 top 1
-    ◎  3 refs/heads/branch-bottom
-    ●  4 d27b21f bottom 2
-    ●  5 a3a5a44 bottom 1
-    ◎  6 refs/heads/main
-    ●  7 965998b base
-      linear    ref=0  rows=[0, 1, 2]
-      linear    ref=3  rows=[3, 4, 5]
-      linear    ref=6  rows=[6, 7]
-      reference ref=0  rows=[0, 1, 2]
-      reference ref=3  rows=[3, 4, 5]
-      reference ref=6  rows=[6, 7]
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* bec4789 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 2fe462c (branch-top) top 2
+* 2c08207 top 1
+* d27b21f (branch-bottom) bottom 2
+* a3a5a44 bottom 1
+* 965998b (origin/main, main) base
+
+"#]]
+    );
+    snapbox::assert_data_eq!(
+        render(&detailed),
+        snapbox::str![[r#"
+# Stack 0
+◎  0 refs/heads/branch-top
+●  1 2fe462c top 2
+●  2 2c08207 top 1
+◎  3 refs/heads/branch-bottom
+●  4 d27b21f bottom 2
+●  5 a3a5a44 bottom 1
+◎  6 refs/heads/main
+●  7 965998b base
+  linear    ref=0  rows=[0, 1, 2]
+  linear    ref=3  rows=[3, 4, 5]
+  linear    ref=6  rows=[6, 7]
+  reference ref=0  rows=[0, 1, 2]
+  reference ref=3  rows=[3, 4, 5]
+  reference ref=6  rows=[6, 7]
+"#]]
+    );
     Ok(())
 }
 
@@ -664,22 +726,25 @@ fn stacked_dependent_branches_partition_per_reference() -> Result<()> {
 #[test]
 fn stacked_dependent_branches_with_target() -> Result<()> {
     let (_repo, detailed) = detailed("workspace-stacked-branches", Some("refs/heads/main"))?;
-    insta::assert_snapshot!(render(&detailed), @"
-    # Stack 0
-    ◎  0 refs/heads/branch-top
-    ●  1 2fe462c top 2
-    ●  2 2c08207 top 1
-    ◎  3 refs/heads/branch-bottom
-    ●  4 d27b21f bottom 2
-    ●  5 a3a5a44 bottom 1
-    ◎  6 refs/heads/main
-      linear    ref=0  rows=[0, 1, 2]
-      linear    ref=3  rows=[3, 4, 5]
-      linear    ref=6  rows=[6]
-      reference ref=0  rows=[0, 1, 2]
-      reference ref=3  rows=[3, 4, 5]
-      reference ref=6  rows=[6]
-    ");
+    snapbox::assert_data_eq!(
+        render(&detailed),
+        snapbox::str![[r#"
+# Stack 0
+◎  0 refs/heads/branch-top
+●  1 2fe462c top 2
+●  2 2c08207 top 1
+◎  3 refs/heads/branch-bottom
+●  4 d27b21f bottom 2
+●  5 a3a5a44 bottom 1
+◎  6 refs/heads/main
+  linear    ref=0  rows=[0, 1, 2]
+  linear    ref=3  rows=[3, 4, 5]
+  linear    ref=6  rows=[6]
+  reference ref=0  rows=[0, 1, 2]
+  reference ref=3  rows=[3, 4, 5]
+  reference ref=6  rows=[6]
+"#]]
+    );
     Ok(())
 }
 
@@ -690,32 +755,40 @@ fn stacked_dependent_branches_with_target() -> Result<()> {
 #[test]
 fn non_linear_reference_segment_with_internal_merge() -> Result<()> {
     let (repo, detailed) = detailed("workspace-merge-in-stack", None)?;
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    * 30345c3 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    *   d585e46 (feature) M
-    |\  
-    | * ed2a973 Q
-    * | 6339d5b P
-    |/  
-    * 965998b (origin/main, main) base
-    ");
-    insta::assert_snapshot!(render(&detailed), @"
-    # Stack 0
-    ◎  0 refs/heads/feature
-    ●    1 d585e46 M
-    ├─╮
-    ● │  2 6339d5b P
-    │ ●  3 ed2a973 Q
-    ├─╯
-    ◎  4 refs/heads/main
-    ●  5 965998b base
-      linear    ref=0  rows=[0]
-      linear    ref=-  rows=[1]
-      linear    ref=-  rows=[2, 3]
-      linear    ref=4  rows=[4, 5]
-      reference ref=0  rows=[0, 1, 2, 3]
-      reference ref=4  rows=[4, 5]
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 30345c3 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+*   d585e46 (feature) M
+|\  
+| * ed2a973 Q
+* | 6339d5b P
+|/  
+* 965998b (origin/main, main) base
+
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(
+        render(&detailed),
+        snapbox::str![[r#"
+# Stack 0
+◎  0 refs/heads/feature
+●    1 d585e46 M
+├─╮
+● │  2 6339d5b P
+│ ●  3 ed2a973 Q
+├─╯
+◎  4 refs/heads/main
+●  5 965998b base
+  linear    ref=0  rows=[0]
+  linear    ref=-  rows=[1]
+  linear    ref=-  rows=[2, 3]
+  linear    ref=4  rows=[4, 5]
+  reference ref=0  rows=[0, 1, 2, 3]
+  reference ref=4  rows=[4, 5]
+"#]]
+    );
     Ok(())
 }
 
@@ -725,33 +798,41 @@ fn non_linear_reference_segment_with_internal_merge() -> Result<()> {
 #[test]
 fn shared_commit_belongs_to_both_reference_segments() -> Result<()> {
     let (repo, detailed) = detailed("workspace-shared-commit", None)?;
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *   a3bbad0 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    | * e6d5410 (stack-y) Y1
-    * | 9f0269c (stack-x) X1
-    |/  
-    * d2bff94 S
-    * 965998b (origin/main, main) base
-    ");
-    insta::assert_snapshot!(render(&detailed), @"
-    # Stack 0
-    ◎  0 refs/heads/stack-x
-    ●  1 9f0269c X1
-    │ ◎  2 refs/heads/stack-y
-    │ ●  3 e6d5410 Y1
-    ├─╯
-    ●  4 d2bff94 S
-    ◎  5 refs/heads/main
-    ●  6 965998b base
-      linear    ref=0  rows=[0, 1]
-      linear    ref=2  rows=[2, 3]
-      linear    ref=-  rows=[4]
-      linear    ref=5  rows=[5, 6]
-      reference ref=0  rows=[0, 1, 4]
-      reference ref=2  rows=[2, 3, 4]
-      reference ref=5  rows=[5, 6]
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   a3bbad0 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+| * e6d5410 (stack-y) Y1
+* | 9f0269c (stack-x) X1
+|/  
+* d2bff94 S
+* 965998b (origin/main, main) base
+
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(
+        render(&detailed),
+        snapbox::str![[r#"
+# Stack 0
+◎  0 refs/heads/stack-x
+●  1 9f0269c X1
+│ ◎  2 refs/heads/stack-y
+│ ●  3 e6d5410 Y1
+├─╯
+●  4 d2bff94 S
+◎  5 refs/heads/main
+●  6 965998b base
+  linear    ref=0  rows=[0, 1]
+  linear    ref=2  rows=[2, 3]
+  linear    ref=-  rows=[4]
+  linear    ref=5  rows=[5, 6]
+  reference ref=0  rows=[0, 1, 4]
+  reference ref=2  rows=[2, 3, 4]
+  reference ref=5  rows=[5, 6]
+"#]]
+    );
     Ok(())
 }
 
@@ -767,12 +848,15 @@ fn shared_commit_belongs_to_both_reference_segments() -> Result<()> {
 #[test]
 fn push_status_nothing_to_push_and_unpushed() -> Result<()> {
     let (_repo, detailed) = detailed("workspace-two-stacks", Some("refs/heads/main"))?;
-    insta::assert_snapshot!(render_push_status(&detailed), @"
-    # Stack 0
-    refs/heads/stack-a push=CompletelyUnpushed             combined=CompletelyUnpushed             remote=-
-    refs/heads/stack-b push=CompletelyUnpushed             combined=CompletelyUnpushed             remote=-
-    refs/heads/main push=NothingToPush                  combined=NothingToPush                  remote=refs/remotes/origin/main
-    ");
+    snapbox::assert_data_eq!(
+        render_push_status(&detailed),
+        snapbox::str![[r#"
+# Stack 0
+refs/heads/stack-a push=CompletelyUnpushed             combined=CompletelyUnpushed             remote=-
+refs/heads/stack-b push=CompletelyUnpushed             combined=CompletelyUnpushed             remote=-
+refs/heads/main push=NothingToPush                  combined=NothingToPush                  remote=refs/remotes/origin/main
+"#]]
+    );
     Ok(())
 }
 
@@ -800,18 +884,24 @@ fn integration_status_marks_fully_integrated_branch() -> Result<()> {
             add_stack(meta, 2, "B", StackState::InWorkspace);
         },
     )?;
-    insta::assert_snapshot!(render_push_status(&detailed), @"
-    # Stack 0
-    refs/heads/A   push=Integrated                     combined=Integrated                     remote=-
-    refs/heads/B   push=CompletelyUnpushed             combined=UnpushedCommitsRequiringForce  remote=-
-    refs/heads/main push=UnpushedCommitsRequiringForce  combined=UnpushedCommitsRequiringForce  remote=refs/remotes/origin/main
-    ");
+    snapbox::assert_data_eq!(
+        render_push_status(&detailed),
+        snapbox::str![[r#"
+# Stack 0
+refs/heads/A   push=Integrated                     combined=Integrated                     remote=-
+refs/heads/B   push=CompletelyUnpushed             combined=UnpushedCommitsRequiringForce  remote=-
+refs/heads/main push=UnpushedCommitsRequiringForce  combined=UnpushedCommitsRequiringForce  remote=refs/remotes/origin/main
+"#]]
+    );
     // `add A1` (== origin/main) is integrated; `add B1` is local-only.
-    insta::assert_snapshot!(render_commit_state(&detailed), @"
-    # Stack 0
-    905d6e5 add A1   state=integrated
-    b38b04b add B1   state=local
-    ");
+    snapbox::assert_data_eq!(
+        render_commit_state(&detailed),
+        snapbox::str![[r#"
+# Stack 0
+905d6e5 add A1   state=integrated
+b38b04b add B1   state=local
+"#]]
+    );
     Ok(())
 }
 
@@ -832,14 +922,17 @@ fn commit_state_marks_content_integrated_commits() -> Result<()> {
             add_stack(meta, 1, "E", StackState::InWorkspace);
         },
     )?;
-    insta::assert_snapshot!(render_commit_state(&detailed), @"
-    # Stack 0
-    a6588cf E        state=local
-    4827d2f C        state=local
-    3d3bfa7 B        state=integrated
-    d8d0970 D        state=local
-    f5b02d3 A        state=integrated
-    ");
+    snapbox::assert_data_eq!(
+        render_commit_state(&detailed),
+        snapbox::str![[r#"
+# Stack 0
+a6588cf E        state=local
+4827d2f C        state=local
+3d3bfa7 B        state=integrated
+d8d0970 D        state=local
+f5b02d3 A        state=integrated
+"#]]
+    );
     Ok(())
 }
 
@@ -856,14 +949,17 @@ fn commit_state_marks_historically_integrated_commits() -> Result<()> {
             add_stack(meta, 1, "E", StackState::InWorkspace);
         },
     )?;
-    insta::assert_snapshot!(render_commit_state(&detailed), @"
-    # Stack 0
-    972cf74 E        state=local
-    9e74c75 C        state=local
-    ffb801b B        state=integrated
-    d6a7004 D        state=local
-    448b195 A        state=integrated
-    ");
+    snapbox::assert_data_eq!(
+        render_commit_state(&detailed),
+        snapbox::str![[r#"
+# Stack 0
+972cf74 E        state=local
+9e74c75 C        state=local
+ffb801b B        state=integrated
+d6a7004 D        state=local
+448b195 A        state=integrated
+"#]]
+    );
     Ok(())
 }
 
@@ -882,18 +978,21 @@ fn integration_status_marks_partially_integrated_multi_branch_stack() -> Result<
             add_stack(meta, 2, "B", StackState::InWorkspace);
         },
     )?;
-    insta::assert_snapshot!(render_statuses(&detailed), @"
-    # Stack 0
-    refs/heads/A   push=CompletelyUnpushed             combined=UnpushedCommitsRequiringForce  remote=-
-    refs/heads/C   push=Integrated                     combined=Integrated                     remote=-
-    refs/heads/B   push=CompletelyUnpushed             combined=UnpushedCommitsRequiringForce  remote=-
-    refs/heads/main push=UnpushedCommitsRequiringForce  combined=UnpushedCommitsRequiringForce  remote=refs/remotes/origin/main
+    snapbox::assert_data_eq!(
+        render_statuses(&detailed),
+        snapbox::str![[r#"
+# Stack 0
+refs/heads/A   push=CompletelyUnpushed             combined=UnpushedCommitsRequiringForce  remote=-
+refs/heads/C   push=Integrated                     combined=Integrated                     remote=-
+refs/heads/B   push=CompletelyUnpushed             combined=UnpushedCommitsRequiringForce  remote=-
+refs/heads/main push=UnpushedCommitsRequiringForce  combined=UnpushedCommitsRequiringForce  remote=refs/remotes/origin/main
 
-    # Stack 0
-    44c9428 add A1   state=local
-    f1e7451 add C1   state=integrated
-    b38b04b add B1   state=local
-    ");
+# Stack 0
+44c9428 add A1   state=local
+f1e7451 add C1   state=integrated
+b38b04b add B1   state=local
+"#]]
+    );
     Ok(())
 }
 
@@ -911,18 +1010,21 @@ fn integration_status_marks_fully_integrated_multi_branch_stack() -> Result<()> 
             add_stack(meta, 2, "B", StackState::InWorkspace);
         },
     )?;
-    insta::assert_snapshot!(render_statuses(&detailed), @"
-    # Stack 0
-    refs/heads/A   push=Integrated                     combined=Integrated                     remote=-
-    refs/heads/C   push=Integrated                     combined=Integrated                     remote=-
-    refs/heads/B   push=CompletelyUnpushed             combined=UnpushedCommitsRequiringForce  remote=-
-    refs/heads/main push=UnpushedCommitsRequiringForce  combined=UnpushedCommitsRequiringForce  remote=refs/remotes/origin/main
+    snapbox::assert_data_eq!(
+        render_statuses(&detailed),
+        snapbox::str![[r#"
+# Stack 0
+refs/heads/A   push=Integrated                     combined=Integrated                     remote=-
+refs/heads/C   push=Integrated                     combined=Integrated                     remote=-
+refs/heads/B   push=CompletelyUnpushed             combined=UnpushedCommitsRequiringForce  remote=-
+refs/heads/main push=UnpushedCommitsRequiringForce  combined=UnpushedCommitsRequiringForce  remote=refs/remotes/origin/main
 
-    # Stack 0
-    44c9428 add A1   state=integrated
-    f1e7451 add C1   state=integrated
-    b38b04b add B1   state=local
-    ");
+# Stack 0
+44c9428 add A1   state=integrated
+f1e7451 add C1   state=integrated
+b38b04b add B1   state=local
+"#]]
+    );
     Ok(())
 }
 
@@ -940,17 +1042,20 @@ fn integration_status_marks_fully_integrated_two_stacks() -> Result<()> {
             add_stack(meta, 2, "B", StackState::InWorkspace);
         },
     )?;
-    insta::assert_snapshot!(render_statuses(&detailed), @"
-    # Stack 0
-    refs/heads/B   push=Integrated                     combined=Integrated                     remote=-
-    # Stack 1
-    refs/heads/A   push=Integrated                     combined=Integrated                     remote=-
+    snapbox::assert_data_eq!(
+        render_statuses(&detailed),
+        snapbox::str![[r#"
+# Stack 0
+refs/heads/B   push=Integrated                     combined=Integrated                     remote=-
+# Stack 1
+refs/heads/A   push=Integrated                     combined=Integrated                     remote=-
 
-    # Stack 0
-    b38b04b add B1   state=integrated
-    # Stack 1
-    905d6e5 add A1   state=integrated
-    ");
+# Stack 0
+b38b04b add B1   state=integrated
+# Stack 1
+905d6e5 add A1   state=integrated
+"#]]
+    );
     Ok(())
 }
 
@@ -967,13 +1072,16 @@ fn empty_branch_remote_tip_marks_reference_integrated() -> Result<()> {
             add_stack(meta, 1, "topic", StackState::InWorkspace);
         },
     )?;
-    insta::assert_snapshot!(render_statuses(&detailed), @"
-    # Stack 0
-    refs/heads/topic push=Integrated                     combined=Integrated                     remote=refs/remotes/origin/topic
+    snapbox::assert_data_eq!(
+        render_statuses(&detailed),
+        snapbox::str![[r#"
+# Stack 0
+refs/heads/topic push=Integrated                     combined=Integrated                     remote=refs/remotes/origin/topic
 
-    # Stack 0
-    6ba217e add topic state=integrated
-    ");
+# Stack 0
+6ba217e add topic state=integrated
+"#]]
+    );
     Ok(())
 }
 
@@ -990,14 +1098,17 @@ fn non_empty_branch_remote_tip_keeps_local_work_unintegrated() -> Result<()> {
             add_stack(meta, 1, "topic", StackState::InWorkspace);
         },
     )?;
-    insta::assert_snapshot!(render_statuses(&detailed), @"
-    # Stack 0
-    refs/heads/topic push=UnpushedCommits                combined=UnpushedCommits                remote=refs/remotes/origin/topic
+    snapbox::assert_data_eq!(
+        render_statuses(&detailed),
+        snapbox::str![[r#"
+# Stack 0
+refs/heads/topic push=UnpushedCommits                combined=UnpushedCommits                remote=refs/remotes/origin/topic
 
-    # Stack 0
-    f1a3cba add local state=local
-    6ba217e add topic state=integrated
-    ");
+# Stack 0
+f1a3cba add local state=local
+6ba217e add topic state=integrated
+"#]]
+    );
     Ok(())
 }
 
@@ -1015,10 +1126,13 @@ fn commit_state_marks_pushed_unintegrated_commit_local_and_remote() -> Result<()
             add_stack(meta, 1, "feature-foo", StackState::InWorkspace);
         },
     )?;
-    insta::assert_snapshot!(render_commit_state(&detailed), @"
-    # Stack 0
-    f0c6d1c add foo.txt state=local/remote(identity)
-    ");
+    snapbox::assert_data_eq!(
+        render_commit_state(&detailed),
+        snapbox::str![[r#"
+# Stack 0
+f0c6d1c add foo.txt state=local/remote(identity)
+"#]]
+    );
     Ok(())
 }
 
@@ -1054,13 +1168,16 @@ fn commit_state_uses_similarity_for_local_and_remote() -> Result<()> {
     )?;
     let mut ws = graph.into_workspace()?;
     let detailed = detailed_graph_workspace(&mut ws, &mut *meta, &repo)?;
-    insta::assert_snapshot!(render_commit_state(&detailed), @"
-    # Stack 0
-    d5d3a92 unique local tip state=local
-    6ffd040 shared by name state=local/remote(similarity)
-    4cd56ab unique local state=local
-    872c22f shared local/remote state=local/remote(identity)
-    ");
+    snapbox::assert_data_eq!(
+        render_commit_state(&detailed),
+        snapbox::str![[r#"
+# Stack 0
+d5d3a92 unique local tip state=local
+6ffd040 shared by name state=local/remote(similarity)
+4cd56ab unique local state=local
+872c22f shared local/remote state=local/remote(identity)
+"#]]
+    );
     Ok(())
 }
 
@@ -1069,11 +1186,15 @@ fn commit_state_uses_similarity_for_local_and_remote() -> Result<()> {
 #[test]
 fn workspace_branch_without_managed_commit() -> Result<()> {
     let (repo, detailed) = detailed("workspace-without-managed-commit", None)?;
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * 1b78c63 (HEAD -> gitbutler/workspace) just a normal commit
-    * 4d41a5c (origin/main, main) one
-    * 965998b base
-    ");
-    insta::assert_snapshot!(render(&detailed), @"(no stacks)");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 1b78c63 (HEAD -> gitbutler/workspace) just a normal commit
+* 4d41a5c (origin/main, main) one
+* 965998b base
+
+"#]]
+    );
+    snapbox::assert_data_eq!(render(&detailed), snapbox::str!["(no stacks)"]);
     Ok(())
 }

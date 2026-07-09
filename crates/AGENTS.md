@@ -130,6 +130,6 @@ vendored, or fixture data unless the task is specifically about that code.
 ## Assertions
 
 - Explain why a standard Rust assertion holds concisely using the last-argument message, like `assert!(1!=2, "arithmetic unit on CPU works")`
-- Explain why an `insta` assertion holds concisely using the second argument as message, like `insta::assert_debug_snapshot(debug, "needs to be this because...", @r"")`.
-- Use `insta` redactions to remove unstable output from the snapshot. Avoid *creating* additional macros, as it's possible to change its settings
-  directly. It's fine to use its own utility macros to configure redactions, where applicable.
+- Snapshot assertions use `snapbox`, like `snapbox::assert_data_eq!(actual, snapbox::str![[r#"..."#]])`. `snapbox::assert_data_eq!` has no message argument, so explain why a snapshot holds with a `// comment` on the line above it.
+- Regenerate inline snapshots by running the tests with `SNAPSHOTS=overwrite`.
+- Remove unstable output before asserting (sanitize ids/timestamps/paths, e.g. the `but_testsupport` helpers) rather than snapshotting it raw. `snapbox` also pattern-matches expected data by default (`[..]` and `...` wildcards, path-separator normalization); append `.raw()` to the expected `snapbox::str!` when the value must match exactly (e.g. it contains backslashes or literal `[..]`/`...`).

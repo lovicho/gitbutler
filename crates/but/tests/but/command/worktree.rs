@@ -1,3 +1,4 @@
+use snapbox::IntoData;
 use snapbox::str;
 
 use crate::utils::Sandbox;
@@ -7,14 +8,19 @@ use crate::utils::Sandbox;
 #[test]
 fn journey_new_list_integrate() -> anyhow::Result<()> {
     let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
-    insta::assert_snapshot!(env.git_log(), @r"
-    *   c128bce (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    | * 9477ae7 (A) add A
-    * | d3e2ba3 (B) add B
-    |/  
-    * 0dc3733 (origin/main, origin/HEAD, main) add M
-    ");
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+*   c128bce (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+| * 9477ae7 (A) add A
+* | d3e2ba3 (B) add B
+|/  
+* 0dc3733 (origin/main, origin/HEAD, main) add M
+
+"#]]
+        .raw()
+    );
     env.setup_metadata(&["A", "B"]);
 
     env.but("worktree new A")

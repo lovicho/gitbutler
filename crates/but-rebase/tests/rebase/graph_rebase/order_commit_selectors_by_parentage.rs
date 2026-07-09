@@ -2,6 +2,7 @@ use anyhow::Result;
 use but_graph::Graph;
 use but_rebase::graph_rebase::{Editor, LookupStep, Step, mutate, testing::Testing as _};
 use but_testsupport::visualize_commit_graph_all;
+use snapbox::prelude::*;
 
 use crate::utils::{fixture, fixture_writable, standard_options};
 
@@ -44,17 +45,26 @@ fn handles_zero_nodes() -> Result<()> {
     let mut ws = graph.into_workspace()?;
     let editor = Editor::create(&mut ws, &mut *meta, &repo)?;
 
-    insta::assert_snapshot!(editor.steps_ascii(), @"
-    ◎  refs/heads/main
-    ●  120e3a9 c
-    ●  a96434e b
-    ●  d591dfe a
-    ●  35b8235 base
-    ");
+    snapbox::assert_data_eq!(
+        editor.steps_ascii(),
+        snapbox::str![[r#"
+◎  refs/heads/main
+●  120e3a9 c
+●  a96434e b
+●  d591dfe a
+●  35b8235 base
+"#]]
+    );
 
     let ordered = editor.order_commit_selectors_by_parentage(Vec::<gix::ObjectId>::new())?;
     let ordered_ids = short_ids(&editor, &ordered)?;
-    insta::assert_debug_snapshot!(ordered_ids, @"[]");
+    snapbox::assert_data_eq!(
+        ordered_ids.to_debug(),
+        snapbox::str![[r#"
+[]
+
+"#]]
+    );
 
     Ok(())
 }
@@ -73,19 +83,26 @@ fn handles_one_node() -> Result<()> {
     let mut ws = graph.into_workspace()?;
     let editor = Editor::create(&mut ws, &mut *meta, &repo)?;
 
-    insta::assert_snapshot!(editor.steps_ascii(), @"
-    ◎  refs/heads/main
-    ●  35b8235 base
-    ");
+    snapbox::assert_data_eq!(
+        editor.steps_ascii(),
+        snapbox::str![[r#"
+◎  refs/heads/main
+●  35b8235 base
+"#]]
+    );
 
     let base = repo.head_id()?.detach();
     let ordered = editor.order_commit_selectors_by_parentage([base])?;
     let ordered_ids = short_ids(&editor, &ordered)?;
-    insta::assert_debug_snapshot!(ordered_ids, @r#"
-    [
-        "35b8235",
-    ]
-    "#);
+    snapbox::assert_data_eq!(
+        ordered_ids.to_debug(),
+        snapbox::str![[r#"
+[
+    "35b8235",
+]
+
+"#]]
+    );
 
     Ok(())
 }
@@ -111,14 +128,18 @@ fn orders_linear_commits_parent_first_for_n_nodes() -> Result<()> {
 
     let ordered = editor.order_commit_selectors_by_parentage([c, a, b, base])?;
     let ordered_ids = short_ids(&editor, &ordered)?;
-    insta::assert_debug_snapshot!(ordered_ids, @r#"
-    [
-        "35b8235",
-        "d591dfe",
-        "a96434e",
-        "120e3a9",
-    ]
-    "#);
+    snapbox::assert_data_eq!(
+        ordered_ids.to_debug(),
+        snapbox::str![[r#"
+[
+    "35b8235",
+    "d591dfe",
+    "a96434e",
+    "120e3a9",
+]
+
+"#]]
+    );
 
     Ok(())
 }
@@ -138,31 +159,39 @@ fn orders_disjoint_commits_by_editor_graph_traversal_1() -> Result<()> {
     let editor = Editor::create(&mut ws, &mut *meta, &repo)?;
 
     let graph = trim_trailing_whitespace(&visualize_commit_graph_all(&repo)?);
-    insta::assert_snapshot!(graph, @r"
-    *-.   1348870 (HEAD -> main) Merge branches 'A', 'B' and 'C'
-    |\ \
-    | | * 930563a (C) C: add another 10 lines to new file
-    | | * 68a2fc3 C: add 10 lines to new file
-    | | * 984fd1c C: new file with 10 lines
-    | * | a748762 (B) B: another 10 lines at the bottom
-    | * | 62e05ba B: 10 lines at the bottom
-    | |/
-    * / add59d2 (A) A: 10 lines on top
-    |/
-    * 8f0d338 (tag: base) base
-    ");
+    snapbox::assert_data_eq!(
+        graph,
+        snapbox::str![[r#"
+*-.   1348870 (HEAD -> main) Merge branches 'A', 'B' and 'C'
+|\ \
+| | * 930563a (C) C: add another 10 lines to new file
+| | * 68a2fc3 C: add 10 lines to new file
+| | * 984fd1c C: new file with 10 lines
+| * | a748762 (B) B: another 10 lines at the bottom
+| * | 62e05ba B: 10 lines at the bottom
+| |/
+* / add59d2 (A) A: 10 lines on top
+|/
+* 8f0d338 (tag: base) base
+"#]]
+        .raw()
+    );
 
     let a = repo.rev_parse_single("A")?.detach();
     let b = repo.rev_parse_single("B")?.detach();
 
     let ordered = editor.order_commit_selectors_by_parentage([b, a])?;
     let ordered_ids = short_ids(&editor, &ordered)?;
-    insta::assert_debug_snapshot!(ordered_ids, @r#"
-    [
-        "a748762",
-        "add59d2",
-    ]
-    "#);
+    snapbox::assert_data_eq!(
+        ordered_ids.to_debug(),
+        snapbox::str![[r#"
+[
+    "a748762",
+    "add59d2",
+]
+
+"#]]
+    );
 
     Ok(())
 }
@@ -182,19 +211,23 @@ fn orders_disjoint_commits_by_editor_graph_traversal_2() -> Result<()> {
     let editor = Editor::create(&mut ws, &mut *meta, &repo)?;
 
     let graph = trim_trailing_whitespace(&visualize_commit_graph_all(&repo)?);
-    insta::assert_snapshot!(graph, @r"
-    *-.   1348870 (HEAD -> main) Merge branches 'A', 'B' and 'C'
-    |\ \
-    | | * 930563a (C) C: add another 10 lines to new file
-    | | * 68a2fc3 C: add 10 lines to new file
-    | | * 984fd1c C: new file with 10 lines
-    | * | a748762 (B) B: another 10 lines at the bottom
-    | * | 62e05ba B: 10 lines at the bottom
-    | |/
-    * / add59d2 (A) A: 10 lines on top
-    |/
-    * 8f0d338 (tag: base) base
-    ");
+    snapbox::assert_data_eq!(
+        graph,
+        snapbox::str![[r#"
+*-.   1348870 (HEAD -> main) Merge branches 'A', 'B' and 'C'
+|\ \
+| | * 930563a (C) C: add another 10 lines to new file
+| | * 68a2fc3 C: add 10 lines to new file
+| | * 984fd1c C: new file with 10 lines
+| * | a748762 (B) B: another 10 lines at the bottom
+| * | 62e05ba B: 10 lines at the bottom
+| |/
+* / add59d2 (A) A: 10 lines on top
+|/
+* 8f0d338 (tag: base) base
+"#]]
+        .raw()
+    );
 
     // The tip of A
     let a = repo.rev_parse_single("A")?.detach();
@@ -209,13 +242,17 @@ fn orders_disjoint_commits_by_editor_graph_traversal_2() -> Result<()> {
     // 1. The first parent of B's tip
     // 2. The tip of B
     // 3. The tip of A
-    insta::assert_debug_snapshot!(ordered_ids, @r#"
-    [
-        "62e05ba",
-        "a748762",
-        "add59d2",
-    ]
-    "#);
+    snapbox::assert_data_eq!(
+        ordered_ids.to_debug(),
+        snapbox::str![[r#"
+[
+    "62e05ba",
+    "a748762",
+    "add59d2",
+]
+
+"#]]
+    );
 
     Ok(())
 }
@@ -235,19 +272,23 @@ fn orders_disjoint_commits_by_editor_graph_traversal_3() -> Result<()> {
     let editor = Editor::create(&mut ws, &mut *meta, &repo)?;
 
     let graph = trim_trailing_whitespace(&visualize_commit_graph_all(&repo)?);
-    insta::assert_snapshot!(graph, @r"
-    *-.   1348870 (HEAD -> main) Merge branches 'A', 'B' and 'C'
-    |\ \
-    | | * 930563a (C) C: add another 10 lines to new file
-    | | * 68a2fc3 C: add 10 lines to new file
-    | | * 984fd1c C: new file with 10 lines
-    | * | a748762 (B) B: another 10 lines at the bottom
-    | * | 62e05ba B: 10 lines at the bottom
-    | |/
-    * / add59d2 (A) A: 10 lines on top
-    |/
-    * 8f0d338 (tag: base) base
-    ");
+    snapbox::assert_data_eq!(
+        graph,
+        snapbox::str![[r#"
+*-.   1348870 (HEAD -> main) Merge branches 'A', 'B' and 'C'
+|\ \
+| | * 930563a (C) C: add another 10 lines to new file
+| | * 68a2fc3 C: add 10 lines to new file
+| | * 984fd1c C: new file with 10 lines
+| * | a748762 (B) B: another 10 lines at the bottom
+| * | 62e05ba B: 10 lines at the bottom
+| |/
+* / add59d2 (A) A: 10 lines on top
+|/
+* 8f0d338 (tag: base) base
+"#]]
+        .raw()
+    );
 
     // The tip of A
     let a = repo.rev_parse_single("A")?.detach();
@@ -265,14 +306,18 @@ fn orders_disjoint_commits_by_editor_graph_traversal_3() -> Result<()> {
     // 2. The first-level parent of the tip of C
     // 3. The tip of B
     // 4. The tip of A
-    insta::assert_debug_snapshot!(ordered_ids, @r#"
-    [
-        "984fd1c",
-        "68a2fc3",
-        "a748762",
-        "add59d2",
-    ]
-    "#);
+    snapbox::assert_data_eq!(
+        ordered_ids.to_debug(),
+        snapbox::str![[r#"
+[
+    "984fd1c",
+    "68a2fc3",
+    "a748762",
+    "add59d2",
+]
+
+"#]]
+    );
 
     Ok(())
 }
@@ -281,12 +326,16 @@ fn orders_disjoint_commits_by_editor_graph_traversal_3() -> Result<()> {
 fn errors_when_selected_commit_is_absent_from_editor_graph() -> Result<()> {
     let (repo, mut meta) = fixture("disjoint-orphan-branches")?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    * 589e8c3 (HEAD -> main) main: tip
-    * 14f3d44 main: base
-    * 74debb1 (orphan) orphan: tip
-    * c7488cd orphan: base
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 589e8c3 (HEAD -> main) main: tip
+* 14f3d44 main: base
+* 74debb1 (orphan) orphan: tip
+* c7488cd orphan: base
+
+"#]]
+    );
 
     let graph = Graph::from_head(
         &repo,
@@ -298,11 +347,14 @@ fn errors_when_selected_commit_is_absent_from_editor_graph() -> Result<()> {
     let mut ws = graph.into_workspace()?;
     let editor = Editor::create(&mut ws, &mut *meta, &repo)?;
 
-    insta::assert_snapshot!(editor.steps_ascii(), @"
-    ◎  refs/heads/main
-    ●  589e8c3 main: tip
-    ●  14f3d44 main: base
-    ");
+    snapbox::assert_data_eq!(
+        editor.steps_ascii(),
+        snapbox::str![[r#"
+◎  refs/heads/main
+●  589e8c3 main: tip
+●  14f3d44 main: base
+"#]]
+    );
 
     let orphan = repo.rev_parse_single("orphan")?.detach();
 
@@ -319,9 +371,9 @@ fn errors_when_selected_commit_is_absent_from_editor_graph() -> Result<()> {
         message.ends_with(" in rebase editor"),
         "unexpected error message format: {message}"
     );
-    insta::assert_snapshot!(
+    snapbox::assert_data_eq!(
         "Failed to find commit <oid> in rebase editor",
-        @"Failed to find commit <oid> in rebase editor"
+        snapbox::str!["Failed to find commit <oid> in rebase editor"]
     );
 
     Ok(())
@@ -347,13 +399,17 @@ fn deduplicates_duplicate_selectors_by_commit_id() -> Result<()> {
 
     let ordered = editor.order_commit_selectors_by_parentage([b, c, b, a, c])?;
     let ordered_ids = short_ids(&editor, &ordered)?;
-    insta::assert_debug_snapshot!(ordered_ids, @r#"
-    [
-        "d591dfe",
-        "a96434e",
-        "120e3a9",
-    ]
-    "#);
+    snapbox::assert_data_eq!(
+        ordered_ids.to_debug(),
+        snapbox::str![[r#"
+[
+    "d591dfe",
+    "a96434e",
+    "120e3a9",
+]
+
+"#]]
+    );
 
     Ok(())
 }
@@ -383,11 +439,15 @@ fn orders_commit_present_in_editor_graph_even_if_workspace_projection_stale() ->
 
     let ordered = editor.order_commit_selectors_by_parentage([rewritten_a])?;
     let ordered_ids = short_ids(&editor, &ordered)?;
-    insta::assert_debug_snapshot!(ordered_ids, @r#"
-    [
-        "1787cd0",
-    ]
-    "#);
+    snapbox::assert_data_eq!(
+        ordered_ids.to_debug(),
+        snapbox::str![[r#"
+[
+    "1787cd0",
+]
+
+"#]]
+    );
 
     Ok(())
 }
@@ -421,11 +481,15 @@ fn orders_commit_disconnected_from_checkout_roots_if_still_in_editor_graph() -> 
 
     let ordered = editor.order_commit_selectors_by_parentage([b])?;
     let ordered_ids = short_ids(&editor, &ordered)?;
-    insta::assert_debug_snapshot!(ordered_ids, @r#"
-    [
-        "a96434e",
-    ]
-    "#);
+    snapbox::assert_data_eq!(
+        ordered_ids.to_debug(),
+        snapbox::str![[r#"
+[
+    "a96434e",
+]
+
+"#]]
+    );
 
     Ok(())
 }
@@ -435,15 +499,19 @@ fn orders_all_commits_in_y_shaped_two_branch_fixture() -> Result<()> {
     let (repo, _tmpdir, mut meta) = fixture_writable("two-branches-shared-bottom-two")?;
 
     let graph = trim_trailing_whitespace(&visualize_commit_graph_all(&repo)?);
-    insta::assert_snapshot!(graph, @r"
-    *   3127e18 (HEAD -> main) merge right into main
-    |\
-    | * ce0d74d (right) right: head
-    * | c3a0d4c (left) left: head
-    |/
-    * 67a0a68 shared
-    * 35b8235 base
-    ");
+    snapbox::assert_data_eq!(
+        graph,
+        snapbox::str![[r#"
+*   3127e18 (HEAD -> main) merge right into main
+|\
+| * ce0d74d (right) right: head
+* | c3a0d4c (left) left: head
+|/
+* 67a0a68 shared
+* 35b8235 base
+"#]]
+        .raw()
+    );
     let right_ref: gix::refs::FullName = "refs/heads/right".try_into()?;
 
     let graph = Graph::from_head(

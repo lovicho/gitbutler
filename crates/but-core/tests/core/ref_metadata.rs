@@ -7,6 +7,7 @@ mod workspace {
         WorkspaceCommitRelation::{Merged, Outside},
         WorkspaceStack, WorkspaceStackBranch,
     };
+    use snapbox::prelude::*;
 
     #[test]
     fn add_new_stack_if_not_present_journey() {
@@ -51,15 +52,19 @@ mod workspace {
         assert!(!ws.remove_segment(c_ref));
 
         // Everything should be removed.
-        insta::assert_debug_snapshot!(ws, @r#"
-        Workspace {
-            ref_info: RefInfo { created_at: None, updated_at: None },
-            stacks: [],
-            target_ref: None,
-            target_commit_id: None,
-            push_remote: None,
-        }
-        "#);
+        snapbox::assert_data_eq!(
+            ws.to_debug(),
+            snapbox::str![[r#"
+Workspace {
+    ref_info: RefInfo { created_at: None, updated_at: None },
+    stacks: [],
+    target_ref: None,
+    target_commit_id: None,
+    push_remote: None,
+}
+
+"#]]
+        );
     }
 
     #[test]
@@ -77,39 +82,39 @@ mod workspace {
             !ws.unapply_branch(r("refs/heads/outside")),
             "an outside branch is not removed from applied workspace metadata"
         );
-        insta::assert_snapshot!(
+        // absent applied branches leave workspace metadata unchanged
+        snapbox::assert_data_eq!(
             but_testsupport::sanitize_uuids_and_timestamps(format!("{ws:#?}")),
-            "absent applied branches leave workspace metadata unchanged",
-            @r#"
-        Workspace {
-            ref_info: RefInfo { created_at: None, updated_at: None },
-            stacks: [
-                WorkspaceStack {
-                    id: 1,
-                    branches: [
-                        WorkspaceStackBranch {
-                            ref_name: "refs/heads/A",
-                            archived: false,
-                        },
-                    ],
-                    workspacecommit_relation: Merged,
-                },
-                WorkspaceStack {
-                    id: 2,
-                    branches: [
-                        WorkspaceStackBranch {
-                            ref_name: "refs/heads/outside",
-                            archived: false,
-                        },
-                    ],
-                    workspacecommit_relation: Outside,
+            snapbox::str![[r#"
+Workspace {
+    ref_info: RefInfo { created_at: None, updated_at: None },
+    stacks: [
+        WorkspaceStack {
+            id: 1,
+            branches: [
+                WorkspaceStackBranch {
+                    ref_name: "refs/heads/A",
+                    archived: false,
                 },
             ],
-            target_ref: None,
-            target_commit_id: None,
-            push_remote: None,
-        }
-        "#
+            workspacecommit_relation: Merged,
+        },
+        WorkspaceStack {
+            id: 2,
+            branches: [
+                WorkspaceStackBranch {
+                    ref_name: "refs/heads/outside",
+                    archived: false,
+                },
+            ],
+            workspacecommit_relation: Outside,
+        },
+    ],
+    target_ref: None,
+    target_commit_id: None,
+    push_remote: None,
+}
+"#]]
         );
     }
 
@@ -124,29 +129,29 @@ mod workspace {
             ws.unapply_branch(r("refs/heads/A")),
             "single-branch applied stacks are removed entirely"
         );
-        insta::assert_snapshot!(
+        // removing the only branch in an applied stack removes that stack metadata
+        snapbox::assert_data_eq!(
             but_testsupport::sanitize_uuids_and_timestamps(format!("{ws:#?}")),
-            "removing the only branch in an applied stack removes that stack metadata",
-            @r#"
-        Workspace {
-            ref_info: RefInfo { created_at: None, updated_at: None },
-            stacks: [
-                WorkspaceStack {
-                    id: 1,
-                    branches: [
-                        WorkspaceStackBranch {
-                            ref_name: "refs/heads/B",
-                            archived: false,
-                        },
-                    ],
-                    workspacecommit_relation: Merged,
+            snapbox::str![[r#"
+Workspace {
+    ref_info: RefInfo { created_at: None, updated_at: None },
+    stacks: [
+        WorkspaceStack {
+            id: 1,
+            branches: [
+                WorkspaceStackBranch {
+                    ref_name: "refs/heads/B",
+                    archived: false,
                 },
             ],
-            target_ref: None,
-            target_commit_id: None,
-            push_remote: None,
-        }
-        "#
+            workspacecommit_relation: Merged,
+        },
+    ],
+    target_ref: None,
+    target_commit_id: None,
+    push_remote: None,
+}
+"#]]
         );
     }
 
@@ -162,37 +167,37 @@ mod workspace {
             ws.unapply_branch(r("refs/heads/A")),
             "removing the tip of a multi-segment applied stack marks it outside"
         );
-        insta::assert_snapshot!(
+        // the status quo retains the branch metadata but moves the stack outside
+        snapbox::assert_data_eq!(
             but_testsupport::sanitize_uuids_and_timestamps(format!("{ws:#?}")),
-            "the status quo retains the branch metadata but moves the stack outside",
-            @r#"
-        Workspace {
-            ref_info: RefInfo { created_at: None, updated_at: None },
-            stacks: [
-                WorkspaceStack {
-                    id: 1,
-                    branches: [
-                        WorkspaceStackBranch {
-                            ref_name: "refs/heads/A",
-                            archived: false,
-                        },
-                        WorkspaceStackBranch {
-                            ref_name: "refs/heads/B",
-                            archived: false,
-                        },
-                        WorkspaceStackBranch {
-                            ref_name: "refs/heads/C",
-                            archived: false,
-                        },
-                    ],
-                    workspacecommit_relation: Outside,
+            snapbox::str![[r#"
+Workspace {
+    ref_info: RefInfo { created_at: None, updated_at: None },
+    stacks: [
+        WorkspaceStack {
+            id: 1,
+            branches: [
+                WorkspaceStackBranch {
+                    ref_name: "refs/heads/A",
+                    archived: false,
+                },
+                WorkspaceStackBranch {
+                    ref_name: "refs/heads/B",
+                    archived: false,
+                },
+                WorkspaceStackBranch {
+                    ref_name: "refs/heads/C",
+                    archived: false,
                 },
             ],
-            target_ref: None,
-            target_commit_id: None,
-            push_remote: None,
-        }
-        "#
+            workspacecommit_relation: Outside,
+        },
+    ],
+    target_ref: None,
+    target_commit_id: None,
+    push_remote: None,
+}
+"#]]
         );
     }
 
@@ -208,33 +213,33 @@ mod workspace {
             ws.unapply_branch(r("refs/heads/B")),
             "removing a middle segment drops that branch metadata"
         );
-        insta::assert_snapshot!(
+        // middle segment removal keeps the stack applied and removes only that branch
+        snapbox::assert_data_eq!(
             but_testsupport::sanitize_uuids_and_timestamps(format!("{ws:#?}")),
-            "middle segment removal keeps the stack applied and removes only that branch",
-            @r#"
-        Workspace {
-            ref_info: RefInfo { created_at: None, updated_at: None },
-            stacks: [
-                WorkspaceStack {
-                    id: 1,
-                    branches: [
-                        WorkspaceStackBranch {
-                            ref_name: "refs/heads/A",
-                            archived: false,
-                        },
-                        WorkspaceStackBranch {
-                            ref_name: "refs/heads/C",
-                            archived: false,
-                        },
-                    ],
-                    workspacecommit_relation: Merged,
+            snapbox::str![[r#"
+Workspace {
+    ref_info: RefInfo { created_at: None, updated_at: None },
+    stacks: [
+        WorkspaceStack {
+            id: 1,
+            branches: [
+                WorkspaceStackBranch {
+                    ref_name: "refs/heads/A",
+                    archived: false,
+                },
+                WorkspaceStackBranch {
+                    ref_name: "refs/heads/C",
+                    archived: false,
                 },
             ],
-            target_ref: None,
-            target_commit_id: None,
-            push_remote: None,
-        }
-        "#
+            workspacecommit_relation: Merged,
+        },
+    ],
+    target_ref: None,
+    target_commit_id: None,
+    push_remote: None,
+}
+"#]]
         );
     }
 
@@ -277,49 +282,56 @@ mod workspace {
             "adding a new stack can 'fail' if the segment is already present, but not as stack tip"
         );
 
-        insta::assert_snapshot!(but_testsupport::sanitize_uuids_and_timestamps(format!("{ws:#?}")), @r#"
-        Workspace {
-            ref_info: RefInfo { created_at: None, updated_at: None },
-            stacks: [
-                WorkspaceStack {
-                    id: 1,
-                    branches: [
-                        WorkspaceStackBranch {
-                            ref_name: "refs/heads/B",
-                            archived: false,
-                        },
-                        WorkspaceStackBranch {
-                            ref_name: "refs/heads/C",
-                            archived: false,
-                        },
-                        WorkspaceStackBranch {
-                            ref_name: "refs/heads/A",
-                            archived: false,
-                        },
-                    ],
-                    workspacecommit_relation: Merged,
+        snapbox::assert_data_eq!(
+            but_testsupport::sanitize_uuids_and_timestamps(format!("{ws:#?}")),
+            snapbox::str![[r#"
+Workspace {
+    ref_info: RefInfo { created_at: None, updated_at: None },
+    stacks: [
+        WorkspaceStack {
+            id: 1,
+            branches: [
+                WorkspaceStackBranch {
+                    ref_name: "refs/heads/B",
+                    archived: false,
+                },
+                WorkspaceStackBranch {
+                    ref_name: "refs/heads/C",
+                    archived: false,
+                },
+                WorkspaceStackBranch {
+                    ref_name: "refs/heads/A",
+                    archived: false,
                 },
             ],
-            target_ref: None,
-            target_commit_id: None,
-            push_remote: None,
-        }
-        "#);
+            workspacecommit_relation: Merged,
+        },
+    ],
+    target_ref: None,
+    target_commit_id: None,
+    push_remote: None,
+}
+"#]]
+        );
 
         assert!(ws.remove_segment(b_ref));
         assert!(ws.remove_segment(a_ref));
         assert!(ws.remove_segment(c_ref));
 
         // Everything should be removed.
-        insta::assert_debug_snapshot!(ws, @r#"
-        Workspace {
-            ref_info: RefInfo { created_at: None, updated_at: None },
-            stacks: [],
-            target_ref: None,
-            target_commit_id: None,
-            push_remote: None,
-        }
-        "#);
+        snapbox::assert_data_eq!(
+            ws.to_debug(),
+            snapbox::str![[r#"
+Workspace {
+    ref_info: RefInfo { created_at: None, updated_at: None },
+    stacks: [],
+    target_ref: None,
+    target_commit_id: None,
+    push_remote: None,
+}
+
+"#]]
+        );
     }
 
     #[test]
@@ -374,40 +386,43 @@ mod workspace {
             stack_id_from_name,
         )?;
 
-        insta::assert_snapshot!(but_testsupport::sanitize_uuids_and_timestamps(format!("{ws:#?}")), @r#"
-        Workspace {
-            ref_info: RefInfo { created_at: None, updated_at: None },
-            stacks: [
-                WorkspaceStack {
-                    id: 1,
-                    branches: [
-                        WorkspaceStackBranch {
-                            ref_name: "refs/heads/A",
-                            archived: false,
-                        },
-                    ],
-                    workspacecommit_relation: Merged,
-                },
-                WorkspaceStack {
-                    id: 2,
-                    branches: [
-                        WorkspaceStackBranch {
-                            ref_name: "refs/heads/C",
-                            archived: false,
-                        },
-                        WorkspaceStackBranch {
-                            ref_name: "refs/heads/B",
-                            archived: false,
-                        },
-                    ],
-                    workspacecommit_relation: Merged,
+        snapbox::assert_data_eq!(
+            but_testsupport::sanitize_uuids_and_timestamps(format!("{ws:#?}")),
+            snapbox::str![[r#"
+Workspace {
+    ref_info: RefInfo { created_at: None, updated_at: None },
+    stacks: [
+        WorkspaceStack {
+            id: 1,
+            branches: [
+                WorkspaceStackBranch {
+                    ref_name: "refs/heads/A",
+                    archived: false,
                 },
             ],
-            target_ref: None,
-            target_commit_id: None,
-            push_remote: None,
-        }
-        "#);
+            workspacecommit_relation: Merged,
+        },
+        WorkspaceStack {
+            id: 2,
+            branches: [
+                WorkspaceStackBranch {
+                    ref_name: "refs/heads/C",
+                    archived: false,
+                },
+                WorkspaceStackBranch {
+                    ref_name: "refs/heads/B",
+                    archived: false,
+                },
+            ],
+            workspacecommit_relation: Merged,
+        },
+    ],
+    target_ref: None,
+    target_commit_id: None,
+    push_remote: None,
+}
+"#]]
+        );
         Ok(())
     }
 
@@ -445,34 +460,38 @@ mod workspace {
             "existing branch metadata is preserved"
         );
         assert_eq!(ws.stacks[0].workspacecommit_relation, Merged);
-        insta::assert_debug_snapshot!(ws, @r#"
-        Workspace {
-            ref_info: RefInfo { created_at: None, updated_at: None },
-            stacks: [
-                WorkspaceStack {
-                    id: 00000000-0000-0000-0000-000000000001,
-                    branches: [
-                        WorkspaceStackBranch {
-                            ref_name: "refs/heads/C",
-                            archived: false,
-                        },
-                        WorkspaceStackBranch {
-                            ref_name: "refs/heads/B",
-                            archived: false,
-                        },
-                        WorkspaceStackBranch {
-                            ref_name: "refs/heads/old-extra",
-                            archived: true,
-                        },
-                    ],
-                    workspacecommit_relation: Merged,
+        snapbox::assert_data_eq!(
+            ws.to_debug(),
+            snapbox::str![[r#"
+Workspace {
+    ref_info: RefInfo { created_at: None, updated_at: None },
+    stacks: [
+        WorkspaceStack {
+            id: 00000000-0000-0000-0000-000000000001,
+            branches: [
+                WorkspaceStackBranch {
+                    ref_name: "refs/heads/C",
+                    archived: false,
+                },
+                WorkspaceStackBranch {
+                    ref_name: "refs/heads/B",
+                    archived: false,
+                },
+                WorkspaceStackBranch {
+                    ref_name: "refs/heads/old-extra",
+                    archived: true,
                 },
             ],
-            target_ref: None,
-            target_commit_id: None,
-            push_remote: None,
-        }
-        "#);
+            workspacecommit_relation: Merged,
+        },
+    ],
+    target_ref: None,
+    target_commit_id: None,
+    push_remote: None,
+}
+
+"#]]
+        );
         Ok(())
     }
 
@@ -522,36 +541,41 @@ mod workspace {
             [projected_stack(Some(matching_stack_id), ["refs/heads/A"])],
             stack_id_from_name,
         )?;
-        insta::assert_debug_snapshot!(ws, "projected stacks prefer pulling from equally identified metadata stacks, so the Outside stacks turns Merged", @r#"
-        Workspace {
-            ref_info: RefInfo { created_at: None, updated_at: None },
-            stacks: [
-                WorkspaceStack {
-                    id: 00000000-0000-0000-0000-000000000001,
-                    branches: [
-                        WorkspaceStackBranch {
-                            ref_name: "refs/heads/A",
-                            archived: false,
-                        },
-                    ],
-                    workspacecommit_relation: Merged,
-                },
-                WorkspaceStack {
-                    id: 00000000-0000-0000-0000-000000000002,
-                    branches: [
-                        WorkspaceStackBranch {
-                            ref_name: "refs/heads/A",
-                            archived: true,
-                        },
-                    ],
-                    workspacecommit_relation: Merged,
+        // projected stacks prefer pulling from equally identified metadata stacks, so the Outside stacks turns Merged
+        snapbox::assert_data_eq!(
+            ws.to_debug(),
+            snapbox::str![[r#"
+Workspace {
+    ref_info: RefInfo { created_at: None, updated_at: None },
+    stacks: [
+        WorkspaceStack {
+            id: 00000000-0000-0000-0000-000000000001,
+            branches: [
+                WorkspaceStackBranch {
+                    ref_name: "refs/heads/A",
+                    archived: false,
                 },
             ],
-            target_ref: None,
-            target_commit_id: None,
-            push_remote: None,
-        }
-        "#);
+            workspacecommit_relation: Merged,
+        },
+        WorkspaceStack {
+            id: 00000000-0000-0000-0000-000000000002,
+            branches: [
+                WorkspaceStackBranch {
+                    ref_name: "refs/heads/A",
+                    archived: true,
+                },
+            ],
+            workspacecommit_relation: Merged,
+        },
+    ],
+    target_ref: None,
+    target_commit_id: None,
+    push_remote: None,
+}
+
+"#]]
+        );
 
         assert_eq!(
             ws.stacks.len(),
@@ -618,54 +642,59 @@ mod workspace {
             stack_id_from_name,
         )?;
 
-        insta::assert_debug_snapshot!(ws, "projected stack grouping moves existing branch metadata between stacks, while unrelated branch metadata remains", @r#"
-        Workspace {
-            ref_info: RefInfo { created_at: None, updated_at: None },
-            stacks: [
-                WorkspaceStack {
-                    id: 00000000-0000-0000-0000-000000000001,
-                    branches: [
-                        WorkspaceStackBranch {
-                            ref_name: "refs/heads/E",
-                            archived: false,
-                        },
-                    ],
-                    workspacecommit_relation: Merged,
-                },
-                WorkspaceStack {
-                    id: 00000000-0000-0000-0000-000000000002,
-                    branches: [
-                        WorkspaceStackBranch {
-                            ref_name: "refs/heads/D",
-                            archived: true,
-                        },
-                        WorkspaceStackBranch {
-                            ref_name: "refs/heads/C",
-                            archived: false,
-                        },
-                        WorkspaceStackBranch {
-                            ref_name: "refs/heads/B",
-                            archived: false,
-                        },
-                    ],
-                    workspacecommit_relation: Merged,
-                },
-                WorkspaceStack {
-                    id: 00000000-0000-0000-0000-000000000003,
-                    branches: [
-                        WorkspaceStackBranch {
-                            ref_name: "refs/heads/unrelated",
-                            archived: false,
-                        },
-                    ],
-                    workspacecommit_relation: Merged,
+        // projected stack grouping moves existing branch metadata between stacks, while unrelated branch metadata remains
+        snapbox::assert_data_eq!(
+            ws.to_debug(),
+            snapbox::str![[r#"
+Workspace {
+    ref_info: RefInfo { created_at: None, updated_at: None },
+    stacks: [
+        WorkspaceStack {
+            id: 00000000-0000-0000-0000-000000000001,
+            branches: [
+                WorkspaceStackBranch {
+                    ref_name: "refs/heads/E",
+                    archived: false,
                 },
             ],
-            target_ref: None,
-            target_commit_id: None,
-            push_remote: None,
-        }
-        "#);
+            workspacecommit_relation: Merged,
+        },
+        WorkspaceStack {
+            id: 00000000-0000-0000-0000-000000000002,
+            branches: [
+                WorkspaceStackBranch {
+                    ref_name: "refs/heads/D",
+                    archived: true,
+                },
+                WorkspaceStackBranch {
+                    ref_name: "refs/heads/C",
+                    archived: false,
+                },
+                WorkspaceStackBranch {
+                    ref_name: "refs/heads/B",
+                    archived: false,
+                },
+            ],
+            workspacecommit_relation: Merged,
+        },
+        WorkspaceStack {
+            id: 00000000-0000-0000-0000-000000000003,
+            branches: [
+                WorkspaceStackBranch {
+                    ref_name: "refs/heads/unrelated",
+                    archived: false,
+                },
+            ],
+            workspacecommit_relation: Merged,
+        },
+    ],
+    target_ref: None,
+    target_commit_id: None,
+    push_remote: None,
+}
+
+"#]]
+        );
         Ok(())
     }
 

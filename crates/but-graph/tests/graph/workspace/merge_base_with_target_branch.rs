@@ -1,5 +1,6 @@
 use but_graph::Graph;
 use but_testsupport::visualize_commit_graph_all;
+use snapbox::IntoData;
 
 use super::project_meta;
 use crate::init::utils::{
@@ -10,19 +11,24 @@ use crate::init::utils::{
 #[test]
 fn with_target_ref() -> anyhow::Result<()> {
     let (repo, mut meta) = read_only_in_memory_scenario("ws/local-target-and-stack")?;
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *   59a427f (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    | * a62b0de (A) A2
-    | * 120a217 A1
-    * | 0a415d8 (main) M3
-    | | * 1f5c47b (origin/main) RM1
-    | |/  
-    |/|   
-    * | 73ba99d M2
-    |/  
-    * fafd9d0 init
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   59a427f (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+| * a62b0de (A) A2
+| * 120a217 A1
+* | 0a415d8 (main) M3
+| | * 1f5c47b (origin/main) RM1
+| |/  
+|/|   
+* | 73ba99d M2
+|/  
+* fafd9d0 init
+
+"#]]
+        .raw()
+    );
 
     add_workspace(&mut meta);
 
@@ -52,19 +58,24 @@ fn with_target_ref() -> anyhow::Result<()> {
 #[test]
 fn with_extra_target_when_no_target_ref() -> anyhow::Result<()> {
     let (repo, mut meta) = read_only_in_memory_scenario("ws/two-branches-one-below-base")?;
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *   e82dfab (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    | * 6fdab32 (A) A1
-    * | 78b1b59 (B) B1
-    | | * 938e6f2 (origin/main, main) M4
-    | |/  
-    |/|   
-    * | f52fcec M3
-    |/  
-    * bce0c5e M2
-    * 3183e43 M1
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   e82dfab (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+| * 6fdab32 (A) A1
+* | 78b1b59 (B) B1
+| | * 938e6f2 (origin/main, main) M4
+| |/  
+|/|   
+* | f52fcec M3
+|/  
+* bce0c5e M2
+* 3183e43 M1
+
+"#]]
+        .raw()
+    );
 
     add_workspace(&mut meta);
     meta.data_mut().default_target = None;

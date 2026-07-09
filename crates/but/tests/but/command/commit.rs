@@ -1,3 +1,4 @@
+use snapbox::IntoData;
 use snapbox::str;
 
 use super::util;
@@ -34,11 +35,15 @@ Hint: run `but help` for all commands
 #[test]
 fn commit_with_message_from_file() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    insta::assert_snapshot!(env.git_log(), @"
-    * edd3eb7 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 9477ae7 (A) add A
-    * 0dc3733 (origin/main, origin/HEAD, main) add M
-    ");
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* edd3eb7 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 9477ae7 (A) add A
+* 0dc3733 (origin/main, origin/HEAD, main) add M
+
+"#]]
+    );
 
     env.setup_metadata(&["A"]);
 
@@ -153,11 +158,15 @@ Caused by:
 #[test]
 fn commit_with_message_flag() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    insta::assert_snapshot!(env.git_log(), @"
-    * edd3eb7 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 9477ae7 (A) add A
-    * 0dc3733 (origin/main, origin/HEAD, main) add M
-    ");
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* edd3eb7 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 9477ae7 (A) add A
+* 0dc3733 (origin/main, origin/HEAD, main) add M
+
+"#]]
+    );
 
     env.setup_metadata(&["A"]);
 
@@ -200,14 +209,19 @@ no need for -a here my friend...
 #[test]
 fn commit_with_branch_hint() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
-    insta::assert_snapshot!(env.git_log(), @r"
-    *   c128bce (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    | * 9477ae7 (A) add A
-    * | d3e2ba3 (B) add B
-    |/  
-    * 0dc3733 (origin/main, origin/HEAD, main) add M
-    ");
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+*   c128bce (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+| * 9477ae7 (A) add A
+* | d3e2ba3 (B) add B
+|/  
+* 0dc3733 (origin/main, origin/HEAD, main) add M
+
+"#]]
+        .raw()
+    );
 
     env.setup_metadata(&["A", "B"]);
 
@@ -230,14 +244,19 @@ fn commit_with_branch_hint() {
 #[test]
 fn commit_with_nonexistent_branch_fails() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
-    insta::assert_snapshot!(env.git_log(), @r"
-    *   c128bce (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    | * 9477ae7 (A) add A
-    * | d3e2ba3 (B) add B
-    |/  
-    * 0dc3733 (origin/main, origin/HEAD, main) add M
-    ");
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+*   c128bce (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+| * 9477ae7 (A) add A
+* | d3e2ba3 (B) add B
+|/  
+* 0dc3733 (origin/main, origin/HEAD, main) add M
+
+"#]]
+        .raw()
+    );
 
     env.setup_metadata_at_target(&["A", "B"], "origin/main");
 
@@ -255,14 +274,19 @@ Error: Branch 'nonexistent' not found
 #[test]
 fn commit_with_create_flag_creates_new_branch() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
-    insta::assert_snapshot!(env.git_log(), @r"
-    *   c128bce (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    | * 9477ae7 (A) add A
-    * | d3e2ba3 (B) add B
-    |/  
-    * 0dc3733 (origin/main, origin/HEAD, main) add M
-    ");
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+*   c128bce (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+| * 9477ae7 (A) add A
+* | d3e2ba3 (B) add B
+|/  
+* 0dc3733 (origin/main, origin/HEAD, main) add M
+
+"#]]
+        .raw()
+    );
 
     env.setup_metadata_at_target(&["A", "B"], "origin/main");
 
@@ -407,11 +431,15 @@ Error: Aborting commit due to empty commit message.
 #[test]
 fn commit_empty_with_before_flag() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    insta::assert_snapshot!(env.git_log(), @"
-    * edd3eb7 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 9477ae7 (A) add A
-    * 0dc3733 (origin/main, origin/HEAD, main) add M
-    ");
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* edd3eb7 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 9477ae7 (A) add A
+* 0dc3733 (origin/main, origin/HEAD, main) add M
+
+"#]]
+    );
 
     env.setup_metadata(&["A"]);
 
@@ -434,11 +462,15 @@ Created blank commit before commit 9477ae7
 #[test]
 fn commit_empty_with_positional_target_defaults_to_before() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    insta::assert_snapshot!(env.git_log(), @"
-    * edd3eb7 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 9477ae7 (A) add A
-    * 0dc3733 (origin/main, origin/HEAD, main) add M
-    ");
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* edd3eb7 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 9477ae7 (A) add A
+* 0dc3733 (origin/main, origin/HEAD, main) add M
+
+"#]]
+    );
 
     env.setup_metadata(&["A"]);
 
@@ -614,11 +646,15 @@ Hint: run `but help` for all commands
 #[test]
 fn commit_empty_with_after_commit() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    insta::assert_snapshot!(env.git_log(), @"
-    * edd3eb7 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 9477ae7 (A) add A
-    * 0dc3733 (origin/main, origin/HEAD, main) add M
-    ");
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* edd3eb7 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 9477ae7 (A) add A
+* 0dc3733 (origin/main, origin/HEAD, main) add M
+
+"#]]
+    );
 
     env.setup_metadata(&["A"]);
 

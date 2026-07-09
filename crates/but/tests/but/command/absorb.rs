@@ -58,17 +58,21 @@ Hint: you can run `but undo` to undo these changes
     // Change was absorbed
     let repo = env.open_repo();
     let blob = repo.rev_parse_single(b"A:a.txt")?.object()?;
-    insta::assert_snapshot!(blob.data.as_bstr(), @"
-    firsta
-    line
-    line
-    line
-    line
-    line
-    line
-    line
-    lasta
-    ");
+    snapbox::assert_data_eq!(
+        blob.data.as_bstr().to_string(),
+        snapbox::str![[r#"
+firsta
+line
+line
+line
+line
+line
+line
+line
+lasta
+
+"#]]
+    );
 
     // Status is clean
     env.but("--format json status -f")
@@ -136,17 +140,21 @@ Hint: you can run `but undo` to undo these changes
     // Change was partially absorbed
     let repo = env.open_repo();
     let blob = repo.rev_parse_single(b"A:a.txt")?.object()?;
-    insta::assert_snapshot!(blob.data.as_bstr(), @"
-    firsta
-    line
-    line
-    line
-    line
-    line
-    line
-    line
-    last
-    ");
+    snapbox::assert_data_eq!(
+        blob.data.as_bstr().to_string(),
+        snapbox::str![[r#"
+firsta
+line
+line
+line
+line
+line
+line
+line
+last
+
+"#]]
+    );
 
     // Status is not clean
     env.but("--format json status -f")
@@ -378,17 +386,21 @@ Hint: run `but help` for all commands
     // Change was full absorbed
     let repo = env.open_repo();
     let blob = repo.rev_parse_single(b"A:a.txt")?.object()?;
-    insta::assert_snapshot!(blob.data.as_bstr(), @"
-    first new
-    line
-    line
-    line
-    line
-    line
-    line
-    line
-    last new
-    ");
+    snapbox::assert_data_eq!(
+        blob.data.as_bstr().to_string(),
+        snapbox::str![[r#"
+first new
+line
+line
+line
+line
+line
+line
+line
+last new
+
+"#]]
+    );
 
     Ok(())
 }
@@ -488,17 +500,21 @@ Dry run complete. No changes were made.
     // Verify the file content wasn't actually changed
     let repo = env.open_repo();
     let blob = repo.rev_parse_single(b"A:a.txt")?.object()?;
-    insta::assert_snapshot!(blob.data.as_bstr(), @"
-    first
-    line
-    line
-    line
-    line
-    line
-    line
-    line
-    last
-    ");
+    snapbox::assert_data_eq!(
+        blob.data.as_bstr().to_string(),
+        snapbox::str![[r#"
+first
+line
+line
+line
+line
+line
+line
+line
+last
+
+"#]]
+    );
 
     // Verify there are still uncommitted changes
     env.but("--format json status -f")

@@ -8,6 +8,7 @@ use but_rebase::{
 };
 use but_testsupport::visualize_commit_graph_all;
 use gix::prelude::ObjectIdExt;
+use snapbox::IntoData;
 use std::mem::ManuallyDrop;
 
 use crate::utils::{fixture, fixture_writable, standard_options};
@@ -16,17 +17,22 @@ use crate::utils::{fixture, fixture_writable, standard_options};
 fn matches_clean_octopus_merge() -> Result<()> {
     let (repo, mut meta) = fixture("octopus-merge-with-redundant-input")?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *-.   a7dcd9f (HEAD -> main) octopus
-    |\ \  
-    | | * 2a5954a (right) right
-    | |/  
-    |/|   
-    | * cbaa825 (left) left-2
-    | * 777f2d5 left-1
-    |/  
-    * 66df43d base
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*-.   a7dcd9f (HEAD -> main) octopus
+|\ \  
+| | * 2a5954a (right) right
+| |/  
+|/|   
+| * cbaa825 (left) left-2
+| * 777f2d5 left-1
+|/  
+* 66df43d base
+
+"#]]
+        .raw()
+    );
 
     let graph = Graph::from_head(
         &repo,
@@ -61,17 +67,22 @@ fn matches_clean_octopus_merge() -> Result<()> {
 fn excludes_unselected_parent_changes() -> Result<()> {
     let (repo, mut meta) = fixture("merge-commits-excludes-unselected-parent-visible")?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *-.   e8da81c (HEAD -> main) merge
-    |\ \  
-    | | * fa946b5 (C) C
-    | | * 2eb5a0f (B) B
-    | |/  
-    |/|   
-    | * cec649d (A) A
-    |/  
-    * b301433 M
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*-.   e8da81c (HEAD -> main) merge
+|\ \  
+| | * fa946b5 (C) C
+| | * 2eb5a0f (B) B
+| |/  
+|/|   
+| * cec649d (A) A
+|/  
+* b301433 M
+
+"#]]
+        .raw()
+    );
 
     let graph = Graph::from_head(
         &repo,
@@ -124,22 +135,27 @@ fn excludes_unselected_parent_changes() -> Result<()> {
 fn reports_conflicts() -> Result<()> {
     let (repo, mut meta) = fixture("merge-commit-changes-fail-fast-after-conflict-visible")?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *   9b1de89 (HEAD -> main) merge-C
-    |\  
-    | * ea9d91a (C) C
-    * |   669016a merge-B
-    |\ \  
-    | * | a1163f7 (B) B
-    | |/  
-    * |   468ee64 merge-A
-    |\ \  
-    | |/  
-    |/|   
-    | * 332e45d (A) A
-    |/  
-    * 66df43d base
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   9b1de89 (HEAD -> main) merge-C
+|\  
+| * ea9d91a (C) C
+* |   669016a merge-B
+|\ \  
+| * | a1163f7 (B) B
+| |/  
+* |   468ee64 merge-A
+|\ \  
+| |/  
+|/|   
+| * 332e45d (A) A
+|/  
+* 66df43d base
+
+"#]]
+        .raw()
+    );
 
     let graph = Graph::from_head(
         &repo,
@@ -190,22 +206,27 @@ fn reports_conflicts() -> Result<()> {
 fn stops_folding_after_first_conflict() -> Result<()> {
     let (repo, mut meta) = fixture("merge-commit-changes-fail-fast-after-conflict-visible")?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *   9b1de89 (HEAD -> main) merge-C
-    |\  
-    | * ea9d91a (C) C
-    * |   669016a merge-B
-    |\ \  
-    | * | a1163f7 (B) B
-    | |/  
-    * |   468ee64 merge-A
-    |\ \  
-    | |/  
-    |/|   
-    | * 332e45d (A) A
-    |/  
-    * 66df43d base
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   9b1de89 (HEAD -> main) merge-C
+|\  
+| * ea9d91a (C) C
+* |   669016a merge-B
+|\ \  
+| * | a1163f7 (B) B
+| |/  
+* |   468ee64 merge-A
+|\ \  
+| |/  
+|/|   
+| * 332e45d (A) A
+|/  
+* 66df43d base
+
+"#]]
+        .raw()
+    );
 
     let graph = Graph::from_head(
         &repo,
@@ -251,18 +272,23 @@ fn preserves_noncontiguous_selected_changes() -> Result<()> {
     let (repo, mut meta) =
         fixture("merge-commits-preserve-noncontiguous-selected-changes-visible")?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *-.   1c47eb3 (HEAD -> main) merge
-    |\ \  
-    | | * bf7c931 (B) D
-    | | * fa946b5 C
-    | | * 2eb5a0f B
-    | |/  
-    |/|   
-    | * cec649d (A) A
-    |/  
-    * b301433 M
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*-.   1c47eb3 (HEAD -> main) merge
+|\ \  
+| | * bf7c931 (B) D
+| | * fa946b5 C
+| | * 2eb5a0f B
+| |/  
+|/|   
+| * cec649d (A) A
+|/  
+* b301433 M
+
+"#]]
+        .raw()
+    );
 
     let graph = Graph::from_head(
         &repo,
@@ -316,19 +342,24 @@ fn preserves_noncontiguous_selected_changes() -> Result<()> {
 fn preserves_first_selected_commit_tree_while_applying_later_selected_ranges() -> Result<()> {
     let (repo, mut meta) = fixture("merge-commits-preserve-anchor-tree-visible")?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *-.   e84cecd (HEAD -> main) merge
-    |\ \  
-    | | * e105958 (E) E
-    | | * 739244f (C) C
-    | | * 7f69bb3 (B) B
-    | |/  
-    |/|   
-    | * 06e6d84 (D) D
-    | * cec649d (A) A
-    |/  
-    * b301433 M
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*-.   e84cecd (HEAD -> main) merge
+|\ \  
+| | * e105958 (E) E
+| | * 739244f (C) C
+| | * 7f69bb3 (B) B
+| |/  
+|/|   
+| * 06e6d84 (D) D
+| * cec649d (A) A
+|/  
+* b301433 M
+
+"#]]
+        .raw()
+    );
 
     let graph = Graph::from_head(
         &repo,
@@ -402,11 +433,15 @@ fn planning_preserves_noncontiguous_selected_changes() -> Result<()> {
     let target = repo.rev_parse_single("A~1")?.detach();
     let plan = editor.plan_commit_changes_for_merge(target, vec![a_commit, b_commit, d_commit])?;
 
-    insta::assert_snapshot!(labeled_plan_entries(&repo, &plan), @"
-    B <- M
-    D <- C
-    A <- M
-    ");
+    snapbox::assert_data_eq!(
+        labeled_plan_entries(&repo, &plan),
+        snapbox::str![[r#"
+B <- M
+D <- C
+A <- M
+
+"#]]
+    );
     Ok(())
 }
 
@@ -414,22 +449,27 @@ fn planning_preserves_noncontiguous_selected_changes() -> Result<()> {
 fn planning_fixture_graph() -> Result<()> {
     let fixture = simplify_fixture()?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&fixture.repo)?, @r"
-    *-.   d0949aa (HEAD -> main) merged
-    |\ \  
-    | | * 8259b01 (right) right-3
-    | | * 0a63ea6 right-2
-    | | * 26b0bd5 right-1
-    | * | feaa00d (left) left-3
-    | * | 07bba81 left-2
-    | * | 4b6a0f2 left-1
-    | |/  
-    * | f1b6511 main-3
-    * | 6bbd9db main-2
-    * | 257ee22 main-1
-    |/  
-    * 6dbc49d base
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&fixture.repo)?,
+        snapbox::str![[r#"
+*-.   d0949aa (HEAD -> main) merged
+|\ \  
+| | * 8259b01 (right) right-3
+| | * 0a63ea6 right-2
+| | * 26b0bd5 right-1
+| * | feaa00d (left) left-3
+| * | 07bba81 left-2
+| * | 4b6a0f2 left-1
+| |/  
+* | f1b6511 main-3
+* | 6bbd9db main-2
+* | 257ee22 main-1
+|/  
+* 6dbc49d base
+
+"#]]
+        .raw()
+    );
 
     Ok(())
 }
@@ -444,7 +484,13 @@ fn planning_collapses_contiguous_selected_chain() -> Result<()> {
         vec![fixture.left_1, fixture.left_2, fixture.left_3],
     )?;
 
-    insta::assert_snapshot!(labeled_plan_entries(&fixture.repo, &plan), @"left-3 <- base");
+    snapbox::assert_data_eq!(
+        labeled_plan_entries(&fixture.repo, &plan),
+        snapbox::str![[r#"
+left-3 <- base
+
+"#]]
+    );
     Ok(())
 }
 
@@ -464,13 +510,17 @@ fn planning_preserves_unrelated_branch_tips() -> Result<()> {
         ],
     )?;
 
-    insta::assert_snapshot!(labeled_plan_entries(&fixture.repo, &plan), @"
-    right-1 <- base
-    right-3 <- right-2
-    left-1 <- base
-    left-3 <- left-2
-    main-2 <- main-1
-    ");
+    snapbox::assert_data_eq!(
+        labeled_plan_entries(&fixture.repo, &plan),
+        snapbox::str![[r#"
+right-1 <- base
+right-3 <- right-2
+left-1 <- base
+left-3 <- left-2
+main-2 <- main-1
+
+"#]]
+    );
     Ok(())
 }
 
@@ -492,12 +542,16 @@ fn planning_deduplicates_and_keeps_order_of_survivors() -> Result<()> {
         ],
     )?;
 
-    insta::assert_snapshot!(labeled_plan_entries(&fixture.repo, &plan), @"
-    right-1 <- base
-    right-3 <- right-2
-    left-3 <- left-1
-    main-3 <- main-1
-    ");
+    snapbox::assert_data_eq!(
+        labeled_plan_entries(&fixture.repo, &plan),
+        snapbox::str![[r#"
+right-1 <- base
+right-3 <- right-2
+left-3 <- left-1
+main-3 <- main-1
+
+"#]]
+    );
     Ok(())
 }
 
@@ -554,7 +608,13 @@ fn planning_prunes_subjects_reachable_from_target_first_parent_lineage() -> Resu
 
     let plan = editor.plan_commit_changes_for_merge(d_commit, vec![a_commit])?;
 
-    insta::assert_snapshot!(labeled_plan_entries(&repo, &plan), @"");
+    snapbox::assert_data_eq!(
+        labeled_plan_entries(&repo, &plan),
+        snapbox::str![[r#"
+
+
+"#]]
+    );
     Ok(())
 }
 
@@ -576,7 +636,13 @@ fn planning_prunes_subjects_reachable_from_target_merge_parent_lineage() -> Resu
 
     let plan = editor.plan_commit_changes_for_merge(merge_commit, vec![b_commit])?;
 
-    insta::assert_snapshot!(labeled_plan_entries(&repo, &plan), @"");
+    snapbox::assert_data_eq!(
+        labeled_plan_entries(&repo, &plan),
+        snapbox::str![[r#"
+
+
+"#]]
+    );
     Ok(())
 }
 
@@ -596,12 +662,16 @@ fn planning_prunes_target_ancestors_and_keeps_external_subject_order() -> Result
         ],
     )?;
 
-    insta::assert_snapshot!(labeled_plan_entries(&fixture.repo, &plan), @"
-    right-1 <- base
-    right-3 <- right-2
-    left-1 <- base
-    left-3 <- left-2
-    ");
+    snapbox::assert_data_eq!(
+        labeled_plan_entries(&fixture.repo, &plan),
+        snapbox::str![[r#"
+right-1 <- base
+right-3 <- right-2
+left-1 <- base
+left-3 <- left-2
+
+"#]]
+    );
     Ok(())
 }
 
@@ -625,7 +695,13 @@ fn planning_uses_pruned_selected_first_parent_tree_as_base_boundary() -> Result<
 
     let plan = editor.plan_commit_changes_for_merge(right, vec![base, shared, left])?;
 
-    insta::assert_snapshot!(labeled_plan_entries(&repo, &plan), @"left: head <- shared");
+    snapbox::assert_data_eq!(
+        labeled_plan_entries(&repo, &plan),
+        snapbox::str![[r#"
+left: head <- shared
+
+"#]]
+    );
     Ok(())
 }
 
@@ -655,7 +731,13 @@ fn planning_works_after_normalizing_chained_editor_mutations() -> Result<()> {
 
     let plan = editor.plan_commit_changes_for_merge(rewritten_head, vec![head_parent])?;
 
-    insta::assert_snapshot!(labeled_plan_entries(&repo, &plan), @"");
+    snapbox::assert_data_eq!(
+        labeled_plan_entries(&repo, &plan),
+        snapbox::str![[r#"
+
+
+"#]]
+    );
     Ok(())
 }
 

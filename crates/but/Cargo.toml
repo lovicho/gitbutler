@@ -168,7 +168,6 @@ serde_json = { workspace = true, features = ["preserve_order"] }
 but-testsupport = { workspace = true, features = ["sandbox-but-api"] }
 snapbox = { workspace = true, features = ["term-svg"] }
 shell-words.workspace = true
-insta.workspace = true
 temp-env = "0.3"
 serial_test = "3.2.0"
 syn = { version = "2.0", features = ["visit", "full", "extra-traits", "parsing", "printing"] }

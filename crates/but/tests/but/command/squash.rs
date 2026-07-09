@@ -1,5 +1,6 @@
 use anyhow::Context as _;
 use bstr::ByteSlice;
+use snapbox::IntoData;
 use snapbox::str;
 
 use crate::{command::util, utils::Sandbox};
@@ -379,14 +380,18 @@ fn squash_list_with_bottom_target_keeps_target_message_first() -> anyhow::Result
     env.setup_metadata(&["A"]);
     setup_branch_with_commits(&env, "A", 3);
 
-    insta::assert_snapshot!(env.git_log(), @"
-    * ec2758d (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 8a1f552 (A) commit 3
-    * 39dd878 commit 2
-    * 8128859 commit 1
-    * 9477ae7 add A
-    * 0dc3733 (origin/main, origin/HEAD, main, gitbutler/target) add M
-    ");
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* ec2758d (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 8a1f552 (A) commit 3
+* 39dd878 commit 2
+* 8128859 commit 1
+* 9477ae7 add A
+* 0dc3733 (origin/main, origin/HEAD, main, gitbutler/target) add M
+
+"#]]
+    );
 
     let status_before = util::status_json(&env)?;
     let branch_a_before = util::find_branch(&status_before, "A")?;
@@ -426,14 +431,18 @@ fn squash_list_with_middle_target_keeps_target_message_first() -> anyhow::Result
     env.setup_metadata(&["A"]);
     setup_branch_with_commits(&env, "A", 3);
 
-    insta::assert_snapshot!(env.git_log(), @"
-    * ec2758d (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 8a1f552 (A) commit 3
-    * 39dd878 commit 2
-    * 8128859 commit 1
-    * 9477ae7 add A
-    * 0dc3733 (origin/main, origin/HEAD, main, gitbutler/target) add M
-    ");
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* ec2758d (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 8a1f552 (A) commit 3
+* 39dd878 commit 2
+* 8128859 commit 1
+* 9477ae7 add A
+* 0dc3733 (origin/main, origin/HEAD, main, gitbutler/target) add M
+
+"#]]
+    );
 
     let status_before = util::status_json(&env)?;
     let branch_a_before = util::find_branch(&status_before, "A")?;
@@ -477,14 +486,18 @@ fn squash_multiple_commits_keeps_squashed_commit_content() -> anyhow::Result<()>
     env.setup_metadata(&["A"]);
     setup_branch_with_commits(&env, "A", 3);
 
-    insta::assert_snapshot!(env.git_log(), @"
-    * ec2758d (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 8a1f552 (A) commit 3
-    * 39dd878 commit 2
-    * 8128859 commit 1
-    * 9477ae7 add A
-    * 0dc3733 (origin/main, origin/HEAD, main, gitbutler/target) add M
-    ");
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* ec2758d (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 8a1f552 (A) commit 3
+* 39dd878 commit 2
+* 8128859 commit 1
+* 9477ae7 add A
+* 0dc3733 (origin/main, origin/HEAD, main, gitbutler/target) add M
+
+"#]]
+    );
 
     let status_before = util::status_json(&env)?;
     let branch_a_before = util::find_branch(&status_before, "A")?;
@@ -541,9 +554,27 @@ fn squash_multiple_commits_keeps_squashed_commit_content() -> anyhow::Result<()>
     let second_blob = repo.rev_parse_single(b"A:A-file2.txt")?.object()?;
     let third_blob = repo.rev_parse_single(b"A:A-file3.txt")?.object()?;
 
-    insta::assert_snapshot!(first_blob.data.as_bstr(), @"content for commit 1");
-    insta::assert_snapshot!(second_blob.data.as_bstr(), @"content for commit 2");
-    insta::assert_snapshot!(third_blob.data.as_bstr(), @"content for commit 3");
+    snapbox::assert_data_eq!(
+        first_blob.data.as_bstr().to_string(),
+        snapbox::str![[r#"
+content for commit 1
+
+"#]]
+    );
+    snapbox::assert_data_eq!(
+        second_blob.data.as_bstr().to_string(),
+        snapbox::str![[r#"
+content for commit 2
+
+"#]]
+    );
+    snapbox::assert_data_eq!(
+        third_blob.data.as_bstr().to_string(),
+        snapbox::str![[r#"
+content for commit 3
+
+"#]]
+    );
 
     let log_after = env.git_log();
     assert!(
@@ -622,19 +653,24 @@ fn squash_branch_c_in_three_stacks_keeps_content_and_updates_graph() -> anyhow::
     env.setup_metadata(&["A", "B", "C"]);
 
     let normalized_log = env.git_log().replace("  \n", "\n");
-    insta::assert_snapshot!(normalized_log, @r"
-    *-.   205e798 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\ \
-    | | * a748762 (B) B: another 10 lines at the bottom
-    | | * 62e05ba B: 10 lines at the bottom
-    | * | add59d2 (A) A: 10 lines on top
-    | |/
-    * | 930563a (C) C: add another 10 lines to new file
-    * | 68a2fc3 C: add 10 lines to new file
-    * | 984fd1c C: new file with 10 lines
-    |/
-    * 8f0d338 (tag: base, origin/main, origin/HEAD, main) base
-    ");
+    snapbox::assert_data_eq!(
+        normalized_log,
+        snapbox::str![[r#"
+*-.   205e798 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\ \
+| | * a748762 (B) B: another 10 lines at the bottom
+| | * 62e05ba B: 10 lines at the bottom
+| * | add59d2 (A) A: 10 lines on top
+| |/
+* | 930563a (C) C: add another 10 lines to new file
+* | 68a2fc3 C: add 10 lines to new file
+* | 984fd1c C: new file with 10 lines
+|/
+* 8f0d338 (tag: base, origin/main, origin/HEAD, main) base
+
+"#]]
+        .raw()
+    );
 
     let working_directory_before = util::working_directory_snapshot(&env)?;
     env.but("squash C").assert().success();
@@ -650,38 +686,42 @@ fn squash_branch_c_in_three_stacks_keeps_content_and_updates_graph() -> anyhow::
 
     let repo = env.open_repo();
     let new_file_blob = repo.rev_parse_single(b"C:new-file")?.object()?;
-    insta::assert_snapshot!(new_file_blob.data.as_bstr(), @"
-    1
-    2
-    3
-    4
-    5
-    6
-    7
-    8
-    9
-    10
-    11
-    12
-    13
-    14
-    15
-    16
-    17
-    18
-    19
-    20
-    21
-    22
-    23
-    24
-    25
-    26
-    27
-    28
-    29
-    30
-    ");
+    snapbox::assert_data_eq!(
+        new_file_blob.data.as_bstr().to_string(),
+        snapbox::str![[r#"
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+
+"#]]
+    );
 
     let normalized_log = env.git_log().replace("  \n", "\n");
     assert!(
@@ -732,38 +772,42 @@ fn squash_all_c_commits_into_second_commit_of_b_keeps_new_file_content() -> anyh
 
     let repo = env.open_repo();
     let new_file_blob = repo.rev_parse_single(b"B:new-file")?.object()?;
-    insta::assert_snapshot!(new_file_blob.data.as_bstr(), @"
-    1
-    2
-    3
-    4
-    5
-    6
-    7
-    8
-    9
-    10
-    11
-    12
-    13
-    14
-    15
-    16
-    17
-    18
-    19
-    20
-    21
-    22
-    23
-    24
-    25
-    26
-    27
-    28
-    29
-    30
-    ");
+    snapbox::assert_data_eq!(
+        new_file_blob.data.as_bstr().to_string(),
+        snapbox::str![[r#"
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+
+"#]]
+    );
 
     Ok(())
 }

@@ -1,3 +1,4 @@
+use snapbox::IntoData;
 use snapbox::str;
 
 use crate::utils::{CommandExt, Sandbox};
@@ -7,11 +8,15 @@ use crate::utils::{CommandExt, Sandbox};
 #[test]
 fn single_branch_simple_teardown() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    insta::assert_snapshot!(env.git_log(), @"
-    * edd3eb7 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 9477ae7 (A) add A
-    * 0dc3733 (origin/main, origin/HEAD, main) add M
-    ");
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* edd3eb7 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 9477ae7 (A) add A
+* 0dc3733 (origin/main, origin/HEAD, main) add M
+
+"#]]
+    );
 
     env.setup_metadata(&["A"]);
 
@@ -54,14 +59,19 @@ To return to GitButler mode, run:
 #[test]
 fn multiple_branches_preserves_state() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
-    insta::assert_snapshot!(env.git_log(), @r"
-    *   c128bce (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    | * 9477ae7 (A) add A
-    * | d3e2ba3 (B) add B
-    |/  
-    * 0dc3733 (origin/main, origin/HEAD, main) add M
-    ");
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+*   c128bce (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+| * 9477ae7 (A) add A
+* | d3e2ba3 (B) add B
+|/  
+* 0dc3733 (origin/main, origin/HEAD, main) add M
+
+"#]]
+        .raw()
+    );
 
     env.setup_metadata(&["A", "B"]);
 
@@ -269,16 +279,21 @@ fn two_dangling_commits_different_branches() -> anyhow::Result<()> {
     let env =
         Sandbox::init_scenario_with_target_and_default_settings("teardown-two-dangling-commits");
     // Initial state: user has made two commits on top of workspace
-    insta::assert_snapshot!(env.git_log(), @r"
-    * fc13bfb (HEAD -> gitbutler/workspace) add FileForB
-    * 091c8f9 add FileForA
-    *   c128bce GitButler Workspace Commit
-    |\  
-    | * 9477ae7 (A) add A
-    * | d3e2ba3 (B) add B
-    |/  
-    * 0dc3733 (origin/main, origin/HEAD, main) add M
-    ");
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* fc13bfb (HEAD -> gitbutler/workspace) add FileForB
+* 091c8f9 add FileForA
+*   c128bce GitButler Workspace Commit
+|\  
+| * 9477ae7 (A) add A
+* | d3e2ba3 (B) add B
+|/  
+* 0dc3733 (origin/main, origin/HEAD, main) add M
+
+"#]]
+        .raw()
+    );
 
     env.setup_metadata(&["A", "B"]);
 

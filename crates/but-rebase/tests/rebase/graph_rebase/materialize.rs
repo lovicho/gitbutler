@@ -5,6 +5,7 @@ use but_rebase::graph_rebase::{Editor, Step};
 use but_testsupport::{
     StackState, graph_tree, visualize_commit_graph_all, visualize_disk_tree_skip_dot_git,
 };
+use snapbox::IntoData;
 
 use crate::{
     graph_rebase::add_stack_with_segments,
@@ -26,21 +27,29 @@ fn materialize_removes_dropped_commit_changes_from_worktree() -> Result<()> {
     let (repo, _tmpdir, mut meta) = fixture_writable("four-commits")?;
     let worktree = repo.workdir().unwrap();
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * 120e3a9 (HEAD -> main) c
-    * a96434e b
-    * d591dfe a
-    * 35b8235 base
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 120e3a9 (HEAD -> main) c
+* a96434e b
+* d591dfe a
+* 35b8235 base
 
-    insta::assert_snapshot!(visualize_disk_tree_skip_dot_git(worktree)?, @"
-    .
-    ├── .git:40755
-    ├── a:100644
-    ├── b:100644
-    ├── base:100644
-    └── c:100644
-    ");
+"#]]
+    );
+
+    snapbox::assert_data_eq!(
+        visualize_disk_tree_skip_dot_git(worktree)?.to_string(),
+        snapbox::str![[r#"
+.
+├── .git:40755
+├── a:100644
+├── b:100644
+├── base:100644
+└── c:100644
+
+"#]]
+    );
 
     let graph =
         Graph::from_head(&repo, &*meta, project_meta(&*meta), standard_options())?.validated()?;
@@ -54,30 +63,42 @@ fn materialize_removes_dropped_commit_changes_from_worktree() -> Result<()> {
 
     let outcome = editor.rebase()?;
     let overlayed = graph_tree(&outcome.overlayed_graph()?).to_string();
-    insta::assert_snapshot!(overlayed, @"
+    snapbox::assert_data_eq!(
+        &overlayed,
+        snapbox::str![[r#"
 
-    └── 👉►:0[0]:main[🌳]
-        ├── ·a96434e (⌂|1)
-        ├── ·d591dfe (⌂|1)
-        └── 🏁·35b8235 (⌂|1)
-    ");
+└── 👉►:0[0]:main[🌳]
+    ├── ·a96434e (⌂|1)
+    ├── ·d591dfe (⌂|1)
+    └── 🏁·35b8235 (⌂|1)
+
+"#]]
+    );
     let outcome = outcome.materialize()?;
     assert_eq!(overlayed, graph_tree(&outcome.workspace.graph).to_string());
 
     // After materialize, file 'c' should be GONE from worktree
-    insta::assert_snapshot!(visualize_disk_tree_skip_dot_git(worktree)?, @"
-    .
-    ├── .git:40755
-    ├── a:100644
-    ├── b:100644
-    └── base:100644
-    ");
+    snapbox::assert_data_eq!(
+        visualize_disk_tree_skip_dot_git(worktree)?.to_string(),
+        snapbox::str![[r#"
+.
+├── .git:40755
+├── a:100644
+├── b:100644
+└── base:100644
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * a96434e (HEAD -> main) b
-    * d591dfe a
-    * 35b8235 base
-    ");
+"#]]
+    );
+
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* a96434e (HEAD -> main) b
+* d591dfe a
+* 35b8235 base
+
+"#]]
+    );
 
     Ok(())
 }
@@ -87,21 +108,29 @@ fn materialize_without_checkout_preserves_dropped_commit_changes_in_worktree() -
     let (repo, _tmpdir, mut meta) = fixture_writable("four-commits")?;
     let worktree = repo.workdir().unwrap();
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * 120e3a9 (HEAD -> main) c
-    * a96434e b
-    * d591dfe a
-    * 35b8235 base
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 120e3a9 (HEAD -> main) c
+* a96434e b
+* d591dfe a
+* 35b8235 base
 
-    insta::assert_snapshot!(visualize_disk_tree_skip_dot_git(worktree)?, @"
-    .
-    ├── .git:40755
-    ├── a:100644
-    ├── b:100644
-    ├── base:100644
-    └── c:100644
-    ");
+"#]]
+    );
+
+    snapbox::assert_data_eq!(
+        visualize_disk_tree_skip_dot_git(worktree)?.to_string(),
+        snapbox::str![[r#"
+.
+├── .git:40755
+├── a:100644
+├── b:100644
+├── base:100644
+└── c:100644
+
+"#]]
+    );
 
     let graph =
         Graph::from_head(&repo, &*meta, project_meta(&*meta), standard_options())?.validated()?;
@@ -115,32 +144,44 @@ fn materialize_without_checkout_preserves_dropped_commit_changes_in_worktree() -
 
     let outcome = editor.rebase()?;
     let overlayed = graph_tree(&outcome.overlayed_graph()?).to_string();
-    insta::assert_snapshot!(overlayed, @"
+    snapbox::assert_data_eq!(
+        &overlayed,
+        snapbox::str![[r#"
 
-    └── 👉►:0[0]:main[🌳]
-        ├── ·a96434e (⌂|1)
-        ├── ·d591dfe (⌂|1)
-        └── 🏁·35b8235 (⌂|1)
-    ");
+└── 👉►:0[0]:main[🌳]
+    ├── ·a96434e (⌂|1)
+    ├── ·d591dfe (⌂|1)
+    └── 🏁·35b8235 (⌂|1)
+
+"#]]
+    );
     let outcome = outcome.materialize_without_checkout()?;
     assert_eq!(overlayed, graph_tree(&outcome.workspace.graph).to_string());
 
     // After materialize_without_checkout, file 'c' should STILL exist in worktree
-    insta::assert_snapshot!(visualize_disk_tree_skip_dot_git(worktree)?, @"
-    .
-    ├── .git:40755
-    ├── a:100644
-    ├── b:100644
-    ├── base:100644
-    └── c:100644
-    ");
+    snapbox::assert_data_eq!(
+        visualize_disk_tree_skip_dot_git(worktree)?.to_string(),
+        snapbox::str![[r#"
+.
+├── .git:40755
+├── a:100644
+├── b:100644
+├── base:100644
+└── c:100644
+
+"#]]
+    );
 
     // But the commit graph should still be updated (refs moved)
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @"
-    * a96434e (HEAD -> main) b
-    * d591dfe a
-    * 35b8235 base
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* a96434e (HEAD -> main) b
+* d591dfe a
+* 35b8235 base
+
+"#]]
+    );
 
     Ok(())
 }
@@ -195,13 +236,17 @@ fn both_methods_update_references_identically() -> Result<()> {
         )
     };
 
-    insta::assert_snapshot!(overlayed_materialize, @"
+    snapbox::assert_data_eq!(
+        &overlayed_materialize,
+        snapbox::str![[r#"
 
-    └── 👉►:0[0]:main[🌳]
-        ├── ·a96434e (⌂|1)
-        ├── ·d591dfe (⌂|1)
-        └── 🏁·35b8235 (⌂|1)
-    ");
+└── 👉►:0[0]:main[🌳]
+    ├── ·a96434e (⌂|1)
+    ├── ·d591dfe (⌂|1)
+    └── 🏁·35b8235 (⌂|1)
+
+"#]]
+    );
     assert_eq!(overlayed_materialize, overlayed_without_checkout);
 
     // Both should update 'main' to the same commit
@@ -210,7 +255,10 @@ fn both_methods_update_references_identically() -> Result<()> {
         "Both methods should update references identically"
     );
 
-    insta::assert_snapshot!(ref_after_materialize, @"a96434e2505c2ea0896cf4f58fec0778e074d3da");
+    snapbox::assert_data_eq!(
+        ref_after_materialize,
+        snapbox::str!["a96434e2505c2ea0896cf4f58fec0778e074d3da"]
+    );
 
     Ok(())
 }
@@ -231,14 +279,18 @@ fn materialize_repoints_head_when_checkout_reference_is_replaced() -> Result<()>
 
     let outcome = editor.rebase()?;
     let overlayed = graph_tree(&outcome.overlayed_graph()?).to_string();
-    insta::assert_snapshot!(overlayed, @"
+    snapbox::assert_data_eq!(
+        &overlayed,
+        snapbox::str![[r#"
 
-    └── 👉►:0[0]:replacement[🌳]
-        ├── ·120e3a9 (⌂|1)
-        ├── ·a96434e (⌂|1)
-        ├── ·d591dfe (⌂|1)
-        └── 🏁·35b8235 (⌂|1)
-    ");
+└── 👉►:0[0]:replacement[🌳]
+    ├── ·120e3a9 (⌂|1)
+    ├── ·a96434e (⌂|1)
+    ├── ·d591dfe (⌂|1)
+    └── 🏁·35b8235 (⌂|1)
+
+"#]]
+    );
     assert_eq!(
         repo.head_name()?,
         Some(gix::refs::FullName::try_from("refs/heads/main")?),
@@ -306,18 +358,23 @@ fn materialize_keeps_immutable_refs_unchanged_while_updating_local_refs() -> Res
     add_stack_with_segments(&mut meta, 2, "stack-2", StackState::InWorkspace, &[]);
     let main_before = repo.rev_parse_single("main")?.detach();
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *   74bcc92 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    * | 2169646 (stack-1) Commit D
-    * | 46ef828 Commit C
-    |/  
-    | * a0f2ac5 (origin/main, main) Commit X
-    |/  
-    * f555940 (stack-2) Commit A
-    * d664be0 Commit B
-    * fafd9d0 init
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   74bcc92 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+* | 2169646 (stack-1) Commit D
+* | 46ef828 Commit C
+|/  
+| * a0f2ac5 (origin/main, main) Commit X
+|/  
+* f555940 (stack-2) Commit A
+* d664be0 Commit B
+* fafd9d0 init
+
+"#]]
+        .raw()
+    );
 
     let graph =
         Graph::from_head(&repo, &*meta, project_meta(&*meta), standard_options())?.validated()?;
@@ -331,18 +388,23 @@ fn materialize_keeps_immutable_refs_unchanged_while_updating_local_refs() -> Res
     let outcome = editor.rebase()?;
     outcome.materialize()?;
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *   3cc8b6f (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    * | c869f24 (stack-1) Commit D
-    * | 07a9b49 Commit C
-    |/  
-    | * a0f2ac5 (origin/main, main) Commit X
-    | * f555940 Commit A
-    |/  
-    * d664be0 (stack-2) Commit B
-    * fafd9d0 init
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   3cc8b6f (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+* | c869f24 (stack-1) Commit D
+* | 07a9b49 Commit C
+|/  
+| * a0f2ac5 (origin/main, main) Commit X
+| * f555940 Commit A
+|/  
+* d664be0 (stack-2) Commit B
+* fafd9d0 init
+
+"#]]
+        .raw()
+    );
 
     assert_eq!(repo.rev_parse_single("main")?.detach(), main_before);
 
@@ -370,18 +432,23 @@ fn materialize_does_not_delete_immutable_refs_removed_from_graph() -> Result<()>
 
     assert_eq!(repo.rev_parse_single("main")?.detach(), main_before);
 
-    insta::assert_snapshot!(visualize_commit_graph_all(&repo)?, @r"
-    *   74bcc92 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    * | 2169646 (stack-1) Commit D
-    * | 46ef828 Commit C
-    |/  
-    | * a0f2ac5 (origin/main, main) Commit X
-    |/  
-    * f555940 (stack-2) Commit A
-    * d664be0 Commit B
-    * fafd9d0 init
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   74bcc92 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+* | 2169646 (stack-1) Commit D
+* | 46ef828 Commit C
+|/  
+| * a0f2ac5 (origin/main, main) Commit X
+|/  
+* f555940 (stack-2) Commit A
+* d664be0 Commit B
+* fafd9d0 init
+
+"#]]
+        .raw()
+    );
 
     Ok(())
 }

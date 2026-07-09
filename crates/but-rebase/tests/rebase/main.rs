@@ -3,6 +3,7 @@ use bstr::ByteSlice;
 use but_rebase::{Rebase, RebaseStep};
 use but_testsupport::visualize_commit_graph;
 use gix::prelude::ObjectIdExt;
+use snapbox::prelude::*;
 
 use crate::utils::{
     assure_nonconflicting, conflicted, fixture_writable, four_commits_writable, visualize_tree,
@@ -56,14 +57,18 @@ mod commit {
             )?;
 
             // New values are written and everything else is still contained.
-            insta::assert_snapshot!(std::fs::read_to_string(local_config_path)?, @"
-            # a comment
-            [special] 
-            value=foo #value comment
-            [user]
-            	name = user
-            	email = email
-            ");
+            snapbox::assert_data_eq!(
+                std::fs::read_to_string(local_config_path)?,
+                snapbox::str![[r#"
+# a comment
+[special] 
+value=foo #value comment
+[user]
+	name = user
+	email = email
+
+"#]]
+            );
             Ok(())
         }
     }
@@ -86,57 +91,69 @@ fn single_stack_journey() -> Result<()> {
             RebaseStep::Reference(but_core::Reference::Virtual("anchor".into())),
         ])?
         .rebase()?;
-    insta::assert_snapshot!(visualize_commit_graph(&repo, "@")?, @"
-    * 120e3a9 (HEAD -> main) c
-    * a96434e b
-    * d591dfe a
-    * 35b8235 base
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph(&repo, "@")?,
+        snapbox::str![[r#"
+* 120e3a9 (HEAD -> main) c
+* a96434e b
+* d591dfe a
+* 35b8235 base
+
+"#]]
+    );
     // The base remains unchanged, and two commits remain: a squash commit and a merge with
     // the original `c` commit.
-    insta::assert_snapshot!(visualize_commit_graph(&repo, out.top_commit)?, @"
-    * 0fce812 second step: squash b into a
-    * 35b8235 base
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph(&repo, out.top_commit)?,
+        snapbox::str![[r#"
+* 0fce812 second step: squash b into a
+* 35b8235 base
+
+"#]]
+    );
 
     // The reference points to the commit and correctly refers to the one that was fixed up.
-    insta::assert_debug_snapshot!(out, @r#"
-    RebaseOutput {
-        top_commit: Sha1(0fce812ca0874f04f883a2a91191175535cac1c5),
-        references: [
-            ReferenceSpec {
-                reference: Virtual(
-                    "anchor",
-                ),
-                commit_id: Sha1(0fce812ca0874f04f883a2a91191175535cac1c5),
-                previous_commit_id: Sha1(a96434e2505c2ea0896cf4f58fec0778e074d3da),
-            },
-        ],
-        commit_mapping: [
-            (
-                Some(
-                    Sha1(35b8235197020a417e9405ab5d4db6f204e8d84b),
-                ),
-                Sha1(d591dfed1777b8f00f5b7b6f427537eeb5878178),
-                Sha1(8ccdf30390de9029cb5726a046783992c5f67067),
+    snapbox::assert_data_eq!(
+        out.to_debug(),
+        snapbox::str![[r#"
+RebaseOutput {
+    top_commit: Sha1(0fce812ca0874f04f883a2a91191175535cac1c5),
+    references: [
+        ReferenceSpec {
+            reference: Virtual(
+                "anchor",
             ),
-            (
-                Some(
-                    Sha1(35b8235197020a417e9405ab5d4db6f204e8d84b),
-                ),
-                Sha1(a96434e2505c2ea0896cf4f58fec0778e074d3da),
-                Sha1(0fce812ca0874f04f883a2a91191175535cac1c5),
+            commit_id: Sha1(0fce812ca0874f04f883a2a91191175535cac1c5),
+            previous_commit_id: Sha1(a96434e2505c2ea0896cf4f58fec0778e074d3da),
+        },
+    ],
+    commit_mapping: [
+        (
+            Some(
+                Sha1(35b8235197020a417e9405ab5d4db6f204e8d84b),
             ),
-            (
-                Some(
-                    Sha1(35b8235197020a417e9405ab5d4db6f204e8d84b),
-                ),
-                Sha1(a96434e2505c2ea0896cf4f58fec0778e074d3da),
-                Sha1(0fce812ca0874f04f883a2a91191175535cac1c5),
+            Sha1(d591dfed1777b8f00f5b7b6f427537eeb5878178),
+            Sha1(8ccdf30390de9029cb5726a046783992c5f67067),
+        ),
+        (
+            Some(
+                Sha1(35b8235197020a417e9405ab5d4db6f204e8d84b),
             ),
-        ],
-    }
-    "#);
+            Sha1(a96434e2505c2ea0896cf4f58fec0778e074d3da),
+            Sha1(0fce812ca0874f04f883a2a91191175535cac1c5),
+        ),
+        (
+            Some(
+                Sha1(35b8235197020a417e9405ab5d4db6f204e8d84b),
+            ),
+            Sha1(a96434e2505c2ea0896cf4f58fec0778e074d3da),
+            Sha1(0fce812ca0874f04f883a2a91191175535cac1c5),
+        ),
+    ],
+}
+
+"#]]
+    );
     assure_nonconflicting(&repo, &out)?;
 
     assert_eq!(
@@ -150,19 +167,24 @@ fn single_stack_journey() -> Result<()> {
 #[test]
 fn amended_commit() -> Result<()> {
     let (repo, _tmp, _meta) = fixture_writable("three-branches-merged")?;
-    insta::assert_snapshot!(visualize_commit_graph(&repo, "@")?, @r"
-    *-.   1348870 (HEAD -> main) Merge branches 'A', 'B' and 'C'
-    |\ \  
-    | | * 930563a (C) C: add another 10 lines to new file
-    | | * 68a2fc3 C: add 10 lines to new file
-    | | * 984fd1c C: new file with 10 lines
-    | * | a748762 (B) B: another 10 lines at the bottom
-    | * | 62e05ba B: 10 lines at the bottom
-    | |/  
-    * / add59d2 (A) A: 10 lines on top
-    |/  
-    * 8f0d338 (tag: base) base
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph(&repo, "@")?,
+        snapbox::str![[r#"
+*-.   1348870 (HEAD -> main) Merge branches 'A', 'B' and 'C'
+|\ \  
+| | * 930563a (C) C: add another 10 lines to new file
+| | * 68a2fc3 C: add 10 lines to new file
+| | * 984fd1c C: new file with 10 lines
+| * | a748762 (B) B: another 10 lines at the bottom
+| * | 62e05ba B: 10 lines at the bottom
+| |/  
+* / add59d2 (A) A: 10 lines on top
+|/  
+* 8f0d338 (tag: base) base
+
+"#]]
+        .raw()
+    );
     let mut builder = Rebase::new(&repo, repo.rev_parse_single("C~1")?.detach(), None)?;
     let out = builder
         .steps([
@@ -180,42 +202,51 @@ fn amended_commit() -> Result<()> {
         ])?
         .rebase()?;
     // Note how the `C` isn't visible anymore as we don't rewrite reference here.
-    insta::assert_snapshot!(visualize_commit_graph(&repo, out.top_commit)?, @r"
-    *-.   6a38e67 Merge branches 'A', 'B' and 'C' - rewritten
-    |\ \  
-    | | * 806db8c C: add another 10 lines to new file - amended
-    | | * 68a2fc3 C: add 10 lines to new file
-    | | * 984fd1c C: new file with 10 lines
-    | * | a748762 (B) B: another 10 lines at the bottom
-    | * | 62e05ba B: 10 lines at the bottom
-    | |/  
-    * / add59d2 (A) A: 10 lines on top
-    |/  
-    * 8f0d338 (tag: base) base
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph(&repo, out.top_commit)?,
+        snapbox::str![[r#"
+*-.   6a38e67 Merge branches 'A', 'B' and 'C' - rewritten
+|\ \  
+| | * 806db8c C: add another 10 lines to new file - amended
+| | * 68a2fc3 C: add 10 lines to new file
+| | * 984fd1c C: new file with 10 lines
+| * | a748762 (B) B: another 10 lines at the bottom
+| * | 62e05ba B: 10 lines at the bottom
+| |/  
+* / add59d2 (A) A: 10 lines on top
+|/  
+* 8f0d338 (tag: base) base
+
+"#]]
+        .raw()
+    );
     // This time without anchor.
-    insta::assert_debug_snapshot!(out, @"
-    RebaseOutput {
-        top_commit: Sha1(6a38e6718b008686a81969c07f8654dd68f7b824),
-        references: [],
-        commit_mapping: [
-            (
-                Some(
-                    Sha1(68a2fc349e13a186e6d65871a31bad244d25e6f4),
-                ),
-                Sha1(930563a048351f05b14cc7b9c0a48640e5a306b0),
-                Sha1(806db8cb9559776b351f5dd222755793a465fe87),
+    snapbox::assert_data_eq!(
+        out.to_debug(),
+        snapbox::str![[r#"
+RebaseOutput {
+    top_commit: Sha1(6a38e6718b008686a81969c07f8654dd68f7b824),
+    references: [],
+    commit_mapping: [
+        (
+            Some(
+                Sha1(68a2fc349e13a186e6d65871a31bad244d25e6f4),
             ),
-            (
-                Some(
-                    Sha1(68a2fc349e13a186e6d65871a31bad244d25e6f4),
-                ),
-                Sha1(134887021e06909021776c023a608f8ef179e859),
-                Sha1(6a38e6718b008686a81969c07f8654dd68f7b824),
+            Sha1(930563a048351f05b14cc7b9c0a48640e5a306b0),
+            Sha1(806db8cb9559776b351f5dd222755793a465fe87),
+        ),
+        (
+            Some(
+                Sha1(68a2fc349e13a186e6d65871a31bad244d25e6f4),
             ),
-        ],
-    }
-    ");
+            Sha1(134887021e06909021776c023a608f8ef179e859),
+            Sha1(6a38e6718b008686a81969c07f8654dd68f7b824),
+        ),
+    ],
+}
+
+"#]]
+    );
     assure_nonconflicting(&repo, &out)?;
     Ok(())
 }
@@ -223,15 +254,20 @@ fn amended_commit() -> Result<()> {
 #[test]
 fn reorder_merge_in_reverse() -> Result<()> {
     let (repo, _tmp, _meta) = fixture_writable("merge-in-the-middle")?;
-    insta::assert_snapshot!(visualize_commit_graph(&repo, "with-inner-merge")?, @r"
-    * e8ee978 (HEAD -> with-inner-merge) on top of inner merge
-    *   2fc288c Merge branch 'B' into with-inner-merge
-    |\  
-    | * 984fd1c (B) C: new file with 10 lines
-    * | add59d2 (A) A: 10 lines on top
-    |/  
-    * 8f0d338 (tag: base, main) base
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph(&repo, "with-inner-merge")?,
+        snapbox::str![[r#"
+* e8ee978 (HEAD -> with-inner-merge) on top of inner merge
+*   2fc288c Merge branch 'B' into with-inner-merge
+|\  
+| * 984fd1c (B) C: new file with 10 lines
+* | add59d2 (A) A: 10 lines on top
+|/  
+* 8f0d338 (tag: base, main) base
+
+"#]]
+        .raw()
+    );
 
     let mut builder = Rebase::new(&repo, repo.rev_parse_single("base")?.detach(), None)?;
     let out = builder
@@ -256,44 +292,53 @@ fn reorder_merge_in_reverse() -> Result<()> {
         .rebase()
         .expect("the first parent of a merge is replaced unconditionally");
     // Note that we don't rewrite references here.
-    insta::assert_snapshot!(visualize_commit_graph(&repo, out.top_commit)?, @r"
-    * eb90e58 was dd59d2 below merge
-    * 5d38e6f was e8ee978 on top
-    *   418a03b was merge 2fc288c one below top
-    |\  
-    | * 984fd1c (B) C: new file with 10 lines
-    |/  
-    * 8f0d338 (tag: base, main) base
-    ");
-    insta::assert_debug_snapshot!(out, @"
-    RebaseOutput {
-        top_commit: Sha1(eb90e584f71ba2b0f122d9778abd0225bde3c669),
-        references: [],
-        commit_mapping: [
-            (
-                Some(
-                    Sha1(8f0d33828e5c859c95fb9e9fc063374fdd482536),
-                ),
-                Sha1(2fc288c36c8bb710c78203f78ea9883724ce142b),
-                Sha1(418a03b1f9da47d9c4cbb3aeea0222899dc0c9c4),
+    snapbox::assert_data_eq!(
+        visualize_commit_graph(&repo, out.top_commit)?,
+        snapbox::str![[r#"
+* eb90e58 was dd59d2 below merge
+* 5d38e6f was e8ee978 on top
+*   418a03b was merge 2fc288c one below top
+|\  
+| * 984fd1c (B) C: new file with 10 lines
+|/  
+* 8f0d338 (tag: base, main) base
+
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(
+        out.to_debug(),
+        snapbox::str![[r#"
+RebaseOutput {
+    top_commit: Sha1(eb90e584f71ba2b0f122d9778abd0225bde3c669),
+    references: [],
+    commit_mapping: [
+        (
+            Some(
+                Sha1(8f0d33828e5c859c95fb9e9fc063374fdd482536),
             ),
-            (
-                Some(
-                    Sha1(8f0d33828e5c859c95fb9e9fc063374fdd482536),
-                ),
-                Sha1(e8ee978dac10e6a85006543ef08be07c5824b4f7),
-                Sha1(5d38e6f5ca16c627bb1f45485dda9b7012287f13),
+            Sha1(2fc288c36c8bb710c78203f78ea9883724ce142b),
+            Sha1(418a03b1f9da47d9c4cbb3aeea0222899dc0c9c4),
+        ),
+        (
+            Some(
+                Sha1(8f0d33828e5c859c95fb9e9fc063374fdd482536),
             ),
-            (
-                Some(
-                    Sha1(8f0d33828e5c859c95fb9e9fc063374fdd482536),
-                ),
-                Sha1(add59d26b2ffd7468fcb44c2db48111dd8f481e5),
-                Sha1(eb90e584f71ba2b0f122d9778abd0225bde3c669),
+            Sha1(e8ee978dac10e6a85006543ef08be07c5824b4f7),
+            Sha1(5d38e6f5ca16c627bb1f45485dda9b7012287f13),
+        ),
+        (
+            Some(
+                Sha1(8f0d33828e5c859c95fb9e9fc063374fdd482536),
             ),
-        ],
-    }
-    ");
+            Sha1(add59d26b2ffd7468fcb44c2db48111dd8f481e5),
+            Sha1(eb90e584f71ba2b0f122d9778abd0225bde3c669),
+        ),
+    ],
+}
+
+"#]]
+    );
     assure_nonconflicting(&repo, &out)?;
     Ok(())
 }
@@ -301,19 +346,24 @@ fn reorder_merge_in_reverse() -> Result<()> {
 #[test]
 fn reorder_with_conflict_and_remerge_and_pick_from_conflicts() -> Result<()> {
     let (repo, _tmp, _meta) = fixture_writable("three-branches-merged")?;
-    insta::assert_snapshot!(visualize_commit_graph(&repo, "@")?, @r"
-    *-.   1348870 (HEAD -> main) Merge branches 'A', 'B' and 'C'
-    |\ \  
-    | | * 930563a (C) C: add another 10 lines to new file
-    | | * 68a2fc3 C: add 10 lines to new file
-    | | * 984fd1c C: new file with 10 lines
-    | * | a748762 (B) B: another 10 lines at the bottom
-    | * | 62e05ba B: 10 lines at the bottom
-    | |/  
-    * / add59d2 (A) A: 10 lines on top
-    |/  
-    * 8f0d338 (tag: base) base
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph(&repo, "@")?,
+        snapbox::str![[r#"
+*-.   1348870 (HEAD -> main) Merge branches 'A', 'B' and 'C'
+|\ \  
+| | * 930563a (C) C: add another 10 lines to new file
+| | * 68a2fc3 C: add 10 lines to new file
+| | * 984fd1c C: new file with 10 lines
+| * | a748762 (B) B: another 10 lines at the bottom
+| * | 62e05ba B: 10 lines at the bottom
+| |/  
+* / add59d2 (A) A: 10 lines on top
+|/  
+* 8f0d338 (tag: base) base
+
+"#]]
+        .raw()
+    );
 
     let mut builder = Rebase::new(&repo, repo.rev_parse_single("base")?.detach(), None)?;
     // Re-order commits with conflict, and trigger a re-merge.
@@ -338,55 +388,64 @@ fn reorder_with_conflict_and_remerge_and_pick_from_conflicts() -> Result<()> {
             },
         ])?
         .rebase()?;
-    insta::assert_debug_snapshot!(out, @"
-    RebaseOutput {
-        top_commit: Sha1(976ad5208a756763180113d0a021610aba3c0dad),
-        references: [],
-        commit_mapping: [
-            (
-                Some(
-                    Sha1(8f0d33828e5c859c95fb9e9fc063374fdd482536),
-                ),
-                Sha1(984fd1c6d3975901147b1f02aae6ef0a16e5904e),
-                Sha1(a037d4a2c1313b991c91f8bd0086643f8f39f0ea),
+    snapbox::assert_data_eq!(
+        out.to_debug(),
+        snapbox::str![[r#"
+RebaseOutput {
+    top_commit: Sha1(976ad5208a756763180113d0a021610aba3c0dad),
+    references: [],
+    commit_mapping: [
+        (
+            Some(
+                Sha1(8f0d33828e5c859c95fb9e9fc063374fdd482536),
             ),
-            (
-                Some(
-                    Sha1(8f0d33828e5c859c95fb9e9fc063374fdd482536),
-                ),
-                Sha1(930563a048351f05b14cc7b9c0a48640e5a306b0),
-                Sha1(eebaa8b32984736d7a835f805724c66a3988f01b),
+            Sha1(984fd1c6d3975901147b1f02aae6ef0a16e5904e),
+            Sha1(a037d4a2c1313b991c91f8bd0086643f8f39f0ea),
+        ),
+        (
+            Some(
+                Sha1(8f0d33828e5c859c95fb9e9fc063374fdd482536),
             ),
-            (
-                Some(
-                    Sha1(8f0d33828e5c859c95fb9e9fc063374fdd482536),
-                ),
-                Sha1(68a2fc349e13a186e6d65871a31bad244d25e6f4),
-                Sha1(d3cf6a9c107edc10d76ff7842de61a1b8c2fe8a8),
+            Sha1(930563a048351f05b14cc7b9c0a48640e5a306b0),
+            Sha1(eebaa8b32984736d7a835f805724c66a3988f01b),
+        ),
+        (
+            Some(
+                Sha1(8f0d33828e5c859c95fb9e9fc063374fdd482536),
             ),
-            (
-                Some(
-                    Sha1(8f0d33828e5c859c95fb9e9fc063374fdd482536),
-                ),
-                Sha1(134887021e06909021776c023a608f8ef179e859),
-                Sha1(976ad5208a756763180113d0a021610aba3c0dad),
+            Sha1(68a2fc349e13a186e6d65871a31bad244d25e6f4),
+            Sha1(d3cf6a9c107edc10d76ff7842de61a1b8c2fe8a8),
+        ),
+        (
+            Some(
+                Sha1(8f0d33828e5c859c95fb9e9fc063374fdd482536),
             ),
-        ],
-    }
-    ");
-    insta::assert_snapshot!(visualize_commit_graph(&repo, out.top_commit)?, @r"
-    *-.   976ad52 Re-merge branches 'A', 'B' and 'C'
-    |\ \  
-    | | * d3cf6a9 [conflict] C~1
-    | | * eebaa8b C
-    | | * a037d4a C~2
-    | * | a748762 (B) B: another 10 lines at the bottom
-    | * | 62e05ba B: 10 lines at the bottom
-    | |/  
-    * / add59d2 (A) A: 10 lines on top
-    |/  
-    * 8f0d338 (tag: base) base
-    ");
+            Sha1(134887021e06909021776c023a608f8ef179e859),
+            Sha1(976ad5208a756763180113d0a021610aba3c0dad),
+        ),
+    ],
+}
+
+"#]]
+    );
+    snapbox::assert_data_eq!(
+        visualize_commit_graph(&repo, out.top_commit)?,
+        snapbox::str![[r#"
+*-.   976ad52 Re-merge branches 'A', 'B' and 'C'
+|\ \  
+| | * d3cf6a9 [conflict] C~1
+| | * eebaa8b C
+| | * a037d4a C~2
+| * | a748762 (B) B: another 10 lines at the bottom
+| * | 62e05ba B: 10 lines at the bottom
+| |/  
+* / add59d2 (A) A: 10 lines on top
+|/  
+* 8f0d338 (tag: base) base
+
+"#]]
+        .raw()
+    );
     assert_ne!(
         out.top_commit.attach(&repo).object()?.peel_to_tree()?.id,
         repo.rev_parse_single("main^{tree}")?.detach(),
@@ -394,90 +453,116 @@ fn reorder_with_conflict_and_remerge_and_pick_from_conflicts() -> Result<()> {
     );
 
     // The auto-resolution towards *ours* causes new-file to look different.
-    insta::assert_snapshot!(visualize_tree(&repo, &out ), @r#"
-    6abc3da
-    ├── file:100644:06581b4 "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80\n"
-    └── new-file:100644:0ff3bbb "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n"
-    "#);
+    snapbox::assert_data_eq!(visualize_tree(&repo, &out ), snapbox::str![[r#"
+6abc3da
+├── file:100644:06581b4 "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80\n"
+└── new-file:100644:0ff3bbb "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n"
+
+"#]].raw());
 
     let conflict_commit_id = repo.rev_parse_single(format!("{}^3", out.top_commit).as_str())?;
-    insta::assert_snapshot!(but_testsupport::visualize_tree(conflict_commit_id), @r#"
-    c581f79
-    ├── .auto-resolution:5b3a532 
-    │   ├── file:100644:5ecf5f4 "50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n"
-    │   └── new-file:100644:213ec44 "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n"
-    ├── .conflict-base-0:fa799da 
-    │   ├── file:100644:5ecf5f4 "50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n"
-    │   └── new-file:100644:f00c965 "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n"
-    ├── .conflict-files:100644:5a96881 "ancestorEntries = [\"new-file\"]\nourEntries = [\"new-file\"]\ntheirEntries = [\"new-file\"]\n"
-    ├── .conflict-side-0:5b3a532 
-    │   ├── file:100644:5ecf5f4 "50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n"
-    │   └── new-file:100644:213ec44 "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n"
-    ├── .conflict-side-1:71364f9 
-    │   ├── file:100644:5ecf5f4 "50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n"
-    │   └── new-file:100644:0ff3bbb "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n"
-    ├── file:100644:5ecf5f4 "50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n"
-    └── new-file:100644:213ec44 "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n"
-    "#);
+    snapbox::assert_data_eq!(but_testsupport::visualize_tree(conflict_commit_id).to_string(), snapbox::str![[r#"
+c581f79
+├── .auto-resolution:5b3a532 
+│   ├── file:100644:5ecf5f4 "50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n"
+│   └── new-file:100644:213ec44 "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n"
+├── .conflict-base-0:fa799da 
+│   ├── file:100644:5ecf5f4 "50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n"
+│   └── new-file:100644:f00c965 "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n"
+├── .conflict-files:100644:5a96881 "ancestorEntries = [\"new-file\"]\nourEntries = [\"new-file\"]\ntheirEntries = [\"new-file\"]\n"
+├── .conflict-side-0:5b3a532 
+│   ├── file:100644:5ecf5f4 "50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n"
+│   └── new-file:100644:213ec44 "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n"
+├── .conflict-side-1:71364f9 
+│   ├── file:100644:5ecf5f4 "50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n"
+│   └── new-file:100644:0ff3bbb "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n"
+├── file:100644:5ecf5f4 "50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n"
+└── new-file:100644:213ec44 "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n"
+
+"#]].raw());
 
     // gitbutler headers were added here to indicate conflict (change-id is frozen for testing)
-    insta::assert_snapshot!(conflict_commit_id.object()?.data.as_bstr(), @r#"
-    tree c581f7908b6eee5cf2cd3a481c8d167f0a47d3c3
-    parent eebaa8b32984736d7a835f805724c66a3988f01b
-    author author <author@example.com> 946684800 +0000
-    committer Committer (Memory Override) <committer@example.com> 946771200 +0000
-    gitbutler-headers-version 2
-    change-id 1
+    snapbox::assert_data_eq!(
+        conflict_commit_id.object()?.data.as_bstr().to_string(),
+        snapbox::str![[r#"
+tree c581f7908b6eee5cf2cd3a481c8d167f0a47d3c3
+parent eebaa8b32984736d7a835f805724c66a3988f01b
+author author <author@example.com> 946684800 +0000
+committer Committer (Memory Override) <committer@example.com> 946771200 +0000
+gitbutler-headers-version 2
+change-id 1
 
-    [conflict] C~1
+[conflict] C~1
 
-    GitButler-Conflict: This is a GitButler-managed conflicted commit. Files are auto-resolved
-       using the "ours" side. The commit tree contains additional directories:
-         .conflict-side-0  — our tree
-         .conflict-side-1  — their tree
-         .conflict-base-0  — the merge base tree
-         .auto-resolution  — the auto-resolved tree
-         .conflict-files   — metadata about conflicted files
-       To manually resolve, check out this commit, remove the directories
-       listed above, resolve the conflicts, and amend the commit.
-    "#);
+GitButler-Conflict: This is a GitButler-managed conflicted commit. Files are auto-resolved
+   using the "ours" side. The commit tree contains additional directories:
+     .conflict-side-0  — our tree
+     .conflict-side-1  — their tree
+     .conflict-base-0  — the merge base tree
+     .auto-resolution  — the auto-resolved tree
+     .conflict-files   — metadata about conflicted files
+   To manually resolve, check out this commit, remove the directories
+   listed above, resolve the conflicts, and amend the commit.
+
+"#]]
+    );
 
     // And they are added to merge commits.
-    insta::assert_snapshot!(out.top_commit.attach(&repo).object()?.data.as_bstr(), @"
-    tree 6abc3da6f1642bfd5543ef97f98b924f4f232a96
-    parent add59d26b2ffd7468fcb44c2db48111dd8f481e5
-    parent a7487625f079bedf4d20e48f052312c010117b38
-    parent d3cf6a9c107edc10d76ff7842de61a1b8c2fe8a8
-    author author <author@example.com> 946684800 +0000
-    committer Committer (Memory Override) <committer@example.com> 946771200 +0000
-    gitbutler-headers-version 2
-    change-id 1
+    snapbox::assert_data_eq!(
+        out.top_commit
+            .attach(&repo)
+            .object()?
+            .data
+            .as_bstr()
+            .to_string(),
+        snapbox::str![[r#"
+tree 6abc3da6f1642bfd5543ef97f98b924f4f232a96
+parent add59d26b2ffd7468fcb44c2db48111dd8f481e5
+parent a7487625f079bedf4d20e48f052312c010117b38
+parent d3cf6a9c107edc10d76ff7842de61a1b8c2fe8a8
+author author <author@example.com> 946684800 +0000
+committer Committer (Memory Override) <committer@example.com> 946771200 +0000
+gitbutler-headers-version 2
+change-id 1
 
-    Re-merge branches 'A', 'B' and 'C'
-    ");
+Re-merge branches 'A', 'B' and 'C'
+"#]]
+    );
 
     // And they are also added to other cherry-picked commits that don't conflict.
     let (_base, original, cherry_picked_no_conflict) = out.commit_mapping.first().unwrap();
-    insta::assert_snapshot!(cherry_picked_no_conflict.attach(&repo).object()?.data.as_bstr(), @"
-    tree fa799da5c8300f1e8f8d89f1c5989a8f03ccd852
-    parent 8f0d33828e5c859c95fb9e9fc063374fdd482536
-    author author <author@example.com> 946684800 +0000
-    committer Committer (Memory Override) <committer@example.com> 946771200 +0000
-    gitbutler-headers-version 2
-    change-id 1
+    snapbox::assert_data_eq!(
+        cherry_picked_no_conflict
+            .attach(&repo)
+            .object()?
+            .data
+            .as_bstr()
+            .to_string(),
+        snapbox::str![[r#"
+tree fa799da5c8300f1e8f8d89f1c5989a8f03ccd852
+parent 8f0d33828e5c859c95fb9e9fc063374fdd482536
+author author <author@example.com> 946684800 +0000
+committer Committer (Memory Override) <committer@example.com> 946771200 +0000
+gitbutler-headers-version 2
+change-id 1
 
-    C~2
-    ");
+C~2
+"#]]
+    );
 
     // The original commit might not have had these extra headers.
-    insta::assert_snapshot!(original.attach(&repo).object()?.data.as_bstr(), @"
-    tree fa799da5c8300f1e8f8d89f1c5989a8f03ccd852
-    parent 8f0d33828e5c859c95fb9e9fc063374fdd482536
-    author author <author@example.com> 946684800 +0000
-    committer committer <committer@example.com> 946771200 +0000
+    snapbox::assert_data_eq!(
+        original.attach(&repo).object()?.data.as_bstr().to_string(),
+        snapbox::str![[r#"
+tree fa799da5c8300f1e8f8d89f1c5989a8f03ccd852
+parent 8f0d33828e5c859c95fb9e9fc063374fdd482536
+author author <author@example.com> 946684800 +0000
+committer committer <committer@example.com> 946771200 +0000
 
-    C: new file with 10 lines
-    ");
+C: new file with 10 lines
+
+"#]]
+    );
 
     let mut builder = Rebase::new(&repo, Some(conflict_commit_id.detach()), None)?;
     let out = builder
@@ -489,23 +574,24 @@ fn reorder_with_conflict_and_remerge_and_pick_from_conflicts() -> Result<()> {
 
     // The base doesn't have new file, and we pick that up from the base of `base` of
     // the previous conflict. `our` side then is the original our.
-    insta::assert_snapshot!(visualize_tree(&repo, &out ), @r#"
-    ee9bc70
-    ├── .auto-resolution:5b3a532 
-    │   ├── file:100644:5ecf5f4 "50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n"
-    │   └── new-file:100644:213ec44 "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n"
-    ├── .conflict-base-0:e8cfc77 
-    │   └── file:100644:5ecf5f4 "50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n"
-    ├── .conflict-files:100644:c7fd016 "ancestorEntries = []\nourEntries = [\"new-file\"]\ntheirEntries = [\"new-file\"]\n"
-    ├── .conflict-side-0:5b3a532 
-    │   ├── file:100644:5ecf5f4 "50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n"
-    │   └── new-file:100644:213ec44 "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n"
-    ├── .conflict-side-1:fa799da 
-    │   ├── file:100644:5ecf5f4 "50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n"
-    │   └── new-file:100644:f00c965 "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n"
-    ├── file:100644:5ecf5f4 "50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n"
-    └── new-file:100644:213ec44 "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n"
-    "#);
+    snapbox::assert_data_eq!(visualize_tree(&repo, &out ), snapbox::str![[r#"
+ee9bc70
+├── .auto-resolution:5b3a532 
+│   ├── file:100644:5ecf5f4 "50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n"
+│   └── new-file:100644:213ec44 "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n"
+├── .conflict-base-0:e8cfc77 
+│   └── file:100644:5ecf5f4 "50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n"
+├── .conflict-files:100644:c7fd016 "ancestorEntries = []\nourEntries = [\"new-file\"]\ntheirEntries = [\"new-file\"]\n"
+├── .conflict-side-0:5b3a532 
+│   ├── file:100644:5ecf5f4 "50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n"
+│   └── new-file:100644:213ec44 "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n"
+├── .conflict-side-1:fa799da 
+│   ├── file:100644:5ecf5f4 "50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n"
+│   └── new-file:100644:f00c965 "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n"
+├── file:100644:5ecf5f4 "50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n"
+└── new-file:100644:213ec44 "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n"
+
+"#]].raw());
 
     Ok(())
 }
@@ -587,27 +673,33 @@ fn reversible_conflicts() -> anyhow::Result<()> {
         assert_eq!(conflicted(&repo, &out), [false]);
         // The conflicting commit is 1-10, 21-30, and now it is putting 21-30 on top again.
         // Important is that it uses the real tree of the base.
-        insta::assert_snapshot!(visualize_tree(&repo, &out), @r#"
-        18f1011
-        ├── file:100644:5ecf5f4 "50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n"
-        └── new-file:100644:ede4e3c "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n"
-        "#);
+        snapbox::assert_data_eq!(visualize_tree(&repo, &out), snapbox::str![[r#"
+18f1011
+├── file:100644:5ecf5f4 "50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n"
+└── new-file:100644:ede4e3c "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n"
+
+"#]].raw());
     }
 
     let conflict_tip = repo.rev_parse_single(format!("{}^3", out.top_commit).as_str())?;
-    insta::assert_snapshot!(visualize_commit_graph(&repo, out.top_commit)?, @r"
-    *-.   976ad52 Re-merge branches 'A', 'B' and 'C'
-    |\ \  
-    | | * d3cf6a9 [conflict] C~1
-    | | * eebaa8b C
-    | | * a037d4a C~2
-    | * | a748762 (B) B: another 10 lines at the bottom
-    | * | 62e05ba B: 10 lines at the bottom
-    | |/  
-    * / add59d2 (A) A: 10 lines on top
-    |/  
-    * 8f0d338 (tag: base) base
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph(&repo, out.top_commit)?,
+        snapbox::str![[r#"
+*-.   976ad52 Re-merge branches 'A', 'B' and 'C'
+|\ \  
+| | * d3cf6a9 [conflict] C~1
+| | * eebaa8b C
+| | * a037d4a C~2
+| * | a748762 (B) B: another 10 lines at the bottom
+| * | 62e05ba B: 10 lines at the bottom
+| |/  
+* / add59d2 (A) A: 10 lines on top
+|/  
+* 8f0d338 (tag: base) base
+
+"#]]
+        .raw()
+    );
     assert!(
         but_core::Commit::from_id(conflict_tip)?.is_conflicted(),
         "The conflict is at the tip"
@@ -641,11 +733,12 @@ fn reversible_conflicts() -> anyhow::Result<()> {
         "Nothing is conflicted anymore, but only because we pulled back the correct 'C'"
     );
     // It's the original version, like one would expect from the original order
-    insta::assert_snapshot!(visualize_tree(&repo, &out), @r#"
-    1111180
-    ├── file:100644:06581b4 "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80\n"
-    └── new-file:100644:e8823e1 "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n"
-    "#);
+    snapbox::assert_data_eq!(visualize_tree(&repo, &out), snapbox::str![[r#"
+1111180
+├── file:100644:06581b4 "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80\n"
+└── new-file:100644:e8823e1 "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n"
+
+"#]].raw());
     Ok(())
 }
 
@@ -665,25 +758,35 @@ fn pick_the_first_commit_with_no_parents_for_squashing() -> Result<()> {
             },
         ])?
         .rebase()?;
-    insta::assert_snapshot!(visualize_commit_graph(&repo, out.top_commit)?, @"* e380582 reworded base after squash");
-    insta::assert_debug_snapshot!(out, @"
-    RebaseOutput {
-        top_commit: Sha1(e3805829c98eb212c529d5e853a94283ed32747c),
-        references: [],
-        commit_mapping: [
-            (
-                None,
-                Sha1(35b8235197020a417e9405ab5d4db6f204e8d84b),
-                Sha1(a7b93ef41a8efade0eb3fe98dbc8e21c34cd16df),
-            ),
-            (
-                None,
-                Sha1(d591dfed1777b8f00f5b7b6f427537eeb5878178),
-                Sha1(e3805829c98eb212c529d5e853a94283ed32747c),
-            ),
-        ],
-    }
-    ");
+    snapbox::assert_data_eq!(
+        visualize_commit_graph(&repo, out.top_commit)?,
+        snapbox::str![[r#"
+* e380582 reworded base after squash
+
+"#]]
+    );
+    snapbox::assert_data_eq!(
+        out.to_debug(),
+        snapbox::str![[r#"
+RebaseOutput {
+    top_commit: Sha1(e3805829c98eb212c529d5e853a94283ed32747c),
+    references: [],
+    commit_mapping: [
+        (
+            None,
+            Sha1(35b8235197020a417e9405ab5d4db6f204e8d84b),
+            Sha1(a7b93ef41a8efade0eb3fe98dbc8e21c34cd16df),
+        ),
+        (
+            None,
+            Sha1(d591dfed1777b8f00f5b7b6f427537eeb5878178),
+            Sha1(e3805829c98eb212c529d5e853a94283ed32747c),
+        ),
+    ],
+}
+
+"#]]
+    );
     assure_nonconflicting(&repo, &out)?;
     Ok(())
 }

@@ -1,3 +1,4 @@
+use snapbox::IntoData;
 use snapbox::str;
 
 use crate::command::util;
@@ -26,47 +27,56 @@ fn install_editor_script(env: &Sandbox, script: &str) -> anyhow::Result<()> {
 fn integrate_pull_rebase_applies_and_snapshots_before_and_after() -> anyhow::Result<()> {
     let env = Sandbox::init_scenario_with_target_and_default_settings("branch-integrate-diverged");
 
-    insta::assert_snapshot!(env.git_log(), @r"
-    *   a952a0b (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    | * 643ade3 (A) add only-on-local
-    |/  
-    | * 28baf9a (origin/A) add only-on-remote
-    |/  
-    * 0dc3733 (origin/main, origin/HEAD, main) add M
-    ");
-    insta::assert_snapshot!(pretty_status(&env)?, @r#"
-    {
-      "uncommittedChanges": [],
-      "stacks": [],
-      "mergeBase": {
-        "cliId": "",
-        "commitId": "0dc37334a458df421bf67ea806103bf5004845dd",
-        "createdAt": "2000-01-01T00:00:00+00:00",
-        "message": "add M\n",
-        "authorName": "author",
-        "authorEmail": "author@example.com",
-        "conflicted": null,
-        "reviewId": null,
-        "changes": null
-      },
-      "upstreamState": {
-        "behind": 0,
-        "latestCommit": {
-          "cliId": "",
-          "commitId": "0dc37334a458df421bf67ea806103bf5004845dd",
-          "createdAt": "2000-01-01T00:00:00+00:00",
-          "message": "add M\n",
-          "authorName": "author",
-          "authorEmail": "author@example.com",
-          "conflicted": null,
-          "reviewId": null,
-          "changes": null
-        },
-        "lastFetched": null
-      }
-    }
-    "#);
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+*   a952a0b (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+| * 643ade3 (A) add only-on-local
+|/  
+| * 28baf9a (origin/A) add only-on-remote
+|/  
+* 0dc3733 (origin/main, origin/HEAD, main) add M
+
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(
+        pretty_status(&env)?,
+        snapbox::str![[r#"
+{
+  "uncommittedChanges": [],
+  "stacks": [],
+  "mergeBase": {
+    "cliId": "",
+    "commitId": "0dc37334a458df421bf67ea806103bf5004845dd",
+    "createdAt": "2000-01-01T00:00:00+00:00",
+    "message": "add M\n",
+    "authorName": "author",
+    "authorEmail": "author@example.com",
+    "conflicted": null,
+    "reviewId": null,
+    "changes": null
+  },
+  "upstreamState": {
+    "behind": 0,
+    "latestCommit": {
+      "cliId": "",
+      "commitId": "0dc37334a458df421bf67ea806103bf5004845dd",
+      "createdAt": "2000-01-01T00:00:00+00:00",
+      "message": "add M\n",
+      "authorName": "author",
+      "authorEmail": "author@example.com",
+      "conflicted": null,
+      "reviewId": null,
+      "changes": null
+    },
+    "lastFetched": null
+  }
+}
+"#]]
+        .raw()
+    );
 
     env.but("branch update A")
         .assert()
@@ -77,46 +87,55 @@ Updated branch A.
 
 "#]]);
 
-    insta::assert_snapshot!(env.git_log(), @r"
-    *   6a3496e (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    | * 74faa12 (A) add only-on-local
-    | * 28baf9a (origin/A) add only-on-remote
-    |/  
-    * 0dc3733 (origin/main, origin/HEAD, main, gitbutler/target) add M
-    ");
-    insta::assert_snapshot!(pretty_status(&env)?, @r#"
-    {
-      "uncommittedChanges": [],
-      "stacks": [],
-      "mergeBase": {
-        "cliId": "",
-        "commitId": "0dc37334a458df421bf67ea806103bf5004845dd",
-        "createdAt": "2000-01-01T00:00:00+00:00",
-        "message": "add M\n",
-        "authorName": "author",
-        "authorEmail": "author@example.com",
-        "conflicted": null,
-        "reviewId": null,
-        "changes": null
-      },
-      "upstreamState": {
-        "behind": 0,
-        "latestCommit": {
-          "cliId": "",
-          "commitId": "0dc37334a458df421bf67ea806103bf5004845dd",
-          "createdAt": "2000-01-01T00:00:00+00:00",
-          "message": "add M\n",
-          "authorName": "author",
-          "authorEmail": "author@example.com",
-          "conflicted": null,
-          "reviewId": null,
-          "changes": null
-        },
-        "lastFetched": null
-      }
-    }
-    "#);
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+*   6a3496e (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+| * 74faa12 (A) add only-on-local
+| * 28baf9a (origin/A) add only-on-remote
+|/  
+* 0dc3733 (origin/main, origin/HEAD, main, gitbutler/target) add M
+
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(
+        pretty_status(&env)?,
+        snapbox::str![[r#"
+{
+  "uncommittedChanges": [],
+  "stacks": [],
+  "mergeBase": {
+    "cliId": "",
+    "commitId": "0dc37334a458df421bf67ea806103bf5004845dd",
+    "createdAt": "2000-01-01T00:00:00+00:00",
+    "message": "add M\n",
+    "authorName": "author",
+    "authorEmail": "author@example.com",
+    "conflicted": null,
+    "reviewId": null,
+    "changes": null
+  },
+  "upstreamState": {
+    "behind": 0,
+    "latestCommit": {
+      "cliId": "",
+      "commitId": "0dc37334a458df421bf67ea806103bf5004845dd",
+      "createdAt": "2000-01-01T00:00:00+00:00",
+      "message": "add M\n",
+      "authorName": "author",
+      "authorEmail": "author@example.com",
+      "conflicted": null,
+      "reviewId": null,
+      "changes": null
+    },
+    "lastFetched": null
+  }
+}
+"#]]
+        .raw()
+    );
 
     Ok(())
 }
@@ -126,19 +145,27 @@ fn integrate_smart_squash_applies_matching_change_ids() -> anyhow::Result<()> {
     let env =
         Sandbox::init_scenario_with_target_and_default_settings("branch-integrate-smart-squash");
 
-    insta::assert_snapshot!(env.git_log(), @"
-    * 2662ee8 (HEAD -> gitbutler/workspace, A) add only-on-local
-    | * c42227a (origin/A) add only-on-remote
-    |/  
-    * 0dc3733 (origin/main, origin/HEAD, main) add M
-    ");
-    insta::assert_snapshot!(raw_json_status(&env)?, @r"
-    status=exit status: 1
-    stdout:
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* 2662ee8 (HEAD -> gitbutler/workspace, A) add only-on-local
+| * c42227a (origin/A) add only-on-remote
+|/  
+* 0dc3733 (origin/main, origin/HEAD, main) add M
 
-    stderr:
-    Error: GitButler mode exit required: please run `but teardown` to preserve your work.
-    ");
+"#]]
+    );
+    snapbox::assert_data_eq!(
+        raw_json_status(&env)?,
+        snapbox::str![[r#"
+status=exit status: 1
+stdout:
+
+stderr:
+Error: GitButler mode exit required: please run `but teardown` to preserve your work.
+
+"#]]
+    );
 
     env.but("branch update A --strategy smart-squash")
         .assert()
@@ -149,19 +176,27 @@ Updated branch A.
 
 "#]]);
 
-    insta::assert_snapshot!(env.git_log(), @"
-    * bf02b24 (HEAD -> gitbutler/workspace, A) add only-on-remote
-    | * c42227a (origin/A) add only-on-remote
-    |/  
-    * 0dc3733 (origin/main, origin/HEAD, main, gitbutler/target) add M
-    ");
-    insta::assert_snapshot!(raw_json_status(&env)?, @r"
-    status=exit status: 1
-    stdout:
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* bf02b24 (HEAD -> gitbutler/workspace, A) add only-on-remote
+| * c42227a (origin/A) add only-on-remote
+|/  
+* 0dc3733 (origin/main, origin/HEAD, main, gitbutler/target) add M
 
-    stderr:
-    Error: GitButler mode exit required: please run `but teardown` to preserve your work.
-    ");
+"#]]
+    );
+    snapbox::assert_data_eq!(
+        raw_json_status(&env)?,
+        snapbox::str![[r#"
+status=exit status: 1
+stdout:
+
+stderr:
+Error: GitButler mode exit required: please run `but teardown` to preserve your work.
+
+"#]]
+    );
 
     Ok(())
 }
@@ -186,47 +221,56 @@ o 0dc3733
 
 "#]]);
 
-    insta::assert_snapshot!(before_log, @r"
-    *   a952a0b (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    | * 643ade3 (A) add only-on-local
-    |/  
-    | * 28baf9a (origin/A) add only-on-remote
-    |/  
-    * 0dc3733 (origin/main, origin/HEAD, main) add M
-    ");
-    insta::assert_snapshot!(before_status, @r#"
-    {
-      "uncommittedChanges": [],
-      "stacks": [],
-      "mergeBase": {
-        "cliId": "",
-        "commitId": "0dc37334a458df421bf67ea806103bf5004845dd",
-        "createdAt": "2000-01-01T00:00:00+00:00",
-        "message": "add M\n",
-        "authorName": "author",
-        "authorEmail": "author@example.com",
-        "conflicted": null,
-        "reviewId": null,
-        "changes": null
-      },
-      "upstreamState": {
-        "behind": 0,
-        "latestCommit": {
-          "cliId": "",
-          "commitId": "0dc37334a458df421bf67ea806103bf5004845dd",
-          "createdAt": "2000-01-01T00:00:00+00:00",
-          "message": "add M\n",
-          "authorName": "author",
-          "authorEmail": "author@example.com",
-          "conflicted": null,
-          "reviewId": null,
-          "changes": null
-        },
-        "lastFetched": null
-      }
-    }
-    "#);
+    snapbox::assert_data_eq!(
+        &before_log,
+        snapbox::str![[r#"
+*   a952a0b (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+| * 643ade3 (A) add only-on-local
+|/  
+| * 28baf9a (origin/A) add only-on-remote
+|/  
+* 0dc3733 (origin/main, origin/HEAD, main) add M
+
+"#]]
+        .raw()
+    );
+    snapbox::assert_data_eq!(
+        &before_status,
+        snapbox::str![[r#"
+{
+  "uncommittedChanges": [],
+  "stacks": [],
+  "mergeBase": {
+    "cliId": "",
+    "commitId": "0dc37334a458df421bf67ea806103bf5004845dd",
+    "createdAt": "2000-01-01T00:00:00+00:00",
+    "message": "add M\n",
+    "authorName": "author",
+    "authorEmail": "author@example.com",
+    "conflicted": null,
+    "reviewId": null,
+    "changes": null
+  },
+  "upstreamState": {
+    "behind": 0,
+    "latestCommit": {
+      "cliId": "",
+      "commitId": "0dc37334a458df421bf67ea806103bf5004845dd",
+      "createdAt": "2000-01-01T00:00:00+00:00",
+      "message": "add M\n",
+      "authorName": "author",
+      "authorEmail": "author@example.com",
+      "conflicted": null,
+      "reviewId": null,
+      "changes": null
+    },
+    "lastFetched": null
+  }
+}
+"#]]
+        .raw()
+    );
     assert_eq!(env.git_log(), before_log, "dry-run must not rewrite refs");
     assert_eq!(
         pretty_status(&env)?,
@@ -316,14 +360,19 @@ Updated branch A.
 
 "#]]);
 
-    insta::assert_snapshot!(env.git_log(), @r"
-    *   6a3496e (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    | * 74faa12 (A) add only-on-local
-    | * 28baf9a (origin/A) add only-on-remote
-    |/  
-    * 0dc3733 (origin/main, origin/HEAD, main, gitbutler/target) add M
-    ");
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+*   6a3496e (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+| * 74faa12 (A) add only-on-local
+| * 28baf9a (origin/A) add only-on-remote
+|/  
+* 0dc3733 (origin/main, origin/HEAD, main, gitbutler/target) add M
+
+"#]]
+        .raw()
+    );
 
     Ok(())
 }
@@ -383,18 +432,23 @@ EOF
         .success()
         .stderr_eq(str![]);
 
-    insta::assert_snapshot!(env.git_log(), @r"
-    *   9e0c28c (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    | *   30a8d17 (A) Merge 28baf9a2794d7722ceff84f2967b5186545b8a48 into previous commit
-    | |\  
-    | | * 28baf9a (origin/A) add only-on-remote
-    | |/  
-    |/|   
-    | * 643ade3 add only-on-local
-    |/  
-    * 0dc3733 (origin/main, origin/HEAD, main, gitbutler/target) add M
-    ");
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+*   9e0c28c (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+| *   30a8d17 (A) Merge 28baf9a2794d7722ceff84f2967b5186545b8a48 into previous commit
+| |\  
+| | * 28baf9a (origin/A) add only-on-remote
+| |/  
+|/|   
+| * 643ade3 add only-on-local
+|/  
+* 0dc3733 (origin/main, origin/HEAD, main, gitbutler/target) add M
+
+"#]]
+        .raw()
+    );
 
     Ok(())
 }
@@ -463,43 +517,51 @@ Error: line 1: invalid pick commit: commit '0dc3733' is not part of the editable
 fn integrate_errors_cleanly_without_tracking_branch() -> anyhow::Result<()> {
     let env =
         Sandbox::init_scenario_with_target_and_default_settings("branch-integrate-no-tracking");
-    insta::assert_snapshot!(env.git_log(), @r"
-    * edd3eb7 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    * 9477ae7 (A) add A
-    * 0dc3733 (origin/main, origin/HEAD, main) add M
-    ");
-    insta::assert_snapshot!(pretty_status(&env)?, @r#"
-    {
-      "uncommittedChanges": [],
-      "stacks": [],
-      "mergeBase": {
-        "cliId": "",
-        "commitId": "0dc37334a458df421bf67ea806103bf5004845dd",
-        "createdAt": "2000-01-01T00:00:00+00:00",
-        "message": "add M\n",
-        "authorName": "author",
-        "authorEmail": "author@example.com",
-        "conflicted": null,
-        "reviewId": null,
-        "changes": null
-      },
-      "upstreamState": {
-        "behind": 0,
-        "latestCommit": {
-          "cliId": "",
-          "commitId": "0dc37334a458df421bf67ea806103bf5004845dd",
-          "createdAt": "2000-01-01T00:00:00+00:00",
-          "message": "add M\n",
-          "authorName": "author",
-          "authorEmail": "author@example.com",
-          "conflicted": null,
-          "reviewId": null,
-          "changes": null
-        },
-        "lastFetched": null
-      }
-    }
-    "#);
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* edd3eb7 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 9477ae7 (A) add A
+* 0dc3733 (origin/main, origin/HEAD, main) add M
+
+"#]]
+    );
+    snapbox::assert_data_eq!(
+        pretty_status(&env)?,
+        snapbox::str![[r#"
+{
+  "uncommittedChanges": [],
+  "stacks": [],
+  "mergeBase": {
+    "cliId": "",
+    "commitId": "0dc37334a458df421bf67ea806103bf5004845dd",
+    "createdAt": "2000-01-01T00:00:00+00:00",
+    "message": "add M\n",
+    "authorName": "author",
+    "authorEmail": "author@example.com",
+    "conflicted": null,
+    "reviewId": null,
+    "changes": null
+  },
+  "upstreamState": {
+    "behind": 0,
+    "latestCommit": {
+      "cliId": "",
+      "commitId": "0dc37334a458df421bf67ea806103bf5004845dd",
+      "createdAt": "2000-01-01T00:00:00+00:00",
+      "message": "add M\n",
+      "authorName": "author",
+      "authorEmail": "author@example.com",
+      "conflicted": null,
+      "reviewId": null,
+      "changes": null
+    },
+    "lastFetched": null
+  }
+}
+"#]]
+        .raw()
+    );
 
     env.but("branch update A")
         .assert()

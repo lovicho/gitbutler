@@ -1,22 +1,28 @@
 use super::util::{enter_edit_mode_with_conflicted_commit, status_json};
 use crate::utils::{CommandExt as _, Sandbox};
+use snapbox::IntoData;
 
 #[test]
 fn worktrees() {
     let env = Sandbox::init_scenario_with_target_and_default_settings_slow("two-worktrees");
-    insta::assert_snapshot!(env.git_log(), @r"
-    *   063d8c1 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-    |\  
-    | * 3e01e28 (B) B
-    * | 4c4624e (A) A
-    |/  
-    | * 8dc508f (origin/main, origin/HEAD, main) M-advanced
-    |/  
-    | * 197ddce (origin/A) A-remote
-    |/  
-    * 081bae9 M-base
-    * 3183e43 M1
-    ");
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+*   063d8c1 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+| * 3e01e28 (B) B
+* | 4c4624e (A) A
+|/  
+| * 8dc508f (origin/main, origin/HEAD, main) M-advanced
+|/  
+| * 197ddce (origin/A) A-remote
+|/  
+* 081bae9 M-base
+* 3183e43 M1
+
+"#]]
+        .raw()
+    );
 
     // Must set metadata to match the scenario, or else the old APIs used here won't deliver.
     env.setup_metadata(&["A", "B"]);
@@ -43,7 +49,7 @@ fn worktrees() {
 #[test]
 fn unborn() {
     let env = Sandbox::open_scenario_with_target_and_default_settings("unborn");
-    insta::assert_snapshot!(env.git_log(), @"");
+    snapbox::assert_data_eq!(env.git_log(), snapbox::str![""]);
 
     // TODO: make this work
     env.but("status --verbose")
@@ -58,7 +64,13 @@ Error: Setup required: No GitButler project found at . - run `but setup` to conf
 #[test]
 fn first_commit_no_workspace() {
     let env = Sandbox::open_scenario_with_target_and_default_settings("first-commit");
-    insta::assert_snapshot!(env.git_log(), @"* 85efbe4 (HEAD -> main) M");
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* 85efbe4 (HEAD -> main) M
+
+"#]]
+    );
 
     // TODO: make this work
     env.but("status --verbose")
