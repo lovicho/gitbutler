@@ -94,6 +94,8 @@ pub fn default_key_binds() -> KeyBinds {
 
                 builder.normal_mode().register();
                 builder.back().register();
+
+                builder.reload().register();
             }
             ModeDiscriminant::InlineReword => {
                 builder.reword_confirm().register();
@@ -706,6 +708,7 @@ impl KeyBindsBuilder<'_> {
             Message::Reload(None, ReloadCause::Manual)
         })
         .hide_from_hotbar()
+        .show_only_in_normal_mode_help_section()
     }
 
     fn copy(&mut self) -> KeyBindsInModesBuilder<'_> {

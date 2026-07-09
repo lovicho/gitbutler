@@ -52,6 +52,42 @@
 	gap: 6px;
 }
 
+.checks {
+	margin-block-start: 48px;
+}
+
+.checkHeading {
+	margin-block-end: 8px;
+	color: var(--text-2);
+	font-weight: 600;
+}
+
+.checkSummary {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.checkItems {
+	display: flex;
+	flex-direction: column;
+	margin-block-start: 8px;
+	gap: 6px;
+	color: var(--text-2);
+}
+
+.checkJobsHeading {
+	margin-block: 12px 8px;
+	color: var(--text-2);
+	font-weight: 600;
+}
+
+.check {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
 .diffControls {
 	display: flex;
 	margin-inline-start: auto;

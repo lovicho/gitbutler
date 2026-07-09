@@ -71,4 +71,4 @@ export const readSettings = async (): Promise<GUISettings> => {
 };
 
 export const writeSettings = (cfg: GUISettings): Promise<void> =>
-	writeFile(cfgPath(), JSON.stringify(cfg));
+	writeFile(cfgPath(), JSON.stringify(cfg, null, "  "));

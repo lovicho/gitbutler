@@ -267,13 +267,14 @@ export const useRunOperation = () => {
 			if (response) {
 				syncCoreCaches(client, dispatch, projectId, response);
 
-				if ("rejectedChanges" in response && response.rejectedChanges.length > 0)
+				if ("rejectedChanges" in response && response.rejectedChanges.length > 0) {
 					toastManager.add(
 						rejectedChangesToastOptions({
 							newCommit: response.newCommit,
 							rejectedChanges: response.rejectedChanges,
 						}),
 					);
+				}
 			}
 		},
 		onError: (error) => {
@@ -533,12 +534,13 @@ const isOperationSourceEnabled = (source: Operand): boolean =>
 export type OperationsByType = Record<OperationType, OperationWithLabel | null>;
 
 export const getOperations = (source: Operand, target: Operand): OperationsByType => {
-	if (operandEquals(source, target) || !isOperationSourceEnabled(source))
+	if (operandEquals(source, target) || !isOperationSourceEnabled(source)) {
 		return {
 			into: null,
 			above: null,
 			below: null,
 		};
+	}
 	return {
 		into: intoOperation({ source, target }),
 		above: moveOperation({ source, target, side: "above" }),

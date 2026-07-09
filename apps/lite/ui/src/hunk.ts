@@ -137,13 +137,14 @@ export const contiguousSelectionByLine = ({
 	line: number;
 	side: SelectionSide;
 }): HunkLineSelection | null => {
-	for (const hunk of hunks)
+	for (const hunk of hunks) {
 		for (const sel of contiguousSelectionsFromHunk(hunk)) {
 			const containsChangedLine = sel.lineGroups.some(
 				(group) => group.side === side && line >= group.start && line < group.start + group.lines,
 			);
 			if (containsChangedLine) return sel;
 		}
+	}
 
 	return null;
 };
@@ -153,13 +154,14 @@ export const diffSpecHunkHeadersForLineSelection = (
 	action: "commit" | "discard",
 ): Array<HunkHeader> =>
 	lineSelection.lineGroups.map((group): HunkHeader => {
-		if (group.side === "deletions")
+		if (group.side === "deletions") {
 			return {
 				oldStart: group.start,
 				oldLines: group.lines,
 				newStart: action === "commit" ? 0 : lineSelection.hunkHeader.newStart,
 				newLines: action === "commit" ? 0 : lineSelection.hunkHeader.newLines,
 			};
+		}
 
 		return {
 			oldStart: action === "commit" ? 0 : lineSelection.hunkHeader.oldStart,

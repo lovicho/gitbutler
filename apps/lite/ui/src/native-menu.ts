@@ -39,7 +39,7 @@ const serializeNativeMenuItems = (
 	items.map((item): NativeMenuPopupItem => {
 		if (item._tag === "Separator") return { _tag: "Separator" };
 
-		if (item.submenu)
+		if (item.submenu) {
 			return {
 				_tag: "Item",
 				label: item.label,
@@ -47,6 +47,7 @@ const serializeNativeMenuItems = (
 				enabled: item.enabled,
 				submenu: serializeNativeMenuItems(item.submenu, handlers, nextActionId),
 			};
+		}
 
 		const itemId = `native-menu:${nextActionId.value++}`;
 		handlers.set(itemId, item.onSelect);

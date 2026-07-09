@@ -212,7 +212,7 @@ export const useOutlineTreeHotkeys = ({
 						response.workspace.headInfo,
 					).branchContextByRefBytes(response.newRef.fullNameBytes)?.stack;
 
-					if (newBranchStack && newBranchStack.id !== null)
+					if (newBranchStack && newBranchStack.id !== null) {
 						dispatch(
 							projectActions.selectOutline({
 								projectId,
@@ -222,6 +222,7 @@ export const useOutlineTreeHotkeys = ({
 								}),
 							}),
 						);
+					}
 				},
 			},
 		);
@@ -350,12 +351,13 @@ export const useOutlineTreeHotkeys = ({
 	};
 
 	const updateSelectedStack = () => {
-		if (selectedStackRebaseUpdate)
+		if (selectedStackRebaseUpdate) {
 			workspaceIntegrateUpstreamMutation.mutate({
 				projectId,
 				updates: [selectedStackRebaseUpdate],
 				dryRun: false,
 			});
+		}
 	};
 
 	const openSelectedCommitInBrowser = async (): Promise<void> => {

@@ -14,9 +14,11 @@ import {
 	branchDiffQueryOptions,
 	changesInWorktreeQueryOptions,
 	commitDetailsWithLineStatsQueryOptions,
+	forgeInfoOptions,
 	getGUISettingsQueryOptions,
 	getReviewMergeStatusQueryOptions,
 	headInfoQueryOptions,
+	listCIChecksQueryOptions,
 	listEditorsQueryOptions,
 	listReviewsQueryOptions,
 	treeChangeDiffsQueryOptions,
@@ -55,6 +57,7 @@ import {
 } from "#ui/components/Field.tsx";
 import { Field, Toggle, ToggleGroup, Toolbar, Tooltip } from "@base-ui/react";
 import type {
+	CiCheck,
 	CommitDetails,
 	DiffHunk,
 	TreeChange,
@@ -74,6 +77,7 @@ import { Hash, identity, Match } from "effect";
 import {
 	ComponentProps,
 	FC,
+	MouseEvent,
 	type RefObject,
 	SubmitEventHandler,
 	Suspense,
@@ -113,6 +117,8 @@ import { getHeadInfoIndex } from "#ui/api/ref-info.ts";
 import { Checkbox } from "#ui/components/Checkbox.tsx";
 import type { GUISettings } from "#electron/settings.ts";
 import { defaultSettings } from "#ui/settings.ts";
+import { AggregateCIChecks } from "#ui/ci.ts";
+import { IconName } from "#ui/components/iconNames.ts";
 
 type BranchTab = "diff" | "pr";
 
@@ -268,8 +274,8 @@ const getDiffView = ({
 		fileByItemId.set(item.id, diffViewFile);
 		fileByPath.set(change.path, diffViewFile);
 
-		if (mdiff?.type === "Patch")
-			for (const hunk of item.fileDiff.hunks)
+		if (mdiff?.type === "Patch") {
+			for (const hunk of item.fileDiff.hunks) {
 				for (const selection of contiguousSelectionsFromHunk(hunk)) {
 					const hunkOperand: HunkOperand = {
 						parent: file,
@@ -292,6 +298,8 @@ const getDiffView = ({
 					fileByHunkKey.set(hunkKey, diffViewFile);
 					hunkByKey.set(hunkKey, diffViewHunk);
 				}
+			}
+		}
 	}
 
 	return {
@@ -417,7 +425,7 @@ const DiffContents: FC<{
 					projectId,
 					editorId: preferredEditor.id,
 					path: diffSelectionFile.change.path,
-					lineNr: null,
+					lineNr: selectedRange?.range.start ?? null,
 				}),
 			options: {
 				enabled: !!diffSelectionFile && !!preferredEditor,
@@ -1193,7 +1201,7 @@ const PullRequestForm: FC<{
 		event.preventDefault();
 		if (!canSubmit) return;
 
-		if (reviewId === null)
+		if (reviewId === null) {
 			publishReview.mutate({
 				projectId,
 				params: {
@@ -1204,7 +1212,7 @@ const PullRequestForm: FC<{
 					targetBranch,
 				},
 			});
-		else
+		} else {
 			updateReview.mutate({
 				projectId,
 				reviewId,
@@ -1213,6 +1221,7 @@ const PullRequestForm: FC<{
 				state: null,
 				targetBase: null,
 			});
+		}
 	};
 
 	useHotkey(pullRequestHotkeys.update.hotkey, () => formRef.current?.requestSubmit(), {
@@ -1351,6 +1360,90 @@ const PullRequestPrimaryAction: FC<{
 						Merge
 					</button>
 				</>
+			)}
+		</div>
+	);
+};
+
+const Check: FC<{
+	title: string;
+	icon: IconName;
+	iconColor: string;
+	url: string;
+}> = (p) => {
+	const handleOpen =
+		(url: string) =>
+		async (evt: MouseEvent<HTMLAnchorElement>): Promise<void> => {
+			evt.preventDefault();
+
+			await window.lite.openInWebBrowser(url);
+		};
+
+	return (
+		<a
+			href={p.url}
+			onClick={(evt) => void handleOpen(p.url)(evt)}
+			className={classes("text-13", styles.check)}
+		>
+			<Icon name={p.icon} style={{ color: p.iconColor }} />
+			{p.title}
+		</a>
+	);
+};
+
+const Checks: FC<{ checks: Array<CiCheck>; aggregate: AggregateCIChecks }> = (p) => {
+	const [summary, summaryIcon, summaryIconColor] = Match.value(p.aggregate.status).pipe(
+		Match.withReturnType<[string, IconName, string]>(),
+		Match.when("success", () => ["All passed", "checklist", "var(--scale-safe-50)"]),
+		Match.when("failure", () => ["Failed", "checklist-remove", "var(--scale-danger-50)"]),
+		Match.when("cancelled", () => ["Some cancelled", "checklist-remove", "var(--scale-danger-50)"]),
+		Match.when("action_required", () => ["Action required", "warning", "var(--scale-warn-50)"]),
+		Match.when("in_progress", () => [
+			"In progress",
+			"spinner",
+			p.aggregate.failure.length > 0
+				? "var(--scale-danger-50)"
+				: p.aggregate.actionRequired.length > 0
+					? "var(--scale-warn-50)"
+					: "grey",
+		]),
+		Match.when("unknown", () => ["Unknown", "warning", "var(--scale-purple-50)"]),
+		Match.exhaustive,
+	);
+
+	return (
+		<div className={styles.checks}>
+			<h4 className={classes("text-14", styles.checkHeading)}>Checks</h4>
+
+			<div className={classes("text-14", styles.checkSummary)}>
+				<Icon name={summaryIcon} style={{ color: summaryIconColor }} />
+				{summary}
+			</div>
+
+			{(p.aggregate.failure.length > 0 || p.aggregate.actionRequired.length > 0) && (
+				<div className={styles.checkItems}>
+					<h5 className={classes("text-13", styles.checkJobsHeading)}>Failed jobs</h5>
+
+					{p.aggregate.failure.map((check) => (
+						<Check
+							key={check.id}
+							title={check.name}
+							icon="cross-circle"
+							iconColor="var(--scale-danger-60)"
+							url={check.htmlUrl}
+						/>
+					))}
+
+					{p.aggregate.actionRequired.map((check) => (
+						<Check
+							key={check.id}
+							title={check.name}
+							icon="warning"
+							iconColor="var(--scale-warn-60)"
+							url={check.htmlUrl}
+						/>
+					))}
+				</div>
 			)}
 		</div>
 	);
@@ -1566,15 +1659,37 @@ export const Details: FC<
 															title={null}
 														/>
 													) : (
-														<PullRequestForm
-															key={review.number}
-															body={review.body}
-															projectId={projectId}
-															reviewId={review.number}
-															sourceBranch={sourceBranch}
-															targetBranch={targetBranch}
-															title={review.title}
-														/>
+														<>
+															<PullRequestForm
+																key={review.number}
+																body={review.body}
+																projectId={projectId}
+																reviewId={review.number}
+																sourceBranch={sourceBranch}
+																targetBranch={targetBranch}
+																title={review.title}
+															/>
+
+															<SuspenseQuery {...forgeInfoOptions(projectId)}>
+																{({ data: forgeInfo }) =>
+																	forgeInfo?.capabilities.checks && (
+																		<SuspenseQuery
+																			{...listCIChecksQueryOptions({
+																				projectId,
+																				reference: sourceBranch,
+																				polling: "priority",
+																			})}
+																		>
+																			{({ data: { data: checks, aggregate } }) =>
+																				aggregate && (
+																					<Checks checks={checks} aggregate={aggregate} />
+																				)
+																			}
+																		</SuspenseQuery>
+																	)
+																}
+															</SuspenseQuery>
+														</>
 													)}
 												</div>
 											);

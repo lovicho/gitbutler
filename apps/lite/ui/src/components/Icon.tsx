@@ -16,7 +16,10 @@ export const Icon: FC<Props> = ({ name, size, ...props }) => (
 		className={classes(props.className, styles.icon, name === "spinner" && styles.spinning)}
 		data-icon
 		aria-hidden
-		style={size !== undefined ? { "--icon-size": `${size}px` } : undefined}
+		style={{
+			...props.style,
+			...(size !== undefined ? { "--icon-size": `${size}px` } : undefined),
+		}}
 		// oxlint-disable-next-line react/no-danger -- SVGs are bundled app assets.
 		dangerouslySetInnerHTML={{ __html: assert(icons.get(name)) }}
 	/>

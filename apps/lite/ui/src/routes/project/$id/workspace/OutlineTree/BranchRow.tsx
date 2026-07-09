@@ -34,7 +34,14 @@ import { projectActions, selectProjectOutlineModeState } from "#ui/projects/stat
 import { focusSelectionScope } from "#ui/selection-scopes.ts";
 import { useAppDispatch, useAppSelector } from "#ui/store.ts";
 import { prForgeUrl } from "#ui/pr.ts";
-import { RowBubble, RowLabel, RowLabelContainer, RowLabelFooter, RowToolbar } from "../Row.tsx";
+import {
+	RowBubble,
+	RowBubbleVariant,
+	RowLabel,
+	RowLabelContainer,
+	RowLabelFooter,
+	RowToolbar,
+} from "../Row.tsx";
 import { getRowButtonClassName } from "../Row-utils.ts";
 import { InlineEditor } from "./InlineEditor.tsx";
 import { commitMessageInputId } from "../CommitForm.tsx";
@@ -42,14 +49,14 @@ import { insertBlankCommitMenuItem } from "./insertBlankCommitMenuItem.ts";
 import { ItemRow } from "./ItemRow.tsx";
 import { type PartialStackState, partialStackPushDisabled } from "./partialStackState.ts";
 import styles from "./BranchRow.module.css";
-import { ciChecksSummaryUrl, type AggregateCIStatus } from "#ui/ci.ts";
+import { ciChecksSummaryUrl, type AggregateCIChecks } from "#ui/ci.ts";
 
 const focusCommitMessageInput = () => {
 	document.getElementById(commitMessageInputId)?.focus();
 };
 
-const CIBubble: FC<{ status: AggregateCIStatus }> = (p) => {
-	switch (p.status) {
+const CIBubble: FC<{ checks: AggregateCIChecks }> = (p) => {
+	switch (p.checks.status) {
 		case "success":
 			return (
 				<RowBubble aria-label="CI checks succeeded" variant="safe">
@@ -62,12 +69,19 @@ const CIBubble: FC<{ status: AggregateCIStatus }> = (p) => {
 					<Icon name="cross" size={12} />
 				</RowBubble>
 			);
-		case "in_progress":
+		case "in_progress": {
+			const [variant, label]: [RowBubbleVariant, string] =
+				p.checks.failure.length > 0
+					? ["danger", "CI checks in progress, some failed"]
+					: p.checks.actionRequired.length > 0
+						? ["warn", "CI checks in progress, some action required"]
+						: ["lightGray", "CI checks in progress"];
 			return (
-				<RowBubble aria-label="CI checks in progress" variant="lightGray">
+				<RowBubble aria-label={label} variant={variant}>
 					<Icon name="spinner" size={12} />
 				</RowBubble>
 			);
+		}
 		case "cancelled":
 			return (
 				<RowBubble aria-label="CI checks cancelled" variant="warn">
@@ -259,7 +273,7 @@ export const BranchRow: FC<
 						response.workspace.headInfo,
 					).branchContextByRefBytes(response.newRef.fullNameBytes)?.stack;
 
-					if (newBranchStack && newBranchStack.id !== null)
+					if (newBranchStack && newBranchStack.id !== null) {
 						dispatch(
 							projectActions.selectOutline({
 								projectId,
@@ -269,6 +283,7 @@ export const BranchRow: FC<
 								}),
 							}),
 						);
+					}
 				},
 			},
 		);
@@ -449,10 +464,10 @@ export const BranchRow: FC<
 						{ciChecks?.aggregate &&
 							(ciURL != null ? (
 								<a href={ciURL} onClick={(evt) => void openCIChecksInBrowser(evt)}>
-									<CIBubble status={ciChecks.aggregate.status} />
+									<CIBubble checks={ciChecks.aggregate} />
 								</a>
 							) : (
-								<CIBubble status={ciChecks.aggregate.status} />
+								<CIBubble checks={ciChecks.aggregate} />
 							))}
 
 						{partialStackState.requiresPush &&

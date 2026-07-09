@@ -15,7 +15,7 @@ export type AggregateCIStatus =
 
 type SDKStatus = Extract<CiStatus, string> | CiConclusion;
 
-type AggregateCIChecks = {
+export type AggregateCIChecks = {
 	status: AggregateCIStatus;
 	total: number;
 } & Record<SDKStatus, Array<CiCheck>>;
@@ -38,10 +38,11 @@ export const aggregateCIChecks = (checks: Array<CiCheck>): AggregateCIChecks | n
 		unknown: [],
 	};
 
-	for (const check of checks)
+	for (const check of checks) {
 		aggregate[
 			typeof check.status === "string" ? check.status : check.status.complete.conclusion
 		].push(check);
+	}
 
 	if (aggregate.failure.length > 0 || aggregate.timedOut.length > 0) aggregate.status = "failure";
 	else if (aggregate.actionRequired.length > 0) aggregate.status = "action_required";

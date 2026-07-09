@@ -136,7 +136,7 @@ export const CommitRow: FC<
 						response.workspace.headInfo,
 					).branchContextByRefBytes(response.newRef.fullNameBytes)?.stack;
 
-					if (newBranchStack && newBranchStack.id !== null)
+					if (newBranchStack && newBranchStack.id !== null) {
 						dispatch(
 							projectActions.selectOutline({
 								projectId,
@@ -146,6 +146,7 @@ export const CommitRow: FC<
 								}),
 							}),
 						);
+					}
 				},
 			},
 		);

@@ -107,6 +107,7 @@ export class UpdaterService {
 			handleError(err, manual);
 		} finally {
 			this.loading.set(false);
+			this.manualCheck = false;
 		}
 	}
 
@@ -121,8 +122,9 @@ export class UpdaterService {
 			return;
 		}
 
+		const isUnseenVersion = update.version !== this.seenVersion;
 		if (
-			update.version !== this.seenVersion &&
+			(isUnseenVersion || this.manualCheck) &&
 			update.currentVersion !== "0.0.0" // DEV mode.
 		) {
 			this.backendDownload = async (onEvent) => await update.download(onEvent);

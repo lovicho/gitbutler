@@ -361,13 +361,14 @@ export const useCommitAmend = ({ projectId }: { projectId: string }) => {
 				},
 			);
 
-			if (response.rejectedChanges.length > 0)
+			if (response.rejectedChanges.length > 0) {
 				toastManager.add(
 					rejectedChangesToastOptions({
 						newCommit: response.newCommit,
 						rejectedChanges: response.rejectedChanges,
 					}),
 				);
+			}
 		},
 		onError: (error) => {
 			// oxlint-disable-next-line no-console
@@ -413,21 +414,23 @@ export const useCommitCreate = ({ projectId }: { projectId: string }) => {
 		onSuccess: async (response, input, _ctx, mutation) => {
 			syncCoreCaches(mutation.client, dispatch, projectId, response);
 
-			if (input.relativeTo.type === "commit" && response.newCommit !== null)
+			if (input.relativeTo.type === "commit" && response.newCommit !== null) {
 				dispatch(
 					projectActions.setCommitTarget({
 						projectId,
 						commitTarget: { type: "commit", subject: response.newCommit },
 					}),
 				);
+			}
 
-			if (response.rejectedChanges.length > 0)
+			if (response.rejectedChanges.length > 0) {
 				toastManager.add(
 					rejectedChangesToastOptions({
 						newCommit: response.newCommit,
 						rejectedChanges: response.rejectedChanges,
 					}),
 				);
+			}
 		},
 		onError: (error) => {
 			// oxlint-disable-next-line no-console
@@ -524,13 +527,14 @@ export const useCommitInsertBlank = () => {
 			const stackId = getHeadInfoIndex(response.workspace.headInfo).commitContextById(
 				response.newCommit,
 			)?.stack.id;
-			if (stackId != null)
+			if (stackId != null) {
 				dispatch(
 					projectActions.selectOutline({
 						projectId: input.projectId,
 						selection: commitOperand({ stackId, commitId: response.newCommit }),
 					}),
 				);
+			}
 		},
 		onError: (error) => {
 			// oxlint-disable-next-line no-console

@@ -73,6 +73,30 @@ describe("Updater", () => {
 		expect(update2).toHaveProperty("releaseNotes", body);
 	});
 
+	test("should prompt again on manual check after dismiss", async () => {
+		const version = "1";
+		const body = "release notes";
+
+		vi.spyOn(backend, "checkUpdate").mockReturnValue(
+			mockUpdate({
+				version,
+				body,
+			}),
+		);
+		await updater.checkForUpdate();
+		expect(get(updater.update)).toHaveProperty("version", version);
+
+		updater.dismiss();
+		expect(get(updater.update)).toMatchObject({});
+
+		await updater.checkForUpdate();
+		expect(get(updater.update)).toMatchObject({});
+
+		await updater.checkForUpdate(true);
+		expect(get(updater.update)).toHaveProperty("version", version);
+		expect(get(updater.update)).toHaveProperty("releaseNotes", body);
+	});
+
 	test("should not prompt download for seen version", async () => {
 		const version = "1";
 		const body = "release notes";

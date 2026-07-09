@@ -104,7 +104,7 @@ export const RowLabel: FC<
 		}),
 	});
 
-type RowBubbleVariant = "fillGray" | "lightGray" | "safe" | "warn" | "danger";
+export type RowBubbleVariant = "fillGray" | "lightGray" | "safe" | "warn" | "danger";
 
 export const RowBubble: FC<
 	{

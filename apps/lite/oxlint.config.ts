@@ -29,7 +29,7 @@ export default defineConfig({
 	rules: {
 		"object-shorthand": "warn",
 		"arrow-body-style": ["warn", "as-needed"],
-		curly: ["warn", "multi"],
+		curly: ["warn", "multi-or-nest", "consistent"],
 		"default-param-last": "error",
 		"no-console": "warn",
 		"no-cond-assign": ["warn", "always"],

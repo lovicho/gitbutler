@@ -39,12 +39,13 @@ export const StackRow: FC<
 
 	const workspaceIntegrateUpstreamMutation = useWorkspaceIntegrateUpstream();
 	const updateStack = () => {
-		if (rebaseUpdate)
+		if (rebaseUpdate) {
 			workspaceIntegrateUpstreamMutation.mutate({
 				projectId,
 				updates: [rebaseUpdate],
 				dryRun: false,
 			});
+		}
 	};
 
 	const menuItems: Array<NativeMenuItem> = [

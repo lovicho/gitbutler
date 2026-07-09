@@ -208,7 +208,9 @@ for (const file of files) {
 		fs.writeFileSync(filePath, optimized, "utf-8");
 		updated++;
 		writeStdout(`  ✓ optimized: ${file}`);
-	} else unchanged++;
+	} else {
+		unchanged++;
+	}
 }
 
 // Regenerate iconNames.ts

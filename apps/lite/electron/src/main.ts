@@ -211,11 +211,12 @@ const registerLiteProtocolHandler = () => {
 		// Don't name files with any intermediate .. and we don't need to make this check account for that :)
 		//
 		// In addition, we only have the single host to serve from for now.
-		if (pathname.includes("..") || host !== liteProtocolHost)
+		if (pathname.includes("..") || host !== liteProtocolHost) {
 			return new Response("Not found", {
 				status: 404,
 				headers: { "content-type": "text/html" },
 			});
+		}
 
 		// We default to serving the index file unless the pathname indicates it's an asset. This is
 		// important to be compatible with React Router's "soft navigation" where it changes the

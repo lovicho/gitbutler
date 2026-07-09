@@ -232,13 +232,14 @@ export default class WatcherManager {
 	stopAllWatchersForShutdown(): number {
 		const stopped = this.watcherSubscriptions.size;
 
-		for (const [projectId, projectWatcher] of this.projectWatchers)
+		for (const [projectId, projectWatcher] of this.projectWatchers) {
 			try {
 				projectWatcher.handle.stop();
 			} catch (error) {
 				// oxlint-disable-next-line no-console
 				console.warn(`Failed to stop project watcher for ${projectId}`, error);
 			}
+		}
 
 		this.pendingProjectWatchers.clear();
 		this.projectWatchers.clear();

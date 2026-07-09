@@ -63,11 +63,34 @@ describe("AppUpdater", () => {
 		expect(button).toBeVisible();
 	});
 
+	test("should display download button again on manual check after dismiss", async () => {
+		vi.spyOn(backend, "checkUpdate").mockReturnValue(
+			mockUpdate({
+				version: "1",
+				body: "release notes",
+			}),
+		);
+
+		render(AppUpdater, { context });
+		await vi.advanceTimersToNextTimerAsync();
+
+		expect(screen.getByTestId("download-update")).toBeVisible();
+
+		updater.dismiss();
+		await vi.advanceTimersToNextTimerAsync();
+		expect(screen.queryByTestId("update-banner")).toBe(null);
+
+		await updater.checkForUpdate(true);
+		await vi.advanceTimersToNextTimerAsync();
+
+		expect(screen.getByTestId("download-update")).toBeVisible();
+	});
+
 	test("should display up-to-date on manual check", async () => {
 		vi.spyOn(backend, "checkUpdate").mockReturnValue(mockUpdate(null));
 		const { getByTestId } = render(AppUpdater, { context });
-		updater.checkForUpdate(true);
 		await vi.advanceTimersToNextTimerAsync();
+		await updater.checkForUpdate(true);
 
 		const button = getByTestId("got-it");
 		expect(button).toBeVisible();

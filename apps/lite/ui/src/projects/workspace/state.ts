@@ -198,9 +198,10 @@ export const setCommitsChecked = (
 	commitIds: Array<string>,
 	checked: boolean,
 ) => {
-	for (const commitId of commitIds)
+	for (const commitId of commitIds) {
 		if (checked) state.checkedCommitIds[commitId] = true;
 		else delete state.checkedCommitIds[commitId];
+	}
 };
 
 export const clearCheckedCommits = (state: WorkspaceState) => {

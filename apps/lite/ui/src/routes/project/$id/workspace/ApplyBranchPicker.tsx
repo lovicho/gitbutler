@@ -45,7 +45,7 @@ const formatRelativeTime = (timestamp: number, now = Date.now()) => {
 const branchListingToApplyBranchPickerOptions = (
 	branch: BranchListing,
 ): Array<ApplyBranchPickerOption> => {
-	if (branch.hasLocal)
+	if (branch.hasLocal) {
 		return [
 			{
 				branchRef: `refs/heads/${branch.name}`,
@@ -54,6 +54,7 @@ const branchListingToApplyBranchPickerOptions = (
 				updatedAt: branch.updatedAt,
 			},
 		];
+	}
 
 	return branch.remotes.map((remote) => ({
 		branchRef: `refs/remotes/${remote}/${branch.name}`,
