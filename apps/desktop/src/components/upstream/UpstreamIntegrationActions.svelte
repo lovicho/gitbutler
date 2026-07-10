@@ -4,12 +4,11 @@
 
 	type Props = {
 		projectId: string;
-		stackId: string | undefined;
-		branchName: string;
 		branchRef: string;
+		branchName: string;
 	};
 
-	const { projectId, branchName, branchRef }: Props = $props();
+	const { projectId, branchRef, branchName }: Props = $props();
 
 	let integrationModal = $state<Modal>();
 
@@ -18,24 +17,22 @@
 	}
 </script>
 
-<BranchIntegrationModal bind:modalRef={integrationModal} {projectId} {branchName} {branchRef} />
+<BranchIntegrationModal bind:modalRef={integrationModal} {projectId} {branchRef} {branchName} />
 
-<form
-	class="upstream-integration-actions"
-	onsubmit={(e) => {
-		e.preventDefault();
-		kickOffIntegration();
-	}}
->
+<div class="upstream-integration-actions">
+	<p class="text-12 text-body clr-text-2">
+		This branch and its remote have diverged.
+		<br />
+		Update to integrate the remote changes.
+	</p>
 	<Button
-		type="submit"
 		style="warning"
-		kind="outline"
 		testId={TestId.UpstreamCommitsIntegrateButton}
+		onclick={kickOffIntegration}
 	>
 		Update local branch...
 	</Button>
-</form>
+</div>
 
 <style lang="postcss">
 	.upstream-integration-actions {

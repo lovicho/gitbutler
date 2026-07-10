@@ -11,7 +11,7 @@
       line-height: 18px;
     }
     .bold { font-weight: bold; }
-    .dimmed { opacity: 0.7; }
+    .dimmed { opacity: 0.4; }
     tspan {
       font: 14px SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace;
       white-space: pre;
@@ -32,11 +32,11 @@
 </tspan>
     <tspan x="10px" y="100px"><tspan>┊╭┄┄</tspan><tspan class="fg-yellow">(upstream: on origin/A)</tspan>
 </tspan>
-    <tspan x="10px" y="118px"><tspan>┊</tspan><tspan class="fg-yellow">●</tspan><tspan>   </tspan><tspan class="fg-blue bold dimmed">94</tspan><tspan class="dimmed">77ae7</tspan><tspan class="dimmed"> add A</tspan>
+    <tspan x="10px" y="118px"><tspan>┊</tspan><tspan class="fg-yellow">●</tspan><tspan>   </tspan><tspan class="fg-blue bold dimmed">9</tspan><tspan class="dimmed">477ae7</tspan><tspan class="dimmed"> add A</tspan>
 </tspan>
     <tspan x="10px" y="136px"><tspan>┊-</tspan>
 </tspan>
-    <tspan x="10px" y="154px"><tspan>┊●   </tspan><tspan class="fg-blue bold">43</tspan><tspan class="dimmed">66169</tspan><tspan> add A amended</tspan>
+    <tspan x="10px" y="154px"><tspan>┊●   </tspan><tspan class="fg-blue bold">4</tspan><tspan class="dimmed">366169</tspan><tspan> add A amended</tspan>
 </tspan>
     <tspan x="10px" y="172px"><tspan>├╯</tspan>
 </tspan>

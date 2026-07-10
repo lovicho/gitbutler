@@ -107,13 +107,13 @@ fn pick_and_goto_noop_when_commit_file_list_open() {
         .assert_current_line_eq(str!["┊●   9477ae7 add A"]);
 
     tui.input('f')
-        .assert_current_line_eq(str!["┊│     94:tm A A"]);
+        .assert_current_line_eq(str!["┊│     9:t A A"]);
 
     tui.input('t')
         .assert_rendered_term_svg_eq(file![
             "snapshots/pick_and_goto_noop_when_commit_file_list_open_001.svg"
         ])
-        .assert_current_line_eq(str!["┊│     94:tm A A"]);
+        .assert_current_line_eq(str!["┊│     9:t A A"]);
 }
 
 #[test]

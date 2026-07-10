@@ -80,16 +80,16 @@ fn uncommit_different_files_from_different_commits_same_branch() -> anyhow::Resu
 ┊
 ┊╭┄g0 [A]
 ┊●   3d21fdd add c2
-┊│     3d:wy A c2.txt
+┊│     3:w A c2.txt
 ┊●   28b88fc add c1
-┊│     28:ls A c1.txt
+┊│     2:l A c1.txt
 ┊●   9477ae7 add A
-┊│     94:tm A A
+┊│     9:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
 ┊●   d3e2ba3 add B
-┊│     d3:pl A B
+┊│     d:p A B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -132,19 +132,19 @@ Uncommitted changes
         .stderr_eq(str![])
         .stdout_eq(str![[r#"
 ╭┄zz [uncommitted]
-┊   ls A c1.txt
-┊   wy A c2.txt
+┊   l A c1.txt
+┊   w A c2.txt
 ┊
 ┊╭┄g0 [A]
 ┊●   01fc011 add c2 (no changes)
 ┊●   5682e2a add c1 (no changes)
 ┊●   9477ae7 add A
-┊│     94:tm A A
+┊│     9:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
 ┊●   d3e2ba3 add B
-┊│     d3:pl A B
+┊│     d:p A B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -186,15 +186,15 @@ fn uncommit_different_files_from_the_same_commit() -> anyhow::Result<()> {
 ┊
 ┊╭┄g0 [A]
 ┊●   191c6ed add c1 and c2
-┊│     19:ls A c1.txt
-┊│     19:wy A c2.txt
+┊│     1:l A c1.txt
+┊│     1:w A c2.txt
 ┊●   9477ae7 add A
-┊│     94:tm A A
+┊│     9:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
 ┊●   d3e2ba3 add B
-┊│     d3:pl A B
+┊│     d:p A B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -235,18 +235,18 @@ Uncommitted changes
         .stderr_eq(str![])
         .stdout_eq(str![[r#"
 ╭┄zz [uncommitted]
-┊   ls A c1.txt
-┊   wy A c2.txt
+┊   l A c1.txt
+┊   w A c2.txt
 ┊
 ┊╭┄g0 [A]
 ┊●   3d256e6 add c1 and c2 (no changes)
 ┊●   9477ae7 add A
-┊│     94:tm A A
+┊│     9:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
 ┊●   d3e2ba3 add B
-┊│     d3:pl A B
+┊│     d:p A B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -290,18 +290,18 @@ fn uncommit_same_file_from_different_commits_same_branch() -> anyhow::Result<()>
 ┊
 ┊╭┄g0 [A]
 ┊●   e128a9a write v3
-┊│     e1:sp M f.txt
+┊│     e:s M f.txt
 ┊●   4dba526 write v2
-┊│     4d:sp M f.txt
+┊│     4:s M f.txt
 ┊●   825d09f write v1
-┊│     82:sp A f.txt
+┊│     8:s A f.txt
 ┊●   9477ae7 add A
-┊│     94:tm A A
+┊│     9:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
 ┊●   d3e2ba3 add B
-┊│     d3:pl A B
+┊│     d:p A B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -346,19 +346,19 @@ Uncommitted changes
         .stderr_eq(str![])
         .stdout_eq(str![[r#"
 ╭┄zz [uncommitted]
-┊   sp A f.txt
+┊   s A f.txt
 ┊
 ┊╭┄g0 [A]
 ┊●   ddf33f2 write v3 (no changes)
 ┊●   3212a72 write v2 (no changes)
 ┊●   637ac90 write v1 (no changes)
 ┊●   9477ae7 add A
-┊│     94:tm A A
+┊│     9:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
 ┊●   d3e2ba3 add B
-┊│     d3:pl A B
+┊│     d3:p A B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -400,16 +400,16 @@ fn uncommit_different_files_from_different_commits_different_branches() -> anyho
 ┊
 ┊╭┄g0 [A]
 ┊●   1675e0b add fa
-┊│     16:sk A fa.txt
+┊│     1:s A fa.txt
 ┊●   9477ae7 add A
-┊│     94:tm A A
+┊│     9:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
 ┊●   30b330c add fb
-┊│     30:qq A fb.txt
+┊│     3:q A fb.txt
 ┊●   d3e2ba3 add B
-┊│     d3:pl A B
+┊│     d:p A B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -447,19 +447,19 @@ Uncommitted changes
         .stderr_eq(str![])
         .stdout_eq(str![[r#"
 ╭┄zz [uncommitted]
-┊   sk A fa.txt
-┊   qq A fb.txt
+┊   s A fa.txt
+┊   q A fb.txt
 ┊
 ┊╭┄g0 [A]
 ┊●   3bbaec6 add fa (no changes)
 ┊●   9477ae7 add A
-┊│     94:tm A A
+┊│     9:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
 ┊●   0596eed add fb (no changes)
 ┊●   d3e2ba3 add B
-┊│     d3:pl A B
+┊│     d:p A B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M

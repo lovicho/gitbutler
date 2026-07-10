@@ -153,10 +153,10 @@ fn discard_stack_confirm_yes_discards_staged_changes() {
         .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊   vo A test.txt"]);
+        .assert_current_line_eq(str!["┊   v A test.txt"]);
 
     tui.input('r')
-        .assert_current_line_eq(str!["┊   << source >> << noop >> vo A test.txt"]);
+        .assert_current_line_eq(str!["┊   << source >> << noop >> v A test.txt"]);
 
     tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊●   << amend >> 9477ae7 add A"]);
@@ -324,7 +324,7 @@ fn discard_individual_committed_files_from_local_file_list() {
         "snapshots/discard_individual_committed_files_from_local_file_list_002.svg"
     ]);
     tui.input('y')
-        .assert_current_line_eq(str![["┊│     5f:or A three"]])
+        .assert_current_line_eq(str!["┊│     5:o A three"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/discard_individual_committed_files_from_local_file_list_003.svg"
         ])
@@ -334,7 +334,7 @@ fn discard_individual_committed_files_from_local_file_list() {
         "snapshots/discard_individual_committed_files_from_local_file_list_004.svg"
     ]);
     tui.input('y')
-        .assert_current_line_eq(str![["┊│     c0:tw A two"]])
+        .assert_current_line_eq(str!["┊│     c:t A two"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/discard_individual_committed_files_from_local_file_list_005.svg"
         ])
@@ -421,7 +421,7 @@ fn discard_marked_committed_files_from_local_file_list() {
         "snapshots/discard_marked_committed_files_from_local_file_list_003.svg"
     ]);
     tui.input('y')
-        .assert_current_line_eq(str![["┊│     c0:tw A two"]])
+        .assert_current_line_eq(str!["┊│     c:t A two"])
         .assert_backstack_eq([BackstackEntry::ShowFileList])
         .assert_rendered_term_svg_eq(file![
             "snapshots/discard_marked_committed_files_from_local_file_list_004.svg"
@@ -492,7 +492,7 @@ fn global_file_list_stays_open_after_discarding_the_last_file_in_a_commit() {
     tui.input('j');
     tui.input('j');
     tui.input('j')
-        .assert_current_line_eq(str![["┊│     94:tm A A"]]);
+        .assert_current_line_eq(str!["┊│     9:t A A"]);
     tui.input('x');
     tui.input('y');
 

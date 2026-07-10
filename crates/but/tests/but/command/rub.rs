@@ -110,9 +110,9 @@ fn assign_uncommitted_file() -> anyhow::Result<()> {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-──────────╮
-km:c a.txt│
-──────────╯
+─────────╮
+k:c a.txt│
+─────────╯
      1│+arbitrary text
 
 "#]]);
@@ -136,9 +136,9 @@ Unstaged the only hunk in a.txt in a stack
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-──────────╮
-nk:c a.txt│
-──────────╯
+─────────╮
+n:c a.txt│
+─────────╯
      1│+arbitrary text
 
 "#]]);
@@ -210,12 +210,12 @@ fn committed_file_to_uncommitted_area() -> anyhow::Result<()> {
 ...
               "changes": [
                 {
-                  "cliId": "e8:nk",
+                  "cliId": "e:n",
                   "filePath": "a.txt",
                   "changeType": "modified"
                 },
                 {
-                  "cliId": "e8:pn",
+                  "cliId": "e:p",
                   "filePath": "b.txt",
                   "changeType": "modified"
                 }
@@ -225,12 +225,12 @@ fn committed_file_to_uncommitted_area() -> anyhow::Result<()> {
 ...
               "changes": [
                 {
-                  "cliId": "fc:nk",
+                  "cliId": "f:n",
                   "filePath": "a.txt",
                   "changeType": "added"
                 },
                 {
-                  "cliId": "fc:pn",
+                  "cliId": "f:p",
                   "filePath": "b.txt",
                   "changeType": "added"
                 }
@@ -240,7 +240,7 @@ fn committed_file_to_uncommitted_area() -> anyhow::Result<()> {
 ...
               "changes": [
                 {
-                  "cliId": "94:tm",
+                  "cliId": "9:t",
                   "filePath": "A",
                   "changeType": "added"
                 }
@@ -269,7 +269,7 @@ Uncommitted changes
 {
   "uncommittedChanges": [
     {
-      "cliId": "pn",
+      "cliId": "p",
       "filePath": "b.txt",
       "changeType": "modified"
     }
@@ -287,7 +287,7 @@ Uncommitted changes
 ...
               "changes": [
                 {
-                  "cliId": "ce:nk",
+                  "cliId": "c:n",
                   "filePath": "a.txt",
                   "changeType": "modified"
                 }
@@ -297,12 +297,12 @@ Uncommitted changes
 ...
               "changes": [
                 {
-                  "cliId": "fc:nk",
+                  "cliId": "f:n",
                   "filePath": "a.txt",
                   "changeType": "added"
                 },
                 {
-                  "cliId": "fc:pn",
+                  "cliId": "f:p",
                   "filePath": "b.txt",
                   "changeType": "added"
                 }
@@ -312,7 +312,7 @@ Uncommitted changes
 ...
               "changes": [
                 {
-                  "cliId": "94:tm",
+                  "cliId": "9:t",
                   "filePath": "A",
                   "changeType": "added"
                 }
@@ -330,7 +330,7 @@ Uncommitted changes
 ...
               "changes": [
                 {
-                  "cliId": "d3:pl",
+                  "cliId": "d:p",
                   "filePath": "B",
                   "changeType": "added"
                 }
@@ -359,17 +359,17 @@ fn shorthand_uncommitted_hunk_to_uncommitted_area() -> anyhow::Result<()> {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-──────────╮
-km:2 a.txt│
-──────────╯
+─────────╮
+k:2 a.txt│
+─────────╯
    1  │-first
      1│+firsta
    2 2│ line
    3 3│ line
    4 4│ line
-──────────╮
-km:e a.txt│
-──────────╯
+─────────╮
+k:e a.txt│
+─────────╯
     6  6│ line
     7  7│ line
     8  8│ line
@@ -397,7 +397,7 @@ Unstaged a hunk in a.txt in a stack
 {
   "uncommittedChanges": [
     {
-      "cliId": "nk",
+      "cliId": "n",
       "filePath": "a.txt",
       "changeType": "modified"
     }
@@ -407,7 +407,7 @@ Unstaged a hunk in a.txt in a stack
       "cliId": "k0",
       "assignedChanges": [
         {
-          "cliId": "km",
+          "cliId": "k",
           "filePath": "a.txt",
           "changeType": "modified"
         }
@@ -438,17 +438,17 @@ fn uncommitted_hunk_to_branch() -> anyhow::Result<()> {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-──────────╮
-nk:2 a.txt│
-──────────╯
+─────────╮
+n:2 a.txt│
+─────────╯
    1  │-first
      1│+firsta
    2 2│ line
    3 3│ line
    4 4│ line
-──────────╮
-nk:e a.txt│
-──────────╯
+─────────╮
+n:e a.txt│
+─────────╯
     6  6│ line
     7  7│ line
     8  8│ line
@@ -476,7 +476,7 @@ Staged a hunk in a.txt in the uncommitted area → [A].
 {
   "uncommittedChanges": [
     {
-      "cliId": "nk",
+      "cliId": "n",
       "filePath": "a.txt",
       "changeType": "modified"
     }
@@ -486,7 +486,7 @@ Staged a hunk in a.txt in the uncommitted area → [A].
       "cliId": "k0",
       "assignedChanges": [
         {
-          "cliId": "km",
+          "cliId": "k",
           "filePath": "a.txt",
           "changeType": "modified"
         }
@@ -532,7 +532,7 @@ Amended [..] → [..]
 {
   "uncommittedChanges": [
     {
-      "cliId": "nk",
+      "cliId": "n",
       "filePath": "a.txt",
       "changeType": "modified"
     }
@@ -614,12 +614,12 @@ fn uncommit_command_on_commit() -> anyhow::Result<()> {
 {
   "uncommittedChanges": [
     {
-      "cliId": "nk",
+      "cliId": "n",
       "filePath": "a.txt",
       "changeType": "added"
     },
     {
-      "cliId": "pn",
+      "cliId": "p",
       "filePath": "b.txt",
       "changeType": "added"
     }
@@ -733,15 +733,15 @@ fn uncommit_command_with_discard_on_commit() -> anyhow::Result<()> {
 ┊
 ┊╭┄g0 [A]
 ┊●   fce8ecc create a.txt and b.txt
-┊│     fc:nk A a.txt
-┊│     fc:pn A b.txt
+┊│     f:n A a.txt
+┊│     f:p A b.txt
 ┊●   9477ae7 add A
-┊│     94:tm A A
+┊│     9:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
 ┊●   d3e2ba3 add B
-┊│     d3:pl A B
+┊│     d:p A B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -780,12 +780,12 @@ Hint: run `but help` for all commands
 ┊
 ┊╭┄g0 [A]
 ┊●   9477ae7 add A
-┊│     94:tm A A
+┊│     9:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
 ┊●   d3e2ba3 add B
-┊│     d3:pl A B
+┊│     d:p A B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -817,15 +817,15 @@ fn uncommit_command_with_discard_on_committed_file() -> anyhow::Result<()> {
 ┊
 ┊╭┄g0 [A]
 ┊●   fce8ecc create a.txt and b.txt
-┊│     fc:nk A a.txt
-┊│     fc:pn A b.txt
+┊│     f:n A a.txt
+┊│     f:p A b.txt
 ┊●   9477ae7 add A
-┊│     94:tm A A
+┊│     9:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
 ┊●   d3e2ba3 add B
-┊│     d3:pl A B
+┊│     d:p A B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -861,14 +861,14 @@ Hint: run `but help` for all commands
 ┊
 ┊╭┄g0 [A]
 ┊●   993513d create a.txt and b.txt
-┊│     99:nk A a.txt
+┊│     99:n A a.txt
 ┊●   9477ae7 add A
-┊│     94:tm A A
+┊│     94:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
 ┊●   d3e2ba3 add B
-┊│     d3:pl A B
+┊│     d:p A B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -965,7 +965,7 @@ fn stage_command() -> anyhow::Result<()> {
       "cliId": "j0",
       "assignedChanges": [
         {
-          "cliId": "km",
+          "cliId": "k",
           "filePath": "a.txt",
           "changeType": "modified"
         }
@@ -1074,7 +1074,7 @@ fn unstage_command() -> anyhow::Result<()> {
       "cliId": "j0",
       "assignedChanges": [
         {
-          "cliId": "km",
+          "cliId": "k",
           "filePath": "a.txt",
           "changeType": "modified"
         }
@@ -1095,7 +1095,7 @@ fn unstage_command() -> anyhow::Result<()> {
 {
   "uncommittedChanges": [
     {
-      "cliId": "nk",
+      "cliId": "n",
       "filePath": "a.txt",
       "changeType": "modified"
     }
@@ -1154,7 +1154,7 @@ fn unstage_command_with_branch() -> anyhow::Result<()> {
 {
   "uncommittedChanges": [
     {
-      "cliId": "nk",
+      "cliId": "n",
       "filePath": "a.txt",
       "changeType": "modified"
     }
@@ -1185,7 +1185,7 @@ fn unstage_command_validation() -> anyhow::Result<()> {
         .assert()
         .failure()
         .stderr_eq(str![[r#"
-Failed to unstage. Cannot unstage fc - it is a commit. Only uncommitted files and hunks can be unstaged.
+Failed to unstage. Cannot unstage f - it is a commit. Only uncommitted files and hunks can be unstaged.
 
 "#]]);
 
@@ -1195,7 +1195,7 @@ Failed to unstage. Cannot unstage fc - it is a commit. Only uncommitted files an
         .assert()
         .failure()
         .stderr_eq(str![[r#"
-Failed to unstage. Cannot unstage from fc - it is a commit. Target must be a branch.
+Failed to unstage. Cannot unstage from f - it is a commit. Target must be a branch.
 
 "#]]);
 
@@ -2235,8 +2235,8 @@ fn rubbing_modified_and_renamed_file() {
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   e3f869d add files
-┊│     e3:qs A file
-┊│     e3:kw A file-2
+┊│     e:q A file
+┊│     e:k A file-2
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -2253,13 +2253,13 @@ Hint: run `but help` for all commands
         .success()
         .stdout_eq(snapbox::str![[r#"
 ╭┄zz [uncommitted]
-┊   qs M file
-┊   kw D file-2
+┊   q M file
+┊   k D file-2
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   e3f869d add files
-┊│     e3:qs A file
-┊│     e3:kw A file-2
+┊│     e:q A file
+┊│     e:k A file-2
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -2278,7 +2278,7 @@ Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "mes
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   3a32c97 add files
-┊│     3a:qs A file
+┊│     3:q A file
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -2306,8 +2306,8 @@ fn committing_modified_and_renamed_file() {
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   e3f869d add files
-┊│     e3:qs A file
-┊│     e3:kw A file-2
+┊│     e:q A file
+┊│     e:k A file-2
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -2324,13 +2324,13 @@ Hint: run `but help` for all commands
         .success()
         .stdout_eq(snapbox::str![[r#"
 ╭┄zz [uncommitted]
-┊   qs M file
-┊   kw D file-2
+┊   q M file
+┊   k D file-2
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   e3f869d add files
-┊│     e3:qs A file
-┊│     e3:kw A file-2
+┊│     e:q A file
+┊│     e:k A file-2
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -2349,11 +2349,11 @@ Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "mes
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   e419886 change file
-┊│     e4:qs M file
-┊│     e4:kw D file-2
+┊│     e4:q M file
+┊│     e4:k D file-2
 ┊●   e3f869d add files
-┊│     e3:qs A file
-┊│     e3:kw A file-2
+┊│     e3:q A file
+┊│     e3:k A file-2
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M

@@ -658,7 +658,7 @@ fn discard_hunk_from_detail_view_via_uncommitted() {
     ]);
 
     tui.input('x')
-        .assert_rendered_contains("Discard hunk kl:f one?")
+        .assert_rendered_contains("Discard hunk k:f one?")
         .assert_rendered_term_svg_eq(file![
             "snapshots/discard_hunk_from_detail_view_via_uncommitted_006.svg"
         ]);
@@ -714,7 +714,7 @@ fn discard_hunk_from_detail_view_via_file() {
 
     tui.input((KeyModifiers::SHIFT, 'G'));
     tui.input('x')
-        .assert_rendered_contains("Discard hunk px:0 x-file?");
+        .assert_rendered_contains("Discard hunk p:0 x-file?");
     tui.input('y').assert_rendered_term_svg_eq(file![
         "snapshots/discard_hunk_from_detail_view_via_file_003.svg"
     ]);

@@ -58,16 +58,16 @@ fn marking_uncommitted_toggles_all_uncommitted_files() {
         .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊✔︎  nk A a.txt"]);
+        .assert_current_line_eq(str!["┊✔︎  n A a.txt"]);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊✔︎  pn A b.txt"]);
+        .assert_current_line_eq(str!["┊✔︎  p A b.txt"]);
 
     tui.input('g');
     tui.input(' ');
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊   nk A a.txt"]);
+        .assert_current_line_eq(str!["┊   n A a.txt"]);
 }
 
 #[test]
@@ -115,7 +115,7 @@ fn marks_still_show_in_split_details() {
     // mark some things
     tui.input('j');
     tui.input(' ')
-        .assert_rendered_contains("┊✔︎    kl A one")
+        .assert_rendered_contains("┊✔︎     k A one")
         .assert_rendered_contains("┊   twop A two")
         .assert_backstack_eq([BackstackEntry::Mark])
         .assert_rendered_term_svg_eq(file!["snapshots/marks_still_show_in_split_details_001.svg"]);
@@ -123,7 +123,7 @@ fn marks_still_show_in_split_details() {
     // open details view and still see the marks
     tui.input('d')
         .assert_rendered_contains("+content of two")
-        .assert_rendered_contains("┊✔︎    kl A one")
+        .assert_rendered_contains("┊✔︎     k A one")
         .assert_rendered_contains("┊   twop A two")
         .assert_backstack_eq([BackstackEntry::OpenSplitDetailsView, BackstackEntry::Mark])
         .assert_rendered_term_svg_eq(file!["snapshots/marks_still_show_in_split_details_002.svg"]);
@@ -135,7 +135,7 @@ fn marks_still_show_in_split_details() {
     tui.input('l')
         .assert_rendered_contains("details")
         .assert_rendered_contains("+content of two")
-        .assert_rendered_contains("┊✔︎    kl A one")
+        .assert_rendered_contains("┊✔︎     k A one")
         .assert_rendered_contains("┊   twop A two")
         .assert_backstack_eq([
             BackstackEntry::LeaveNormalMode,
@@ -148,7 +148,7 @@ fn marks_still_show_in_split_details() {
     tui.input('h')
         .assert_rendered_contains("normal")
         .assert_rendered_contains("+content of two")
-        .assert_rendered_contains("┊✔︎    kl A one")
+        .assert_rendered_contains("┊✔︎     k A one")
         .assert_rendered_contains("┊   twop A two")
         .assert_backstack_eq([BackstackEntry::OpenSplitDetailsView, BackstackEntry::Mark])
         .assert_rendered_term_svg_eq(file!["snapshots/marks_still_show_in_split_details_005.svg"]);
@@ -188,7 +188,7 @@ fn can_only_mark_files_from_one_commit() {
 
     tui.input('j');
     tui.input(' ')
-        .assert_current_line_eq(str![["┊│     bd:tw A two"]])
+        .assert_current_line_eq(str!["┊│     b:t A two"])
         .assert_backstack_eq([BackstackEntry::Mark, BackstackEntry::ShowFileList])
         .assert_rendered_term_svg_eq(file![
             "snapshots/can_only_mark_files_from_one_commit_002.svg"
@@ -197,7 +197,7 @@ fn can_only_mark_files_from_one_commit() {
     // we shouldn't be allowed to select lines outside the commit files
     for _ in 0..10 {
         tui.input('j')
-            .assert_current_line_eq(str![["┊│     bd:tw A two"]])
+            .assert_current_line_eq(str!["┊│     b:t A two"])
             .assert_backstack_eq([BackstackEntry::Mark, BackstackEntry::ShowFileList])
             .assert_rendered_term_svg_eq(file![
                 "snapshots/can_only_mark_files_from_one_commit_003.svg"
@@ -205,7 +205,7 @@ fn can_only_mark_files_from_one_commit() {
     }
     for _ in 0..10 {
         tui.input('k')
-            .assert_current_line_eq(str![["┊✔︎     bd:or A three"]])
+            .assert_current_line_eq(str!["┊✔︎     b:o A three"])
             .assert_backstack_eq([BackstackEntry::Mark, BackstackEntry::ShowFileList])
             .assert_rendered_term_svg_eq(file![
                 "snapshots/can_only_mark_files_from_one_commit_004.svg"

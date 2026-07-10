@@ -44,8 +44,8 @@
 		color: var(--fill-pop-fg);
 
 		&.small {
-			width: 12px;
-			height: 12px;
+			width: 14px;
+			height: 14px;
 			border-radius: 6px;
 		}
 

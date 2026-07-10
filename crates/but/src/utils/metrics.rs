@@ -1,4 +1,8 @@
-use std::{collections::HashMap, env};
+use std::{
+    collections::HashMap,
+    env,
+    path::{Path, PathBuf},
+};
 
 use but_settings::AppSettings;
 use clap::ValueEnum;
@@ -25,6 +29,7 @@ pub(super) mod types {
         pub(super) start: std::time::Instant,
         pub command: CommandName,
         pub(super) extra_props: Vec<(String, serde_json::Value)>,
+        pub(super) current_dir: std::path::PathBuf,
     }
 
     /// A metrics implementation to run in the background, receiving metrics to send through a channel.
@@ -36,11 +41,16 @@ pub(super) mod types {
 use types::{BackgroundMetrics, OneshotMetricsContext};
 
 impl OneshotMetricsContext {
-    pub fn new(cmd: CommandName, extra_props: Vec<(String, serde_json::Value)>) -> Self {
+    pub fn new(
+        cmd: CommandName,
+        extra_props: Vec<(String, serde_json::Value)>,
+        current_dir: PathBuf,
+    ) -> Self {
         Self {
             start: std::time::Instant::now(),
             command: cmd,
             extra_props,
+            current_dir,
         }
     }
 }
@@ -69,13 +79,21 @@ impl EventKind {
 
 impl Subcommands {
     /// Create all context that is needed to emit metrics for `self` once, if `settings` permit.
-    pub fn to_metrics_context(&self, settings: &AppSettings) -> Option<OneshotMetricsContext> {
+    pub fn to_metrics_context(
+        &self,
+        settings: &AppSettings,
+        current_dir: &Path,
+    ) -> Option<OneshotMetricsContext> {
         if !settings.telemetry.app_metrics_enabled {
             return None;
         }
         let cmd = self.to_metrics_command();
         let extra_props = self.to_metrics_extra_props();
-        Some(OneshotMetricsContext::new(cmd, extra_props))
+        Some(OneshotMetricsContext::new(
+            cmd,
+            extra_props,
+            current_dir.to_owned(),
+        ))
     }
 
     /// Turn `self` into a `CommandName` that serves as metric identifier.
@@ -498,6 +516,72 @@ fn truncate_error_message(message: String) -> String {
     message.chars().take(ERROR_MESSAGE_MAX_CHARS).collect()
 }
 
+/// Add lane and branch counts to `event`, read from the managed workspace at `current_dir`;
+/// on failure the props are simply absent.
+///
+/// This runs in the spun-off `but metrics` process, shortly after the user-facing command
+/// finished. Property names are shared with the desktop commit analytics where the meaning
+/// matches; do not reuse desktop names like `branchCount` whose meaning differs.
+pub fn add_workspace_shape(event: &mut Event, current_dir: &Path) {
+    let Ok(ctx) = but_ctx::Context::discover(current_dir) else {
+        return;
+    };
+    // Only inspect repositories that already carry GitButler project state; capturing an
+    // event must never be what initializes a project.
+    if !but_db::DbHandle::db_file_path(ctx.project_data_dir()).exists() {
+        return;
+    }
+    let _guard = ctx.shared_worktree_access();
+    let Some(ws) = read_only_workspace(&ctx) else {
+        return;
+    };
+    // Without an intact workspace commit stack segments aren't reliable, and without a
+    // lower bound they extend into unrelated history and would count historical branches.
+    if !ws.kind.has_managed_commit() || ws.lower_bound.is_none() {
+        return;
+    }
+    let branches_per_lane: Vec<usize> = ws
+        .stacks
+        .iter()
+        .map(|stack| {
+            stack
+                .segments
+                .iter()
+                .filter(|segment| segment.ref_name().is_some())
+                .count()
+        })
+        .collect();
+    event.insert_prop("totalLanesInWorkspace", branches_per_lane.len());
+    event.insert_prop(
+        "totalBranchesInWorkspace",
+        branches_per_lane.iter().sum::<usize>(),
+    );
+    event.insert_prop(
+        "maxBranchesPerLane",
+        branches_per_lane.iter().max().copied().unwrap_or_default(),
+    );
+}
+
+/// The workspace as seen from `HEAD`, built strictly read-only: unlike the
+/// `Context::workspace_and_db()` family this never creates or migrates the project database
+/// or rewrites `virtual_branches.toml`.
+fn read_only_workspace(ctx: &but_ctx::Context) -> Option<but_graph::Workspace> {
+    let repo = ctx.repo.get().ok()?;
+    let meta = but_meta::BranchOrderMetadata::from_paths_read_only(
+        ctx.project_data_dir().join("virtual_branches.toml"),
+        ctx.project_data_dir(),
+    )
+    .ok()?;
+    let graph = but_graph::Graph::from_head(
+        &repo,
+        &meta,
+        ctx.project_meta().ok()?,
+        but_graph::init::Options::limited(),
+    )
+    .ok()?;
+    graph.into_workspace().ok()
+}
+
 #[derive(Debug, Clone)]
 pub struct Event {
     event_name: EventKind,
@@ -643,6 +727,7 @@ impl<T> ResultMetricsExt<T, anyhow::Error> for anyhow::Result<T> {
             start,
             command,
             extra_props,
+            current_dir,
         }) = ctx
         else {
             return self;
@@ -650,7 +735,7 @@ impl<T> ResultMetricsExt<T, anyhow::Error> for anyhow::Result<T> {
 
         let mut props = Props::from_anyhow_result(start, &self, command);
         props.extend(extra_props);
-        emit_metrics(command, &props);
+        emit_metrics(command, &props, &current_dir);
         self
     }
 }
@@ -661,6 +746,7 @@ impl<T> ResultMetricsExt<T, CliError> for Result<T, CliError> {
             start,
             command,
             extra_props,
+            current_dir,
         }) = ctx
         else {
             return self;
@@ -668,12 +754,12 @@ impl<T> ResultMetricsExt<T, CliError> for Result<T, CliError> {
 
         let mut props = Props::from_cli_error_result(start, &self, command);
         props.extend(extra_props);
-        emit_metrics(command, &props);
+        emit_metrics(command, &props, &current_dir);
         self
     }
 }
 
-fn emit_metrics(command: CommandName, props: &Props) {
+fn emit_metrics(command: CommandName, props: &Props, current_dir: &Path) {
     let Some(v) = command.to_possible_value() else {
         tracing::warn!("BUG: didn't get string value for {command:?}");
         return;
@@ -689,7 +775,14 @@ fn emit_metrics(command: CommandName, props: &Props) {
         Ok(path) => path,
     };
 
+    // Pass the invocation directory as an argument rather than as the child's working
+    // directory: an invalid directory (say a bad `-C` value, which itself is worth
+    // capturing) must neither fail the spawn nor let the child report another repository.
+    // The `=`-joined form parses even for values starting with a hyphen.
+    let mut current_dir_arg = std::ffi::OsString::from("--current-dir=");
+    current_dir_arg.push(current_dir);
     let _ = tokio::process::Command::new(but_path)
+        .arg(current_dir_arg)
         .arg("metrics")
         .arg("--command-name")
         .arg(v.get_name())
@@ -725,6 +818,56 @@ mod tests {
             Event::new(EventKind::Cli(subcommand.to_metrics_command())).props["command"],
             serde_json::json!(expected)
         );
+    }
+
+    #[test]
+    fn workspace_shape_never_initializes_a_project() {
+        but_testsupport::isolated_app_data_dir(|| {
+            let tmp = tempfile::tempdir().expect("tempdir");
+            let repo_dir = tmp.path().join("repo");
+            gix::init(&repo_dir).expect("init plain repo");
+            let mut event = Event::new(EventKind::Cli(CommandName::Commit));
+
+            // A plain repository without GitButler state must stay untouched.
+            add_workspace_shape(&mut event, &repo_dir);
+            let data_dir = repo_dir.join(".git/gitbutler");
+            assert!(!data_dir.exists());
+            assert!(!event.props.contains_key("totalLanesInWorkspace"));
+
+            // Even with a project data dir present, the project database must not be created.
+            std::fs::create_dir(&data_dir).expect("create project data dir");
+            add_workspace_shape(&mut event, &repo_dir);
+            assert_eq!(
+                std::fs::read_dir(&data_dir).expect("read data dir").count(),
+                0
+            );
+            assert!(!event.props.contains_key("totalLanesInWorkspace"));
+        });
+    }
+
+    #[test]
+    fn workspace_shape_counts_lanes_and_stacked_branches() {
+        but_testsupport::isolated_app_data_dir(|| {
+            let sandbox =
+                but_testsupport::Sandbox::open_or_init_scenario_with_target_and_default_settings(
+                    "one-stack-three-dependent-branches",
+                );
+            let repo = sandbox.open_repo();
+            let workdir = repo.workdir().expect("scenario is not bare").to_owned();
+            // The shape is only read from repositories that already carry a project database.
+            but_db::DbHandle::new_in_directory(repo.git_dir().join("gitbutler"))
+                .expect("create project db");
+
+            let mut event = Event::new(EventKind::Cli(CommandName::Commit));
+            add_workspace_shape(&mut event, &workdir);
+
+            assert_eq!(event.props["totalLanesInWorkspace"], serde_json::json!(1));
+            assert_eq!(
+                event.props["totalBranchesInWorkspace"],
+                serde_json::json!(3)
+            );
+            assert_eq!(event.props["maxBranchesPerLane"], serde_json::json!(3));
+        });
     }
 
     #[test]

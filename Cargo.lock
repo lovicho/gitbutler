@@ -829,6 +829,7 @@ dependencies = [
  "but-hunk-dependency",
  "but-installer",
  "but-llm",
+ "but-meta",
  "but-path",
  "but-rebase",
  "but-secret",

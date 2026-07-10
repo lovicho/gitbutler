@@ -10,7 +10,7 @@
       line-height: 18px;
     }
     .bold { font-weight: bold; }
-    .dimmed { opacity: 0.7; }
+    .dimmed { opacity: 0.4; }
     tspan {
       font: 14px SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace;
       white-space: pre;
@@ -27,7 +27,7 @@
 </tspan>
     <tspan x="10px" y="64px"><tspan>┊╭┄</tspan><tspan class="fg-blue bold">g0</tspan><tspan> [</tspan><tspan class="fg-green">A</tspan><tspan>]</tspan>
 </tspan>
-    <tspan x="10px" y="82px"><tspan>┊● </tspan><tspan class="fg-blue bold">94</tspan><tspan class="dimmed">77ae7</tspan><tspan> author </tspan><tspan class="dimmed">2000-01-01 00:00:00 +0000</tspan>
+    <tspan x="10px" y="82px"><tspan>┊● </tspan><tspan class="fg-blue bold">9</tspan><tspan class="dimmed">477ae7</tspan><tspan> author </tspan><tspan class="dimmed">2000-01-01 00:00:00 +0000</tspan>
 </tspan>
     <tspan x="10px" y="100px"><tspan>┊│     add A </tspan>
 </tspan>
@@ -37,7 +37,7 @@
 </tspan>
     <tspan x="10px" y="154px"><tspan>┊╭┄</tspan><tspan class="fg-blue bold">h0</tspan><tspan> [</tspan><tspan class="fg-green">B</tspan><tspan>]</tspan>
 </tspan>
-    <tspan x="10px" y="172px"><tspan>┊● </tspan><tspan class="fg-blue bold">d3</tspan><tspan class="dimmed">e2ba3</tspan><tspan> author </tspan><tspan class="dimmed">2000-01-01 00:00:00 +0000</tspan>
+    <tspan x="10px" y="172px"><tspan>┊● </tspan><tspan class="fg-blue bold">d</tspan><tspan class="dimmed">3e2ba3</tspan><tspan> author </tspan><tspan class="dimmed">2000-01-01 00:00:00 +0000</tspan>
 </tspan>
     <tspan x="10px" y="190px"><tspan>┊│     add B </tspan>
 </tspan>

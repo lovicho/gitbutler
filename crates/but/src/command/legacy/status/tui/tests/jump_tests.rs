@@ -113,8 +113,7 @@ fn highlights_exact_matches_when_file_list_is_open() {
 
     tui.input((KeyModifiers::SHIFT, 'F'));
     tui.input('/');
-    tui.input('9');
-    tui.input('4').assert_rendered_term_svg_eq(file![
+    tui.input('9').assert_rendered_term_svg_eq(file![
         "snapshots/highlights_exact_matches_when_file_list_is_open_001.svg"
     ]);
 

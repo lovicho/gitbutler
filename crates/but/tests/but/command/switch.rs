@@ -211,7 +211,7 @@ fn rejects_non_branch_cli_id() -> anyhow::Result<()> {
         .failure()
         .stdout_eq(str![])
         .stderr_eq(str![[r#"
-Error: Could not find branch: '94'
+Error: Could not find branch: '9'
 
 Hint: Run `but status` for applicable targets.
 

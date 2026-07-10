@@ -12,7 +12,7 @@
 
 <div data-testid={testId} class="action-row" class:is-last={isLast}>
 	<div class="commit-line-wrapper">
-		<div class="commit-line" class:dashed={isLast}></div>
+		<div class="commit-line dashed"></div>
 	</div>
 
 	<div class="action">
@@ -25,8 +25,11 @@
 		display: flex;
 		position: relative;
 		overflow: hidden;
-		border-top: 1px solid var(--border-3);
 		--commit-color: var(--commit-upstream);
+
+		&:not(:first-child) {
+			border-top: 1px solid var(--border-3);
+		}
 
 		&:not(.is-last) {
 			border-bottom: 1px solid var(--border-2);

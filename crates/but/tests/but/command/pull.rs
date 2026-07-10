@@ -397,7 +397,7 @@ fn pull_does_not_report_branch_rebase_conflicts_as_worktree_conflicts() -> anyho
 
     env.but("status").assert().success().stdout_eq(str![[r#"
 ╭┄zz [uncommitted]
-┊   ot M shared.txt
+┊   o M shared.txt
 ┊
 ┊╭┄g0 [A]
 ┊●   ba99744 local change
@@ -433,7 +433,7 @@ Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "mes
 
     env.but("status").assert().success().stdout_eq(str![[r#"
 ╭┄zz [uncommitted]
-┊   ot M shared.txt
+┊   o M shared.txt
 ┊
 ┊╭┄g0 [A]
 ┊◐   705b03e local change (no changes) {conflicted}

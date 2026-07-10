@@ -120,7 +120,7 @@ fn json_shows_paths_as_strings() {
 {
   "uncommittedChanges": [
     {
-      "cliId": "qu",
+      "cliId": "q",
       "filePath": "test-file.txt",
       "changeType": "added"
     }
@@ -135,7 +135,7 @@ fn json_shows_paths_as_strings() {
           "name": "A",
           "commits": [
             {
-              "cliId": "94",
+              "cliId": "9",
               "commitId": "9477ae721ab521d9d0174f70e804ce3ff9f6fb56",
               "createdAt": "2000-01-01T00:00:00+00:00",
               "message": "add A/n",
@@ -162,7 +162,7 @@ fn json_shows_paths_as_strings() {
           "name": "B",
           "commits": [
             {
-              "cliId": "d3",
+              "cliId": "d",
               "commitId": "d3e2ba36c529fbdce8de90593e22aceae21f9b17",
               "createdAt": "2000-01-01T00:00:00+00:00",
               "message": "add B/n",
@@ -241,12 +241,12 @@ fn uncommitted_and_committed_file_cli_ids() -> anyhow::Result<()> {
 {
   "uncommittedChanges": [
     {
-      "cliId": "nk",
+      "cliId": "n",
       "filePath": "a.txt",
       "changeType": "modified"
     },
     {
-      "cliId": "pn",
+      "cliId": "p",
       "filePath": "b.txt",
       "changeType": "modified"
     }
@@ -257,12 +257,12 @@ fn uncommitted_and_committed_file_cli_ids() -> anyhow::Result<()> {
 ...
               "changes": [
                 {
-                  "cliId": "44:nk",
+                  "cliId": "44:n",
                   "filePath": "a.txt",
                   "changeType": "modified"
                 },
                 {
-                  "cliId": "44:pn",
+                  "cliId": "44:p",
                   "filePath": "b.txt",
                   "changeType": "modified"
                 }
@@ -272,12 +272,12 @@ fn uncommitted_and_committed_file_cli_ids() -> anyhow::Result<()> {
 ...
               "changes": [
                 {
-                  "cliId": "49:nk",
+                  "cliId": "49:n",
                   "filePath": "a.txt",
                   "changeType": "added"
                 },
                 {
-                  "cliId": "49:pn",
+                  "cliId": "49:p",
                   "filePath": "b.txt",
                   "changeType": "added"
                 }
@@ -355,7 +355,7 @@ fn long_cli_ids_json() -> anyhow::Result<()> {
               "message": "add A13/n",
 ...
             {
-              "cliId": "a1",
+              "cliId": "a",
               "commitId": "a18ea48cd317c7c8fc9317b6f2427be4cdb2585d",
               "createdAt": "[RFC_TIMESTAMP]",
               "message": "add A12/n",
@@ -708,7 +708,7 @@ fn unmerged_empty_branch_above_merged_one_is_not_treated_as_merged() {
         .stdout_eq(snapbox::str![[r#"
 ╭┄zz [uncommitted] (no changes)
 ┊
-┊╭┄op [top] (no commits)
+┊╭┄to [top] (no commits)
 ┊│
 ┊├┄bo [bottom] (merged upstream) (no commits)
 ├╯

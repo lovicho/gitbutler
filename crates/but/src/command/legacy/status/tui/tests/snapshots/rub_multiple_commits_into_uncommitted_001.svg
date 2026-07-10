@@ -209,7 +209,7 @@
   <text x="130" y="78" style="fill:#FFFFFF;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">&gt;</text>
   <text x="138" y="78" style="fill:#FFFFFF;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">&gt;</text>
   <text x="154" y="78" style="fill:#0000AA;font-weight:bold;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">a</text>
-  <text x="162" y="78" style="fill:#0000AA;font-weight:bold;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">6</text>
+  <text x="162" y="78" style="fill:#CCCCCC;opacity:0.75;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">6</text>
   <text x="170" y="78" style="fill:#CCCCCC;opacity:0.75;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">0</text>
   <text x="178" y="78" style="fill:#CCCCCC;opacity:0.75;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">1</text>
   <text x="186" y="78" style="fill:#CCCCCC;opacity:0.75;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">8</text>
@@ -245,7 +245,7 @@
   <text x="130" y="96" style="fill:#FFFFFF;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">&gt;</text>
   <text x="138" y="96" style="fill:#FFFFFF;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">&gt;</text>
   <text x="154" y="96" style="fill:#0000AA;font-weight:bold;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">5</text>
-  <text x="162" y="96" style="fill:#0000AA;font-weight:bold;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">b</text>
+  <text x="162" y="96" style="fill:#CCCCCC;opacity:0.75;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">b</text>
   <text x="170" y="96" style="fill:#CCCCCC;opacity:0.75;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">d</text>
   <text x="178" y="96" style="fill:#CCCCCC;opacity:0.75;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">3</text>
   <text x="186" y="96" style="fill:#CCCCCC;opacity:0.75;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">0</text>

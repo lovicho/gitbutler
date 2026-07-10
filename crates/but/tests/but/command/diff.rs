@@ -15,13 +15,13 @@ fn path_prefix() {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-─────────────╮
-yz:c prefix/a│
-─────────────╯
+────────────╮
+y:c prefix/a│
+────────────╯
      1│+we want this
-─────────────╮
-uo:d prefix/b│
-─────────────╯
+────────────╮
+u:d prefix/b│
+────────────╯
      1│+we also want this
 
 "#]]);
@@ -62,7 +62,7 @@ fn json_no_target_all_worktree_changes() {
 {
   "changes": [
     {
-      "id": "xz:b",
+      "id": "x:b",
       "path": "alpha.txt",
       "status": "modified",
       "diff": {
@@ -79,7 +79,7 @@ fn json_no_target_all_worktree_changes() {
       }
     },
     {
-      "id": "vq:5",
+      "id": "v:5",
       "path": "beta.txt",
       "status": "modified",
       "diff": {
@@ -118,7 +118,7 @@ fn json_target_uncommitted_hunk_or_file() {
 {
   "changes": [
     {
-      "id": "xw:4",
+      "id": "x:4",
       "path": "other.txt",
       "status": "modified",
       "diff": {
@@ -135,7 +135,7 @@ fn json_target_uncommitted_hunk_or_file() {
       }
     },
     {
-      "id": "pk:b",
+      "id": "p:b",
       "path": "target.txt",
       "status": "modified",
       "diff": {
@@ -167,7 +167,7 @@ fn json_target_uncommitted_hunk_or_file() {
 {
   "changes": [
     {
-      "id": "pk:b",
+      "id": "p:b",
       "path": "target.txt",
       "status": "modified",
       "diff": {
@@ -214,7 +214,7 @@ fn json_target_uncommitted_whole_file_with_multiple_hunks() {
 {
   "changes": [
     {
-      "id": "ut:a",
+      "id": "u:a",
       "path": "multi-hunk.txt",
       "status": "modified",
       "diff": {
@@ -231,7 +231,7 @@ fn json_target_uncommitted_whole_file_with_multiple_hunks() {
       }
     },
     {
-      "id": "ut:6",
+      "id": "u:6",
       "path": "multi-hunk.txt",
       "status": "modified",
       "diff": {
@@ -271,7 +271,7 @@ fn json_target_path_prefix() {
 {
   "changes": [
     {
-      "id": "yz:c",
+      "id": "y:c",
       "path": "prefix/a",
       "status": "modified",
       "diff": {
@@ -288,7 +288,7 @@ fn json_target_path_prefix() {
       }
     },
     {
-      "id": "uo:d",
+      "id": "u:d",
       "path": "prefix/b",
       "status": "modified",
       "diff": {
@@ -330,15 +330,15 @@ fn json_target_committed_file() {
 ┊
 ┊╭┄g0 [A]
 ┊●   3f40d29 committed-file-target
-┊│     3f:kr A committed-other.txt
-┊│     3f:wm A committed-target.txt
+┊│     3:k A committed-other.txt
+┊│     3:w A committed-target.txt
 ┊●   9477ae7 add A
-┊│     94:tm A A
+┊│     9:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
 ┊●   d3e2ba3 add B
-┊│     d3:pl A B
+┊│     d:p A B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -428,12 +428,12 @@ fn json_target_commit() {
 ┊
 ┊╭┄g0 [A]
 ┊●   9477ae7 add A
-┊│     94:tm A A
+┊│     9:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
 ┊●   d3e2ba3 add B
-┊│     d3:pl A B
+┊│     d:p A B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -492,7 +492,7 @@ fn json_target_uncommitted_area() {
 {
   "changes": [
     {
-      "id": "nz:4",
+      "id": "n:4",
       "path": "unassigned.txt",
       "status": "modified",
       "diff": {
@@ -529,19 +529,19 @@ fn json_target_stack() {
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
 ╭┄zz [uncommitted]
-┊   nz A unassigned.txt
+┊   n A unassigned.txt
 ┊
 ┊  ╭┄k0 [staged to A]
-┊  │ su A assigned.txt
+┊  │ s A assigned.txt
 ┊  │
 ┊╭┄g0 [A]
 ┊●   9477ae7 add A
-┊│     94:tm A A
+┊│     9:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
 ┊●   d3e2ba3 add B
-┊│     d3:pl A B
+┊│     d:p A B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -561,7 +561,7 @@ Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "mes
 {
   "changes": [
     {
-      "id": "su:8",
+      "id": "s:8",
       "path": "assigned.txt",
       "status": "modified",
       "diff": {
@@ -613,19 +613,19 @@ fn json_commit_target_tree_change_statuses() -> anyhow::Result<()> {
 ┊●   dafe86a status-target
 ┊│     da:nx A added.txt
 ┊│     da:nm D deleted.txt
-┊│     da:un M modified.txt
-┊│     da:or R renamed-after.txt
+┊│     da:u M modified.txt
+┊│     da:o R renamed-after.txt
 ┊●   db7d00b status-base
-┊│     db:nm A deleted.txt
-┊│     db:un A modified.txt
-┊│     db:zy A renamed-before.txt
+┊│     db:n A deleted.txt
+┊│     db:u A modified.txt
+┊│     db:z A renamed-before.txt
 ┊●   9477ae7 add A
-┊│     94:tm A A
+┊│     9:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
 ┊●   d3e2ba3 add B
-┊│     d3:pl A B
+┊│     d3:p A B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M

@@ -231,7 +231,7 @@ pub async fn handle_args(args: impl Iterator<Item = OsString>) -> Result<()> {
 
     let result = match args.cmd.take() {
         Some(cmd @ Subcommands::External(_)) => {
-            let metrics_ctx = cmd.to_metrics_context(&app_settings);
+            let metrics_ctx = cmd.to_metrics_context(&app_settings, &args.current_dir);
             let Subcommands::External(extra) = cmd else {
                 unreachable!("external command was matched above")
             };
@@ -400,16 +400,23 @@ async fn match_subcommand(
         cmd => cmd,
     };
 
-    let metrics_ctx = cmd.to_metrics_context(&app_settings);
+    let metrics_ctx = cmd.to_metrics_context(&app_settings, &args.current_dir);
 
     match cmd {
         Subcommands::Metrics {
             command_name,
             props,
         } => {
+            use args::metrics::CommandName;
             let mut event = utils::metrics::Event::new(command_name.into());
             if let Ok(props) = utils::metrics::Props::from_json_string(&props) {
                 props.update_event(&mut event);
+            }
+            if matches!(
+                command_name,
+                CommandName::Commit | CommandName::CommitEmpty | CommandName::Commit2
+            ) {
+                utils::metrics::add_workspace_shape(&mut event, &args.current_dir);
             }
             utils::metrics::capture_event_blocking(&app_settings, event).await;
             Ok(())

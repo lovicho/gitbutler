@@ -574,13 +574,13 @@ fn esc_leaves_rub_mode() {
         .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊   vo A test.txt"]);
+        .assert_current_line_eq(str!["┊   v A test.txt"]);
 
     tui.input('r')
-        .assert_current_line_eq(str!["┊   << source >> << noop >> vo A test.txt"]);
+        .assert_current_line_eq(str!["┊   << source >> << noop >> v A test.txt"]);
 
     tui.input(KeyCode::Esc)
-        .assert_current_line_eq(str!["┊   vo A test.txt"]);
+        .assert_current_line_eq(str!["┊   v A test.txt"]);
 }
 
 #[test]
@@ -595,16 +595,16 @@ fn mode_key_r_enters_and_escape_leaves_rub_mode() {
     tui.reload();
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊   vo A test.txt"]);
+        .assert_current_line_eq(str!["┊   v A test.txt"]);
 
     tui.input('r')
         .assert_rendered_term_svg_eq(file![
             "snapshots/mode_toggle_key_r_enters_and_leaves_rub_mode_001.svg"
         ])
-        .assert_current_line_eq(str!["┊   << source >> << noop >> vo A test.txt"]);
+        .assert_current_line_eq(str!["┊   << source >> << noop >> v A test.txt"]);
 
     tui.input(KeyCode::Esc)
-        .assert_current_line_eq(str!["┊   vo A test.txt"]);
+        .assert_current_line_eq(str!["┊   v A test.txt"]);
 }
 
 #[test]
@@ -619,10 +619,10 @@ fn rub_mode_shift_j_lands_on_first_selectable_in_next_branch() {
     tui.reload();
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊   vo A test.txt"]);
+        .assert_current_line_eq(str!["┊   v A test.txt"]);
 
     tui.input('r')
-        .assert_current_line_eq(str!["┊   << source >> << noop >> vo A test.txt"]);
+        .assert_current_line_eq(str!["┊   << source >> << noop >> v A test.txt"]);
 
     tui.input((KeyModifiers::SHIFT, 'J'))
         .assert_current_line_eq(str!["┊●   << amend >> 9477ae7 add A"]);
@@ -640,10 +640,10 @@ fn rub_mode_shift_j_can_jump_between_branches() {
     tui.reload();
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊   vo A test.txt"]);
+        .assert_current_line_eq(str!["┊   v A test.txt"]);
 
     tui.input('r')
-        .assert_current_line_eq(str!["┊   << source >> << noop >> vo A test.txt"]);
+        .assert_current_line_eq(str!["┊   << source >> << noop >> v A test.txt"]);
 
     tui.input((KeyModifiers::SHIFT, 'J'))
         .assert_current_line_eq(str!["┊●   << amend >> 9477ae7 add A"]);
@@ -664,10 +664,10 @@ fn rub_mode_shift_k_jumps_to_first_selectable_in_previous_branch() {
     tui.reload();
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊   vo A test.txt"]);
+        .assert_current_line_eq(str!["┊   v A test.txt"]);
 
     tui.input('r')
-        .assert_current_line_eq(str!["┊   << source >> << noop >> vo A test.txt"]);
+        .assert_current_line_eq(str!["┊   << source >> << noop >> v A test.txt"]);
 
     tui.input((KeyModifiers::SHIFT, 'J'))
         .assert_current_line_eq(str!["┊●   << amend >> 9477ae7 add A"]);
@@ -752,7 +752,7 @@ fn rubbing() {
         .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊   vo A test.txt"]);
+        .assert_current_line_eq(str!["┊   v A test.txt"]);
 
     tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
@@ -761,10 +761,10 @@ fn rubbing() {
         .assert_current_line_eq(str!["┊●   f184fc7 (no commit message) (no changes)"]);
 
     tui.input([KeyCode::Up, KeyCode::Up])
-        .assert_current_line_eq(str!["┊   vo A test.txt"]);
+        .assert_current_line_eq(str!["┊   v A test.txt"]);
 
     tui.input('r')
-        .assert_current_line_eq(str!["┊   << source >> << noop >> vo A test.txt"]);
+        .assert_current_line_eq(str!["┊   << source >> << noop >> v A test.txt"]);
 
     tui.input(KeyCode::Down).assert_current_line_eq(str![
         "┊●   << amend >> f184fc7 (no commit message) (no changes)"
@@ -806,7 +806,7 @@ fn global_file_list_does_not_restrict_cursor() {
         .assert_current_line_eq(str!["┊●   9477ae7 add A"]);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊│     94:tm A A"]);
+        .assert_current_line_eq(str!["┊│     9:t A A"]);
 
     tui.input((KeyModifiers::SHIFT, 'J'))
         .assert_current_line_eq(str!["┊╭┄h0 [B]"])
@@ -826,13 +826,13 @@ fn commit_file_list_scopes_cursor_to_files_in_selected_commit() {
         .assert_current_line_eq(str!["┊●   9477ae7 add A"]);
 
     tui.input('f')
-        .assert_current_line_eq(str!["┊│     94:tm A A"]);
+        .assert_current_line_eq(str!["┊│     9:t A A"]);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊│     94:tm A A"]);
+        .assert_current_line_eq(str!["┊│     9:t A A"]);
 
     tui.input(KeyCode::Up)
-        .assert_current_line_eq(str!["┊│     94:tm A A"])
+        .assert_current_line_eq(str!["┊│     9:t A A"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/commit_file_list_scopes_cursor_to_files_in_selected_commit_final.svg"
         ]);
@@ -883,13 +883,13 @@ fn commit_file_list_rub_esc_leaves_rub_and_closes_file_list() {
         .assert_current_line_eq(str!["┊●   9477ae7 add A"]);
 
     tui.input('f')
-        .assert_current_line_eq(str!["┊│     94:tm A A"]);
+        .assert_current_line_eq(str!["┊│     9:t A A"]);
 
     tui.input((KeyModifiers::SHIFT, 'R'))
-        .assert_current_line_eq(str!["┊│     94:tm A A"]);
+        .assert_current_line_eq(str!["┊│     9:t A A"]);
 
     tui.input(KeyCode::Up)
-        .assert_current_line_eq(str!["┊│     94:tm A A"]);
+        .assert_current_line_eq(str!["┊│     9:t A A"]);
 
     tui.input(KeyCode::Esc)
         .assert_current_line_eq(str!["┊●   9477ae7 add A"])
@@ -909,16 +909,16 @@ fn confirm_rub_keeps_commit_file_list_open() {
         .assert_current_line_eq(str!["┊●   9477ae7 add A"]);
 
     tui.input('f')
-        .assert_current_line_eq(str!["┊│     94:tm A A"]);
+        .assert_current_line_eq(str!["┊│     9:t A A"]);
 
     tui.input((KeyModifiers::SHIFT, 'R'))
-        .assert_current_line_eq(str!["┊│     94:tm A A"]);
+        .assert_current_line_eq(str!["┊│     9:t A A"]);
 
     tui.input(KeyCode::Enter)
-        .assert_current_line_eq(str!["┊│     94:tm A A"]);
+        .assert_current_line_eq(str!["┊│     9:t A A"]);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊│     94:tm A A"]);
+        .assert_current_line_eq(str!["┊│     9:t A A"]);
 }
 
 #[test]
@@ -935,7 +935,7 @@ fn esc_in_normal_mode_closes_global_file_list() {
         .assert_current_line_eq(str!["┊●   9477ae7 add A"]);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊│     94:tm A A"]);
+        .assert_current_line_eq(str!["┊│     9:t A A"]);
 
     tui.input(KeyCode::Esc)
         .assert_current_line_eq(str!["┊●   9477ae7 add A"])
@@ -955,7 +955,7 @@ fn esc_in_normal_mode_closes_commit_file_list() {
         .assert_current_line_eq(str!["┊●   9477ae7 add A"]);
 
     tui.input('f')
-        .assert_current_line_eq(str!["┊│     94:tm A A"]);
+        .assert_current_line_eq(str!["┊│     9:t A A"]);
 
     tui.input(KeyCode::Esc)
         .assert_current_line_eq(str!["┊●   9477ae7 add A"])

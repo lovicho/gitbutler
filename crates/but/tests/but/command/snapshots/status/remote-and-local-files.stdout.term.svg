@@ -11,7 +11,7 @@
       line-height: 18px;
     }
     .bold { font-weight: bold; }
-    .dimmed { opacity: 0.7; }
+    .dimmed { opacity: 0.4; }
     tspan {
       font: 14px SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace;
       white-space: pre;
@@ -38,15 +38,15 @@
 </tspan>
     <tspan x="10px" y="154px"><tspan>┊╭┄┄</tspan><tspan class="fg-yellow">(upstream: on origin/A)</tspan>
 </tspan>
-    <tspan x="10px" y="172px"><tspan>┊</tspan><tspan class="fg-yellow">●</tspan><tspan>   </tspan><tspan class="fg-blue bold dimmed">28</tspan><tspan class="dimmed">baf9a</tspan><tspan class="dimmed"> add only-on-remote</tspan>
+    <tspan x="10px" y="172px"><tspan>┊</tspan><tspan class="fg-yellow">●</tspan><tspan>   </tspan><tspan class="fg-blue bold dimmed">2</tspan><tspan class="dimmed">8baf9a</tspan><tspan class="dimmed"> add only-on-remote</tspan>
 </tspan>
     <tspan x="10px" y="190px"><tspan>┊│     A </tspan><tspan class="fg-green">only-on-remote</tspan>
 </tspan>
     <tspan x="10px" y="208px"><tspan>┊-</tspan>
 </tspan>
-    <tspan x="10px" y="226px"><tspan>┊●   </tspan><tspan class="fg-blue bold">64</tspan><tspan class="dimmed">3ade3</tspan><tspan> add only-on-local</tspan>
+    <tspan x="10px" y="226px"><tspan>┊●   </tspan><tspan class="fg-blue bold">6</tspan><tspan class="dimmed">43ade3</tspan><tspan> add only-on-local</tspan>
 </tspan>
-    <tspan x="10px" y="244px"><tspan>┊│     </tspan><tspan class="fg-blue bold">64:tp</tspan><tspan> A </tspan><tspan class="fg-green">only-on-local</tspan>
+    <tspan x="10px" y="244px"><tspan>┊│     </tspan><tspan class="fg-blue bold">6:t</tspan><tspan> A </tspan><tspan class="fg-green">only-on-local</tspan>
 </tspan>
     <tspan x="10px" y="262px"><tspan>├╯</tspan>
 </tspan>

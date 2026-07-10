@@ -948,9 +948,9 @@ fn move_file_below_commit_creates_commit() {
 ┊
 ┊╭┄g0 [A]
 ┊●   9ac4652 add second
-┊│     9a:wu A second
+┊│     9:w A second
 ┊●   fe12bcd add first
-┊│     fe:lz A first
+┊│     f:l A first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -976,9 +976,9 @@ Moved 1 changes from 9ac4652 to new commit 8e35f84 below commit fe12bcd
 ┊╭┄g0 [A]
 ┊●   01a55b8 add second (no changes)
 ┊●   12b9152 add first
-┊│     12:lz A first
+┊│     1:l A first
 ┊●   8e35f84 (no commit message)
-┊│     8e:wu A second
+┊│     8:w A second
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -1001,9 +1001,9 @@ fn move_file_above_commit_creates_commit() {
 ┊
 ┊╭┄g0 [A]
 ┊●   9ac4652 add second
-┊│     9a:wu A second
+┊│     9:w A second
 ┊●   fe12bcd add first
-┊│     fe:lz A first
+┊│     f:l A first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -1028,9 +1028,9 @@ Moved 1 changes from fe12bcd to new commit c019027 above commit 9ac4652
 ┊
 ┊╭┄g0 [A]
 ┊●   c019027 (no commit message)
-┊│     c0:lz A first
+┊│     c:l A first
 ┊●   38b1f1a add second
-┊│     38:wu A second
+┊│     3:w A second
 ┊●   d8dfd0f add first (no changes)
 ├╯
 ┊
@@ -1054,9 +1054,9 @@ fn move_file_below_branch_creates_branch_and_commit() {
 ┊
 ┊╭┄g0 [A]
 ┊●   9ac4652 add second
-┊│     9a:wu A second
+┊│     9:w A second
 ┊●   fe12bcd add first
-┊│     fe:lz A first
+┊│     f:l A first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -1082,11 +1082,11 @@ Moved 1 changes from 9ac4652 to new commit 8e35f84 on new branch 'a-branch-1' be
 ┊╭┄g0 [A]
 ┊●   01a55b8 add second (no changes)
 ┊●   12b9152 add first
-┊│     12:lz A first
+┊│     1:l A first
 ┊│
 ┊├┄br [a-branch-1]
 ┊●   8e35f84 (no commit message)
-┊│     8e:wu A second
+┊│     8:w A second
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -1109,9 +1109,9 @@ fn move_file_above_branch_creates_branch_and_commit() {
 ┊
 ┊╭┄g0 [A]
 ┊●   9ac4652 add second
-┊│     9a:wu A second
+┊│     9:w A second
 ┊●   fe12bcd add first
-┊│     fe:lz A first
+┊│     f:l A first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -1136,11 +1136,11 @@ Moved 1 changes from fe12bcd to new commit c019027 on new branch 'a-branch-1' ab
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   c019027 (no commit message)
-┊│     c0:lz A first
+┊│     c:l A first
 ┊│
 ┊├┄g0 [A]
 ┊●   38b1f1a add second
-┊│     38:wu A second
+┊│     3:w A second
 ┊●   d8dfd0f add first (no changes)
 ├╯
 ┊
@@ -1164,12 +1164,12 @@ fn move_file_to_branch_tip_creates_commit() {
 ┊
 ┊╭┄g0 [A]
 ┊●   9477ae7 add A
-┊│     94:tm A A
+┊│     9:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
 ┊●   d3e2ba3 add B
-┊│     d3:pl A B
+┊│     d:p A B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1194,9 +1194,9 @@ Moved 1 changes from d3e2ba3 to new commit be174de to the tip of branch 'A'
 ┊
 ┊╭┄g0 [A]
 ┊●   be174de (no commit message)
-┊│     be:pl A B
+┊│     b:p A B
 ┊●   9477ae7 add A
-┊│     94:tm A A
+┊│     9:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
@@ -1223,9 +1223,9 @@ fn move_file_to_non_existing_branch_tip_creates_unstacked_branch_and_commit() {
 ┊
 ┊╭┄g0 [A]
 ┊●   9ac4652 add second
-┊│     9a:wu A second
+┊│     9:w A second
 ┊●   fe12bcd add first
-┊│     fe:lz A first
+┊│     f:l A first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -1250,13 +1250,13 @@ Moved 1 changes from 9ac4652 to new commit 8e35f84 on new branch 'new-branch'
 ┊
 ┊╭┄ne [new-branch]
 ┊●   8e35f84 (no commit message)
-┊│     8e:wu A second
+┊│     8e:w A second
 ├╯
 ┊
 ┊╭┄g0 [A]
 ┊●   810e515 add second (no changes)
 ┊●   fe12bcd add first
-┊│     fe:lz A first
+┊│     f:l A first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -1279,9 +1279,9 @@ fn move_file_branch_without_argument_creates_unstacked_branch_with_canned_name_a
 ┊
 ┊╭┄g0 [A]
 ┊●   9ac4652 add second
-┊│     9a:wu A second
+┊│     9:w A second
 ┊●   fe12bcd add first
-┊│     fe:lz A first
+┊│     f:l A first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -1306,13 +1306,13 @@ Moved 1 changes from 9ac4652 to new commit 8e35f84 on new branch 'a-branch-1'
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   8e35f84 (no commit message)
-┊│     8e:wu A second
+┊│     8e:w A second
 ├╯
 ┊
 ┊╭┄g0 [A]
 ┊●   810e515 add second (no changes)
 ┊●   fe12bcd add first
-┊│     fe:lz A first
+┊│     f:l A first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -1348,11 +1348,11 @@ fn move_file_should_be_order_independent() {
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   e3d3e3a Prepare for moves!
-┊│     e3:ul R moved
-┊│     e3:py A new/file
-┊│     e3:tt A unrelated
+┊│     e:u R moved
+┊│     e:p A new/file
+┊│     e:t A unrelated
 ┊●   24ac1e5 Add new file
-┊│     24:nx A new
+┊│     2:n A new
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1377,12 +1377,12 @@ Moved 2 changes from e3d3e3a to new commit 99ef17e above commit e3d3e3a
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   99ef17e (no commit message)
-┊│     99:ul R moved
-┊│     99:py A new/file
+┊│     9:u R moved
+┊│     9:p A new/file
 ┊●   f94e59f Prepare for moves!
-┊│     f9:tt A unrelated
+┊│     f:t A unrelated
 ┊●   24ac1e5 Add new file
-┊│     24:nx A new
+┊│     2:n A new
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1409,12 +1409,12 @@ Moved 2 changes from e3d3e3a to new commit 99ef17e above commit e3d3e3a
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   99ef17e (no commit message)
-┊│     99:ul R moved
-┊│     99:py A new/file
+┊│     9:u R moved
+┊│     9:p A new/file
 ┊●   f94e59f Prepare for moves!
-┊│     f9:tt A unrelated
+┊│     f:t A unrelated
 ┊●   24ac1e5 Add new file
-┊│     24:nx A new
+┊│     2:n A new
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1437,12 +1437,12 @@ fn move_file_from_multiple_source_commits_is_not_allowed() {
 ┊
 ┊╭┄g0 [A]
 ┊●   9477ae7 add A
-┊│     94:tm A A
+┊│     9:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
 ┊●   d3e2ba3 add B
-┊│     d3:pl A B
+┊│     d:p A B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1938,7 +1938,7 @@ fn unstack_empty_branch() {
         .stdout_eq(snapbox::str![[r#"
 ╭┄zz [uncommitted] (no changes)
 ┊
-┊╭┄op [top] (no commits)
+┊╭┄to [top] (no commits)
 ┊│
 ┊├┄bo [bottom] (no commits)
 ├╯
@@ -1966,7 +1966,7 @@ Unstacked branch 'top'
 ┊╭┄bo [bottom] (no commits)
 ├╯
 ┊
-┊╭┄op [top] (no commits)
+┊╭┄to [top] (no commits)
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -2051,9 +2051,9 @@ fn unstack_file() {
 ┊
 ┊╭┄g0 [A]
 ┊●   9ac4652 add second
-┊│     9a:wu A second
+┊│     9:w A second
 ┊●   fe12bcd add first
-┊│     fe:lz A first
+┊│     f:l A first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -2084,9 +2084,9 @@ fn unstack_commit() {
 ┊
 ┊╭┄g0 [A]
 ┊●   9ac4652 add second
-┊│     9a:wu A second
+┊│     9:w A second
 ┊●   fe12bcd add first
-┊│     fe:lz A first
+┊│     f:l A first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -2257,12 +2257,12 @@ fn cannot_mix_sources() {
 ┊
 ┊╭┄g0 [A]
 ┊●   9477ae7 add A
-┊│     94:tm A A
+┊│     9:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
 ┊●   d3e2ba3 add B
-┊│     d3:pl A B
+┊│     d:p A B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -2467,7 +2467,7 @@ fn cannot_move_from_uncommitted() {
         .success()
         .stdout_eq(snapbox::str![[r#"
 ╭┄zz [uncommitted]
-┊   qs A file
+┊   q A file
 ┊
 ┊╭┄g0 [A]
 ┊●   9477ae7 add A

@@ -10,7 +10,7 @@
       line-height: 18px;
     }
     .bold { font-weight: bold; }
-    .dimmed { opacity: 0.7; }
+    .dimmed { opacity: 0.4; }
     tspan {
       font: 14px SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace;
       white-space: pre;
@@ -23,13 +23,13 @@
   <text xml:space="preserve" class="container fg">
     <tspan x="10px" y="28px"><tspan>╭┄</tspan><tspan class="fg-blue bold">zz</tspan><tspan> [</tspan><tspan class="fg-cyan">uncommitted</tspan><tspan>]</tspan>
 </tspan>
-    <tspan x="10px" y="46px"><tspan>┊   </tspan><tspan class="fg-blue bold">xk</tspan><tspan> A </tspan><tspan class="fg-green">new-file.txt</tspan>
+    <tspan x="10px" y="46px"><tspan>┊   </tspan><tspan class="fg-blue bold">x</tspan><tspan> A </tspan><tspan class="fg-green">new-file.txt</tspan>
 </tspan>
     <tspan x="10px" y="64px"><tspan>┊</tspan>
 </tspan>
     <tspan x="10px" y="82px"><tspan>┊╭┄</tspan><tspan class="fg-blue bold">g0</tspan><tspan> [</tspan><tspan class="fg-green">A</tspan><tspan>]</tspan>
 </tspan>
-    <tspan x="10px" y="100px"><tspan>┊●   </tspan><tspan class="fg-blue bold">94</tspan><tspan class="dimmed">77ae7</tspan><tspan> add A</tspan>
+    <tspan x="10px" y="100px"><tspan>┊●   </tspan><tspan class="fg-blue bold">9</tspan><tspan class="dimmed">477ae7</tspan><tspan> add A</tspan>
 </tspan>
     <tspan x="10px" y="118px"><tspan>├╯</tspan>
 </tspan>

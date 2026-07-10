@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 
 use bstr::BString;
 use but_graph::workspace::Stack;
@@ -12,7 +12,7 @@ fn stacks_info_without_short_ids(stacks: Vec<Stack>) -> StacksInfo {
     let mut stacks_info = StacksInfo {
         stacks: Vec::with_capacity(stacks.len()),
         id_usage: IdUsage::default(),
-        short_ids_to_count: HashMap::new(),
+        non_hex_used_short_ids: HashSet::new(),
     };
     for stack in stacks {
         let mut stack_with_id = StackWithId {
@@ -50,12 +50,15 @@ fn stacks_info_without_short_ids(stacks: Vec<Stack>) -> StacksInfo {
 fn populate_branch_short_ids(
     stacks: &mut [StackWithId],
     id_usage: &mut IdUsage,
-    short_ids_to_count: &mut HashMap<ShortId, u8>,
+    non_hex_used_short_ids: &mut HashSet<ShortId>,
     uncommitted_short_filenames: &HashSet<BString>,
 ) -> anyhow::Result<()> {
-    // Fill the `short_ids_to_count` and `id_usage` data structures.
-    let mut maybe_mark_used = |candidate| {
-        if let Some(short_id) = UintId::from_name(candidate)
+    // Fill the `non_hex_used_short_ids` and `id_usage` data structures.
+    //
+    // Returns None if the candidate was bad, Some(false) if it was already taken and Some(true) if
+    // it was successfully "acquired".
+    let mut maybe_mark_used = |candidate: &[u8], id_usage: &mut IdUsage| {
+        let short_id = UintId::from_name(candidate)
             .map(|uint_id| {
                 id_usage.mark_used(uint_id);
                 uint_id.to_short_id()
@@ -70,25 +73,14 @@ fn populate_branch_short_ids(
                 } else {
                     None
                 }
-            })
-        {
-            short_ids_to_count
-                .entry(short_id)
-                .and_modify(|count| *count = count.saturating_add(1))
-                .or_insert(1);
-        }
+            })?;
+
+        Some(non_hex_used_short_ids.insert(short_id))
     };
-    maybe_mark_used(UNCOMMITTED.as_bytes());
+
+    maybe_mark_used(UNCOMMITTED.as_bytes(), id_usage);
     for uncommitted_short_filename in uncommitted_short_filenames.iter() {
-        maybe_mark_used(uncommitted_short_filename);
-    }
-    for segment in stacks.iter().flat_map(|stack| stack.segments.iter()) {
-        let Some(branch_name) = segment.branch_name() else {
-            continue;
-        };
-        for candidate in branch_name.windows(2).chain(branch_name.windows(3)) {
-            maybe_mark_used(candidate);
-        }
+        maybe_mark_used(uncommitted_short_filename, id_usage);
     }
 
     // Populate branch short IDs in `stacks`.
@@ -106,7 +98,7 @@ fn populate_branch_short_ids(
             // exactly one branch) and use it.
             for candidate in branch_name.windows(2).chain(branch_name.windows(3)) {
                 if let Ok(short_id) = str::from_utf8(candidate)
-                    && let Some(1) = short_ids_to_count.get(short_id)
+                    && let Some(true) = maybe_mark_used(candidate, id_usage)
                 {
                     break 'short_id short_id.to_owned();
                 }
@@ -170,7 +162,7 @@ fn populate_commit_short_ids(stacks: &mut [StackWithId]) {
         for short_id in short_ids.iter_mut() {
             short_id.push_str(
                 &commit_id
-                    .to_hex_with_len(1 + 1.max(common_with_previous_len).max(common_with_next_len))
+                    .to_hex_with_len(1 + common_with_previous_len.max(common_with_next_len))
                     .to_string(),
             );
         }
@@ -182,15 +174,12 @@ fn populate_commit_short_ids(stacks: &mut [StackWithId]) {
 pub(crate) struct StacksInfo {
     pub(crate) stacks: Vec<StackWithId>,
     pub(crate) id_usage: IdUsage,
-    // Map from an acceptable short ID to how many times it appears among
-    // uncommitted short filenames and substrings of branch names. If a
-    // string doesn't appear in this map, it is not an acceptable short ID,
-    // and if a string's count is more than 1, it's ambiguous.
-    //
-    // Note that this map's keys do not necessarily need to start with g-z,
-    // unlike [UintId], as long as the key cannot be confused with a commit
-    // ID.
-    pub(crate) short_ids_to_count: HashMap<ShortId, u8>,
+    /// The set of short IDs allocated to items when building the [`StacksInfo`].
+    ///
+    /// Note that this map's keys do not necessarily need to start with g-z,
+    /// unlike [UintId], as long as the key cannot be confused with a commit
+    /// ID.
+    pub(crate) non_hex_used_short_ids: HashSet<ShortId>,
 }
 
 impl StacksInfo {
@@ -202,7 +191,7 @@ impl StacksInfo {
         populate_branch_short_ids(
             &mut stacks_info.stacks,
             &mut stacks_info.id_usage,
-            &mut stacks_info.short_ids_to_count,
+            &mut stacks_info.non_hex_used_short_ids,
             uncommitted_short_filenames,
         )?;
         populate_commit_short_ids(&mut stacks_info.stacks);

@@ -136,7 +136,7 @@ fn assign_short_ids(
             });
         if let Some(short_id) = short_id {
             short_id.push_str(str::from_utf8(
-                &reverse_hex[..(1 + 1.max(common_with_previous_len).max(common_with_next_len))],
+                &reverse_hex[..(1 + common_with_previous_len.max(common_with_next_len))],
             )?);
         }
         common_with_previous_len = common_with_next_len;
@@ -506,7 +506,7 @@ impl IdMap {
         let StacksInfo {
             stacks,
             mut id_usage,
-            short_ids_to_count,
+            non_hex_used_short_ids,
         } = StacksInfo::new(stacks, &uncommitted_short_filenames)?;
 
         let mut uncommitted_files: BTreeMap<ChangeId, UncommittedFile> = BTreeMap::new();
@@ -542,8 +542,13 @@ impl IdMap {
                 (reverse_hex.clone(), Some(&mut uncommitted_file.short_id))
             })
             .collect();
-        // Ensure that uncommitted files do not collide with branch substrings
-        for short_id in short_ids_to_count.keys() {
+        // Ensure that uncommitted file revers hexes do not collide short IDs that have already been allocated
+        //
+        // TODO The raw filenames of the uncommitted files are in these non_hex_used_short_ids, which means
+        // that a file that is its own reverse hex ID collides with itself and forces an unnecessary
+        // extension. E.g. the file "out" gets the short ID "outk", which seems pretty redundant as
+        // there is no ambiguity if both IDs point to the same thing.
+        for short_id in non_hex_used_short_ids {
             reverse_hex_short_ids.push((ChangeId::from(BString::from(short_id.as_str())), None));
         }
         reverse_hex_short_ids.sort();
@@ -812,13 +817,6 @@ impl IdMap {
         // The following match only if there have been no matches so far.
         if !matches.is_empty() {
             return Ok(matches);
-        }
-
-        // Short codes are always two characters or more. So if we don't have an exact match yet
-        // and the input is less than two characters then it doesn't exist and there are no
-        // matches.
-        if element.len() < 2 {
-            return Ok(Vec::new());
         }
 
         // Only try SHA matching if the input looks like a hex string

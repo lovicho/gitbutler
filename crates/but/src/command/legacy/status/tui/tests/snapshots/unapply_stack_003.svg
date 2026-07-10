@@ -441,8 +441,8 @@
   <text x="10" y="60" style="fill:#CCCCCC;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">┊</text>
   <text x="18" y="60" style="fill:#CCCCCC;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">╭</text>
   <text x="26" y="60" style="fill:#CCCCCC;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">┄</text>
-  <text x="34" y="60" style="fill:#0000AA;font-weight:bold;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">g</text>
-  <text x="42" y="60" style="fill:#0000AA;font-weight:bold;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">0</text>
+  <text x="34" y="60" style="fill:#0000AA;font-weight:bold;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">b</text>
+  <text x="42" y="60" style="fill:#0000AA;font-weight:bold;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">r</text>
   <text x="58" y="60" style="fill:#CCCCCC;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">[</text>
   <text x="66" y="60" style="fill:#00AA00;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">c</text>
   <text x="74" y="60" style="fill:#00AA00;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">-</text>
@@ -481,8 +481,8 @@
   <text x="90" y="114" style="fill:#000000;font-weight:bold;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">k</text>
   <text x="106" y="114" style="fill:#000000;font-weight:bold;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">&gt;</text>
   <text x="114" y="114" style="fill:#000000;font-weight:bold;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">&gt;</text>
-  <text x="130" y="114" style="fill:#0000AA;font-weight:bold;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">h</text>
-  <text x="138" y="114" style="fill:#0000AA;font-weight:bold;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">0</text>
+  <text x="130" y="114" style="fill:#0000AA;font-weight:bold;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">r</text>
+  <text x="138" y="114" style="fill:#0000AA;font-weight:bold;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">a</text>
   <text x="154" y="114" style="fill:#FFFFFF;font-weight:bold;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">[</text>
   <text x="162" y="114" style="fill:#00AA00;font-weight:bold;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">c</text>
   <text x="170" y="114" style="fill:#00AA00;font-weight:bold;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">-</text>
@@ -511,7 +511,7 @@
   <text x="10" y="150" style="fill:#FFFFFF;font-weight:bold;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">┊</text>
   <text x="18" y="150" style="fill:#FFFFFF;font-weight:bold;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">├</text>
   <text x="26" y="150" style="fill:#FFFFFF;font-weight:bold;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">┄</text>
-  <text x="34" y="150" style="fill:#0000AA;font-weight:bold;opacity:0.75;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">i</text>
+  <text x="34" y="150" style="fill:#0000AA;font-weight:bold;opacity:0.75;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">g</text>
   <text x="42" y="150" style="fill:#0000AA;font-weight:bold;opacity:0.75;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">0</text>
   <text x="58" y="150" style="fill:#FFFFFF;font-weight:bold;opacity:0.75;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">[</text>
   <text x="66" y="150" style="fill:#00AA00;font-weight:bold;opacity:0.75;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">A</text>
@@ -519,7 +519,7 @@
   <text x="10" y="168" style="fill:#FFFFFF;font-weight:bold;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">┊</text>
   <text x="18" y="168" style="fill:#FFFFFF;font-weight:bold;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">●</text>
   <text x="50" y="168" style="fill:#0000AA;font-weight:bold;opacity:0.75;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">9</text>
-  <text x="58" y="168" style="fill:#0000AA;font-weight:bold;opacity:0.75;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">4</text>
+  <text x="58" y="168" style="fill:#FFFFFF;font-weight:bold;opacity:0.75;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">4</text>
   <text x="66" y="168" style="fill:#FFFFFF;font-weight:bold;opacity:0.75;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">7</text>
   <text x="74" y="168" style="fill:#FFFFFF;font-weight:bold;opacity:0.75;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">7</text>
   <text x="82" y="168" style="fill:#FFFFFF;font-weight:bold;opacity:0.75;" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">a</text>

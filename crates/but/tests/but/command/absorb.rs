@@ -30,7 +30,7 @@ fn uncommitted_file() -> anyhow::Result<()> {
 {
   "uncommittedChanges": [
     {
-      "cliId": "nk",
+      "cliId": "n",
       "filePath": "a.txt",
       "changeType": "modified"
     }
@@ -103,17 +103,17 @@ fn uncommitted_hunk() -> anyhow::Result<()> {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-──────────╮
-nk:2 a.txt│
-──────────╯
+─────────╮
+n:2 a.txt│
+─────────╯
    1  │-first
      1│+firsta
    2 2│ line
    3 3│ line
    4 4│ line
-──────────╮
-nk:e a.txt│
-──────────╯
+─────────╮
+n:e a.txt│
+─────────╯
     6  6│ line
     7  7│ line
     8  8│ line
@@ -166,7 +166,7 @@ last
 {
   "uncommittedChanges": [
     {
-      "cliId": "nk",
+      "cliId": "n",
       "filePath": "a.txt",
       "changeType": "modified"
     }
@@ -190,17 +190,17 @@ fn committed_hunk() -> anyhow::Result<()> {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-──────────╮
-nk:2 a.txt│
-──────────╯
+─────────╮
+n:2 a.txt│
+─────────╯
    1  │-first
      1│+firsta
    2 2│ line
    3 3│ line
    4 4│ line
-──────────╮
-nk:e a.txt│
-──────────╯
+─────────╮
+n:e a.txt│
+─────────╯
     6  6│ line
     7  7│ line
     8  8│ line
@@ -227,9 +227,9 @@ nk:e a.txt│
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-──────────╮
-nk:f a.txt│
-──────────╯
+─────────╮
+n:f a.txt│
+─────────╯
    1  │-firsta
      1│+first
    2 2│ line
@@ -254,9 +254,9 @@ nk:f a.txt│
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-──────────╮
-nk:1 a.txt│
-──────────╯
+─────────╮
+n:1 a.txt│
+─────────╯
     6  6│ line
     7  7│ line
     8  8│ line
@@ -281,17 +281,17 @@ nk:1 a.txt│
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-──────────╮
-nk:b a.txt│
-──────────╯
+─────────╮
+n:b a.txt│
+─────────╯
    1  │-first
      1│+first new
    2 2│ line
    3 3│ line
    4 4│ line
-──────────╮
-nk:5 a.txt│
-──────────╯
+─────────╮
+n:5 a.txt│
+─────────╯
     6  6│ line
     7  7│ line
     8  8│ line
@@ -306,24 +306,24 @@ nk:5 a.txt│
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
 ╭┄zz [uncommitted]
-┊   nk M a.txt
+┊   n M a.txt
 ┊
 ┊╭┄g0 [A]
 ┊●   a7aa4ef partial change to a.txt 3
-┊│     a7:nk M a.txt
+┊│     a:n M a.txt
 ┊●   889385c partial change to a.txt 2
-┊│     88:nk M a.txt
+┊│     88:n M a.txt
 ┊●   8dc39e0 partial change to a.txt 1
-┊│     8d:nk M a.txt
+┊│     8d:n M a.txt
 ┊●   f4ea7f8 a.txt
-┊│     f4:nk A a.txt
+┊│     f:n A a.txt
 ┊●   9477ae7 add A
-┊│     94:tm A A
+┊│     9:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
 ┊●   d3e2ba3 add B
-┊│     d3:pl A B
+┊│     d:p A B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -361,20 +361,20 @@ Hint: you can run `but undo` to undo these changes
 ┊
 ┊╭┄g0 [A]
 ┊●   4822140 partial change to a.txt 3
-┊│     48:nk M a.txt
+┊│     48:n M a.txt
 ┊●   4593422 partial change to a.txt 2
-┊│     45:nk M a.txt
+┊│     45:n M a.txt
 ┊●   8dc39e0 partial change to a.txt 1
-┊│     8d:nk M a.txt
+┊│     8:n M a.txt
 ┊●   f4ea7f8 a.txt
-┊│     f4:nk A a.txt
+┊│     f:n A a.txt
 ┊●   9477ae7 add A
-┊│     94:tm A A
+┊│     9:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
 ┊●   d3e2ba3 add B
-┊│     d3:pl A B
+┊│     d:p A B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -526,7 +526,7 @@ last
 {
   "uncommittedChanges": [
     {
-      "cliId": "nk",
+      "cliId": "n",
       "filePath": "a.txt",
       "changeType": "modified"
     }

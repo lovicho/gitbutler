@@ -58,11 +58,11 @@ fn branch_key_keeps_global_file_list_open() {
 
     tui.input((KeyModifiers::SHIFT, 'F'))
         .assert_current_line_eq(str!["┊╭┄g0 [A]"])
-        .assert_rendered_contains("94:tm A A");
+        .assert_rendered_contains("9:t A A");
 
     tui.input('b')
         .assert_current_line_eq(str!["┊╭┄br [c-branch-1] (no commits)"])
-        .assert_rendered_contains("94:tm A A");
+        .assert_rendered_contains("9:t A A");
 }
 
 #[test]
