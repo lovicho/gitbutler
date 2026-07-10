@@ -394,7 +394,7 @@ const registerIpcHandlers = (): void => {
 		(_e, { projectId, branch }: BranchDiffParams) => branchDiff(projectId, branch),
 	);
 	senderValidatingHandle(liteIpcChannels.changesInWorktree, (_e, projectId: string) =>
-		changesInWorktree(projectId),
+		changesInWorktree(projectId, true),
 	);
 	senderValidatingHandle(liteIpcChannels.clipboardWriteText, (_e, text: string) => {
 		clipboard.writeText(text, "clipboard");

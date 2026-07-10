@@ -124,7 +124,7 @@ pub fn absorption_plan_with_perm(
             // TODO: Ideally, there's a simpler way of getting the worktree changes without passing the context to it.
             // At this time, the context is passed pretty deep into the function.
             let worktree_changes =
-                crate::diff::changes_in_worktree_with_perm(ctx, perm.read_permission())?;
+                crate::diff::changes_in_worktree_with_perm(ctx, true, perm.read_permission())?;
             let all_assignments = worktree_changes.assignments;
             let dependencies = worktree_changes.dependencies;
 
@@ -162,7 +162,7 @@ pub fn absorption_plan_with_perm(
         } => {
             // Get all worktree changes, assignments, and dependencies
             let worktree_changes =
-                crate::diff::changes_in_worktree_with_perm(ctx, perm.read_permission())?;
+                crate::diff::changes_in_worktree_with_perm(ctx, true, perm.read_permission())?;
             let all_assignments = worktree_changes.assignments;
             let dependencies = worktree_changes.dependencies;
 
@@ -196,7 +196,7 @@ pub fn absorption_plan_with_perm(
             // TODO: Ideally, there's a simpler way of getting the worktree changes without passing the context to it.
             // At this time, the context is passed pretty deep into the function.
             let worktree_changes =
-                crate::diff::changes_in_worktree_with_perm(ctx, perm.read_permission())?;
+                crate::diff::changes_in_worktree_with_perm(ctx, true, perm.read_permission())?;
             (worktree_changes.assignments, worktree_changes.dependencies)
         }
     };

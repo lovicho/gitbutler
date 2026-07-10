@@ -120,7 +120,7 @@ export declare function branchLand(projectId: string, branch: string, noFf: bool
 export declare function branchRemove(projectId: string, refName: FullNameBytes): Promise<BranchRemoveResult>
 
 /** See [`changes_in_worktree_with_perm()`]. */
-export declare function changesInWorktree(projectId: string): Promise<WorktreeChanges>
+export declare function changesInWorktree(projectId: string, computeDepsAndAssignments: boolean): Promise<WorktreeChanges>
 
 /**
  * This UI-version of [`but_core::diff::worktree_changes()`] simplifies the `git status` information for display in
@@ -133,12 +133,15 @@ export declare function changesInWorktree(projectId: string): Promise<WorktreeCh
  *
  * All ignored status changes are also provided so they can be displayed separately.
  *
+ * When dependency and assignment computation is turned off, hunk assignments and dependencies
+ * are not computed at all: `assignments` is empty and there are no `dependencies`.
+ *
  * For lower-level implementation details, see
  * [`but_core::diff::worktree_changes()`],
  * [`but_hunk_assignment::assignments_with_fallback()`], and
  * [`but_hunk_dependency::ui::hunk_dependencies_for_workspace_changes_by_worktree_dir()`].
  */
-export declare function changesInWorktreeWithPerm(projectId: string): Promise<WorktreeChanges>
+export declare function changesInWorktreeWithPerm(projectId: string, computeDepsAndAssignments: boolean): Promise<WorktreeChanges>
 
 /**
  * Amend the commit at `commit_id` with `changes` and record an oplog snapshot on success.

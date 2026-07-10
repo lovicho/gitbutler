@@ -539,7 +539,7 @@ pub(crate) fn commit(
         resolve_insert_position(ctx, &id_map, target_branch, before, after)?;
 
     // Get changes and assignments using but-api
-    let worktree_changes = diff::changes_in_worktree_with_perm(ctx, guard.read_permission())?;
+    let worktree_changes = diff::changes_in_worktree_with_perm(ctx, true, guard.read_permission())?;
     let changes = worktree_changes.worktree_changes.changes;
 
     // Get files to commit - either specific files by ID or all eligible files

@@ -2076,7 +2076,7 @@ fn reassign_all_from_stack_to_stack(
     source_stack_id: Option<StackId>,
     target_stack_id: Option<StackId>,
 ) -> anyhow::Result<()> {
-    let requests = but_api::diff::changes_in_worktree(ctx)?
+    let requests = but_api::diff::changes_in_worktree(ctx, true)?
         .assignments
         .into_iter()
         .filter(|assignment| assignment.stack_id == source_stack_id)
@@ -2095,7 +2095,7 @@ fn changes_for_stack_assignment(
     ctx: &mut Context,
     stack_id: Option<StackId>,
 ) -> anyhow::Result<Vec<DiffSpec>> {
-    let assignments = but_api::diff::changes_in_worktree(ctx)?
+    let assignments = but_api::diff::changes_in_worktree(ctx, true)?
         .assignments
         .into_iter()
         .filter(|assignment| assignment.stack_id == stack_id);

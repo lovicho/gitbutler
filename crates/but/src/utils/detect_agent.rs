@@ -31,6 +31,7 @@ pub enum Agent {
     RooCode,
     Trae,
     TabnineCli,
+    Pi,
     Unknown,
 }
 
@@ -59,6 +60,7 @@ impl Agent {
             Self::RooCode => "roo-code",
             Self::Trae => "trae",
             Self::TabnineCli => "tabnine-cli",
+            Self::Pi => "pi",
             Self::Unknown => "unknown",
         }
     }
@@ -146,6 +148,9 @@ fn detect_with(lookup: impl Fn(&str) -> Option<OsString>) -> Option<Agent> {
     if is_set("TABNINE_CLI") {
         return Some(Agent::TabnineCli);
     }
+    if is_set("PI_CODING_AGENT") {
+        return Some(Agent::Pi);
+    }
 
     // Shorter `AGENT` convention (Goose, Amp, Crush, Codex), checked last: it is
     // a generic variable name and can be stale or inherited from a parent shell,
@@ -212,6 +217,7 @@ fn match_agent_name(val: &str) -> Option<Agent> {
         "roo-code" => Agent::RooCode,
         "trae" => Agent::Trae,
         "tabnine-cli" => Agent::TabnineCli,
+        "pi" => Agent::Pi,
         _ => return None,
     })
 }
@@ -581,6 +587,14 @@ mod tests {
     }
 
     #[test]
+    fn detect_pi() {
+        assert_eq!(
+            detect_with(env_from(&[("PI_CODING_AGENT", "true")])),
+            Some(Agent::Pi),
+        );
+    }
+
+    #[test]
     fn agent_name_roundtrip() {
         let agents = [
             Agent::ClaudeCode,
@@ -604,6 +618,7 @@ mod tests {
             Agent::RooCode,
             Agent::Trae,
             Agent::TabnineCli,
+            Agent::Pi,
             Agent::Unknown,
         ];
         for agent in agents {

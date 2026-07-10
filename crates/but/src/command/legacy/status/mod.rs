@@ -398,7 +398,7 @@ fn build_status_context<'a>(
     let review_map = review::get_review_map(ctx, Some(cache_config.clone()))?;
 
     let worktree_changes =
-        but_api::diff::changes_in_worktree_with_perm(ctx, perm.read_permission())?;
+        but_api::diff::changes_in_worktree_with_perm(ctx, true, perm.read_permission())?;
 
     let id_map = IdMap::new(stacks, worktree_changes.assignments.clone())?;
 

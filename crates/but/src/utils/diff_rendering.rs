@@ -538,7 +538,7 @@ pub fn render_uncommitted(
 ) -> anyhow::Result<()> {
     let mut id_gen = id_gen.scoped("uncommitted");
 
-    let wt_changes = but_api::diff::changes_in_worktree(ctx)?;
+    let wt_changes = but_api::diff::changes_in_worktree(ctx, true)?;
     let id_map = IdMap::legacy_new_from_context(ctx, Some(wt_changes.assignments))?;
     let uncommitted_hunks = filter_uncommitted_hunks(ctx, &id_map, |hunk_assignment| {
         hunk_assignment.stack_id.is_none()
@@ -587,7 +587,7 @@ pub fn render_uncommitted_hunk(
     let mut id_gen = id_gen.scoped("hunk");
     let mut id_gen = id_gen.scoped(&hunk.id);
 
-    let wt_changes = but_api::diff::changes_in_worktree(ctx)?;
+    let wt_changes = but_api::diff::changes_in_worktree(ctx, true)?;
     let id_map = IdMap::legacy_new_from_context(ctx, Some(wt_changes.assignments))?;
     let uncommitted_hunks = filter_uncommitted_hunks(ctx, &id_map, |hunk_assignment| {
         uncommitted_hunk_matches_selection(hunk_assignment, &hunk)

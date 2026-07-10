@@ -36,7 +36,7 @@ pub fn handle(ctx: &mut Context, out: &mut OutputChannel, id: &str) -> Result<()
     }
 
     // Get worktree changes once for the Uncommitted case.
-    let worktree_changes = diff::changes_in_worktree_with_perm(ctx, guard.read_permission())?;
+    let worktree_changes = diff::changes_in_worktree_with_perm(ctx, true, guard.read_permission())?;
 
     // Extract DiffSpecs from all resolved entities.
     let diff_specs = {

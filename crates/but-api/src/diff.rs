@@ -106,9 +106,12 @@ pub fn tree_change_diffs(
 /// See [`changes_in_worktree_with_perm()`].
 #[but_api(napi)]
 #[instrument(err(Debug))]
-pub fn changes_in_worktree(ctx: &Context) -> anyhow::Result<WorktreeChanges> {
+pub fn changes_in_worktree(
+    ctx: &Context,
+    compute_deps_and_assignments: bool,
+) -> anyhow::Result<WorktreeChanges> {
     let guard = ctx.shared_worktree_access();
-    changes_in_worktree_with_perm(ctx, guard.read_permission())
+    changes_in_worktree_with_perm(ctx, compute_deps_and_assignments, guard.read_permission())
 }
 
 /// This UI-version of [`but_core::diff::worktree_changes()`] simplifies the `git status` information for display in
@@ -121,6 +124,9 @@ pub fn changes_in_worktree(ctx: &Context) -> anyhow::Result<WorktreeChanges> {
 ///
 /// All ignored status changes are also provided so they can be displayed separately.
 ///
+/// When dependency and assignment computation is turned off, hunk assignments and dependencies
+/// are not computed at all: `assignments` is empty and there are no `dependencies`.
+///
 /// For lower-level implementation details, see
 /// [`but_core::diff::worktree_changes()`],
 /// [`but_hunk_assignment::assignments_with_fallback()`], and
@@ -129,9 +135,15 @@ pub fn changes_in_worktree(ctx: &Context) -> anyhow::Result<WorktreeChanges> {
 #[instrument(skip_all, err(Debug))]
 pub fn changes_in_worktree_with_perm(
     ctx: &Context,
+    compute_deps_and_assignments: bool,
     perm: &RepoShared,
 ) -> anyhow::Result<WorktreeChanges> {
     let context_lines = ctx.settings.context_lines;
+
+    if !compute_deps_and_assignments {
+        let repo = ctx.repo.get()?;
+        return Ok(but_core::diff::worktree_changes(&repo)?.into());
+    }
 
     let (repo, ws, mut db) = ctx.workspace_and_db_mut_with_perm(perm)?;
 
