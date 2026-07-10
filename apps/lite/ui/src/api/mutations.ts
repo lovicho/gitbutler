@@ -1,4 +1,4 @@
-import { encodeBytes } from "#ui/api/bytes.ts";
+import { decodeBytes, encodeBytes } from "#ui/api/bytes.ts";
 import { getHeadInfoIndex, renameBranchInHeadInfo } from "#ui/api/ref-info.ts";
 import {
 	changesInWorktreeQueryOptions,
@@ -29,6 +29,7 @@ import { type QueryClient, useMutation, useQueryClient } from "@tanstack/react-q
 import { Match } from "effect";
 import type { OpenInEditorParams } from "#electron/ipc.ts";
 import type { GUISettings } from "#electron/settings.ts";
+import { moveDraftPR } from "#ui/pr.ts";
 
 // oxlint-disable-next-line typescript/no-explicit-any
 type PromiseReturnType<T> = T extends (...args: Array<any>) => Promise<infer U> ? U : never;
@@ -852,6 +853,16 @@ export const useUpdateBranchName = ({
 					newBranch,
 				}),
 			);
+
+			await moveDraftPR({
+				queryClient: mutation.client,
+				projectId,
+				oldBranch:
+					// https://linear.app/gitbutler/issue/GB-1226/unify-branch-identifiers
+					decodeBytes(oldBranch.branchRef).replace(/^refs\/heads\//, ""),
+				newBranch: newRef.displayName,
+			});
+
 			dispatch(projectActions.exitMode({ projectId }));
 		},
 		onError: (error) => {

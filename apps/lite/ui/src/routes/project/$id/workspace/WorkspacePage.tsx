@@ -21,7 +21,7 @@ import {
 } from "#ui/projects/state.ts";
 import { PickerDialog } from "#ui/components/PickerDialog.tsx";
 import { globalHotkeys, workspaceHotkeys } from "#ui/hotkeys.ts";
-import { lastOpenedProjectKey } from "#ui/projects/last-opened.ts";
+import { writeLastOpenedProject } from "#ui/project.ts";
 import { type AppThunk, useAppDispatch, useAppSelector } from "#ui/store.ts";
 import { ProjectForFrontend, RefInfo, Segment } from "@gitbutler/but-sdk";
 import { useHotkey, useHotkeys } from "@tanstack/react-hotkeys";
@@ -249,7 +249,7 @@ const ProjectPicker: FC<ProjectPickerProps> = (p) => {
 			to: "/project/$id/workspace",
 			params: { id: project.id },
 		});
-		window.localStorage.setItem(lastOpenedProjectKey, project.id);
+		writeLastOpenedProject(project.id);
 	};
 
 	return (

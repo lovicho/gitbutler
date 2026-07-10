@@ -119,6 +119,7 @@ import type { GUISettings } from "#electron/settings.ts";
 import { defaultSettings } from "#ui/settings.ts";
 import { AggregateCIChecks } from "#ui/ci.ts";
 import { IconName } from "#ui/components/iconNames.ts";
+import { draftPRQueryOptions, usePersistDraftPR } from "#ui/pr.ts";
 
 type BranchTab = "diff" | "pr";
 
@@ -1181,33 +1182,57 @@ const PullRequestForm: FC<{
 	const publishReview = usePublishReview();
 	const updateReview = useUpdateReview();
 	const formRef = useRef<HTMLFormElement | null>(null);
-	const [draftTitle, setDraftTitle] = useState<string | null>(null);
-	const [draftBody, setDraftBody] = useState<string | null>(null);
-	const [newIsDraft, setNewIsDraft] = useState(false);
 
-	const derivedTitle = draftTitle ?? title ?? "";
-	const derivedBody = draftBody ?? body ?? "";
+	const remoteOrEmptyDocument = {
+		title: title ?? "",
+		body: body ?? "",
+	};
+	const { data: persistedDocument } = useSuspenseQuery(
+		draftPRQueryOptions({ projectId, branchName: sourceBranch }),
+	);
+	const [localDocument, setLocalDocument] = useState({
+		title: persistedDocument?.title ?? title ?? "",
+		body: persistedDocument?.body ?? body ?? "",
+		isDraft: persistedDocument?.isDraft ?? false,
+	});
+	const persistDraftPR = usePersistDraftPR();
 
 	const isNew = reviewId === null;
 	const isAnyPending = publishReview.isPending || updateReview.isPending;
-	const canSubmit = !isAnyPending && derivedTitle.trim() !== "";
+	const hasChanges =
+		localDocument.title !== remoteOrEmptyDocument.title ||
+		localDocument.body !== remoteOrEmptyDocument.body ||
+		(isNew && localDocument.isDraft);
 
-	const reset = () => {
-		setDraftTitle(title);
-		setDraftBody(body);
+	const handleBlur = () => {
+		persistDraftPR.mutate({
+			projectId,
+			branchName: sourceBranch,
+			draft: localDocument,
+		});
 	};
 
-	const submit: SubmitEventHandler<HTMLFormElement> = (event) => {
-		event.preventDefault();
-		if (!canSubmit) return;
+	const handleReset = () => {
+		const resetDocument = { ...remoteOrEmptyDocument, isDraft: false };
+		setLocalDocument(resetDocument);
+		persistDraftPR.mutate({
+			projectId,
+			branchName: sourceBranch,
+			draft: resetDocument,
+		});
+	};
+
+	const handleSubmit: SubmitEventHandler<HTMLFormElement> = (evt) => {
+		evt.preventDefault();
+		if (isAnyPending || localDocument.title.trim() === "") return;
 
 		if (reviewId === null) {
 			publishReview.mutate({
 				projectId,
 				params: {
-					title: derivedTitle,
-					body: derivedBody,
-					draft: newIsDraft,
+					title: localDocument.title,
+					body: localDocument.body,
+					draft: localDocument.isDraft,
 					sourceBranch,
 					targetBranch,
 				},
@@ -1216,8 +1241,8 @@ const PullRequestForm: FC<{
 			updateReview.mutate({
 				projectId,
 				reviewId,
-				title: derivedTitle,
-				body: derivedBody,
+				title: localDocument.title,
+				body: localDocument.body,
 				state: null,
 				targetBase: null,
 			});
@@ -1226,20 +1251,23 @@ const PullRequestForm: FC<{
 
 	useHotkey(pullRequestHotkeys.update.hotkey, () => formRef.current?.requestSubmit(), {
 		conflictBehavior: "allow",
+		enabled: !isAnyPending && hasChanges,
 		target: formRef,
 	});
 
 	return (
-		<form ref={formRef} className={styles.prForm} onSubmit={submit}>
+		// oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- Used for persistence, not UI per se.
+		<form ref={formRef} className={styles.prForm} onBlur={handleBlur} onSubmit={handleSubmit}>
 			<Field.Root render={<FieldRootStyles />}>
 				<Field.Label render={<FieldLabelStyles />}>Title</Field.Label>
 				<Field.Control
 					render={<FieldControlStyles />}
 					className="text-15 text-semibold"
-					onChange={(event) => setDraftTitle(event.currentTarget.value)}
+					name="title"
+					onChange={(evt) => setLocalDocument({ ...localDocument, title: evt.currentTarget.value })}
 					placeholder="Title"
 					required
-					value={derivedTitle}
+					value={localDocument.title}
 				/>
 			</Field.Root>
 
@@ -1248,24 +1276,29 @@ const PullRequestForm: FC<{
 				<Field.Control
 					render={<FieldTextareaStyles />}
 					className="text-14 text-body text-monospace"
-					onChange={(event) => setDraftBody(event.currentTarget.value)}
+					name="body"
+					onChange={(evt) => setLocalDocument({ ...localDocument, body: evt.currentTarget.value })}
 					placeholder="Description"
-					value={derivedBody}
+					value={localDocument.body}
 				/>
 			</Field.Root>
 
 			{isNew && (
 				<Field.Root render={<FieldRootStyles />}>
 					<Field.Label render={<FieldLabelStyles />}>Draft</Field.Label>
-					<Checkbox checked={newIsDraft} onCheckedChange={(checked) => setNewIsDraft(checked)} />
+					<Checkbox
+						checked={localDocument.isDraft}
+						name="isDraft"
+						onCheckedChange={(isDraft) => setLocalDocument({ ...localDocument, isDraft })}
+					/>
 				</Field.Root>
 			)}
 
 			<div className={styles.prFormActions}>
 				<button
 					className={getButtonClassName({})}
-					disabled={isAnyPending}
-					onClick={reset}
+					disabled={isAnyPending || !hasChanges}
+					onClick={handleReset}
 					type="button"
 				>
 					Reset
@@ -1273,7 +1306,7 @@ const PullRequestForm: FC<{
 
 				<button
 					className={getButtonClassName({ variant: "pop" })}
-					disabled={!canSubmit}
+					disabled={isAnyPending || !hasChanges}
 					type="submit"
 				>
 					{isAnyPending && <Icon name="spinner" />}
@@ -1651,6 +1684,7 @@ export const Details: FC<
 														<p className="text-13">Branch must be pushed to create PR.</p>
 													) : review === undefined ? (
 														<PullRequestForm
+															key={sourceBranch}
 															body={null}
 															projectId={projectId}
 															reviewId={null}
