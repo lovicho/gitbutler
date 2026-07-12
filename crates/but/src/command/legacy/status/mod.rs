@@ -1281,16 +1281,22 @@ fn print_group(
                 branch_suffix.push(Span::styled(no_commits, t.hint));
             }
 
+            let (decoration_start, decoration_end) = if branch.is_empty() {
+                ("", "")
+            } else {
+                (" [", "]")
+            };
+
             output.branch(
                 Vec::from([Span::raw(format!("┊{notch}┄"))]),
                 BranchLineContent {
                     id: Vec::from([Span::styled(segment.short_id.clone(), t.cli_id)]),
-                    decoration_start: Vec::from([Span::raw(" [")]),
+                    decoration_start: Vec::from([Span::raw(decoration_start)]),
                     branch_name: Vec::from([
                         Span::styled(branch, t.local_branch),
                         Span::raw(workspace),
                     ]),
-                    decoration_end: Vec::from([Span::raw("]")]),
+                    decoration_end: Vec::from([Span::raw(decoration_end)]),
                     suffix: branch_suffix,
                 },
                 branch_cli_id,

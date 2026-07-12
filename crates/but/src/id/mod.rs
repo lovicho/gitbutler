@@ -779,6 +779,10 @@ impl IdMap {
     }
 
     fn parse_element<'a>(&'a self, element: &str) -> anyhow::Result<Vec<Box<dyn Node<'a> + 'a>>> {
+        if element.is_empty() {
+            return Ok(vec![]);
+        }
+
         // Parse known suffixes.
         if let Some(prefix) = element.strip_suffix("@{stack}") {
             let mut matches = Vec::<Box<dyn Node<'a> + 'a>>::new();

@@ -47,6 +47,33 @@ fn worktrees() {
 }
 
 #[test]
+fn anonymous_segment() {
+    let env =
+        Sandbox::init_scenario_with_target_and_default_settings("one-stack-anonymous-segment");
+    env.setup_metadata(&["A"]);
+
+    env.but("status")
+        .assert()
+        .success()
+        .stderr_eq(snapbox::str![])
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted] (no changes)
+┊
+┊╭┄g0
+┊●   b36b65c anonymous (no changes)
+┊│
+┊├┄h0 [A]
+┊●   9477ae7 add A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}
+
+#[test]
 fn unborn() {
     let env = Sandbox::open_scenario_with_target_and_default_settings("unborn");
     snapbox::assert_data_eq!(env.git_log(), snapbox::str![""]);

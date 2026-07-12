@@ -88,24 +88,25 @@ fn populate_branch_short_ids(
         .iter_mut()
         .flat_map(|stack| stack.segments.iter_mut())
     {
-        let Some(branch_name) = segment.branch_name() else {
-            // The branch CliId is its name, so if this segment doesn't have a
-            // name, it doesn't need an ID.
-            continue;
-        };
-        segment.short_id = 'short_id: {
-            // Find first non-conflicting pair or triple (i.e. used in
-            // exactly one branch) and use it.
-            for candidate in branch_name.windows(2).chain(branch_name.windows(3)) {
-                if let Ok(short_id) = str::from_utf8(candidate)
-                    && let Some(true) = maybe_mark_used(candidate, id_usage)
-                {
-                    break 'short_id short_id.to_owned();
+        if let Some(branch_name) = segment.branch_name() {
+            segment.short_id = 'short_id: {
+                // Find first non-conflicting pair or triple (i.e. used in
+                // exactly one branch) and use it.
+                for candidate in branch_name.windows(2).chain(branch_name.windows(3)) {
+                    if let Ok(short_id) = str::from_utf8(candidate)
+                        && let Some(true) = maybe_mark_used(candidate, id_usage)
+                    {
+                        break 'short_id short_id.to_owned();
+                    }
                 }
-            }
-            // If none available, use next available ID.
-            id_usage.next_available()?.to_short_id()
-        };
+                // If none available, use next available ID.
+                id_usage.next_available()?.to_short_id()
+            };
+        } else {
+            // This sgement is anonymous, so we have no name to base the ID on. We just assign it a
+            // generic ID, which allows some rudimentary stuff to work (e.g. `but status`).
+            segment.short_id = id_usage.next_available()?.to_short_id();
+        }
     }
 
     Ok(())
