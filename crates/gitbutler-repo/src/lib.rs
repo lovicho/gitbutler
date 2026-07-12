@@ -16,7 +16,6 @@ pub use repository_ext::{commit_with_signature_gix, commit_without_signature_gix
 pub mod hooks;
 pub mod managed_hooks;
 mod remote;
-pub mod staging;
 
 pub mod commit_message;
 

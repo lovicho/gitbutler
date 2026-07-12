@@ -5,6 +5,9 @@
 
 use std::{io::Write, path::Path};
 
+#[cfg(unix)]
+use std::os::unix::ffi::OsStrExt as _;
+
 use bstr::ByteSlice as _;
 use but_core::{GitConfigSettings, RepositoryExt as _};
 use gitbutler_branch::BranchCreateRequest;
@@ -141,6 +144,118 @@ fn restore_snapshot_reverts_the_target() -> anyhow::Result<()> {
         "undoing a base-branch switch reverts the target everywhere, not just in the TOML"
     );
     Ok(())
+}
+
+#[test]
+fn snapshot_creation_works_with_unmerged_index() -> anyhow::Result<()> {
+    let Test { repo, ctx, .. } = &mut Test::default();
+    configure_default_target(ctx)?;
+
+    // Simulate what a workspace update leaves behind when an uncommitted file
+    // conflicts: conflict markers in the worktree and unmerged entries in the index.
+    // `deleted.txt` has no 'ours' stage, as when the local side deleted the file.
+    let (base_blob, ours_blob, theirs_blob) = {
+        let git2_repo = ctx.git2_repo.get()?;
+        let ours_blob = git2_repo.blob(b"ours\n")?;
+        let base_blob = git2_repo.blob(b"base\n")?;
+        let theirs_blob = git2_repo.blob(b"theirs\n")?;
+        let mut index = git2_repo.index()?;
+        for (path, stage, blob) in [
+            ("conflicted.txt", 1, base_blob),
+            ("conflicted.txt", 2, ours_blob),
+            ("conflicted.txt", 3, theirs_blob),
+            ("deleted.txt", 1, base_blob),
+            ("deleted.txt", 3, theirs_blob),
+            ("df", 2, ours_blob),
+            ("df/child", 3, theirs_blob),
+        ] {
+            index.add(&conflict_index_entry(path, stage, blob))?;
+        }
+        #[cfg(unix)]
+        for (stage, blob) in [(1, base_blob), (2, ours_blob), (3, theirs_blob)] {
+            index.add(&conflict_index_entry(b"invalid-\xff.txt", stage, blob))?;
+        }
+        index.write()?;
+        (base_blob, ours_blob, theirs_blob)
+    };
+    fs::write(
+        repo.path().join("conflicted.txt"),
+        "<<<<<<< ours\nours\n||||||| base\nbase\n=======\ntheirs\n>>>>>>> theirs\n",
+    )?;
+
+    let mut guard = ctx.exclusive_worktree_access();
+    let snapshot_id = ctx.create_snapshot(
+        SnapshotDetails::new(OperationKind::OnDemandSnapshot),
+        guard.write_permission(),
+    )?;
+
+    {
+        let git2_repo = ctx.git2_repo.get()?;
+        let mut index = git2_repo.index()?;
+        index.clear()?;
+        index.write()?;
+        assert!(
+            !index.has_conflicts(),
+            "the conflict is cleared before restore"
+        );
+    }
+    ctx.restore_snapshot(
+        snapshot_id,
+        RestoreKind::RestoreFromSnapshotViaUndo,
+        guard.write_permission(),
+    )?;
+
+    let index = ctx.git2_repo.get()?.index()?;
+    for (path, stage, expected) in [
+        ("conflicted.txt", 1, base_blob),
+        ("conflicted.txt", 2, ours_blob),
+        ("conflicted.txt", 3, theirs_blob),
+        ("deleted.txt", 1, base_blob),
+        ("deleted.txt", 3, theirs_blob),
+        ("df", 2, ours_blob),
+        ("df/child", 3, theirs_blob),
+    ] {
+        assert_eq!(
+            index.get_path(Path::new(path), stage).map(|entry| entry.id),
+            Some(expected),
+            "restore preserves stage {stage} for {path}"
+        );
+    }
+    assert!(
+        index.get_path(Path::new("deleted.txt"), 2).is_none(),
+        "restore preserves the missing ours stage for a local deletion"
+    );
+    #[cfg(unix)]
+    {
+        let path = Path::new(std::ffi::OsStr::from_bytes(b"invalid-\xff.txt"));
+        for (stage, expected) in [(1, base_blob), (2, ours_blob), (3, theirs_blob)] {
+            assert_eq!(
+                index.get_path(path, stage).map(|entry| entry.id),
+                Some(expected),
+                "restore preserves non-UTF-8 conflict paths at stage {stage}"
+            );
+        }
+    }
+    Ok(())
+}
+
+fn conflict_index_entry(path: impl AsRef<[u8]>, stage: u16, blob: git2::Oid) -> git2::IndexEntry {
+    let path = path.as_ref();
+    let path_len = path.len().min(0x0fff) as u16;
+    git2::IndexEntry {
+        ctime: git2::IndexTime::new(0, 0),
+        mtime: git2::IndexTime::new(0, 0),
+        dev: 0,
+        ino: 0,
+        mode: 0o100644,
+        uid: 0,
+        gid: 0,
+        file_size: 0,
+        id: blob,
+        flags: stage << 12 | path_len,
+        flags_extended: 0,
+        path: path.into(),
+    }
 }
 
 fn wd_file_count(worktree_dir: &&Path) -> anyhow::Result<usize> {

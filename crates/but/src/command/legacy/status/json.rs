@@ -31,6 +31,9 @@ use super::StatusContext;
 pub(crate) struct WorkspaceStatus {
     /// Represents uncommitted changes that are not assigned to any stack
     uncommitted_changes: Vec<FileChange>,
+    /// Uncommitted files with unresolved merge conflicts in the index; not committable until resolved.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    conflicted_files: Vec<String>,
     /// The stacks that are applied in the current workspace
     stacks: Vec<Stack>,
     /// The most recent common merge base between all applied stacks and the target upstream branch
@@ -57,12 +60,14 @@ pub(crate) struct UpstreamState {
 impl WorkspaceStatus {
     pub fn new(
         uncommitted_changes: Vec<FileChange>,
+        conflicted_files: Vec<String>,
         stacks: Vec<Stack>,
         merge_base: Commit,
         upstream_state: UpstreamState,
     ) -> Self {
         Self {
             uncommitted_changes,
+            conflicted_files,
             stacks,
             merge_base,
             upstream_state,
@@ -709,6 +714,7 @@ pub(super) fn build_workspace_status_json(
 
     Ok(WorkspaceStatus::new(
         json_uncommitted_changes,
+        status_ctx.conflicted_paths.clone(),
         json_stacks,
         merge_base_commit,
         upstream_state_json,

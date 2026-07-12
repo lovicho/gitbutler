@@ -4037,7 +4037,6 @@ dependencies = [
  "but-core",
  "but-ctx",
  "but-meta",
- "but-oxidize",
  "but-schemars",
  "but-serde",
  "but-testsupport",

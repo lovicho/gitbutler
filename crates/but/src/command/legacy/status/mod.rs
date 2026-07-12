@@ -5,7 +5,7 @@ use assignment::FileAssignment;
 use bstr::{BStr, BString, ByteSlice};
 use but_api::diff::ComputeLineStats;
 use but_core::{
-    RepositoryExt, TreeStatus,
+    IgnoredWorktreeTreeChangeStatus, RepositoryExt, TreeStatus,
     ref_metadata::StackId,
     sync::{RepoExclusive, RepoExclusiveGuard},
     ui,
@@ -187,6 +187,8 @@ struct StatusContext<'a> {
     flags: StatusFlags,
     stack_details: Vec<StackEntry>,
     worktree_changes: Vec<ui::TreeChange>,
+    /// Uncommitted files with unresolved merge conflicts in the index; not committable until resolved.
+    conflicted_paths: Vec<String>,
     common_merge_base_data: CommonMergeBase,
     target_tip_id: gix::ObjectId,
     upstream_state: Option<UpstreamState>,
@@ -400,6 +402,15 @@ fn build_status_context<'a>(
     let worktree_changes =
         but_api::diff::changes_in_worktree_with_perm(ctx, true, perm.read_permission())?;
 
+    let mut conflicted_paths: Vec<String> = worktree_changes
+        .worktree_changes
+        .ignored_changes
+        .iter()
+        .filter(|change| matches!(change.status, IgnoredWorktreeTreeChangeStatus::Conflict))
+        .map(|change| change.path.to_string())
+        .collect();
+    conflicted_paths.sort();
+
     let id_map = IdMap::new(stacks, worktree_changes.assignments.clone())?;
 
     let stacks = id_map.stacks();
@@ -527,6 +538,7 @@ fn build_status_context<'a>(
     Ok(StatusContext {
         stack_details,
         worktree_changes: worktree_changes.worktree_changes.changes,
+        conflicted_paths,
         common_merge_base_data,
         target_tip_id,
         upstream_state,
@@ -563,6 +575,7 @@ fn build_status_output(
     let has_merged_upstream_branch = print_worktree_status(ctx, status_ctx, output)?;
     print_upstream_state(ctx, status_ctx, output)?;
     print_common_merge_base_summary(status_ctx, output)?;
+    print_conflicted_files_warning(status_ctx, output)?;
     let not_on_workspace = matches!(
         status_ctx.mode,
         gitbutler_operating_modes::OperatingMode::OutsideWorkspace(_)
@@ -597,6 +610,23 @@ fn print_update_notice(
         output.connector(Vec::from([Span::raw("")]))?;
     }
 
+    Ok(())
+}
+
+/// Print a note on how to deal with the uncommitted files marked `{conflicted}` in the
+/// listing above.
+fn print_conflicted_files_warning(
+    status_ctx: &StatusContext<'_>,
+    output: &mut StatusOutput<'_>,
+) -> anyhow::Result<()> {
+    if status_ctx.conflicted_paths.is_empty() {
+        return Ok(());
+    }
+    let t = crate::theme::get();
+    output.warning(Vec::from([Span::styled(
+        "⚠ Uncommitted file conflicts: choose the desired file state, then run `git add -- <path>`.",
+        t.attention,
+    )]))?;
     Ok(())
 }
 
@@ -1351,7 +1381,7 @@ fn print_group(
             decoration_start: Vec::from([Span::raw(" [")]),
             label: Vec::from([Span::styled("uncommitted", t.info)]),
             decoration_end: Vec::from([Span::raw("]")]),
-            suffix: if assignments.is_empty() {
+            suffix: if assignments.is_empty() && status_ctx.conflicted_paths.is_empty() {
                 Vec::from([Span::raw(" "), Span::styled("(no changes)", t.hint)])
             } else {
                 Vec::new()
@@ -1360,6 +1390,17 @@ fn print_group(
         output.unstaged_changes(Vec::from([Span::raw("╭┄")]), line, cli_id.clone())?;
         if !assignments.is_empty() {
             print_assignments(&repo, status_ctx, None, None, assignments, true, output)?;
+        }
+        for path in &status_ctx.conflicted_paths {
+            output.no_assignments_unstaged(
+                Vec::from([Span::raw("┊"), Span::raw(" "), Span::raw("  ")]),
+                Vec::from([
+                    Span::raw(" "),
+                    Span::raw(path.clone()),
+                    Span::raw(" "),
+                    Span::styled("{conflicted}", t.error),
+                ]),
+            )?;
         }
     }
     if !first {

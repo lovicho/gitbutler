@@ -1156,6 +1156,85 @@ Hint: run `but help` for all commands
 }
 
 #[test]
+fn conflicted_uncommitted_file_is_surfaced() -> anyhow::Result<()> {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    // Leave behind what a conflicting workspace update produces for an uncommitted
+    // file: conflict markers in the worktree and unmerged entries in the index.
+    env.file(
+        "conflicted.txt",
+        "<<<<<<< ours\nours\n=======\ntheirs\n>>>>>>> theirs\n",
+    );
+    env.invoke_bash(
+        r#"base=$(echo base | git hash-object -w --stdin) &&
+ours=$(echo ours | git hash-object -w --stdin) &&
+theirs=$(echo theirs | git hash-object -w --stdin) &&
+printf '100644 %s 1\tconflicted.txt\n100644 %s 2\tconflicted.txt\n100644 %s 3\tconflicted.txt\n' "$base" "$ours" "$theirs" | git update-index --index-info"#,
+    );
+
+    env.but("status")
+        .assert()
+        .success()
+        .stderr_eq(snapbox::str![])
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted]
+┊    conflicted.txt {conflicted}
+┊
+┊╭┄g0 [A]
+┊●   9477ae7 add A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+⚠ Uncommitted file conflicts: choose the desired file state, then run `git add -- <path>`.
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    assert_eq!(
+        status_json(&env)?["conflictedFiles"],
+        serde_json::json!(["conflicted.txt"]),
+        "JSON status should list uncommitted files with unresolved index conflicts"
+    );
+
+    // Committing composes the oplog snapshot and the pre-commit hook index swap;
+    // both must tolerate the unmerged index, and the conflict must survive.
+    env.file("other.txt", "unrelated\n");
+    env.but("commit A -m unrelated").assert().success();
+    assert_eq!(
+        env.invoke_git("ls-files --unmerged").lines().count(),
+        3,
+        "the index conflict survives the commit, including the hook index swap"
+    );
+    assert_eq!(
+        env.invoke_git("show --name-only --format= A --"),
+        "other.txt",
+        "the commit contains only the unrelated file, not the conflicted one"
+    );
+
+    // Git already owns index conflict resolution; once marked resolved, the file
+    // becomes an ordinary committable change and the warning disappears.
+    env.file("conflicted.txt", "resolved\n");
+    env.invoke_git("add -- conflicted.txt");
+    assert_eq!(
+        status_json(&env)?["conflictedFiles"],
+        serde_json::Value::Null,
+        "the conflict warning is gone after resolving"
+    );
+    assert!(
+        status_json(&env)?["uncommittedChanges"]
+            .as_array()
+            .is_some_and(|changes| changes
+                .iter()
+                .any(|change| change["filePath"] == "conflicted.txt")),
+        "the resolved file becomes an ordinary committable change"
+    );
+
+    Ok(())
+}
+
+#[test]
 fn status_in_edit_mode_delegates_to_resolve_status() -> anyhow::Result<()> {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
     enter_edit_mode_with_conflicted_commit(&env)?;

@@ -37,7 +37,7 @@ but commit <branch> -c -m "<msg>" --changes <id>,<id>
 
 ## Non-Negotiable Rules
 
-1. Use `but` for all write operations. Never run `git add`, `git commit`, `git push`, `git checkout`, `git merge`, `git rebase`, `git stash`, or `git cherry-pick`. If the user says a `git` write command, translate it to `but` and run that.
+1. Use `but` for all write operations. Never run `git add`, `git commit`, `git push`, `git checkout`, `git merge`, `git rebase`, `git stash`, or `git cherry-pick`. If the user says a `git` write command, translate it to `but` and run that. Sole exception: `git add -- <path>` to mark a conflicted uncommitted file resolved — see "Conflicts in uncommitted files".
 2. After mutations, read the returned output for the updated workspace state — it replaces a follow-up status command.
 3. You may chain `but commit` mutations with `&&` to make several commits from one diff; they stack in the order you write them, so the first `but commit` is the oldest of the new commits and each later one goes on top (newest). File/hunk IDs copied from the original output generally remain usable across commits, and branch IDs are stable. Do NOT chain mutations that consume or rewrite commit IDs (`amend`, `squash`, `move`, `uncommit`); those reassign IDs the next command needs, so run one, read the returned workspace state, and take fresh IDs from it. If a chained command cannot resolve an ID, re-read with `but status`/`but diff` and retry.
 4. Use CLI IDs from `but diff` / `but status` / `but status -fv` / `but show`; never hardcode IDs.
@@ -228,6 +228,14 @@ If `but move` causes conflicts (conflicted commits in status):
 6. Repeat for any remaining conflicted commits.
 
 **Common mistakes:** Do NOT use `but amend` on conflicted commits (it won't work). Do NOT skip step 4 — you must actually edit the files to remove conflict markers before finishing.
+
+### Conflicts in uncommitted files
+
+`but status` lists uncommitted files with unresolved merge conflicts marked
+`{conflicted}`; they are excluded from committable changes. These conflicts are
+outside `but resolve` mode. Choose the desired contents or delete the file, then
+run `git add -- <path>` to mark it resolved. This is the one case where using
+`git add` is permitted.
 
 ## Git-to-But Map
 

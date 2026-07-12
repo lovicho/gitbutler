@@ -220,7 +220,6 @@ impl StatusOutput<'_> {
         )
     }
 
-    #[expect(dead_code)]
     pub(super) fn no_assignments_unstaged(
         &mut self,
         connector: Vec<Span<'static>>,

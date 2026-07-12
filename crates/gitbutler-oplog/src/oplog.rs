@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, hash_map::Entry},
+    collections::{BTreeSet, HashMap, hash_map::Entry},
     fs,
     str::{FromStr, from_utf8},
 };
@@ -11,14 +11,18 @@ use but_ctx::{
     access::{RepoExclusive, RepoShared},
 };
 use but_meta::virtual_branches_legacy_types::VirtualBranches;
-use but_oxidize::{ObjectIdExt as _, OidExt};
 use gitbutler_cherry_pick::GixRepositoryExt as _;
 use gitbutler_repo::{
     SignaturePurpose, commit_ids_excluding_reachable_from_with_graph, commit_without_signature_gix,
     signature_gix,
 };
 use gix::objs::Write as _;
-use gix::{ObjectId, bstr::ByteSlice, object::tree::EntryKind};
+use gix::{
+    ObjectId,
+    bstr::ByteSlice,
+    index::entry::{Flags, Stage},
+    object::tree::EntryKind,
+};
 use tracing::instrument;
 
 use super::{
@@ -40,6 +44,7 @@ const AUTO_TRACK_LIMIT_BYTES: u64 = 0;
 /// .
 /// ├── conflicts/…
 /// ├── index/
+/// ├── index-conflicts/…
 /// ├── target_tree/…
 /// ├── virtual_branches
 /// │   └── [branch-id]
@@ -318,22 +323,111 @@ fn get_workdir_tree(
     }
 }
 
-fn write_index_tree(ctx: &Context) -> Result<gix::ObjectId> {
-    #[expect(deprecated, reason = "index materialization boundary")]
-    let git2_repo = ctx.git2_repo.get()?;
-    let mut index = git2_repo.index()?;
-    Ok(index.write_tree()?.to_gix())
+struct IndexTrees {
+    index: gix::ObjectId,
+    conflicts: Option<gix::ObjectId>,
 }
 
-fn reset_index_to_tree(ctx: &Context, tree_id: gix::ObjectId) -> Result<()> {
-    #[expect(deprecated, reason = "index materialization boundary")]
-    let git2_repo = ctx.git2_repo.get()?;
-    let tree = git2_repo
-        .find_tree(tree_id.to_git2())
-        .context("failed to convert index tree entry to tree")?;
-    let mut index = git2_repo.index()?;
-    index.read_tree(&tree)?;
-    index.write()?;
+fn write_index_trees(ctx: &Context) -> Result<IndexTrees> {
+    let repo = ctx.repo.get()?;
+    let index = repo.index_or_empty()?;
+    // The detached editor writes trees without checking that each entry's blob exists
+    // locally, which it may not, e.g. for unfetched files in a partial clone with a
+    // sparse checkout.
+    let mut tree = repo.empty_tree().edit()?.detach();
+    let mut conflicts = repo.empty_tree().edit()?.detach();
+    let mut has_conflicts = false;
+    for entry in index.entries() {
+        let stage = entry.stage();
+        let mode = entry.mode.to_tree_entry_mode().with_context(|| {
+            format!(
+                "index entry {} has no tree representation",
+                entry.path(&index)
+            )
+        })?;
+        if stage != Stage::Unconflicted {
+            has_conflicts = true;
+            let mut conflict_path = Vec::with_capacity(entry.path(&index).len() + 2);
+            conflict_path.push(b'0' + stage as u8);
+            conflict_path.push(b'/');
+            conflict_path.extend_from_slice(entry.path(&index));
+            conflicts.upsert(
+                conflict_path.as_bstr().split_str("/"),
+                mode.kind(),
+                entry.id,
+            )?;
+        }
+        // Unmerged entries (e.g. a conflict in an uncommitted file left by a workspace
+        // update) cannot be represented in a tree. Keep the side with the local changes
+        // ('ours', stage 2, absent when locally deleted); the worktree file with conflict
+        // markers is captured in the snapshot's `worktree` tree.
+        if !matches!(stage, Stage::Unconflicted | Stage::Ours) {
+            continue;
+        }
+        tree.upsert(entry.path(&index).split_str("/"), mode.kind(), entry.id)?;
+    }
+    Ok(IndexTrees {
+        index: tree.write(|tree| repo.write_object(tree).map(|id| id.detach()))?,
+        conflicts: has_conflicts
+            .then(|| conflicts.write(|tree| repo.write_object(tree).map(|id| id.detach())))
+            .transpose()?,
+    })
+}
+
+fn reset_index_to_tree(
+    ctx: &Context,
+    tree_id: gix::ObjectId,
+    conflicts_tree_id: Option<gix::ObjectId>,
+) -> Result<()> {
+    let repo = ctx.repo.get()?;
+    let tree = repo.find_tree(tree_id)?;
+    let mut index = repo.index_from_tree(&tree.id())?;
+    if let Some(conflicts_tree_id) = conflicts_tree_id {
+        restore_index_conflicts(&mut index, repo.find_tree(conflicts_tree_id)?.id())?;
+    }
+    index.write(Default::default())?;
+    // Keep the legacy libgit2 handle in sync with the index written through gix.
+    #[expect(deprecated, reason = "index cache compatibility boundary")]
+    ctx.git2_repo.get()?.index()?.read(true)?;
+    Ok(())
+}
+
+#[expect(clippy::indexing_slicing)]
+fn restore_index_conflicts(index: &mut gix::index::State, conflict_tree: gix::Id) -> Result<()> {
+    let conflict_tree = conflict_tree.object()?.try_into_tree()?;
+    let mut recorder = gix::traverse::tree::Recorder::default();
+    conflict_tree.traverse().depthfirst(&mut recorder)?;
+
+    let mut to_remove = BTreeSet::new();
+    for record in &recorder.records {
+        if record.mode.is_tree() {
+            continue;
+        }
+        let path = &record.filepath;
+        let slash = path
+            .find_byte(b'/')
+            .context("BUG: expecting <stage>/<path>")?;
+        let stage = match &path[..slash] {
+            b"1" => Stage::Base,
+            b"2" => Stage::Ours,
+            b"3" => Stage::Theirs,
+            stage => bail!("Invalid conflict stage '{}'", stage.as_bstr()),
+        };
+        let path = path[slash + 1..].as_bstr();
+
+        index.dangerously_push_entry(
+            Default::default(),
+            record.oid,
+            Flags::from_stage(stage),
+            record.mode.into(),
+            path,
+        );
+        to_remove.insert(path);
+    }
+    index.remove_entries(|_idx, path, entry| {
+        entry.flags.stage() == Stage::Unconflicted && to_remove.contains(path)
+    });
+    index.sort_entries();
     Ok(())
 }
 
@@ -467,11 +561,14 @@ fn prepare_snapshot_with_target(
     let mut graph = repo.revision_graph(commit_graph_cache.as_ref());
 
     // write out the index as a tree to store
-    let index_tree_id = write_index_tree(ctx)?;
+    let index_trees = write_index_trees(ctx)?;
 
     // start building our snapshot tree
     let mut snapshot_tree = repo.empty_tree().edit()?;
-    snapshot_tree.upsert("index", EntryKind::Tree, index_tree_id)?;
+    snapshot_tree.upsert("index", EntryKind::Tree, index_trees.index)?;
+    if let Some(conflicts) = index_trees.conflicts {
+        snapshot_tree.upsert("index-conflicts", EntryKind::Tree, conflicts)?;
+    }
     snapshot_tree.upsert("target_tree", EntryKind::Tree, target_tree_id)?;
     snapshot_tree.upsert("conflicts", EntryKind::Tree, conflicts_tree_id)?;
     snapshot_tree.upsert("virtual_branches", EntryKind::Tree, empty_tree_id)?;
@@ -765,8 +862,11 @@ fn restore_snapshot(
     // reset the repo index to our index tree
     let index_tree_entry = snapshot_tree
         .lookup_entry_by_path("index")?
-        .context("failed to get virtual_branches.toml blob")?;
-    reset_index_to_tree(ctx, index_tree_entry.id().detach())?;
+        .context("failed to get index tree")?;
+    let index_conflicts_tree_id = snapshot_tree
+        .lookup_entry_by_path("index-conflicts")?
+        .map(|entry| entry.id().detach());
+    reset_index_to_tree(ctx, index_tree_entry.id().detach(), index_conflicts_tree_id)?;
 
     let restored_operation = snapshot_commit
         .message_raw()?

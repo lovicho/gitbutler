@@ -1,10 +1,101 @@
 use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
 
 use crate::support::RepoWithOrigin;
+use but_ctx::{Context, RepoOpenMode};
+use but_settings::AppSettings;
 use but_testsupport::open_repo;
-use gitbutler_repo::hooks::{HookResult, pre_push};
+use gitbutler_repo::hooks::{HookResult, pre_commit_with_tree, pre_push};
+
+fn context_for_repo(workdir: &Path) -> Context {
+    let project = gitbutler_project::Project::new_for_gitbutler_repo(workdir.to_path_buf());
+    Context::new_from_legacy_project_and_settings_with_repo_open_mode(
+        &project,
+        AppSettings::default(),
+        RepoOpenMode::Isolated,
+    )
+    .expect("can create context")
+    .with_memory_app_cache()
+}
+
+#[test]
+fn pre_commit_refuses_to_overwrite_stale_index_backup() -> anyhow::Result<()> {
+    let test_project = RepoWithOrigin::default();
+    let workdir = test_project.local_repo.workdir().expect("non-bare");
+    let ctx = context_for_repo(workdir);
+    let index_path = ctx.gitdir.join("index");
+    let backup_path = index_path.with_extension("gitbutler-hook-backup");
+    let original_index = fs::read(&index_path)?;
+    fs::write(&backup_path, b"stale backup")?;
+    let tree_id = ctx.repo.get()?.head_tree_id_or_empty()?.detach();
+
+    let err = pre_commit_with_tree(&ctx, tree_id).expect_err("stale backup must stop the hook");
+
+    assert!(
+        err.to_string().contains("stale pre-commit index backup"),
+        "unexpected error: {err:#}"
+    );
+    assert_eq!(
+        fs::read(&backup_path)?,
+        b"stale backup",
+        "stale backup must be preserved"
+    );
+    assert_eq!(
+        fs::read(&index_path)?,
+        original_index,
+        "index must remain untouched"
+    );
+    Ok(())
+}
+
+#[test]
+fn pre_commit_refuses_a_concurrent_index_swap() -> anyhow::Result<()> {
+    let test_project = RepoWithOrigin::default();
+    let workdir = test_project.local_repo.workdir().expect("non-bare");
+    let ctx = context_for_repo(workdir);
+    let mut lock = but_core::sync::LockFile::open(
+        ctx.gitdir
+            .join("index")
+            .with_extension("gitbutler-hook-lock"),
+    )?;
+    lock.lock()?;
+    let tree_id = ctx.repo.get()?.head_tree_id_or_empty()?.detach();
+
+    let err = pre_commit_with_tree(&ctx, tree_id).expect_err("concurrent swap must be rejected");
+
+    assert!(
+        err.to_string()
+            .contains("another pre-commit hook is already using the repository index"),
+        "unexpected error: {err:#}"
+    );
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn pre_commit_propagates_index_restore_failure() -> anyhow::Result<()> {
+    let test_project = RepoWithOrigin::default();
+    let workdir = test_project.local_repo.workdir().expect("non-bare");
+    let ctx = context_for_repo(workdir);
+    let hook_path = ctx.gitdir.join("hooks/pre-commit");
+    fs::write(
+        &hook_path,
+        "#!/bin/sh\nrm -f \"$(git rev-parse --git-path index).gitbutler-hook-backup\"\n",
+    )?;
+    fs::set_permissions(&hook_path, fs::Permissions::from_mode(0o755))?;
+    let tree_id = ctx.repo.get()?.head_tree_id_or_empty()?.detach();
+
+    let err = pre_commit_with_tree(&ctx, tree_id).expect_err("restore failure must be returned");
+
+    assert!(
+        err.to_string()
+            .contains("failed to restore pre-commit index"),
+        "unexpected error: {err:#}"
+    );
+    Ok(())
+}
 
 #[test]
 fn pre_push_hook_not_configured() -> anyhow::Result<()> {

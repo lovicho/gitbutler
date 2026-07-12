@@ -4,14 +4,14 @@ use std::{
     process::Stdio,
 };
 
-use anyhow::Result;
+use anyhow::{Context as _, Result};
 use bstr::ByteSlice;
 use but_ctx::Context;
 use but_oxidize::ObjectIdExt;
 use git2_hooks::{self, HookResult as H, HookRunResponse};
 use serde::Serialize;
 
-use crate::{managed_hooks::get_hooks_dir, staging};
+use crate::managed_hooks::get_hooks_dir;
 
 #[derive(Serialize, PartialEq, Debug, Clone)]
 pub struct MessageData {
@@ -84,44 +84,121 @@ pub fn commit_msg(ctx: &Context, mut message: String) -> Result<MessageHookResul
 pub fn pre_commit_with_tree(ctx: &Context, tree_id: gix::ObjectId) -> Result<HookResult> {
     #[expect(deprecated, reason = "libgit2 hook/index adapter boundary")]
     let repo = &*ctx.git2_repo.get()?;
-    let original_tree = repo.index()?.write_tree()?;
+    // Back up the index file byte for byte; a round-trip through a tree would fail
+    // on an index with unmerged entries (a conflict in an uncommitted file) and
+    // could not bring those entries back. A sibling file copy keeps memory flat and
+    // lets the restore be a single atomic rename that also keeps the permissions.
+    let index_path = repo
+        .index()?
+        .path()
+        .context("repository index has no backing file")?
+        .to_owned();
+    let backup_path = index_path.with_extension("gitbutler-hook-backup");
+    let backup_tmp_path = index_path.with_extension("gitbutler-hook-backup.tmp");
+    let mut transaction_lock =
+        but_core::sync::LockFile::open(index_path.with_extension("gitbutler-hook-lock"))
+            .context("failed to open pre-commit index lock")?;
+    if !transaction_lock
+        .try_lock()
+        .context("failed to lock the index for a pre-commit hook")?
+    {
+        anyhow::bail!("another pre-commit hook is already using the repository index");
+    }
+    match std::fs::symlink_metadata(&backup_path) {
+        Ok(_) => anyhow::bail!(
+            "stale pre-commit index backup at '{}'; restore it to '{}' before retrying",
+            backup_path.display(),
+            index_path.display()
+        ),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+        Err(err) => return Err(err).context("failed to inspect pre-commit index backup"),
+    }
+    match std::fs::remove_file(&backup_tmp_path) {
+        Ok(()) => {}
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+        Err(err) => return Err(err).context("failed to remove stale temporary index backup"),
+    }
+    let had_index = match std::fs::copy(&index_path, &backup_tmp_path) {
+        Ok(_) => {
+            std::fs::rename(&backup_tmp_path, &backup_path)
+                .context("failed to finalize pre-commit index backup")?;
+            true
+        }
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => false,
+        Err(err) => return Err(err).context("failed to back up index for pre-commit hook"),
+    };
 
-    // Scope guard that resets the index at the end, even under panic.
-    let _guard = scopeguard::guard((), |_| {
-        match staging::reset_index(repo, original_tree) {
-            Ok(()) => (),
-            Err(err) => tracing::error!("Failed to reset index: {}", err),
-        };
+    // Panic fallback; normal restoration below can report failures to the caller.
+    let guard = scopeguard::guard((), |_| {
+        if let Err(err) = restore_index(repo, &index_path, &backup_path, had_index) {
+            tracing::error!("Failed to reset index: {}", err);
+        }
     });
 
-    let mut index = repo.index()?;
-    index.read_tree(&repo.find_tree(tree_id.to_git2())?)?;
-    index.write()?;
+    let hook_result = (|| -> Result<HookResult> {
+        {
+            let mut index = repo.index()?;
+            index.read_tree(&repo.find_tree(tree_id.to_git2())?)?;
+            index.write()?;
+        }
 
-    Ok(
-        match git2_hooks::hooks_pre_commit(repo, husky_search_paths(ctx))? {
-            H::NoHookFound => HookResult::NotConfigured,
-            H::Run(HookRunResponse {
-                stdout,
-                stderr,
-                code,
-                ..
-            }) => {
-                if code == 0 {
-                    HookResult::Success
-                } else {
-                    // If the output contains GITBUTLER_ERROR, it's our managed hook blocking
-                    // commits on gitbutler/workspace - this is expected behavior, not a failure
-                    if stdout.contains("GITBUTLER_ERROR") || stderr.contains("GITBUTLER_ERROR") {
+        Ok(
+            match git2_hooks::hooks_pre_commit(repo, husky_search_paths(ctx))? {
+                H::NoHookFound => HookResult::NotConfigured,
+                H::Run(HookRunResponse {
+                    stdout,
+                    stderr,
+                    code,
+                    ..
+                }) => {
+                    if code == 0 {
                         HookResult::Success
                     } else {
-                        let error = join_output(stdout, stderr, Some(code));
-                        HookResult::Failure(ErrorData { error })
+                        // If the output contains GITBUTLER_ERROR, it's our managed hook blocking
+                        // commits on gitbutler/workspace - this is expected behavior, not a failure
+                        if stdout.contains("GITBUTLER_ERROR") || stderr.contains("GITBUTLER_ERROR")
+                        {
+                            HookResult::Success
+                        } else {
+                            let error = join_output(stdout, stderr, Some(code));
+                            HookResult::Failure(ErrorData { error })
+                        }
                     }
                 }
+            },
+        )
+    })();
+
+    if let Err(err) = restore_index(repo, &index_path, &backup_path, had_index) {
+        drop(guard); // Retry once through the fallback before returning the original error.
+        return Err(err);
+    }
+    scopeguard::ScopeGuard::into_inner(guard);
+    hook_result
+}
+
+fn restore_index(
+    repo: &git2::Repository,
+    index_path: &Path,
+    backup_path: &Path,
+    had_index: bool,
+) -> Result<()> {
+    if had_index {
+        std::fs::rename(backup_path, index_path).context("failed to restore pre-commit index")?;
+        // Refresh the in-memory index from the restored file.
+        repo.index()?
+            .read(true)
+            .context("failed to reload restored pre-commit index")?;
+    } else {
+        match std::fs::remove_file(index_path) {
+            Err(err) if err.kind() != std::io::ErrorKind::NotFound => {
+                return Err(err).context("failed to remove temporary pre-commit index");
             }
-        },
-    )
+            _ => {}
+        }
+        repo.index()?.clear()?;
+    }
+    Ok(())
 }
 
 pub fn post_commit(ctx: &Context) -> Result<HookResult> {
