@@ -1,7 +1,6 @@
 import { decodeBytes } from "#ui/api/bytes.ts";
 import type { DiffSpec, RejectionReason, RejectedChange } from "@gitbutler/but-sdk";
 import { type ToastManagerAddOptions } from "@base-ui/react";
-import { Array, pipe } from "effect";
 import { FC } from "react";
 
 const listFormatter = new Intl.ListFormat(undefined, {
@@ -55,15 +54,14 @@ const RejectedChanges: FC<{
 
 	return (
 		<ul>
-			{pipe(
-				pathsByReason,
-				Array.fromIterable,
-				Array.map(([reason, paths]) => (
+			{pathsByReason
+				.entries()
+				.toArray()
+				.map(([reason, paths]) => (
 					<li key={reason}>
 						<strong>{readableRejectionReason(reason)}:</strong> {formatPaths(paths)}
 					</li>
-				)),
-			)}
+				))}
 		</ul>
 	);
 };

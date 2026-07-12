@@ -1,10 +1,9 @@
 import { getDependencyCommitIds, getHunkDependencyDiffsByPath } from "#ui/hunk.ts";
 import type { TreeChange, WorktreeChanges } from "@gitbutler/but-sdk";
-import { Array } from "effect";
 
 type ChangeFileRowItem = {
 	change: TreeChange;
-	dependencyCommitIds?: Array.NonEmptyArray<string>;
+	dependencyCommitIds: Array<string>;
 	path: string;
 };
 
@@ -37,7 +36,7 @@ export const getChangesFileRowItems = (worktreeChanges: WorktreeChanges): Array<
 		const hunkDependencyDiffs = hunkDependencyDiffsByPath.get(change.path);
 		const dependencyCommitIds = hunkDependencyDiffs
 			? getDependencyCommitIds({ hunkDependencyDiffs })
-			: undefined;
+			: [];
 
 		return changeFileRowItem({
 			change,

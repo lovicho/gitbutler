@@ -2,7 +2,6 @@ import { relativeToEquals } from "#ui/api/relative-to.ts";
 import type { HeadInfoIndex } from "#ui/api/ref-info.ts";
 import { commitTitle } from "#ui/commit.ts";
 import type { RefInfo, RelativeTo } from "@gitbutler/but-sdk";
-import { reverse } from "effect/Array";
 import type { CommitTargetComboboxItem } from "../CommitForm.tsx";
 
 export const buildCommitTargetComboboxItems = ({
@@ -29,7 +28,7 @@ export const buildCommitTargetComboboxItems = ({
 				] satisfies Array<CommitTargetComboboxItem>)
 			: []),
 		...(headInfo
-			? reverse(headInfo.stacks).flatMap(
+			? headInfo.stacks.toReversed().flatMap(
 					(stack): Array<CommitTargetComboboxItem> =>
 						stack.segments.flatMap((segment): Array<CommitTargetComboboxItem> => {
 							const refName = segment.refName;

@@ -25,7 +25,6 @@ import {
 	type TransferMode,
 } from "#ui/outline/mode.ts";
 import { getHeadInfoIndex } from "#ui/api/ref-info.ts";
-import { mapKeys } from "effect/Record";
 
 export type SelectionState = {
 	outline: Operand | null;
@@ -268,10 +267,13 @@ export const updateRewrittenCommitReferences = (
 		if (commitId !== undefined) state.commitTarget = { type: "commit", subject: commitId };
 	}
 
-	state.checkedCommitIds = mapKeys(
-		state.checkedCommitIds,
-		(checkedCommitId) => replacedCommits[checkedCommitId] ?? checkedCommitId,
-	);
+	for (const oldId of Object.keys(state.checkedCommitIds)) {
+		const newId = replacedCommits[oldId];
+		if (newId !== undefined) {
+			delete state.checkedCommitIds[oldId];
+			state.checkedCommitIds[newId] = true;
+		}
+	}
 
 	if (state.mode._tag === "RewordCommit") {
 		const commit = rewrittenCommitOperand({

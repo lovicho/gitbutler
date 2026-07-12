@@ -47,9 +47,9 @@ import { InlineEditor } from "./InlineEditor.tsx";
 import { commitMessageInputId } from "../CommitForm.tsx";
 import { insertBlankCommitMenuItem } from "./insertBlankCommitMenuItem.ts";
 import { ItemRow } from "./ItemRow.tsx";
-import { type PartialStackState, partialStackPushDisabled } from "./partialStackState.ts";
 import styles from "./BranchRow.module.css";
 import { ciChecksSummaryUrl, type AggregateCIChecks } from "#ui/ci.ts";
+import { type DownstackPushStatus, downstackPushStatusDisabled } from "#ui/segment.ts";
 
 const focusCommitMessageInput = () => {
 	document.getElementById(commitMessageInputId)?.focus();
@@ -111,7 +111,7 @@ export const BranchRow: FC<
 		isCommitTarget: boolean;
 		canTearOffBranch: boolean;
 		canRemoveBranch: boolean;
-		partialStackState: PartialStackState;
+		downstackPushStatus: DownstackPushStatus;
 		pushStatus: PushStatus;
 		graphStatus: GraphSegmentStatus;
 		pullRequest: number | null;
@@ -125,7 +125,7 @@ export const BranchRow: FC<
 	isCommitTarget,
 	canTearOffBranch,
 	canRemoveBranch,
-	partialStackState,
+	downstackPushStatus,
 	pushStatus,
 	graphStatus,
 	pullRequest,
@@ -194,7 +194,7 @@ export const BranchRow: FC<
 	const removeBranchMutation = useRemoveBranch();
 	const branchCreateMutation = useBranchCreate();
 
-	const pushesMultipleBranches = partialStackState.branchCount > 1;
+	const pushesMultipleBranches = downstackPushStatus.downstackBranches > 1;
 
 	const saveBranchName = (newBranchName: string) => {
 		const trimmed = newBranchName.trim();
@@ -301,7 +301,7 @@ export const BranchRow: FC<
 		workspaceBranchAndAncestorsPushMutation.mutate({
 			projectId,
 			branch: decodeBytes(refName.fullNameBytes),
-			withForce: partialStackState.pushWithForce,
+			withForce: downstackPushStatus.anyPushRequiresForce,
 			skipForcePushProtection: false,
 			runHooks: true,
 			pushOpts: [],
@@ -322,13 +322,13 @@ export const BranchRow: FC<
 
 	const workspaceBranchAndAncestorsPushDisabled =
 		workspaceBranchAndAncestorsPushMutation.isPending ||
-		partialStackPushDisabled(partialStackState);
+		downstackPushStatusDisabled(downstackPushStatus);
 
 	const pushMenuLabel = pushesMultipleBranches
-		? partialStackState.pushWithForce
+		? downstackPushStatus.anyPushRequiresForce
 			? "Force Push With Branches Below"
 			: "Push With Branches Below"
-		: partialStackState.pushWithForce
+		: downstackPushStatus.anyPushRequiresForce
 			? "Force Push Branch"
 			: "Push Branch";
 
@@ -470,21 +470,21 @@ export const BranchRow: FC<
 								<CIBubble checks={ciChecks.aggregate} />
 							))}
 
-						{partialStackState.requiresPush &&
+						{downstackPushStatus.anyRequiresPush &&
 							(() => {
 								const workspaceBranchAndAncestorsPushDisabledReason =
 									workspaceBranchAndAncestorsPushMutation.isPending
 										? "pushing"
-										: partialStackState.hasConflicts
+										: downstackPushStatus.anyHasConflicts
 											? "disabled due to conflicts"
 											: null;
 
 								const pushButtonLabel = `${
 									pushesMultipleBranches
-										? partialStackState.pushWithForce
+										? downstackPushStatus.anyPushRequiresForce
 											? "Force push this and all branches below"
 											: "Push this and all branches below"
-										: partialStackState.pushWithForce
+										: downstackPushStatus.anyPushRequiresForce
 											? "Force push branch"
 											: "Push branch"
 								}${workspaceBranchAndAncestorsPushDisabledReason !== null ? ` (${workspaceBranchAndAncestorsPushDisabledReason})` : ""}`;

@@ -113,7 +113,7 @@ export const FileRow: FC<
 				{outlineMode._tag === "Default" &&
 					item._tag === "Change" &&
 					fileParent._tag === "UncommittedChanges" &&
-					item.dependencyCommitIds && (
+					item.dependencyCommitIds.length > 0 && (
 						<Toolbar.Root aria-label="File actions" render={<RowToolbar forceVisible />}>
 							<Toolbar.Button
 								render={

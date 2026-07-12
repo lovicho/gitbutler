@@ -47,7 +47,6 @@ import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panel
 import styles from "./OutlineTree.module.css";
 import { Row, RowLabel, RowLabelContainer } from "../Row.tsx";
 import { getOperation, useDryRunOperation } from "#ui/operations/operation.ts";
-import { reverse } from "effect/Array";
 import { GraphSegment, GraphSegmentStatus } from "#ui/components/GraphSegment.tsx";
 import { segmentBottomRelativeTo } from "#ui/api/stack.ts";
 import { assert } from "#ui/assert.ts";
@@ -57,10 +56,14 @@ import { CommitRow } from "./CommitRow.tsx";
 import { BranchRow } from "./BranchRow.tsx";
 import { StackRow } from "./StackRow.tsx";
 import { useOutlineTreeHotkeys } from "./hotkeys.ts";
-import { partialStackStatesFromSegments, type PartialStackState } from "./partialStackState.ts";
 import { UncommittedChangesRow } from "./UncommittedChangesRow.tsx";
 import { FileRow } from "../FileRow.tsx";
 import { getChangesFileRowItems, type FileRowItem } from "../file-row.ts";
+import {
+	canRemoveBranchReference,
+	downstackPushStatusesFromSegments,
+	type DownstackPushStatus,
+} from "#ui/segment.ts";
 
 const DryRunWorkspaceContext = createContext<WorkspaceState | null>(null);
 
@@ -300,7 +303,7 @@ const BranchSegment: FC<{
 	commitTarget: RelativeTo | null;
 	canTearOffBranch: boolean;
 	canRemoveBranch: boolean;
-	partialStackState: PartialStackState;
+	downstackPushStatus: DownstackPushStatus;
 	isTopSegment: boolean;
 }> = ({
 	projectId,
@@ -310,7 +313,7 @@ const BranchSegment: FC<{
 	commitTarget,
 	canTearOffBranch,
 	canRemoveBranch,
-	partialStackState,
+	downstackPushStatus,
 	isTopSegment,
 }) => {
 	const operand = branchOperand({ stackId, branchRef: refName.fullNameBytes });
@@ -329,7 +332,7 @@ const BranchSegment: FC<{
 				stackId={stackId}
 				canTearOffBranch={canTearOffBranch}
 				canRemoveBranch={canRemoveBranch}
-				partialStackState={partialStackState}
+				downstackPushStatus={downstackPushStatus}
 				isCommitTarget={
 					commitTarget
 						? relativeToEquals(commitTarget, {
@@ -441,12 +444,7 @@ const StackC: FC<{
 	const stackId = stack.id!;
 	const operand = stackOperand({ stackId });
 	const canTearOffBranch = stack.segments.length > 1;
-
-	const partialStackStates = partialStackStatesFromSegments(stack.segments);
-	// This should never fail because we always have at least one segment.
-	const stackState = assert(partialStackStates[0]);
-	const topBranchIndex = stack.segments.findIndex((segment) => segment.refName);
-
+	const downstackPushStatuses = downstackPushStatusesFromSegments(stack.segments);
 	const navigationIndex = assert(use(NavigationIndexContext));
 
 	return (
@@ -463,15 +461,7 @@ const StackC: FC<{
 			{/* oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- Tree items need ARIA group semantics. */}
 			<div role="group" className={styles.segments}>
 				{stack.segments.map((segment, index) => {
-					const partialStackState = assert(partialStackStates[index]);
-					const canRemoveBranch =
-						segment.commits.length === 0 ||
-						// We disallow deleting the top branch reference inside a stack of
-						// multiple branches because (1) the backend misbehaves (2) and we
-						// want to discourage users from creating branchless segments. See
-						// discussion in
-						// https://github.com/gitbutlerapp/gitbutler/pull/14059.
-						(stackState.branchCount > 1 && index !== topBranchIndex);
+					const downstackPushStatus = assert(downstackPushStatuses[index]);
 
 					const key = segment.refName
 						? JSON.stringify(segment.refName.fullNameBytes)
@@ -490,8 +480,8 @@ const StackC: FC<{
 										stackId={stackId}
 										commitTarget={commitTarget}
 										canTearOffBranch={canTearOffBranch}
-										canRemoveBranch={canRemoveBranch}
-										partialStackState={partialStackState}
+										canRemoveBranch={canRemoveBranchReference(stack, index)}
+										downstackPushStatus={downstackPushStatus}
 										isTopSegment={index === 0}
 									/>
 								) : (
@@ -573,7 +563,7 @@ const Stacks: FC<{
 	return (
 		<DryRunWorkspaceContext value={dryRunWorkspace}>
 			<div className={styles.stacks}>
-				{reverse(headInfo?.stacks ?? []).map((stack) => (
+				{(headInfo?.stacks.toReversed() ?? []).map((stack) => (
 					<StackC key={stack.id} projectId={projectId} stack={stack} commitTarget={commitTarget} />
 				))}
 			</div>

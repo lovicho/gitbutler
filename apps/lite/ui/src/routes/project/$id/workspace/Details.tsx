@@ -73,7 +73,7 @@ import {
 import { CodeView, type CodeViewHandle } from "@pierre/diffs/react";
 import { useQuery, useSuspenseQueries, useSuspenseQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
-import { Hash, identity, Match } from "effect";
+import { Match } from "effect";
 import {
 	ComponentProps,
 	FC,
@@ -120,6 +120,7 @@ import { defaultSettings } from "#ui/settings.ts";
 import { AggregateCIChecks } from "#ui/ci.ts";
 import { IconName } from "#ui/components/iconNames.ts";
 import { draftPRQueryOptions, usePersistDraftPR } from "#ui/pr.ts";
+import { combineHashes, hash } from "#ui/hash.ts";
 
 type BranchTab = "diff" | "pr";
 
@@ -170,6 +171,7 @@ const getCommitFileRowItems = ({
 				changeFileRowItem({
 					change,
 					path: change.path,
+					dependencyCommitIds: [],
 				}),
 			),
 	];
@@ -180,6 +182,7 @@ const getBranchFileRowItems = ({ branchDiff }: { branchDiff: TreeChanges }): Arr
 		changeFileRowItem({
 			change,
 			path: change.path,
+			dependencyCommitIds: [],
 		}),
 	);
 
@@ -189,7 +192,7 @@ const mkCodeViewItem = (
 	hunks: Array<DiffHunk>,
 ): CodeViewDiffItem => {
 	const combinedFilePatch = synthesizeFilePatch(change, hunks);
-	const version = Hash.string(combinedFilePatch);
+	const version = hash(combinedFilePatch);
 	const parsed = parsePatchFiles(combinedFilePatch, String(version));
 
 	return {
@@ -503,7 +506,7 @@ const DiffContents: FC<{
 		...item,
 		collapsed: true,
 		// oxlint-disable-next-line typescript/no-non-null-assertion -- We always use versions.
-		version: Hash.combine(item.version!)(1),
+		version: combineHashes(item.version!, 1),
 	});
 
 	return items.length === 0 ? (
@@ -968,7 +971,7 @@ const Diff: FC<{
 	const files = filesItems.map((item) => item.path);
 	const filesNavigationIndex: NavigationIndex<string> = {
 		items: files,
-		indexByKey: buildIndexByKey(files, identity),
+		indexByKey: buildIndexByKey(files, (path) => path),
 	};
 	const filesSelection = useFilesSelection(projectId, filesNavigationIndex);
 

@@ -11,7 +11,6 @@ import {
 	SequenceOptions,
 	useHotkeyRegistrations,
 } from "@tanstack/react-hotkeys";
-import { Order } from "effect";
 import { useState, type FC } from "react";
 
 type CommandPaletteItem = {
@@ -33,11 +32,11 @@ const groupCommandPaletteItems = (
 	const grouped = Map.groupBy(items, (item) => item.group);
 
 	return Array.from(grouped.entries())
-		.toSorted(Order.mapInput(Order.string, ([group]) => group))
+		.toSorted(([a], [b]) => a.localeCompare(b))
 		.map(
 			([group, items]): PickerDialogGroup<CommandPaletteItem> => ({
 				value: group,
-				items: items.toSorted(Order.mapInput(Order.string, (item) => item.name)),
+				items: items.toSorted((a, b) => a.name.localeCompare(b.name)),
 			}),
 		);
 };

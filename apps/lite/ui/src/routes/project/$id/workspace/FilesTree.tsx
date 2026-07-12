@@ -12,7 +12,6 @@ import { useAppDispatch, useAppSelector } from "#ui/store.ts";
 import { classes } from "#ui/components/classes.ts";
 import { mergeProps, useRender } from "@base-ui/react";
 import { useQuery } from "@tanstack/react-query";
-import { identity } from "effect";
 import { ComponentProps, FC, useRef } from "react";
 import styles from "./FilesTree.module.css";
 import { Row, RowLabel, RowLabelContainer } from "./Row.tsx";
@@ -115,7 +114,7 @@ const useFilesTreeHotkeys = ({
 		select: onFileSelection,
 		selection,
 		ref,
-		getKey: identity,
+		getKey: (path) => path,
 		operationSourceForItem: (path) => fileOperand({ parent: fileParent, path }),
 	});
 };
@@ -192,7 +191,7 @@ export const FilesTree: FC<
 										render={
 											<FileRow
 												item={item}
-												inert={!navigationIndexIncludes(navigationIndex, item.path, identity)}
+												inert={!navigationIndexIncludes(navigationIndex, item.path, (path) => path)}
 												isSelected={selection !== null && selection === item.path}
 												onSelect={() => onFileSelection(item.path)}
 												projectId={projectId}

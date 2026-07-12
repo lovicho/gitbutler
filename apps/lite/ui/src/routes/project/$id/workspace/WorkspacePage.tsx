@@ -56,7 +56,6 @@ import { CommandPalette } from "./CommandPalette.tsx";
 import { Outline } from "./Outline.tsx";
 import { getOperations } from "#ui/operations/operation.ts";
 import { buildIndexByKey, type NavigationIndex } from "#ui/workspace/navigation-index.ts";
-import { reverse } from "effect/Array";
 import { OperationControls } from "#ui/routes/project/$id/workspace/OperationControls.tsx";
 import { WorkspacePageErrorBoundary } from "./WorkspacePageErrorBoundary.tsx";
 import { Settings } from "./Settings.tsx";
@@ -178,7 +177,7 @@ const outlineNavigationItems = ({
 			fileOperand({ parent: uncommittedChangesFileParent, path }),
 		),
 
-		...reverse(headInfo?.stacks ?? []).flatMap((stack) => {
+		...(headInfo?.stacks.toReversed() ?? []).flatMap((stack) => {
 			// oxlint-disable-next-line typescript/no-non-null-assertion -- [ref:stack-id-required]
 			const stackId = stack.id!;
 			return stack.segments.flatMap((segment) => segmentItems(stackId, segment));

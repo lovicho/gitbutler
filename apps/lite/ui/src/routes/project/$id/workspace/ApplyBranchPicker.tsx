@@ -5,7 +5,6 @@ import { headInfoQueryOptions, listBranchesQueryOptions } from "#ui/api/queries.
 import { PickerDialog, type PickerDialogGroup } from "#ui/components/PickerDialog.tsx";
 import { BranchListing } from "@gitbutler/but-sdk";
 import { useQuery } from "@tanstack/react-query";
-import { Order } from "effect";
 import { type FC, useState } from "react";
 
 type ApplyBranchPickerOption = {
@@ -71,21 +70,16 @@ const groupApplyBranchPickerOptions = (
 		Map.groupBy(items, (item) => item.type),
 		([value, items]): PickerDialogGroup<ApplyBranchPickerOption> => ({
 			value,
-			items: items.toSorted(
-				value === "Local"
-					? Order.combineAll<ApplyBranchPickerOption>([
-							Order.mapInput(Order.reverse(Order.number), (option) => option.updatedAt),
-							Order.mapInput(Order.string, (option) => option.label),
-						])
-					: Order.mapInput(Order.string, (option: ApplyBranchPickerOption) => option.label),
-			),
+			items: items.toSorted((a, b) => {
+				if (value === "Local" && a.updatedAt !== b.updatedAt) return b.updatedAt - a.updatedAt;
+				return a.label.localeCompare(b.label);
+			}),
 		}),
-	).toSorted(
-		Order.combineAll<PickerDialogGroup<ApplyBranchPickerOption>>([
-			Order.mapInput(Order.boolean, (group) => group.value !== "Local"),
-			Order.mapInput(Order.string, (group) => group.value),
-		]),
-	);
+	).toSorted((a, b) => {
+		if (a.value === "Local" && b.value !== "Local") return -1;
+		if (a.value !== "Local" && b.value === "Local") return 1;
+		return a.value.localeCompare(b.value);
+	});
 
 export const ApplyBranchPicker: FC<Props> = ({ open, onOpenChange, projectId }) => {
 	const { data: headInfoIndex } = useQuery({

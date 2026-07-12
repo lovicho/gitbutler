@@ -198,7 +198,6 @@ fn print_grouped_with_truncation(
                 SubcommandDiscriminant::Edit => continue,
                 SubcommandDiscriminant::Metrics => continue,
                 SubcommandDiscriminant::Onboarding => continue,
-                SubcommandDiscriminant::EvalHook => continue,
                 SubcommandDiscriminant::External => continue,
 
                 #[cfg(feature = "legacy")]

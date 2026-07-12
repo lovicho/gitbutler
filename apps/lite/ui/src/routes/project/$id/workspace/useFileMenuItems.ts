@@ -22,7 +22,6 @@ import { useAppDispatch } from "#ui/store.ts";
 import { focusSelectionScope } from "#ui/selection-scopes.ts";
 import type { TreeChange } from "@gitbutler/but-sdk";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
-import type { NonEmptyArray } from "effect/Array";
 import { Match } from "effect";
 
 export const useFileMenuItems = ({
@@ -61,7 +60,7 @@ export const useFileMenuItems = ({
 		focusSelectionScope("outline");
 	};
 
-	const menuItemGroups: Array<NonEmptyArray<NativeMenuItem>> = [
+	const menuItemGroups: Array<Array<NativeMenuItem>> = [
 		[
 			preferredEditor
 				? nativeMenuItem({
@@ -118,12 +117,12 @@ export const useFileMenuItems = ({
 							onSelect: cutFile,
 							accelerator: toElectronAccelerator(selectionOperationHotkeys.cut.hotkey),
 						}),
-					] satisfies NonEmptyArray<NativeMenuItem>,
+					] satisfies Array<NativeMenuItem>,
 				]
 			: []),
 		...(change
 			? Match.value(operand).pipe(
-					Match.withReturnType<Array<NonEmptyArray<NativeMenuItem>>>(),
+					Match.withReturnType<Array<Array<NativeMenuItem>>>(),
 					Match.when({ parent: { _tag: "Commit" } }, (operand) => {
 						const uncommit = () =>
 							commitUncommitChanges.mutate({

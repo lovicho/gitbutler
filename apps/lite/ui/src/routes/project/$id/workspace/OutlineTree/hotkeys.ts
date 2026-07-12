@@ -47,12 +47,12 @@ import { useQuery } from "@tanstack/react-query";
 import { Match } from "effect";
 import { type RefObject } from "react";
 import { commitMessageInputId } from "../CommitForm.tsx";
-import { partialStackPushDisabled, partialStackStateFromSegments } from "./partialStackState.ts";
 import { selectAfterDiscardedCommit } from "./selectAfterDiscardedCommit.ts";
+import { downstackPushStatusDisabled, downstackPushStatusFromSegments } from "#ui/segment.ts";
 
 type PushContext = {
 	refName: BranchReference;
-	partialStackSegments: Array<Segment>;
+	downstackSegments: Array<Segment>;
 };
 
 const pushContextForSegment = ({
@@ -65,11 +65,11 @@ const pushContextForSegment = ({
 	const segment = segments[segmentIndex];
 	if (!segment?.refName) return null;
 
-	const partialStackSegments = segments.slice(segmentIndex);
+	const downstackSegments = segments.slice(segmentIndex);
 
 	return {
 		refName: segment.refName,
-		partialStackSegments,
+		downstackSegments,
 	};
 };
 
@@ -336,14 +336,14 @@ export const useOutlineTreeHotkeys = ({
 	const pushSelectedBranch = () => {
 		if (!selectedPushContext) return;
 
-		const partialStackState = partialStackStateFromSegments(
-			selectedPushContext.partialStackSegments,
+		const downstackPushStatus = downstackPushStatusFromSegments(
+			selectedPushContext.downstackSegments,
 		);
 
 		workspaceBranchAndAncestorsPushMutation.mutate({
 			projectId,
 			branch: decodeBytes(selectedPushContext.refName.fullNameBytes),
-			withForce: partialStackState.pushWithForce,
+			withForce: downstackPushStatus.anyPushRequiresForce,
 			skipForcePushProtection: false,
 			runHooks: true,
 			pushOpts: [],
@@ -379,8 +379,8 @@ export const useOutlineTreeHotkeys = ({
 	const canPushSelectedBranch =
 		!!selectedPushContext &&
 		!workspaceBranchAndAncestorsPushMutation.isPending &&
-		!partialStackPushDisabled(
-			partialStackStateFromSegments(selectedPushContext.partialStackSegments),
+		!downstackPushStatusDisabled(
+			downstackPushStatusFromSegments(selectedPushContext.downstackSegments),
 		);
 
 	useNavigationIndexHotkeys({

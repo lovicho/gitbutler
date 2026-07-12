@@ -16,7 +16,7 @@ import {
 	extractInstruction,
 } from "@atlaskit/pragmatic-drag-and-drop-hitbox/list-item";
 import { Tooltip, useRender } from "@base-ui/react";
-import { Match, pipe } from "effect";
+import { Match } from "effect";
 import { FC, useEffect, useEffectEvent, useRef } from "react";
 import { TooltipPopup } from "#ui/components/Tooltip.tsx";
 
@@ -162,9 +162,7 @@ export const OperationTarget: FC<
 		<Tooltip.Root open={activeOperation?.tooltip !== undefined} disableHoverablePopup>
 			<Tooltip.Trigger
 				render={targetEl}
-				className={pipe(
-					activeOperation?.operationType,
-					Match.value,
+				className={Match.value(activeOperation?.operationType).pipe(
 					Match.when("above", () => classes(styles.insertionTarget, styles.insertionTargetAbove)),
 					Match.when("below", () => classes(styles.insertionTarget, styles.insertionTargetBelow)),
 					Match.when("into", () =>

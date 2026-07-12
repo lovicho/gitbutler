@@ -36,4 +36,6 @@ export default defineConfig(({ command }) => ({
 			},
 		},
 	}),
+	// Keep at least the property here to help Knip's inference.
+	test: {},
 }));

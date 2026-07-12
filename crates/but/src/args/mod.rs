@@ -1418,14 +1418,6 @@ pub enum Subcommands {
     #[clap(hide = true)]
     Onboarding,
 
-    /// AI: Claude Code hook for workspace awareness and skill activation.
-    ///
-    /// Outputs workspace status as JSON and a skill-loading nudge.
-    /// Intended to fire on the Stop hook.
-    #[clap(hide = true)]
-    #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
-    EvalHook,
-
     /// External commands and aliases are resolved to this variant.
     ///
     /// External commands are currently only supported on UNIX platforms, but this is available on

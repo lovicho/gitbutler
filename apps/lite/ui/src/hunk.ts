@@ -9,7 +9,7 @@
 
 import type { DiffHunk, HunkDependencies, HunkHeader, TreeChange } from "@gitbutler/but-sdk";
 import type { ChangeContent, Hunk, SelectedLineRange, SelectionSide } from "@pierre/diffs";
-import { Array, Match } from "effect";
+import { Match } from "effect";
 
 type HunkDependencyDiff = HunkDependencies["diffs"][number];
 
@@ -40,7 +40,7 @@ export const getDependencyCommitIds = ({
 }: {
 	hunk?: DiffHunk;
 	hunkDependencyDiffs: Array<HunkDependencyDiff>;
-}): Array.NonEmptyArray<string> | undefined => {
+}): Array<string> => {
 	const commitIds = new Set<string>();
 
 	for (const [, dependencyHunk, locks] of hunkDependencyDiffs) {
@@ -48,8 +48,7 @@ export const getDependencyCommitIds = ({
 		for (const dependency of locks) commitIds.add(dependency.commitId);
 	}
 
-	const dependencyCommitIds = globalThis.Array.from(commitIds);
-	return Array.isNonEmptyArray(dependencyCommitIds) ? dependencyCommitIds : undefined;
+	return Array.from(commitIds);
 };
 
 const hunkHeaderFromHunk = (hunk: Hunk): HunkHeader => ({
@@ -99,10 +98,12 @@ const lineGroupsFromChangeContent = (
 ];
 
 const rangeFromLineGroups = (
-	lineGroups: Array.NonEmptyArray<HunkLineSelectionGroup>,
-): SelectedLineRange => {
-	const first = Array.headNonEmpty(lineGroups);
-	const last = Array.lastNonEmpty(lineGroups);
+	lineGroups: Array<HunkLineSelectionGroup>,
+): SelectedLineRange | null => {
+	const first = lineGroups[0];
+	const last = lineGroups.at(-1);
+	if (!first || !last) return null;
+
 	const range: SelectedLineRange = {
 		start: first.start,
 		side: first.side,
@@ -119,12 +120,13 @@ export const contiguousSelectionsFromHunk = (hunk: Hunk): Array<HunkLineSelectio
 		if (content.type !== "change") return [];
 
 		const lineGroups = lineGroupsFromChangeContent(hunk, content);
-		if (!Array.isNonEmptyArray(lineGroups)) return [];
+		const range = rangeFromLineGroups(lineGroups);
+		if (!range) return [];
 
 		return {
 			hunkHeader: hunkHeaderFromHunk(hunk),
 			lineGroups,
-			range: rangeFromLineGroups(lineGroups),
+			range,
 		};
 	});
 

@@ -246,7 +246,7 @@ impl Subcommands {
             Subcommands::Edit { .. } => Edit,
             #[cfg(feature = "legacy")]
             Subcommands::Clean { .. } => Clean,
-            Subcommands::Onboarding | Subcommands::EvalHook => Unknown,
+            Subcommands::Onboarding => Unknown,
             Subcommands::AgentLog { .. } => Unknown,
             Subcommands::External(_) => External,
         }

@@ -15,7 +15,6 @@ import {
 	type NavigationIndex,
 } from "#ui/workspace/navigation-index.ts";
 import { useHotkeySequences, useHotkeys } from "@tanstack/react-hotkeys";
-import { identity } from "effect";
 
 export type SelectionScope = "outline" | "files" | "diff";
 const allSelectionScopes: Array<SelectionScope> = ["outline", "files", "diff"];
@@ -81,7 +80,7 @@ export const resolveNavigationIndexSelection = <T>(
 
 export const useFilesSelection = (projectId: string, navigationIndex: NavigationIndex<string>) => {
 	const selection = useAppSelector((state) => selectProjectSelectionFiles(state, projectId));
-	return resolveNavigationIndexSelection(navigationIndex, selection, identity);
+	return resolveNavigationIndexSelection(navigationIndex, selection, (item) => item);
 };
 
 export const useOutlineSelection = ({

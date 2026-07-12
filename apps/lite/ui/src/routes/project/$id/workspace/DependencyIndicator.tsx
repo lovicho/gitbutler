@@ -2,24 +2,23 @@ import { projectActions } from "#ui/projects/state.ts";
 import { useAppDispatch } from "#ui/store.ts";
 import { TooltipPopup } from "#ui/components/Tooltip.tsx";
 import { Tooltip } from "@base-ui/react";
-import { Array, pipe } from "effect";
 import { ComponentProps, FC } from "react";
 
 export const DependencyIndicator: FC<
 	{
 		projectId: string;
-		commitIds: Array.NonEmptyArray<string>;
+		commitIds: Array<string>;
 		branchNameByCommitId: (commitId: string) => string | undefined;
 	} & ComponentProps<"button">
 > = ({ projectId, commitIds, branchNameByCommitId, ...restProps }) => {
 	const dispatch = useAppDispatch();
-	const branchNames = pipe(
-		commitIds,
-		Array.flatMapNullable((commitId) => branchNameByCommitId(commitId)),
-		Array.dedupe,
+	const branchNames = new Set(
+		commitIds.flatMap((commitId) => branchNameByCommitId(commitId) ?? []),
 	);
 	const tooltip =
-		branchNames.length > 0 ? `Depends on ${branchNames.join(", ")}` : "Unknown dependencies";
+		branchNames.size > 0
+			? `Depends on ${branchNames.values().toArray().join(", ")}`
+			: "Unknown dependencies";
 	const highlightCommitIds = () => {
 		dispatch(
 			projectActions.setHighlightedCommitIds({
