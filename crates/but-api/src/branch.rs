@@ -7,7 +7,7 @@ use but_api_macros::but_api;
 use but_core::{
     DryRun, RefMetadata, WORKSPACE_REF_NAME,
     branch::unique_canned_refname,
-    ref_metadata::{ProjectMeta, StackId},
+    ref_metadata::StackId,
     sync::RepoExclusive,
     ui::TreeChanges,
     update_head_reference,
@@ -22,8 +22,9 @@ use but_workspace::branch::{
     apply::{WorkspaceMerge, WorkspaceReferenceNaming},
     integrate_branch_upstream::InteractiveIntegration,
 };
+use gix::refs::Target;
 use gix::refs::transaction::PreviousValue;
-use tracing::instrument;
+use tracing::{instrument, warn};
 
 /// Outcome after moving a branch.
 pub struct MoveBranchResult {
@@ -46,6 +47,15 @@ pub struct BranchRemoveResult {
     pub workspace: WorkspaceState,
 }
 
+/// Outcome after renaming a branch.
+#[derive(Debug)]
+pub struct BranchRenameResult {
+    /// Workspace state after renaming the branch.
+    pub workspace: WorkspaceState,
+    /// The full name of the renamed reference.
+    pub new_ref: gix::refs::FullName,
+}
+
 /// Outcome after integrating a branch with an interactive integration plan.
 pub struct IntegrateBranchResult {
     /// Workspace state after applying or previewing the integration.
@@ -59,75 +69,6 @@ pub struct BranchCheckoutResult {
     pub workspace: WorkspaceState,
 }
 
-/// Set the project default target without applying branches or entering managed workspace mode.
-///
-/// This acquires exclusive worktree access from `ctx` before updating project metadata.
-pub fn set_default_target(
-    ctx: &mut Context,
-    target_ref: &gix::refs::FullNameRef,
-    push_remote: Option<String>,
-) -> anyhow::Result<ProjectMeta> {
-    let mut guard = ctx.exclusive_worktree_access();
-    set_default_target_with_perm(ctx, target_ref, push_remote, guard.write_permission())
-}
-
-/// Set the project default target under caller-held exclusive repository access.
-///
-/// This is metadata-only: it writes [`ProjectMeta`] and deliberately does not create stack
-/// metadata, create or update `gitbutler/workspace`, checkout any ref, update the index, record
-/// oplog state, or install managed workspace hooks.
-pub fn set_default_target_with_perm(
-    ctx: &mut Context,
-    target_ref: &gix::refs::FullNameRef,
-    push_remote: Option<String>,
-    _perm: &mut RepoExclusive,
-) -> anyhow::Result<ProjectMeta> {
-    if !target_ref.as_bstr().starts_with_str("refs/remotes/") {
-        bail!(
-            "Default target must be a remote-tracking branch under refs/remotes, got '{}'",
-            target_ref.as_bstr()
-        );
-    }
-
-    let (target_ref, target_commit_id) = {
-        let repo = ctx.repo.get()?;
-        let mut target_reference = repo
-            .find_reference(target_ref)
-            .with_context(|| format!("Could not find target ref '{}'", target_ref.as_bstr()))?;
-        let target_ref_commit = target_reference
-            .peel_to_commit()
-            .with_context(|| {
-                format!(
-                    "Target ref '{}' does not point to a commit",
-                    target_ref.as_bstr()
-                )
-            })?
-            .id;
-        let current_head_commit = repo
-            .head()
-            .context("Failed to get HEAD reference")?
-            .peel_to_commit()
-            .context("Failed to peel HEAD reference to commit")?
-            .id;
-        let target_commit_id = repo
-            .merge_base(current_head_commit, target_ref_commit)
-            .with_context(|| {
-                format!(
-                    "Failed to calculate merge base between {current_head_commit} and {target_ref_commit}"
-                )
-            })?
-            .detach();
-        (target_ref.to_owned(), target_commit_id)
-    };
-
-    let mut project_meta = ctx.project_meta()?;
-    project_meta.target_ref = Some(target_ref);
-    project_meta.target_commit_id = Some(target_commit_id);
-    project_meta.push_remote = push_remote;
-    ctx.set_project_meta(project_meta.clone())?;
-    Ok(project_meta)
-}
-
 /// JSON transport types for branch APIs.
 pub mod json {
     use but_workspace::{branch::apply::OutcomeStatus, ui::ref_info::BranchReference};
@@ -137,6 +78,7 @@ pub mod json {
         BranchCheckoutResult as InternalBranchCheckoutResult,
         BranchCreateResult as InternalBranchCreateResult,
         BranchRemoveResult as InternalBranchRemoveResult,
+        BranchRenameResult as InternalBranchRenameResult,
         IntegrateBranchResult as InternalIntegrateBranchResult,
         MoveBranchResult as InternalMoveBranchResult,
     };
@@ -275,6 +217,30 @@ pub mod json {
         fn try_from(value: InternalBranchRemoveResult) -> Result<Self, Self::Error> {
             Ok(Self {
                 workspace: value.workspace.try_into()?,
+            })
+        }
+    }
+
+    /// JSON transport type for renaming a branch.
+    #[derive(Debug, Serialize)]
+    #[cfg_attr(feature = "export-schema", derive(schemars::JsonSchema))]
+    #[serde(rename_all = "camelCase")]
+    pub struct BranchRenameResult {
+        /// Workspace state after renaming the branch.
+        pub workspace: crate::json::WorkspaceState,
+        /// The full name of the renamed reference.
+        pub new_ref: BranchReference,
+    }
+    #[cfg(feature = "export-schema")]
+    but_schemars::register_sdk_type!(BranchRenameResult);
+
+    impl TryFrom<InternalBranchRenameResult> for BranchRenameResult {
+        type Error = anyhow::Error;
+
+        fn try_from(value: InternalBranchRenameResult) -> Result<Self, Self::Error> {
+            Ok(Self {
+                workspace: value.workspace.try_into()?,
+                new_ref: value.new_ref.into(),
             })
         }
     }
@@ -1006,6 +972,301 @@ pub fn branch_remove_with_perm(
     Ok(BranchRemoveResult { workspace })
 }
 
+/// Renames the local branch `ref_name` to `new_name`, moving its git reference and
+/// its metadata (including its `branch_order` entry) and, when it is the
+/// checked-out branch, re-pointing `HEAD` at the new name.
+///
+/// `new_name` is a short branch name that is normalized into a valid
+/// `refs/heads/<name>` reference before the rename, so callers don't have to
+/// pre-normalize it. This acquires exclusive worktree access from `ctx`, records
+/// an oplog snapshot on success, and returns the post-operation workspace view.
+/// It requires no stack id and works in both managed and ad-hoc/single-branch
+/// workspaces.
+#[but_api(napi, try_from = json::BranchRenameResult)]
+#[instrument(err(Debug))]
+pub fn branch_rename(
+    ctx: &mut but_ctx::Context,
+    #[but_api(crate::json::FullNameBytes)] ref_name: gix::refs::FullName,
+    new_name: String,
+) -> anyhow::Result<BranchRenameResult> {
+    let mut guard = ctx.exclusive_worktree_access();
+    branch_rename_with_perm(ctx, ref_name, new_name, guard.write_permission())
+}
+
+/// Rename the local branch `ref_name` to `new_name` under caller-held exclusive
+/// repository access and record an oplog snapshot on success.
+///
+/// See [`branch_rename()`] for the higher-level behaviour.
+pub fn branch_rename_with_perm(
+    ctx: &mut but_ctx::Context,
+    ref_name: gix::refs::FullName,
+    new_name: String,
+    perm: &mut RepoExclusive,
+) -> anyhow::Result<BranchRenameResult> {
+    // This only renames local branches. Reject anything else up front (mirroring
+    // `branch_checkout_with_perm`) so an SDK/server caller can't pass e.g.
+    // `refs/remotes/origin/foo` and have us create a local branch while deleting the
+    // remote-tracking ref.
+    if ref_name.category() != Some(gix::refs::Category::LocalBranch) {
+        bail!(
+            "Can only rename local branches under refs/heads, got '{}'",
+            ref_name.as_bstr()
+        );
+    }
+
+    // Normalize the requested name into a valid local branch reference. This is the non-legacy
+    // counterpart to the old `normalize_branch_name`, so any caller can pass a raw, human-entered
+    // name and get a valid ref.
+    let normalized = but_core::branch::normalize_short_name(new_name.as_str())?;
+    let new_ref = gix::refs::Category::LocalBranch.to_full_name(normalized.as_bstr())?;
+
+    // Renaming onto the same name is a no-op that still returns the current view.
+    if ref_name.as_ref() == new_ref.as_ref() {
+        let mut meta = ctx.meta()?;
+        let (repo, ws, _db) = ctx.workspace_mut_and_db_with_perm(perm)?;
+        repo.find_reference(ref_name.as_ref())
+            .with_context(|| format!("Branch '{}' does not exist", ref_name.shorten()))?;
+        let workspace = WorkspaceState::from_workspace(&ws, &mut meta, &repo, BTreeMap::new())?;
+        return Ok(BranchRenameResult { workspace, new_ref });
+    }
+
+    let maybe_oplog_entry = but_oplog::UnmaterializedOplogSnapshot::from_details_with_perm(
+        ctx,
+        SnapshotDetails::new(OperationKind::UpdateBranchName).with_trailers([
+            // Distinct keys (`previous_name` / `name`) so both survive `.find(key)` lookups on the
+            // consumer side; two `Name` trailers would collide and drop the second.
+            Trailer::PreviousName(ref_name.to_string()),
+            Trailer::Name(new_ref.to_string()),
+        ]),
+        perm.read_permission(),
+        DryRun::No,
+    );
+
+    // --- git reference + metadata mutation (borrows dropped before the reload below) ---
+    {
+        let mut meta = ctx.meta()?;
+        let (repo, _ws, _db) = ctx.workspace_mut_and_db_with_perm(perm)?;
+
+        let old_reference = repo
+            .find_reference(ref_name.as_ref())
+            .with_context(|| format!("Branch '{}' does not exist", ref_name.shorten()))?;
+        let target_id = old_reference.clone().peel_to_id()?.detach();
+
+        if repo.try_find_reference(new_ref.as_ref())?.is_some() {
+            bail_precondition!("A branch named '{}' already exists", new_ref.shorten());
+        }
+
+        // Also reject a destination that is free at the git level but still occupied in workspace
+        // metadata (e.g. a stale managed head or `branch_order` entry left behind after an external
+        // branch deletion). `meta.rename()` performs these same checks, but only *after* we would
+        // have moved the refs — bailing there would leave the repository renamed while the metadata
+        // stayed keyed by the old name. Preflighting here keeps the ref and metadata steps from
+        // diverging.
+        if meta.branch_opt(new_ref.as_ref())?.is_some()
+            || meta.branch_stack_order(new_ref.as_ref())?.is_some()
+        {
+            bail_precondition!("A branch named '{}' already exists", new_ref.shorten());
+        }
+
+        // Bail *before* mutating any refs if the branch is checked out in another worktree:
+        // otherwise the delete below would silently no-op and leave a partially-applied rename
+        // (new ref created, old ref still present). Unlike `branch_remove`, which performs no ref
+        // mutation before `SafeDelete` checks this condition, rename needs this explicit preflight.
+        // The current worktree is excluded here — if its HEAD is on the old branch it gets
+        // repointed below rather than blocking the rename.
+        let checkout_probe = but_core::branch::SafeDelete::new(&repo)?;
+        if let Some(dirs) = checkout_probe.worktree_dirs_with_ref(&old_reference) {
+            let current_workdir = repo.workdir();
+            let elsewhere: Vec<_> = dirs
+                .iter()
+                .filter(|dir| Some(dir.as_path()) != current_workdir)
+                .collect();
+            if !elsewhere.is_empty() {
+                bail_precondition!(
+                    "Refusing to rename a branch that is checked out elsewhere. Worktrees are: {elsewhere:?}"
+                );
+            }
+        }
+
+        // Whether HEAD (in this worktree) points at the old branch. If so it has to follow the
+        // rename to the new name; the commit is unchanged, so there is no worktree/index update to
+        // do — only the symbolic ref moves.
+        let head_on_old = repo
+            .head_name()
+            .ok()
+            .flatten()
+            .is_some_and(|head| head.as_ref() == ref_name.as_ref());
+
+        let prefix_related = refs_are_prefix_related(ref_name.as_ref(), new_ref.as_ref());
+        let mut backup_reference = None;
+        if prefix_related {
+            // One name is a directory prefix of the other (e.g. `foo` -> `foo/bar`), so the two refs
+            // cannot exist at the same time on disk. The usual create-then-delete order hits a
+            // directory/file conflict. Protect the commit with an internal backup ref before
+            // deleting the old branch. If destination creation fails, restore the source from this
+            // backup; on a later failure the backup remains available for recovery.
+            let backup_ref: gix::refs::FullName =
+                format!("refs/gitbutler/rename-backup/{}", uuid::Uuid::new_v4()).try_into()?;
+            backup_reference = Some(
+                repo.reference(
+                    backup_ref.as_ref(),
+                    target_id,
+                    PreviousValue::MustNotExist,
+                    "back up branch before rename",
+                )
+                .with_context(|| {
+                    format!(
+                        "Could not create recovery ref before renaming '{}'",
+                        ref_name.as_bstr()
+                    )
+                })?,
+            );
+
+            if let Err(delete_err) = old_reference.delete() {
+                if let Some(backup) = backup_reference.take()
+                    && let Err(err) = backup.delete()
+                {
+                    warn!(
+                        ?err,
+                        "failed to remove branch-rename recovery ref after source deletion failed"
+                    );
+                }
+                return Err(anyhow::Error::new(delete_err)
+                    .context(format!("Could not delete branch '{}'", ref_name.as_bstr())));
+            }
+            if let Err(create_err) = repo.reference(
+                new_ref.as_ref(),
+                target_id,
+                PreviousValue::MustNotExist,
+                "rename branch",
+            ) {
+                let create_err = anyhow::Error::new(create_err)
+                    .context(format!("Could not create branch '{}'", new_ref.as_bstr()));
+                match repo.reference(
+                    ref_name.as_ref(),
+                    target_id,
+                    PreviousValue::MustNotExist,
+                    "restore branch after failed rename",
+                ) {
+                    Ok(_) => {
+                        if let Some(backup) = backup_reference.take()
+                            && let Err(err) = backup.delete()
+                        {
+                            warn!(
+                                ?err,
+                                "failed to remove branch-rename recovery ref after restoring source"
+                            );
+                        }
+                        return Err(create_err);
+                    }
+                    Err(restore_err) => {
+                        let backup_name = backup_reference
+                            .as_ref()
+                            .map(|reference| reference.name().to_string())
+                            .unwrap_or_else(|| "<unknown>".into());
+                        return Err(create_err.context(format!(
+                            "Restoring source branch '{}' also failed: {restore_err}. The commit remains protected by recovery ref '{backup_name}'",
+                            ref_name.as_bstr()
+                        )));
+                    }
+                }
+            }
+            if head_on_old {
+                update_head_reference(
+                    &repo,
+                    Target::Symbolic(new_ref.clone()),
+                    false,
+                    "rename",
+                    new_ref.as_bstr(),
+                    repo.find_commit(target_id)?.parent_ids().count(),
+                )
+                .with_context(|| {
+                    let backup_name = backup_reference
+                        .as_ref()
+                        .map(|reference| reference.name().to_string())
+                        .unwrap_or_else(|| "<unknown>".into());
+                    format!(
+                        "Could not update HEAD to '{}'. Recovery ref '{backup_name}' was retained",
+                        new_ref.as_bstr()
+                    )
+                })?;
+            }
+        } else {
+            // Create the new reference at the same commit as the old one.
+            repo.reference(
+                new_ref.as_ref(),
+                target_id,
+                PreviousValue::MustNotExist,
+                "rename branch",
+            )
+            .with_context(|| format!("Could not create branch '{}'", new_ref.as_bstr()))?;
+
+            if head_on_old {
+                update_head_reference(
+                    &repo,
+                    Target::Symbolic(new_ref.clone()),
+                    false,
+                    "rename",
+                    new_ref.as_bstr(),
+                    repo.find_commit(target_id)?.parent_ids().count(),
+                )
+                .with_context(|| format!("Could not update HEAD to '{}'", new_ref.as_bstr()))?;
+            }
+
+            // Delete the old reference (HEAD has already moved off it, so this is allowed).
+            let safe_delete = but_core::branch::SafeDelete::new(&repo)?;
+            let out = safe_delete.delete_reference(&old_reference)?;
+            if let Some(paths) = out.checked_out_in_worktree_dirs {
+                bail_precondition!(
+                    "Refusing to rename a branch that is checked out elsewhere. Worktrees are: {paths:?}"
+                );
+            }
+        }
+
+        // Move all metadata (per-branch blob + branch-order entry) to the new name.
+        if let Err(err) = meta.rename(ref_name.as_ref(), new_ref.as_ref()) {
+            if let Some(backup) = backup_reference.as_ref() {
+                return Err(err).context(format!(
+                    "Could not rename branch metadata. Recovery ref '{}' was retained",
+                    backup.name()
+                ));
+            }
+            return Err(err);
+        }
+
+        if let Some(backup) = backup_reference
+            && let Err(err) = backup.delete()
+        {
+            warn!(?err, "failed to remove branch-rename recovery ref");
+        }
+    }
+
+    // Rebuild the workspace from scratch: this re-reads HEAD, so the moved-HEAD case needs no
+    // stale-entrypoint handling.
+    ctx.reload_repo_and_invalidate_workspace(perm)?;
+    if let Some(snapshot) = maybe_oplog_entry {
+        snapshot.commit(ctx, perm).ok();
+    }
+
+    let mut meta = ctx.meta()?;
+    let (repo, ws, _db) = ctx.workspace_mut_and_db_with_perm(perm)?;
+    let workspace = WorkspaceState::from_workspace(&ws, &mut meta, &repo, BTreeMap::new())?;
+    Ok(BranchRenameResult { workspace, new_ref })
+}
+
+/// Whether `a` and `b` are in a directory/file prefix relationship, i.e. one full ref name is a
+/// path-component prefix of the other (`refs/heads/foo` vs `refs/heads/foo/bar`). Such refs cannot
+/// coexist on disk, so a rename between them must delete the old ref *before* creating the new one,
+/// rather than the usual create-then-delete order. A shared prefix that is not on a `/` boundary
+/// (`foo` vs `foobar`) is not prefix-related.
+fn refs_are_prefix_related(a: &gix::refs::FullNameRef, b: &gix::refs::FullNameRef) -> bool {
+    fn is_dir_prefix(prefix: &bstr::BStr, full: &bstr::BStr) -> bool {
+        full.len() > prefix.len() && full.starts_with(prefix) && full[prefix.len()] == b'/'
+    }
+    let (a, b) = (a.as_bstr(), b.as_bstr());
+    is_dir_prefix(a, b) || is_dir_prefix(b, a)
+}
+
 /// Checks out an existing local branch and returns the resulting workspace state.
 ///
 /// This acquires exclusive worktree access from `ctx`, updates the worktree and
@@ -1297,7 +1558,7 @@ pub fn move_branch_with_perm(
     dry_run: DryRun,
     perm: &mut RepoExclusive,
 ) -> anyhow::Result<MoveBranchResult> {
-    branch_mutation_with_snapshot(
+    let (result, new_tip) = branch_mutation_with_snapshot(
         ctx,
         perm,
         OperationKind::MoveBranch,
@@ -1306,14 +1567,42 @@ pub fn move_branch_with_perm(
             let mut meta = ctx.meta()?;
             let (repo, mut ws, _) = ctx.workspace_mut_and_db_with_perm(perm)?;
             let editor = Editor::create(&mut ws, &mut meta, &repo)?;
-            let but_workspace::branch::move_branch::Outcome { rebase, ws_meta } =
-                but_workspace::branch::move_branch(editor, subject_branch, target_branch)?;
+            let but_workspace::branch::move_branch::Outcome {
+                mut rebase,
+                ws_meta,
+                new_tip,
+                branch_stack_order,
+            } = but_workspace::branch::move_branch(editor, subject_branch, target_branch)?;
 
-            Ok(MoveBranchResult {
+            // In single-branch mode the reorder is returned rather than persisted. Only write it for
+            // real runs so a dry-run preview never mutates the user's branch-order metadata.
+            let is_dry_run: bool = dry_run.into();
+            if let Some(order) = branch_stack_order.filter(|_| !is_dry_run) {
+                let (_repo, meta) = rebase.repo_and_meta_mut();
+                meta.set_branch_stack_order(&order)?;
+            }
+
+            let result = MoveBranchResult {
                 workspace: branch_workspace_from_rebase(rebase, ws_meta, &repo, dry_run)?,
-            })
+            };
+            Ok((result, new_tip))
         },
-    )
+    )?;
+
+    // In single-branch (ad-hoc) mode a move can place the subject above the checked-out tip. The
+    // operation doesn't move `HEAD`, so check out the new tip here to keep the moved branch part of
+    // the projected workspace (mirroring `create_reference`). Skipped on dry runs.
+    let is_dry_run: bool = dry_run.into();
+    if let Some(new_tip) = new_tip
+        && !is_dry_run
+    {
+        let checkout = branch_checkout_with_perm(ctx, new_tip, perm)?;
+        return Ok(MoveBranchResult {
+            workspace: checkout.workspace,
+        });
+    }
+
+    Ok(result)
 }
 
 /// Tears off a branch using the behavior described by [`tear_off_branch_with_perm()`].
@@ -1358,8 +1647,9 @@ pub fn tear_off_branch_with_perm(
             let mut meta = ctx.meta()?;
             let (repo, mut ws, _) = ctx.workspace_mut_and_db_with_perm(perm)?;
             let editor = Editor::create(&mut ws, &mut meta, &repo)?;
-            let but_workspace::branch::move_branch::Outcome { rebase, ws_meta } =
-                but_workspace::branch::tear_off_branch(editor, subject_branch, None)?;
+            let but_workspace::branch::move_branch::Outcome {
+                rebase, ws_meta, ..
+            } = but_workspace::branch::tear_off_branch(editor, subject_branch, None)?;
 
             Ok(MoveBranchResult {
                 workspace: branch_workspace_from_rebase(rebase, ws_meta, &repo, dry_run)?,
@@ -1419,393 +1709,4 @@ fn branch_workspace_from_rebase<M: but_core::RefMetadata>(
         repo,
         materialized.history.commit_mappings(),
     )
-}
-
-#[cfg(test)]
-mod tests {
-    use std::path::Path;
-
-    use but_core::{RefMetadata, ref_metadata::ProjectMeta};
-    use but_rebase::graph_rebase::mutate::InsertSide;
-    use but_testsupport::{CommandExt, git_at_dir, open_repo};
-
-    fn repo_with_feature_branch() -> anyhow::Result<(gix::Repository, tempfile::TempDir)> {
-        let tmp = tempfile::tempdir()?;
-        git_at_dir(tmp.path()).args(["init"]).run();
-        git_at_dir(tmp.path())
-            .args(["config", "user.name", "GitButler"])
-            .run();
-        git_at_dir(tmp.path())
-            .args(["config", "user.email", "gitbutler@example.com"])
-            .run();
-        write_file(tmp.path(), "file.txt", "one\n")?;
-        git_at_dir(tmp.path()).args(["add", "file.txt"]).run();
-        git_at_dir(tmp.path()).args(["commit", "-m", "one"]).run();
-        git_at_dir(tmp.path()).args(["branch", "feature"]).run();
-        git_at_dir(tmp.path())
-            .args(["config", "remote.origin.url", "../origin"])
-            .run();
-        git_at_dir(tmp.path())
-            .args(["update-ref", "refs/remotes/origin/main", "HEAD"])
-            .run();
-        write_file(tmp.path(), "file.txt", "two\n")?;
-        git_at_dir(tmp.path()).args(["commit", "-am", "two"]).run();
-
-        Ok((open_repo(tmp.path())?, tmp))
-    }
-
-    fn set_project_target_to_feature(repo: &gix::Repository) -> anyhow::Result<gix::ObjectId> {
-        let mut feature = repo.find_reference("refs/heads/feature")?;
-        let target_commit_id = feature.peel_to_id()?.detach();
-        ProjectMeta {
-            target_ref: Some("refs/remotes/origin/main".try_into()?),
-            target_commit_id: Some(target_commit_id),
-            push_remote: Some("origin".into()),
-        }
-        .persist_to_local_config(repo)?;
-        Ok(target_commit_id)
-    }
-
-    fn write_file(root: &Path, relative_path: &str, content: &str) -> anyhow::Result<()> {
-        std::fs::write(root.join(relative_path), content)?;
-        Ok(())
-    }
-
-    #[test]
-    fn set_default_target_accepts_remote_tracking_ref_and_persists_metadata() -> anyhow::Result<()>
-    {
-        let (repo, _tmp) = repo_with_feature_branch()?;
-        let mut ctx = but_ctx::Context::from_repo_for_testing(repo)?.with_memory_app_cache();
-        let target_ref = gix::refs::FullName::try_from("refs/remotes/origin/main")?;
-
-        let project_meta =
-            super::set_default_target(&mut ctx, target_ref.as_ref(), Some("origin".into()))?;
-
-        let stored_meta = ctx.project_meta()?;
-        assert_eq!(project_meta, stored_meta);
-        assert_eq!(stored_meta.target_ref.as_ref(), Some(&target_ref));
-        assert!(stored_meta.target_commit_id.is_some());
-        assert_eq!(stored_meta.push_remote.as_deref(), Some("origin"));
-
-        Ok(())
-    }
-
-    #[test]
-    fn set_default_target_rejects_local_branch_refs() -> anyhow::Result<()> {
-        let (repo, _tmp) = repo_with_feature_branch()?;
-        let mut ctx = but_ctx::Context::from_repo_for_testing(repo)?.with_memory_app_cache();
-        let target_ref = gix::refs::FullName::try_from("refs/heads/feature")?;
-
-        let err = super::set_default_target(&mut ctx, target_ref.as_ref(), None)
-            .expect_err("local branches are not valid default targets");
-        assert_eq!(
-            err.to_string(),
-            "Default target must be a remote-tracking branch under refs/remotes, got 'refs/heads/feature'"
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn set_default_target_uses_merge_base_not_target_tip() -> anyhow::Result<()> {
-        let (_repo, tmp) = repo_with_feature_branch()?;
-        git_at_dir(tmp.path()).args(["checkout", "feature"]).run();
-        write_file(tmp.path(), "feature.txt", "feature\n")?;
-        git_at_dir(tmp.path()).args(["add", "feature.txt"]).run();
-        git_at_dir(tmp.path())
-            .args(["commit", "-m", "feature"])
-            .run();
-        git_at_dir(tmp.path())
-            .args(["update-ref", "refs/remotes/origin/feature", "HEAD"])
-            .run();
-        git_at_dir(tmp.path()).args(["checkout", "main"]).run();
-
-        let repo = open_repo(tmp.path())?;
-        let target_ref = gix::refs::FullName::try_from("refs/remotes/origin/feature")?;
-        let target_tip = repo
-            .find_reference(target_ref.as_ref())?
-            .peel_to_id()?
-            .detach();
-        let current_head = repo.head_id()?.detach();
-        let expected_merge_base = repo.merge_base(current_head, target_tip)?.detach();
-        assert_ne!(expected_merge_base, target_tip);
-
-        let mut ctx = but_ctx::Context::from_repo_for_testing(repo)?.with_memory_app_cache();
-        let project_meta = super::set_default_target(&mut ctx, target_ref.as_ref(), None)?;
-
-        assert_eq!(project_meta.target_commit_id, Some(expected_merge_base));
-        assert_eq!(project_meta.push_remote, None);
-
-        Ok(())
-    }
-
-    #[test]
-    fn checkout_branch_switches_head_and_returns_workspace() -> anyhow::Result<()> {
-        let (repo, _tmp) = repo_with_feature_branch()?;
-        let mut ctx = but_ctx::Context::from_repo_for_testing(repo)?.with_memory_app_cache();
-        let branch = gix::refs::FullName::try_from("refs/heads/feature")?;
-        let result = super::branch_checkout(&mut ctx, branch)?;
-
-        let repo = ctx.repo.get()?;
-        let head_name = repo.head_name()?.expect("HEAD is symbolic after checkout");
-        assert_eq!(head_name.as_bstr(), "refs/heads/feature");
-        assert_workspace_ref(&result.workspace, "refs/heads/feature");
-
-        Ok(())
-    }
-
-    /// Assert the mutation response's workspace projection contains `expected`
-    /// as its checked-out ref, in whichever projection flavor this build uses.
-    #[cfg(not(feature = "graph-workspace"))]
-    fn assert_workspace_ref(workspace: &crate::WorkspaceState, expected: &str) {
-        let workspace_ref = workspace
-            .head_info
-            .workspace_ref_info
-            .as_ref()
-            .expect("checked out branch is the workspace ref");
-        assert_eq!(workspace_ref.ref_name.as_bstr(), expected);
-    }
-
-    /// Assert the mutation response's workspace projection contains `expected`
-    /// as its checked-out ref, in whichever projection flavor this build uses.
-    #[cfg(feature = "graph-workspace")]
-    fn assert_workspace_ref(workspace: &crate::WorkspaceState, expected: &str) {
-        use but_workspace::ui::workspace::DetailedGraphRowData;
-        assert!(
-            workspace.graph_workspace.stacks.iter().any(|stack| {
-                stack.rows.iter().any(|row| {
-                    matches!(
-                        &row.data,
-                        DetailedGraphRowData::Reference(reference)
-                            if reference.ref_name.full_name == expected
-                    )
-                })
-            }),
-            "checked out branch '{expected}' appears in the graph workspace"
-        );
-    }
-
-    #[test]
-    fn branch_create_above_checked_out_ref_checks_out_new_ref_in_ad_hoc_workspace()
-    -> anyhow::Result<()> {
-        let (repo, _tmp) = repo_with_feature_branch()?;
-        let mut ctx = but_ctx::Context::from_repo_for_testing(repo)?.with_memory_app_cache();
-        let new_ref = gix::refs::FullName::try_from("refs/heads/top")?;
-        let anchor_ref = gix::refs::FullName::try_from("refs/heads/main")?;
-
-        let result = super::branch_create(
-            &mut ctx,
-            Some(new_ref.clone()),
-            super::json::BranchCreatePlacement::Dependent {
-                relative_to: crate::commit::json::RelativeTo::Reference(anchor_ref.clone()),
-                side: InsertSide::Above,
-            },
-        )?;
-
-        let repo = ctx.repo.get()?;
-        let head_name = repo
-            .head_name()?
-            .expect("creating above checked-out branch checks out the new ref");
-        assert_eq!(head_name.as_ref(), new_ref.as_ref());
-        assert_workspace_ref(&result.workspace, "refs/heads/top");
-
-        let order = ctx
-            .meta()?
-            .branch_stack_order(anchor_ref.as_ref())?
-            .expect("ad-hoc branch creation above a local ref persists branch order");
-        assert_eq!(order, vec![new_ref, anchor_ref]);
-
-        Ok(())
-    }
-
-    #[test]
-    fn branch_create_below_checked_out_ref_keeps_head_in_ad_hoc_workspace() -> anyhow::Result<()> {
-        let (repo, _tmp) = repo_with_feature_branch()?;
-        let mut ctx = but_ctx::Context::from_repo_for_testing(repo)?.with_memory_app_cache();
-        let new_ref = gix::refs::FullName::try_from("refs/heads/bottom")?;
-        let anchor_ref = gix::refs::FullName::try_from("refs/heads/main")?;
-
-        let result = super::branch_create(
-            &mut ctx,
-            Some(new_ref.clone()),
-            super::json::BranchCreatePlacement::Dependent {
-                relative_to: crate::commit::json::RelativeTo::Reference(anchor_ref.clone()),
-                side: InsertSide::Below,
-            },
-        )?;
-
-        // Creating below the checked-out branch checks nothing out: HEAD stays on the anchor.
-        let repo = ctx.repo.get()?;
-        let head_name = repo
-            .head_name()?
-            .expect("HEAD remains symbolic after create-below");
-        assert_eq!(head_name.as_ref(), anchor_ref.as_ref());
-        assert_workspace_ref(&result.workspace, "refs/heads/main");
-        assert!(repo.try_find_reference(new_ref.as_ref())?.is_some());
-
-        let order = ctx
-            .meta()?
-            .branch_stack_order(anchor_ref.as_ref())?
-            .expect("ad-hoc branch creation below a local ref persists branch order");
-        assert_eq!(order, vec![anchor_ref, new_ref]);
-
-        Ok(())
-    }
-
-    /// Create `new_ref` as an empty branch directly above `anchor`, mirroring
-    /// the ad-hoc "create dependent branch above" flow (which also checks the
-    /// new branch out).
-    fn create_empty_branch_above(
-        ctx: &mut but_ctx::Context,
-        new_ref: &gix::refs::FullName,
-        anchor: &gix::refs::FullName,
-    ) -> anyhow::Result<()> {
-        super::branch_create(
-            ctx,
-            Some(new_ref.clone()),
-            super::json::BranchCreatePlacement::Dependent {
-                relative_to: crate::commit::json::RelativeTo::Reference(anchor.clone()),
-                side: InsertSide::Above,
-            },
-        )?;
-        Ok(())
-    }
-
-    #[test]
-    fn branch_remove_deletes_middle_empty_branch_and_keeps_head() -> anyhow::Result<()> {
-        let (repo, _tmp) = repo_with_feature_branch()?;
-        let mut ctx = but_ctx::Context::from_repo_for_testing(repo)?.with_memory_app_cache();
-        let main = gix::refs::FullName::try_from("refs/heads/main")?;
-        let middle = gix::refs::FullName::try_from("refs/heads/middle")?;
-        let tip = gix::refs::FullName::try_from("refs/heads/tip")?;
-
-        // Stack two empty branches above the checked-out `main`: [tip, middle, main].
-        create_empty_branch_above(&mut ctx, &middle, &main)?;
-        create_empty_branch_above(&mut ctx, &tip, &middle)?;
-
-        super::branch_remove(&mut ctx, middle.clone())?;
-
-        let repo = ctx.repo.get()?;
-        // Removing a branch that isn't checked out leaves HEAD on the tip.
-        assert_eq!(
-            repo.head_name()?.expect("HEAD is symbolic").as_ref(),
-            tip.as_ref()
-        );
-        assert!(repo.try_find_reference(middle.as_ref())?.is_none());
-        // The order relinks the tip straight onto the base.
-        let order = ctx
-            .meta()?
-            .branch_stack_order(tip.as_ref())?
-            .expect("branch order still persisted");
-        assert_eq!(order, vec![tip, main]);
-
-        Ok(())
-    }
-
-    #[test]
-    fn branch_remove_checked_out_empty_tip_moves_head_to_ref_below() -> anyhow::Result<()> {
-        let (repo, _tmp) = repo_with_feature_branch()?;
-        let mut ctx = but_ctx::Context::from_repo_for_testing(repo)?.with_memory_app_cache();
-        let main = gix::refs::FullName::try_from("refs/heads/main")?;
-        let middle = gix::refs::FullName::try_from("refs/heads/middle")?;
-        let tip = gix::refs::FullName::try_from("refs/heads/tip")?;
-
-        // [tip, middle, main] with HEAD on the empty `tip`.
-        create_empty_branch_above(&mut ctx, &middle, &main)?;
-        create_empty_branch_above(&mut ctx, &tip, &middle)?;
-
-        let result = super::branch_remove(&mut ctx, tip.clone())?;
-
-        let repo = ctx.repo.get()?;
-        // HEAD lands on the reference that was directly underneath the removed tip.
-        assert_eq!(
-            repo.head_name()?.expect("HEAD is symbolic").as_ref(),
-            middle.as_ref()
-        );
-        assert!(repo.try_find_reference(tip.as_ref())?.is_none());
-        assert_workspace_ref(&result.workspace, "refs/heads/middle");
-
-        let order = ctx
-            .meta()?
-            .branch_stack_order(middle.as_ref())?
-            .expect("branch order still persisted");
-        assert_eq!(order, vec![middle, main]);
-
-        Ok(())
-    }
-
-    #[test]
-    fn branch_remove_rejects_checked_out_branch_with_commits() -> anyhow::Result<()> {
-        let (repo, _tmp) = repo_with_feature_branch()?;
-        let mut ctx = but_ctx::Context::from_repo_for_testing(repo)?.with_memory_app_cache();
-        let main = gix::refs::FullName::try_from("refs/heads/main")?;
-
-        let err = super::branch_remove(&mut ctx, main.clone())
-            .expect_err("cannot delete the checked-out branch that owns commits");
-        assert!(
-            err.to_string().contains("contains commits"),
-            "unexpected error: {err}"
-        );
-
-        // Nothing was removed.
-        let repo = ctx.repo.get()?;
-        assert!(repo.try_find_reference(main.as_ref())?.is_some());
-        assert_eq!(
-            repo.head_name()?.expect("HEAD is symbolic").as_ref(),
-            main.as_ref()
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn checkout_branch_rejects_remote_refs() -> anyhow::Result<()> {
-        let (repo, _tmp) = repo_with_feature_branch()?;
-        let mut ctx = but_ctx::Context::from_repo_for_testing(repo)?.with_memory_app_cache();
-        let branch = gix::refs::FullName::try_from("refs/remotes/origin/main")?;
-
-        let err = super::branch_checkout(&mut ctx, branch)
-            .expect_err("only local branch refs can be checked out");
-        assert_eq!(
-            err.to_string(),
-            "Can only check out local branches under refs/heads, got 'refs/remotes/origin/main'"
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn branch_checkout_new_creates_named_branch_at_target_and_checks_it_out() -> anyhow::Result<()>
-    {
-        let (repo, _tmp) = repo_with_feature_branch()?;
-        let target_commit_id = set_project_target_to_feature(&repo)?;
-        let mut ctx = but_ctx::Context::from_repo_for_testing(repo)?.with_memory_app_cache();
-
-        let result = super::branch_checkout_new(&mut ctx, Some("new branch".into()))?;
-
-        let repo = ctx.repo.get()?;
-        let head_name = repo.head_name()?.expect("HEAD is symbolic after checkout");
-        assert_eq!(head_name.as_bstr(), "refs/heads/new-branch");
-        let mut created = repo.find_reference("refs/heads/new-branch")?;
-        assert_eq!(created.peel_to_id()?.detach(), target_commit_id);
-        assert_workspace_ref(&result.workspace, "refs/heads/new-branch");
-
-        Ok(())
-    }
-
-    #[test]
-    fn branch_checkout_new_rejects_existing_explicit_name() -> anyhow::Result<()> {
-        let (repo, _tmp) = repo_with_feature_branch()?;
-        set_project_target_to_feature(&repo)?;
-        let mut ctx = but_ctx::Context::from_repo_for_testing(repo)?.with_memory_app_cache();
-
-        let err = super::branch_checkout_new(&mut ctx, Some("feature".into()))
-            .expect_err("explicit names must not be uniquified");
-        assert_eq!(
-            err.to_string(),
-            "Branch 'refs/heads/feature' already exists"
-        );
-
-        Ok(())
-    }
 }

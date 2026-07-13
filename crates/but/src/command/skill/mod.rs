@@ -2,15 +2,20 @@ use std::{fmt::Write as _, path::PathBuf};
 
 use anyhow::{Context as _, Result};
 use but_ctx::Context;
-use chrono::{DateTime, Duration, Utc};
-use command_group::AsyncCommandGroup;
+// Test-override-aware (`E2E_TEST_APP_DATA_DIR`), so skill discovery and
+// installation never touch the real home directory under test.
+use but_path::home_dir;
 use serde::Serialize;
 
 use crate::{
     args::skill,
     theme::{self, Paint},
-    utils::OutputChannel,
+    utils::{OutputChannel, detect_agent::Agent},
 };
+
+mod freshness;
+use freshness::agent_default_install_path;
+pub(crate) use freshness::{agent_skill_notice, agent_skill_update_notice};
 
 /// Error type for user-initiated cancellation
 #[derive(Debug, Clone, Copy)]
@@ -25,15 +30,10 @@ impl std::fmt::Display for UserCancelled {
 impl std::error::Error for UserCancelled {}
 
 // Embedded skill files
-const SKILL_MD: &[u8] = include_bytes!("../../skill/SKILL.md");
-const CONCEPTS_MD: &[u8] = include_bytes!("../../skill/references/concepts.md");
-const EXAMPLES_MD: &[u8] = include_bytes!("../../skill/references/examples.md");
-const REFERENCE_MD: &[u8] = include_bytes!("../../skill/references/reference.md");
-/// Minimum time between agent-triggered skill freshness checks. Long, because
-/// staleness is auto-repaired rather than waiting on the agent to act; the
-/// debounce only bounds the filesystem-check overhead. The timestamp lives in
-/// the pre-existing `agent-skill-notice` cache table.
-const AGENT_SKILL_CHECK_DEBOUNCE_HOURS: i64 = 12;
+const SKILL_MD: &[u8] = include_bytes!("../../../skill/SKILL.md");
+const CONCEPTS_MD: &[u8] = include_bytes!("../../../skill/references/concepts.md");
+const EXAMPLES_MD: &[u8] = include_bytes!("../../../skill/references/examples.md");
+const REFERENCE_MD: &[u8] = include_bytes!("../../../skill/references/reference.md");
 
 /// Metadata for a skill file to be installed
 struct SkillFile {
@@ -86,6 +86,13 @@ const SKILL_FILES: &[SkillFile] = &[
     },
 ];
 
+fn skill_files_in_write_order() -> impl Iterator<Item = &'static SkillFile> {
+    SKILL_FILES
+        .iter()
+        .filter(|file| !file.is_main_skill_file())
+        .chain(SKILL_FILES.iter().filter(|file| file.is_main_skill_file()))
+}
+
 /// Represents a skill installation location format
 #[derive(Debug, Clone)]
 struct SkillFormat {
@@ -107,6 +114,15 @@ enum SkillFormatAvailability {
 }
 
 impl SkillFormat {
+    const fn global(name: &'static str, path_components: &'static [&'static str]) -> Self {
+        Self {
+            name,
+            description: "Agent-specific global skill format",
+            availability: SkillFormatAvailability::GlobalOnly,
+            path_components,
+        }
+    }
+
     /// Get the actual installation path given a base directory
     fn get_install_path(&self, base_dir: &std::path::Path) -> PathBuf {
         join_relative_path(base_dir, self.path_components)
@@ -137,10 +153,13 @@ impl SkillFormat {
 /// the same locations that `but skill check`/install/update discover, instead of
 /// duplicating (and drifting from) these paths.
 pub(crate) fn path_components_for(name: &str, global: bool) -> Option<&'static [&'static str]> {
+    skill_format_for_name(name, global).map(|format| format.path_components)
+}
+
+fn skill_format_for_name(name: &str, global: bool) -> Option<&'static SkillFormat> {
     SKILL_FORMATS
         .iter()
         .find(|format| format.name == name && format.is_available_for(global))
-        .map(|format| format.path_components)
 }
 
 /// Join a relative path from components using platform-native separators.
@@ -168,10 +187,11 @@ const SKILL_FORMATS: &[SkillFormat] = &[
     },
     SkillFormat {
         name: "OpenCode",
-        description: "OpenCode AI skill format",
-        availability: SkillFormatAvailability::LocalAndGlobal,
+        description: "OpenCode local skill format",
+        availability: SkillFormatAvailability::LocalOnly,
         path_components: &[".opencode", "skills", "gitbutler"],
     },
+    SkillFormat::global("OpenCode", &[".config", "opencode", "skills", "gitbutler"]),
     SkillFormat {
         name: "Codex",
         description: "Codex skill format",
@@ -198,11 +218,53 @@ const SKILL_FORMATS: &[SkillFormat] = &[
     },
     SkillFormat {
         name: "Windsurf",
-        description: "Windsurf skill format",
-        availability: SkillFormatAvailability::LocalAndGlobal,
+        description: "Windsurf local skill format",
+        availability: SkillFormatAvailability::LocalOnly,
         path_components: &[".windsurf", "skills", "gitbutler"],
     },
+    SkillFormat::global("Windsurf", &[".codeium", "windsurf", "skills", "gitbutler"]),
+    SkillFormat::global("Gemini CLI", &[".gemini", "skills", "gitbutler"]),
+    SkillFormat::global("Augment", &[".augment", "skills", "gitbutler"]),
+    SkillFormat::global(
+        "Antigravity",
+        &[".gemini", "antigravity", "skills", "gitbutler"],
+    ),
+    SkillFormat::global(
+        "Universal Agents",
+        &[".config", "agents", "skills", "gitbutler"],
+    ),
+    SkillFormat::global("Crush", &[".config", "crush", "skills", "gitbutler"]),
+    SkillFormat::global("Goose", &[".config", "goose", "skills", "gitbutler"]),
+    SkillFormat::global("Roo Code", &[".roo", "skills", "gitbutler"]),
+    SkillFormat::global("Trae", &[".trae", "skills", "gitbutler"]),
+    SkillFormat::global("Tabnine CLI", &[".tabnine", "agent", "skills", "gitbutler"]),
+    SkillFormat::global("Pi", &[".pi", "agent", "skills", "gitbutler"]),
+    SkillFormat::global("Devin", &[".config", "devin", "skills", "gitbutler"]),
 ];
+
+fn skill_format_for_agent(agent: Agent, global: bool) -> Option<&'static SkillFormat> {
+    let name = match agent {
+        Agent::Codex => "Codex",
+        Agent::ClaudeCode | Agent::ClaudeCodeCowork => "Claude Code",
+        Agent::Cursor | Agent::CursorCli => "Cursor",
+        Agent::GitHubCopilot => "GitHub Copilot",
+        Agent::OpenCode => "OpenCode",
+        Agent::GeminiCli => "Gemini CLI",
+        Agent::Augment => "Augment",
+        Agent::Antigravity => "Antigravity",
+        Agent::Replit | Agent::Amp => "Universal Agents",
+        Agent::Crush => "Crush",
+        Agent::Goose => "Goose",
+        Agent::Cline => "Agent Skills",
+        Agent::RooCode => "Roo Code",
+        Agent::Trae => "Trae",
+        Agent::TabnineCli => "Tabnine CLI",
+        Agent::Pi => "Pi",
+        Agent::Devin => "Devin",
+        Agent::V0 | Agent::PulumiNeo | Agent::Unknown => return None,
+    };
+    skill_format_for_name(name, global)
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum InstallScope {
@@ -299,7 +361,7 @@ pub fn handle(
 /// Expand tilde in path to home directory
 fn expand_tilde(path_str: &str) -> Option<PathBuf> {
     if path_str == "~" || path_str.starts_with("~/") || path_str.starts_with("~\\") {
-        dirs::home_dir().map(|home| {
+        home_dir().map(|home| {
             if path_str == "~" {
                 home
             } else {
@@ -314,7 +376,7 @@ fn expand_tilde(path_str: &str) -> Option<PathBuf> {
 /// Get the base directory for installation (repo root or home directory)
 fn get_base_dir(ctx: Option<&mut Context>, global: bool) -> Result<PathBuf> {
     if global {
-        dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))
+        home_dir().ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))
     } else {
         let ctx = ctx.ok_or_else(|| {
             anyhow::anyhow!(
@@ -460,6 +522,18 @@ fn find_format_installations(format: &SkillFormat, base_dir: &std::path::Path) -
     found
 }
 
+fn is_complete_skill_installation(path: &std::path::Path) -> bool {
+    is_gitbutler_skill(&path.join("SKILL.md"))
+        && SKILL_FILES
+            .iter()
+            .all(|file| file.get_install_path(path).is_file())
+}
+
+fn is_current_skill_installation(path: &std::path::Path, version: &str) -> bool {
+    is_complete_skill_installation(path)
+        && extract_installed_version(&path.join("SKILL.md")).as_deref() == Some(version)
+}
+
 /// Scope labels for a skill installation. Single-sourced here because
 /// [`detect_install_paths`] selects installations by scope.
 const SCOPE_GLOBAL: &str = "global";
@@ -478,7 +552,7 @@ fn find_all_installations(
     // Determine which base directories to check
     let mut base_dirs: Vec<(PathBuf, &str)> = Vec::new();
 
-    if check_global && let Some(home) = dirs::home_dir() {
+    if check_global && let Some(home) = home_dir() {
         base_dirs.push((home, SCOPE_GLOBAL));
     }
 
@@ -525,7 +599,7 @@ pub fn check_skill_status(
         let installed_version =
             extract_installed_version(&skill_md_path).unwrap_or_else(|| "unknown".to_string());
 
-        let up_to_date = installed_version == cli_version;
+        let up_to_date = is_current_skill_installation(&path, &cli_version);
         if !up_to_date {
             outdated_count += 1;
         }
@@ -544,194 +618,6 @@ pub fn check_skill_status(
         skills,
         outdated_count,
     })
-}
-
-/// Periodic agent-facing skill upkeep, run after agent mutation commands.
-///
-/// At most once per [`AGENT_SKILL_CHECK_DEBOUNCE_HOURS`], checks all skill
-/// installations and starts a background update of outdated ones. Skill files
-/// are fully application-managed, so staleness is fixed directly rather than by
-/// asking the agent to act. Returns an agent-facing line when something
-/// happened: an update announcement (the agent should reload the skill), or an
-/// `AGENT ACTION REQUIRED` notice for cases the application cannot resolve
-/// itself (skill not installed, or the update could not start).
-///
-/// Best-effort by construction: every failure - cache access, skill detection,
-/// the update subprocess - is logged or turned into an agent-facing line.
-/// Nothing propagates to the mutation command that triggered the check.
-pub fn agent_skill_freshness_check_for_context(ctx: Option<&mut Context>) -> Option<String> {
-    let now = Utc::now();
-    match ctx {
-        Some(ctx) => {
-            let workdir = ctx
-                .repo
-                .get()
-                .ok()
-                .and_then(|repo| repo.workdir().map(|workdir| workdir.to_path_buf()));
-            {
-                let cache = ctx.app_cache.get_cache().ok()?;
-                if !agent_skill_check_due(cache.agent_skill_notice().get().as_ref(), now) {
-                    return None;
-                }
-            }
-            {
-                let mut cache = ctx.app_cache.get_cache_mut().ok()?;
-                if !record_agent_skill_check(&mut cache, now) {
-                    return None;
-                }
-            }
-            reconcile_agent_skills(check_skill_status(Some(&mut *ctx), true, true), move || {
-                spawn_skill_update(workdir.as_deref())
-            })
-        }
-        None => {
-            let mut cache = Context::app_cache();
-
-            if !agent_skill_check_due(cache.agent_skill_notice().get().as_ref(), now) {
-                return None;
-            }
-            if !record_agent_skill_check(&mut cache, now) {
-                return None;
-            }
-            reconcile_agent_skills(check_skill_status(None, true, true), || {
-                spawn_skill_update(None)
-            })
-        }
-    }
-}
-
-/// Bring skill installations in line with the running CLI and describe the
-/// outcome to the agent, if anything needs saying. `spawn_update` starts the
-/// actual update and is only invoked when something is outdated.
-fn reconcile_agent_skills(
-    result: Result<SkillCheckResult>,
-    spawn_update: impl FnOnce() -> Result<()>,
-) -> Option<String> {
-    let result = match result {
-        Ok(result) => result,
-        Err(err) => {
-            tracing::debug!(?err, "failed to check agent skill freshness");
-            return None;
-        }
-    };
-
-    if result.skills.is_empty() {
-        return Some(agent_skill_not_installed_notice());
-    }
-    if result.outdated_count == 0 {
-        return None;
-    }
-
-    match spawn_update() {
-        Ok(()) => Some(agent_skill_update_started_message(&result.cli_version)),
-        Err(err) => {
-            tracing::debug!(?err, "failed to spawn the agent skill auto-update");
-            Some(agent_skill_update_failed_notice(&err))
-        }
-    }
-}
-
-/// Update outdated skills by spawning `but skill check --update` as a detached
-/// child of the current binary, mirroring how metrics emission and background
-/// sync spawn `but`. Out-of-process so the update cannot disturb the invoking
-/// command and is recorded by command metrics like any other invocation;
-/// detached so it survives the parent. The outcome is not observed - if the
-/// update fails, the next debounced check finds the skill still outdated and
-/// tries again.
-fn spawn_skill_update(workdir: Option<&std::path::Path>) -> Result<()> {
-    let but_path = crate::utils::binary_path::current_exe_for_but_exec()
-        .context("failed to resolve the but binary path")?;
-    let mut cmd = tokio::process::Command::new(but_path);
-    // Anchor local-scope skill detection to the repository the parent runs in.
-    if let Some(workdir) = workdir {
-        cmd.arg("-C").arg(workdir);
-    }
-    cmd.args(["skill", "check", "--update"])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .group()
-        .kill_on_drop(false)
-        .spawn()
-        .context("failed to spawn `but skill check --update`")?;
-    Ok(())
-}
-
-/// Record that the skill check ran, so the next one waits out the debounce.
-///
-/// Returns `false` when another process already recorded a check within the
-/// debounce window (or the cache is locked/unavailable) - the caller should
-/// then skip the check entirely.
-fn record_agent_skill_check(cache: &mut but_db::AppCacheHandle, now: DateTime<Utc>) -> bool {
-    match cache.immediate_transaction_nonblocking() {
-        Ok(Some(mut transaction)) => {
-            let cached = transaction.agent_skill_notice().get();
-
-            if !agent_skill_check_due(cached.as_ref(), now) {
-                false
-            } else {
-                let save_result = transaction.agent_skill_notice_mut().and_then(|handle| {
-                    handle.save(&but_db::cache::AgentSkillNotice { shown_at: now })
-                });
-                match save_result.and_then(|_| transaction.commit()) {
-                    Ok(()) => true,
-                    Err(err) => {
-                        tracing::debug!(?err, "failed to debounce agent skill check");
-                        false
-                    }
-                }
-            }
-        }
-        Ok(None) => {
-            tracing::debug!("agent skill check debounce cache is locked");
-            false
-        }
-        Err(err) => {
-            tracing::debug!(?err, "failed to access agent skill check debounce cache");
-            false
-        }
-    }
-}
-
-fn agent_skill_check_due(
-    cached: Option<&but_db::cache::AgentSkillNotice>,
-    now: DateTime<Utc>,
-) -> bool {
-    let Some(cached) = cached else {
-        return true;
-    };
-
-    now.signed_duration_since(cached.shown_at) >= Duration::hours(AGENT_SKILL_CHECK_DEBOUNCE_HOURS)
-}
-
-fn agent_skill_not_installed_notice() -> String {
-    let t = theme::get();
-    format!(
-        "{} AGENT ACTION REQUIRED: The GitButler skill is not installed.\n\
-         Install it once for this agent, then reload/use the GitButler skill.\n\
-         If this warning repeats, report it instead of retrying.",
-        t.sym().warning,
-    )
-}
-
-fn agent_skill_update_started_message(version: &str) -> String {
-    let t = theme::get();
-    format!(
-        "{} The GitButler skill was out of date; an automatic update to {version} \
-         has started in the background. Reload/use the GitButler skill to pick up \
-         the changes.",
-        t.sym().success,
-    )
-}
-
-fn agent_skill_update_failed_notice(err: &anyhow::Error) -> String {
-    let t = theme::get();
-    format!(
-        "{} AGENT ACTION REQUIRED: The GitButler skill is out of date and auto-update failed: {err:#}.\n\
-         Run once: but skill check --update\n\
-         Then reload/use the updated skill.\n\
-         If this warning repeats, report it instead of retrying.",
-        t.sym().warning,
-    )
 }
 
 /// Check if installed skills are up to date
@@ -952,7 +838,7 @@ fn prompt_for_install_path(
     let t = theme::get();
     if out.for_human().is_none() {
         anyhow::bail!(
-            "In non-interactive mode, you must specify --path or --detect. Use --path <path> to specify where to install the skill, or --detect to update an existing installation."
+            "No supported agent was detected. In non-interactive mode, specify --path or --detect. Use --path <path> to choose an installation directory, or --detect to update an existing installation."
         );
     }
     if !out.can_prompt() {
@@ -1078,7 +964,7 @@ pub(crate) fn write_skill_files(install_path: &std::path::Path) -> Result<&'stat
         )
     })?;
 
-    for file in SKILL_FILES {
+    for file in skill_files_in_write_order() {
         let file_path = file.get_install_path(install_path);
         let content = if file.is_main_skill_file() {
             // Use the version-injected content for SKILL.md
@@ -1113,6 +999,9 @@ fn install_skill(
     detect: bool,
 ) -> Result<()> {
     let t = theme::get();
+    let driving_agent = (!out.can_prompt())
+        .then(crate::utils::detect_agent::detect)
+        .flatten();
     // Validate that embedded files are not empty (catches build issues)
     if SKILL_FILES.iter().any(|f| f.content.is_empty()) {
         anyhow::bail!(
@@ -1168,10 +1057,18 @@ fn install_skill(
 
     // Determine installation path(s). Only --detect can yield more than one, when
     // several GitButler skills share a scope; they are all refreshed together.
+    let agent_default_path = if custom_path.is_none() && !detect {
+        driving_agent.and_then(agent_default_install_path)
+    } else {
+        None
+    };
+    let installed_for_driving_agent = agent_default_path.is_some();
     let install_paths = if let Some(custom) = custom_path {
         vec![resolve_custom_path(&custom, ctx, global)?]
     } else if detect {
         detect_install_paths(ctx, global)?
+    } else if let Some(path) = agent_default_path {
+        vec![path]
     } else {
         vec![prompt_for_install_path(ctx, global, out, &mut progress)?]
     };
@@ -1234,6 +1131,18 @@ fn install_skill(
             writeln!(writer, "    • {}", file.display_path())?;
         }
         writeln!(writer)?;
+        // A skill installed mid-session is only picked up when the agent's
+        // harness next indexes skills, so point the current session at the
+        // file directly. The locations all carry the same content, so reading
+        // the first one is enough.
+        if installed_for_driving_agent && let [first, ..] = install_paths.as_slice() {
+            writeln!(
+                writer,
+                "To use it in this session, read {} now; future sessions load it automatically.",
+                first.join("SKILL.md").display()
+            )?;
+            writeln!(writer)?;
+        }
     }
 
     if let Some(out) = out.for_json() {
@@ -1514,7 +1423,7 @@ mod tests {
     }
 
     // NOTE: detect_install_paths is difficult to test in isolation because it depends on
-    // dirs::home_dir() and git repository context. It's tested indirectly through
+    // the user home directory and git repository context. It's tested indirectly through
     // integration tests and manual testing. The core logic (is_gitbutler_skill validation
     // and per-format discovery) is tested separately.
 
@@ -1640,87 +1549,6 @@ mod tests {
     }
 
     #[test]
-    fn reconcile_handles_current_missing_and_check_errors() {
-        let update_must_not_run =
-            || -> Result<()> { panic!("no update may run unless something is outdated") };
-
-        let current = SkillCheckResult {
-            cli_version: "2.0.0".to_string(),
-            skills: vec![SkillStatus {
-                path: PathBuf::from("/test/path"),
-                format_name: "Codex".to_string(),
-                scope: "global".to_string(),
-                installed_version: "2.0.0".to_string(),
-                up_to_date: true,
-            }],
-            outdated_count: 0,
-        };
-        assert!(
-            reconcile_agent_skills(Ok(current), update_must_not_run).is_none(),
-            "up-to-date skills need neither repair nor notice"
-        );
-
-        let missing = SkillCheckResult {
-            cli_version: "2.0.0".to_string(),
-            skills: vec![],
-            outdated_count: 0,
-        };
-        let missing_notice = reconcile_agent_skills(Ok(missing), update_must_not_run)
-            .expect("a missing installation cannot be auto-repaired, so the agent is told");
-        assert!(missing_notice.contains("AGENT ACTION REQUIRED"));
-        assert!(missing_notice.contains("not installed"));
-        assert!(missing_notice.contains("report it instead of retrying"));
-
-        assert!(
-            reconcile_agent_skills(Err(anyhow::anyhow!("check failed")), update_must_not_run)
-                .is_none(),
-            "check errors are logged, not surfaced to the agent"
-        );
-    }
-
-    fn stale_check_result() -> SkillCheckResult {
-        SkillCheckResult {
-            cli_version: "2.0.0".to_string(),
-            skills: vec![SkillStatus {
-                path: PathBuf::from("/test/path"),
-                format_name: "Claude Code".to_string(),
-                scope: "global".to_string(),
-                installed_version: "1.0.0".to_string(),
-                up_to_date: false,
-            }],
-            outdated_count: 1,
-        }
-    }
-
-    #[test]
-    fn reconcile_spawns_update_for_stale_installations() {
-        let mut update_spawns = 0;
-        let message = reconcile_agent_skills(Ok(stale_check_result()), || {
-            update_spawns += 1;
-            Ok(())
-        })
-        .expect("a started update is announced so the agent reloads the skill");
-        assert_eq!(update_spawns, 1, "one update run repairs all installations");
-        assert!(message.contains("automatic update to 2.0.0"));
-        assert!(
-            !message.contains("AGENT ACTION REQUIRED"),
-            "a started auto-update is informational, not an action request"
-        );
-    }
-
-    #[test]
-    fn reconcile_falls_back_to_agent_notice_when_update_fails() {
-        let notice =
-            reconcile_agent_skills(Ok(stale_check_result()), || Err(anyhow::anyhow!("denied")))
-                .expect("when auto-update fails the agent is asked to run it");
-        assert!(notice.contains("AGENT ACTION REQUIRED"));
-        assert!(notice.contains("auto-update failed"));
-        assert!(notice.contains("denied"), "the update error is surfaced");
-        assert!(notice.contains("but skill check --update"));
-        assert!(notice.contains("report it instead of retrying"));
-    }
-
-    #[test]
     fn write_skill_files_writes_versioned_bundle() {
         let dir = tempfile::tempdir().unwrap();
         let install_path = dir.path().join(".claude").join("skills").join("gitbutler");
@@ -1742,47 +1570,13 @@ mod tests {
     }
 
     #[test]
-    fn agent_skill_check_debounce_is_12_hours() {
-        let now = DateTime::from_timestamp(2_000_000, 0).unwrap();
-        assert!(agent_skill_check_due(None, now));
-
-        let recent = but_db::cache::AgentSkillNotice {
-            shown_at: now - Duration::hours(11),
-        };
-        assert!(!agent_skill_check_due(Some(&recent), now));
-
-        let old = but_db::cache::AgentSkillNotice {
-            shown_at: now - Duration::hours(12),
-        };
-        assert!(agent_skill_check_due(Some(&old), now));
-    }
-
-    #[test]
-    fn agent_skill_check_records_only_when_cache_write_succeeds() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("app-cache.sqlite");
-        let now = DateTime::from_timestamp(2_000_000, 0).unwrap();
-        let mut cache = but_db::AppCacheHandle::new_at_path(&path);
-
-        assert!(record_agent_skill_check(&mut cache, now));
-        assert!(!record_agent_skill_check(
-            &mut cache,
-            now + Duration::hours(11)
-        ));
-        assert!(record_agent_skill_check(
-            &mut cache,
-            now + Duration::hours(12)
-        ));
-
-        let mut locked_cache = but_db::AppCacheHandle::new_at_path(&path);
-        let _lock = cache
-            .immediate_transaction_nonblocking()
-            .unwrap()
-            .expect("write lock should be available");
-        assert!(!record_agent_skill_check(
-            &mut locked_cache,
-            now + Duration::hours(24)
-        ));
+    fn skill_entrypoint_is_written_last() {
+        assert!(
+            skill_files_in_write_order()
+                .last()
+                .is_some_and(SkillFile::is_main_skill_file),
+            "a partial bundle must not look installed"
+        );
     }
 
     #[test]
@@ -1837,7 +1631,7 @@ mod tests {
         fs::create_dir_all(&other_skill_dir).unwrap();
         fs::write(other_skill_dir.join("SKILL.md"), "# Some other skill").unwrap();
 
-        // We can't easily test find_all_installations directly since it uses dirs::home_dir()
+        // We can't easily test find_all_installations directly since it uses the user home.
         // But we can test the components it uses
 
         // Verify is_gitbutler_skill correctly identifies our test files
@@ -1894,6 +1688,15 @@ mod tests {
             find_format_installations(format_without_dir, temp_dir.path()).is_empty(),
             "a missing skills directory yields no installations"
         );
+    }
+
+    #[test]
+    fn skill_installation_requires_every_embedded_file() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        write_skill_files(temp_dir.path()).unwrap();
+        std::fs::remove_file(temp_dir.path().join("references/concepts.md")).unwrap();
+
+        assert!(!is_complete_skill_installation(temp_dir.path()));
     }
 
     #[test]

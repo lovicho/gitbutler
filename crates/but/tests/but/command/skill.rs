@@ -68,9 +68,245 @@ fn skill_install_json_outside_repo_requires_path_instead_of_repo_context() {
         .failure()
         .stdout_eq(str![[]])
         .stderr_eq(str![[r#"
-Error: In non-interactive mode, you must specify --path or --detect. Use --path <path> to specify where to install the skill, or --detect to update an existing installation.
+Error: No supported agent was detected. In non-interactive mode, specify --path or --detect. Use --path <path> to choose an installation directory, or --detect to update an existing installation.
 
 "#]]);
+}
+
+#[test]
+fn skill_install_bare_defaults_to_detected_agents_global_dir() {
+    let env = Sandbox::empty();
+
+    // A detected agent running the bare command without a terminal gets its
+    // own global skill directory instead of the interactive wizard - this is
+    // the command the not-installed status notice suggests.
+    let output = env
+        .but("skill install")
+        .env("AI_AGENT", "codex")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let skill_md = env
+        .home_dir()
+        .join(".codex")
+        .join("skills")
+        .join("gitbutler")
+        .join("SKILL.md");
+    assert!(
+        skill_md.is_file(),
+        "the skill lands in the agent's global directory under the sandboxed home"
+    );
+
+    // A skill installed mid-session is invisible to the agent's harness until
+    // the next session, so the agent is pointed at the file directly.
+    let stdout = String::from_utf8_lossy(&output);
+    assert!(!stdout.contains("AGENT ACTION REQUIRED"));
+    assert!(
+        stdout.contains("To use it in this session, read "),
+        "an agent caller is told to read the skill now, got: {stdout}"
+    );
+}
+
+#[test]
+fn agent_skill_notice_gating() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    // Only human-text output can carry the notice; JSON output skips the check.
+    let json_run = env
+        .but("--format json alias list")
+        .env("AI_AGENT", "codex")
+        .allow_json()
+        .output()
+        .expect("status --format json runs");
+    assert!(json_run.status.success());
+    assert!(
+        !String::from_utf8_lossy(&json_run.stdout).contains("AGENT ACTION REQUIRED"),
+        "JSON status output carries no skill notice"
+    );
+
+    // A human-text agent run delivers the notice, leading the output so
+    // output-trimming pipes like `head` keep it.
+    let stdout_of = || {
+        let out = env
+            .but("alias list")
+            .env("AI_AGENT", "codex")
+            .output()
+            .expect("alias list runs");
+        assert!(out.status.success());
+        String::from_utf8(out.stdout).unwrap()
+    };
+    // Wording is pinned by the status snapshot; this asserts placement only.
+    let stdout = stdout_of();
+    assert!(
+        stdout.starts_with("⚠ AGENT ACTION REQUIRED"),
+        "the notice must lead the output, got: {stdout}"
+    );
+
+    // The not-installed notice is not debounced - every session and every
+    // agent is nudged on each status until the skill is installed, rather
+    // than one delivery silencing all others for hours.
+    assert!(
+        stdout_of().contains("AGENT ACTION REQUIRED"),
+        "the not-installed notice keeps showing until the skill is installed"
+    );
+
+    let failed = env
+        .but("alias add 'bad name' status")
+        .env("AI_AGENT", "codex")
+        .output()
+        .expect("alias add runs");
+    assert!(!failed.status.success());
+    assert!(
+        String::from_utf8_lossy(&failed.stdout).starts_with("⚠ AGENT ACTION REQUIRED"),
+        "failed normal commands receive the same pre-dispatch notice"
+    );
+}
+
+#[test]
+fn agent_skill_notice_is_scoped_to_the_driving_agents_format() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    // A Cursor session installs the skill into its own format directory.
+    env.but("skill install")
+        .env("AI_AGENT", "cursor")
+        .assert()
+        .success();
+    assert!(
+        env.home_dir()
+            .join(".cursor")
+            .join("skills")
+            .join("gitbutler")
+            .join("SKILL.md")
+            .is_file(),
+        "the Cursor install landed in the sandboxed home"
+    );
+
+    // Claude Code cannot read `.cursor/skills`, so it must still be told to
+    // install its own copy - the Cursor install does not count for it.
+    let claude = env
+        .but("alias list")
+        .env("AI_AGENT", "claude-code")
+        .output()
+        .expect("alias list runs");
+    assert!(claude.status.success());
+    let stdout = String::from_utf8_lossy(&claude.stdout);
+    assert!(
+        stdout.contains("AGENT ACTION REQUIRED")
+            && stdout.contains("Install the GitButler skill before continuing"),
+        "another agent's install must not silence Claude Code, got: {stdout}"
+    );
+
+    // The Cursor session, whose format holds the install, is satisfied.
+    let cursor = env
+        .but("alias list")
+        .env("AI_AGENT", "cursor")
+        .output()
+        .expect("alias list runs");
+    assert!(cursor.status.success());
+    assert!(
+        !String::from_utf8_lossy(&cursor.stdout).contains("AGENT ACTION REQUIRED"),
+        "the agent whose format holds the install gets no notice"
+    );
+
+    env.but("skill install --path .claude/skills/gitbutler")
+        .assert()
+        .success();
+    let claude = env
+        .but("alias list")
+        .env("AI_AGENT", "claude-code")
+        .output()
+        .expect("alias list runs");
+    assert!(
+        !String::from_utf8_lossy(&claude.stdout).contains("AGENT ACTION REQUIRED"),
+        "a repository-local install also satisfies its agent"
+    );
+}
+
+#[test]
+fn agent_skill_notice_accepts_compatible_shared_local_install() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+    env.but("skill install --path .agents/skills/gitbutler")
+        .assert()
+        .success();
+
+    for agent in ["opencode", "devin"] {
+        let output = env
+            .but("alias list")
+            .env("AI_AGENT", agent)
+            .output()
+            .expect("alias list runs");
+        assert!(output.status.success());
+        assert!(
+            !String::from_utf8_lossy(&output.stdout).contains("AGENT ACTION REQUIRED"),
+            "{agent} should accept the shared local skill format"
+        );
+    }
+}
+
+#[test]
+fn agent_skill_notice_reports_a_stale_local_skill_despite_a_current_global_copy() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.but("skill install --path .codex/skills/gitbutler")
+        .assert()
+        .success();
+    std::fs::write(
+        env.projects_root().join(".codex/skills/gitbutler/SKILL.md"),
+        "---\nname: but\nversion: old\n---\n",
+    )
+    .unwrap();
+    env.but("skill install")
+        .env("AI_AGENT", "codex")
+        .assert()
+        .success();
+
+    let output = env
+        .but("alias list")
+        .env("AI_AGENT", "codex")
+        .output()
+        .expect("alias list runs");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(
+        stdout.starts_with("⚠ AGENT ACTION REQUIRED")
+            && stdout.contains("but skill check --update"),
+        "the stale local copy must not hide behind the current global copy, got: {stdout}"
+    );
+}
+
+#[test]
+fn agent_skill_notice_repairs_a_stale_global_skill() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+    env.but("skill install")
+        .env("AI_AGENT", "codex")
+        .assert()
+        .success();
+    std::fs::write(
+        env.home_dir().join(".codex/skills/gitbutler/SKILL.md"),
+        "---\nname: but\nversion: old\n---\n",
+    )
+    .unwrap();
+
+    let output = env
+        .but("alias list")
+        .env("AI_AGENT", "codex")
+        .output()
+        .expect("alias list runs");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(
+        stdout.contains("was out of date and was updated")
+            && !stdout.contains("but skill check --update"),
+        "a stale global skill should be repaired before a read-only command, got: {stdout}"
+    );
 }
 
 #[test]
@@ -130,7 +366,7 @@ fn skill_install_absolute_path_outside_repo_does_not_require_global() -> anyhow:
 }
 
 #[test]
-fn skill_install_agent_outputs_success_message() -> anyhow::Result<()> {
+fn skill_install_explicit_path_does_not_claim_the_agent_will_load_it() -> anyhow::Result<()> {
     let env = Sandbox::empty();
     let install_dir = env.projects_root().join("agent-skill-install");
 
@@ -141,6 +377,7 @@ fn skill_install_agent_outputs_success_message() -> anyhow::Result<()> {
         .args(["--format", "agent", "--global"])
         .arg("--path")
         .arg(&install_dir)
+        .env("AI_AGENT", "codex")
         .assert()
         .success()
         .stderr_eq(str![[]])
@@ -156,6 +393,10 @@ fn skill_install_agent_outputs_success_message() -> anyhow::Result<()> {
     assert!(
         stdout.contains("Files installed:"),
         "agent skill install should print installed files, got: {stdout}"
+    );
+    assert!(
+        !stdout.contains("To use it in this session"),
+        "the read-it-now hint is for detected agent callers only, got: {stdout}"
     );
 
     Ok(())
@@ -203,6 +444,40 @@ fn skill_check_detects_agent_skills_installation_in_repo() -> anyhow::Result<()>
         "expected Agent Skills installation in .agents/skills/gitbutler, got: {skills:?}"
     );
 
+    Ok(())
+}
+
+#[test]
+fn skill_check_marks_an_incomplete_bundle_outdated() -> anyhow::Result<()> {
+    let env = Sandbox::open_with_default_settings("repo-no-remote");
+    let install_path = relative_agent_skill_path(".agents");
+    env.but("")
+        .arg("skill")
+        .arg("install")
+        .arg("--path")
+        .arg(&install_path)
+        .assert()
+        .success();
+    std::fs::remove_file(
+        env.projects_root()
+            .join(&install_path)
+            .join("references/concepts.md"),
+    )?;
+
+    let output = env
+        .but("skill check --local --format json")
+        .allow_json()
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let json: serde_json::Value = serde_json::from_slice(&output)?;
+
+    assert_eq!(
+        json.get("outdated_count").and_then(|value| value.as_u64()),
+        Some(1)
+    );
     Ok(())
 }
 

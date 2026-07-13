@@ -7,6 +7,14 @@ use super::{
 };
 
 #[test]
+fn devin_uses_shared_agent_skills_target() {
+    assert_eq!(
+        AgentTarget::from_detected(detect_agent::Agent::Devin),
+        Some(AgentTarget::AgentSkills)
+    );
+}
+
+#[test]
 fn generated_default_policy_includes_baseline_and_default_preferences() {
     let policy = render_managed_policy_block(&WizardAnswers::default());
 
@@ -87,7 +95,7 @@ fn display_path_strips_leading_dot_component() {
 #[test]
 fn display_path_collapses_home_to_tilde() {
     use std::path::MAIN_SEPARATOR as SEP;
-    let home = dirs::home_dir().expect("home dir");
+    let home = but_path::home_dir().expect("home dir");
     let inside = home.join(".codex").join("AGENTS.md");
     assert_eq!(display_path(&inside), format!("~{SEP}.codex{SEP}AGENTS.md"));
 }
@@ -123,11 +131,12 @@ fn agent_in_use_detects_repo_marker_but_ignores_shared_agents_md() {
 #[test]
 fn agent_in_use_detects_existing_skill_install() {
     let home = tempfile::tempdir().expect("home");
-    // A skill a prior run installed for OpenCode (`~/.opencode/skills/gitbutler`)
+    // A skill a prior run installed for OpenCode
     // should mark it in use even without other config present.
     std::fs::create_dir_all(
         home.path()
-            .join(".opencode")
+            .join(".config")
+            .join("opencode")
             .join("skills")
             .join("gitbutler"),
     )
@@ -571,18 +580,15 @@ fn skill_installs_global_only_uses_home_paths() {
             .iter()
             .any(|i| i.path.ends_with(".copilot/skills/gitbutler"))
     );
-    // Paths match `but skill`'s SKILL_FORMATS so installs stay discoverable —
-    // OpenCode is `.opencode` (not `.config/opencode`) and Windsurf is
-    // `.windsurf` (not `.codeium/windsurf`).
     assert!(
         installs
             .iter()
-            .any(|i| { i.path.ends_with(".opencode/skills/gitbutler") })
+            .any(|i| { i.path.ends_with(".config/opencode/skills/gitbutler") })
     );
     assert!(
         installs
             .iter()
-            .any(|i| { i.path.ends_with(".windsurf/skills/gitbutler") })
+            .any(|i| { i.path.ends_with(".codeium/windsurf/skills/gitbutler") })
     );
 }
 

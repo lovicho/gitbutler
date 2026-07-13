@@ -320,15 +320,32 @@ where
         Ok(())
     }
 
+    /// Restack `source_branch` on top of `target_branch` within the transaction's workspace.
+    ///
+    /// Transactions operate on managed workspaces only. The ad-hoc (single-branch) move path is the
+    /// one that populates [`Outcome::new_tip`] and [`Outcome::branch_stack_order`] for the caller to
+    /// apply, and `RecordingMetadata` can't persist branch stack order anyway, so we bail if either
+    /// field is ever set rather than silently dropping a metadata reorder or a required checkout.
+    ///
+    /// [`Outcome::new_tip`]: but_workspace::branch::move_branch::Outcome::new_tip
+    /// [`Outcome::branch_stack_order`]: but_workspace::branch::move_branch::Outcome::branch_stack_order
     pub fn stack_branch_on(
         &mut self,
         source_branch: &FullNameRef,
         target_branch: &FullNameRef,
     ) -> anyhow::Result<()> {
-        let ws_meta = self.rebase(|editor, _, _| {
+        let (ws_meta, new_tip, branch_stack_order) = self.rebase(|editor, _, _| {
             let outcome = but_workspace::branch::move_branch(editor, source_branch, target_branch)?;
-            Ok((outcome.ws_meta, outcome.rebase))
+            Ok((
+                (outcome.ws_meta, outcome.new_tip, outcome.branch_stack_order),
+                outcome.rebase,
+            ))
         })?;
+
+        anyhow::ensure!(
+            new_tip.is_none() && branch_stack_order.is_none(),
+            "Ad-hoc (single-branch) branch moves are not supported inside transactions"
+        );
 
         self.record_workspace_metadata_update(ws_meta)?;
 

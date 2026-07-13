@@ -400,7 +400,32 @@ async fn match_subcommand(
         cmd => cmd,
     };
 
-    let metrics_ctx = cmd.to_metrics_context(&app_settings, &args.current_dir);
+    let show_agent_skill_notice = out.format().is_human_text()
+        && !out.can_prompt()
+        && !matches!(
+            &cmd,
+            Subcommands::Skill(_)
+                | Subcommands::Agent(_)
+                | Subcommands::Help { .. }
+                | Subcommands::Completions { .. }
+                | Subcommands::Metrics { .. }
+        );
+    let agent_skill_notice = show_agent_skill_notice
+        .then(|| command::skill::agent_skill_notice(&args.current_dir))
+        .flatten();
+    if let Some(notice) = agent_skill_notice.as_ref()
+        && let Some(human) = out.for_human()
+    {
+        writeln!(human, "{}", notice.text()).ok();
+        writeln!(human).ok();
+    }
+
+    let mut metrics_ctx = cmd.to_metrics_context(&app_settings, &args.current_dir);
+    if agent_skill_notice.is_some_and(|notice| notice.is_hint())
+        && let Some(metrics_ctx) = metrics_ctx.as_mut()
+    {
+        metrics_ctx.push_extra_prop("agentSkillHintShown", true);
+    }
 
     match cmd {
         Subcommands::Metrics {
@@ -1866,11 +1891,8 @@ async fn maybe_run_status_after<T, E>(
 /// In human mode, prints a blank line then full status.
 /// In JSON mode, combines the mutation's buffered JSON with status JSON into
 /// `{"result": <mutation_output>, "status": <workspace_status>}`.
-/// Periodically reconciles skill installations: stale skills are auto-updated
-/// in the background, and an agent-facing line (update announcement, or an
-/// action notice when the skill is missing or the update could not start) is
-/// included between the mutation output and the status (so output-trimming
-/// pipes like `head` still deliver it), or under `agent_skill_notice` in JSON.
+/// For JSON commands, reconciles stale skill installations and includes an
+/// update announcement or failure notice under `agent_skill_notice`.
 /// This function only runs when the CLI caller was detected as an agent.
 ///
 /// Status errors are handled gracefully: in JSON mode the mutation result is
@@ -1884,13 +1906,11 @@ async fn run_status_after(
 ) {
     use crate::command::legacy::status::StatusFlags;
 
-    // Producing a notice burns its global debounce, so compute it only when the
-    // format can deliver it (human text below, or a field in the JSON object).
-    let agent_skill_notice = if out.format().is_human_text() || out.format().is_json() {
-        command::skill::agent_skill_freshness_check_for_context(Some(&mut *ctx))
-    } else {
-        None
-    };
+    let agent_skill_notice = out
+        .format()
+        .is_json()
+        .then(command::skill::agent_skill_update_notice)
+        .flatten();
 
     if out.is_json() {
         out.start_json_buffering();
@@ -1932,13 +1952,6 @@ async fn run_status_after(
     } else {
         if let Some(human) = out.for_human() {
             writeln!(human).ok();
-            // The notice must precede the status dump: agents routinely pipe
-            // `but` output through `head`/`grep`, which keeps leading lines and
-            // drops trailing ones.
-            if let Some(notice) = agent_skill_notice {
-                writeln!(human, "{notice}").ok();
-                writeln!(human).ok();
-            }
         }
         if let Err(err) = command::legacy::status::worktree(
             ctx,

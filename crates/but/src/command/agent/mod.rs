@@ -313,7 +313,7 @@ fn prompt_agents(
     // the CLI (if any), plus any whose config we can find on this machine or in
     // this repository.
     let running = detect_agent::detect().and_then(AgentTarget::from_detected);
-    let home = dirs::home_dir();
+    let home = but_path::home_dir();
     let preselect =
         |agent: AgentTarget| Some(agent) == running || agent.in_use(home.as_deref(), repo);
 
@@ -674,7 +674,7 @@ fn write_review(writer: &mut impl fmt::Write, plan: &Plan) -> fmt::Result {
 /// leading `.` component so review paths read cleanly (`AGENTS.md`,
 /// `~/.codex/...`).
 fn display_path(path: &Path) -> String {
-    if let Some(home) = dirs::home_dir()
+    if let Some(home) = but_path::home_dir()
         && let Ok(rest) = path.strip_prefix(&home)
     {
         return if rest.as_os_str().is_empty() {

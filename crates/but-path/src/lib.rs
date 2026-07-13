@@ -10,6 +10,7 @@
 //! - logs: `<E2E_TEST_APP_DATA_DIR>/logs`
 //! - config: `<E2E_TEST_APP_DATA_DIR>/gitbutler`
 //! - cache: `<E2E_TEST_APP_DATA_DIR>/cache`
+//! - home: `<E2E_TEST_APP_DATA_DIR>/home`
 //!
 //! This override intentionally ignores the compile-time or explicit [`AppChannel`]. Even
 //! `*_for_channel(...)` helpers return the same E2E path for all channels so tests do not
@@ -28,6 +29,18 @@ use anyhow::Context;
 /// `<E2E_TEST_APP_DATA_DIR>/com.gitbutler.app` for every channel.
 pub fn app_data_dir() -> anyhow::Result<PathBuf> {
     app_data_dir_for_channel(AppChannel::new())
+}
+
+/// The user's home directory, for code that reads or writes user-level files
+/// (like agent skill installations).
+///
+/// When `E2E_TEST_APP_DATA_DIR` is set, returns `<E2E_TEST_APP_DATA_DIR>/home`
+/// so tests never touch the real home directory.
+pub fn home_dir() -> Option<PathBuf> {
+    if let Some(test_dir) = std::env::var_os("E2E_TEST_APP_DATA_DIR") {
+        return Some(PathBuf::from(test_dir).join("home"));
+    }
+    dirs::home_dir()
 }
 
 /// Like [`app_data_dir()`], but explicitly for `channel`.

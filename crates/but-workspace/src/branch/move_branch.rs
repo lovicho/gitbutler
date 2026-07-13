@@ -11,6 +11,17 @@ pub struct Outcome<'ws, 'meta, M: RefMetadata> {
     /// The updated workspace metadata that accompanies the move operation.
     /// It should replace the actual workspace metadata to configure moved 'virtual' branches segments, if `Some()`.
     pub ws_meta: Option<but_core::ref_metadata::Workspace>,
+    /// In single-branch (ad-hoc) mode, set to the reference that became the new tip when the move
+    /// placed the subject above the currently checked-out branch. `HEAD` is *not* moved by the
+    /// operation; the caller is responsible for checking this out so the moved branch stays part of
+    /// the projected workspace (mirroring [`create_reference`](crate::branch::create_reference())).
+    /// `None` when the tip is unchanged.
+    pub new_tip: Option<gix::refs::FullName>,
+    /// In single-branch (ad-hoc) mode, the reordered tip-to-base branch chain that the caller should
+    /// persist with [`RefMetadata::set_branch_stack_order`].
+    /// It is returned rather than written here so callers can apply it only for real runs and skip
+    /// persistence for dry-run previews. `None` outside single-branch mode.
+    pub branch_stack_order: Option<Vec<gix::refs::FullName>>,
 }
 
 pub(super) mod function {
@@ -27,6 +38,7 @@ pub(super) mod function {
     use anyhow::bail;
     use but_graph::workspace::WorkspaceKind;
     use but_rebase::graph_rebase::Editor;
+    use but_rebase::graph_rebase::SuccessfulRebase;
     use gix::refs::FullNameRef;
 
     /// Remove a branch out of a stack, creating a new stack out of it, in memory.
@@ -82,6 +94,8 @@ pub(super) mod function {
             return Ok(Outcome {
                 rebase: editor.rebase()?,
                 ws_meta,
+                new_tip: None,
+                branch_stack_order: None,
             });
         }
 
@@ -142,6 +156,8 @@ pub(super) mod function {
         Ok(Outcome {
             rebase: editor.rebase()?,
             ws_meta,
+            new_tip: None,
+            branch_stack_order: None,
         })
     }
 
@@ -174,21 +190,109 @@ pub(super) mod function {
         let (source, destination) =
             retrieve_branches_and_containers(&workspace, subject_branch_name, target_branch_name)?;
 
-        let Some(workspace_head) = workspace.tip_commit().map(|commit| commit.id) else {
-            bail!("Couldn't find workspace head.")
-        };
-
-        // We're currently stopping the move branch operations imperatively at this stage, in order to
-        // reduce the scope of this first iteration of moving the branches.
+        // Each kind of workspace has a very different notion of what "moving a branch" means, so we
+        // dispatch into a dedicated handler for each one.
         // TODO: Enable and test that we can move branches in any kind of workspace.
         match &workspace.kind {
-            WorkspaceKind::Managed { .. } => {}
+            WorkspaceKind::AdHoc => move_branch_in_single_branch_mode(
+                successful_rebase,
+                workspace.ref_name().map(ToOwned::to_owned),
+                source,
+                subject_branch_name,
+                target_branch_name,
+            ),
             WorkspaceKind::ManagedMissingWorkspaceCommit { .. } => {
                 bail!("Moving branches currently need a workspace commit")
             }
-            WorkspaceKind::AdHoc => {
-                bail!("Moving branches in non-managed workspaces is not supported");
-            }
+            WorkspaceKind::Managed { .. } => move_branch_in_managed_workspace(
+                successful_rebase,
+                workspace,
+                source,
+                destination,
+                subject_branch_name,
+                target_branch_name,
+            ),
+        }
+    }
+
+    /// Move a branch in a single-branch (ad-hoc) workspace, where `HEAD` is on a plain local branch.
+    ///
+    /// In single-branch (ad-hoc) mode there is no workspace commit, and the tip-to-base order of
+    /// same-commit empty branches lives in the `branch_order` metadata table rather than in the
+    /// workspace metadata. Reordering two empty branches is therefore a pure metadata operation
+    /// with no graph rewrite - mirror `create_reference`'s ad-hoc handling. The reordered chain is
+    /// returned in [`Outcome::branch_stack_order`] for the caller to persist (via
+    /// [`RefMetadata::set_branch_stack_order`]) rather than being written here, so callers can skip
+    /// persistence for dry-run previews.
+    fn move_branch_in_single_branch_mode<'ws, 'meta, M: RefMetadata>(
+        mut successful_rebase: SuccessfulRebase<'ws, 'meta, M>,
+        entrypoint: Option<gix::refs::FullName>,
+        source: WorkspaceSegmentContext,
+        subject_branch_name: &FullNameRef,
+        target_branch_name: &FullNameRef,
+    ) -> anyhow::Result<Outcome<'ws, 'meta, M>> {
+        let (_, subject_segment) = &source;
+        // Only the *subject* needs to be empty: a branch that owns no commits can be reordered by
+        // metadata alone, regardless of whether the target owns commits (e.g. the base branch). A
+        // non-empty subject would change commit ownership and needs a real rebase.
+        if !subject_segment.commits.is_empty() {
+            bail!("Moving a non-empty branch in single-branch mode is not yet supported");
+        }
+        let (_repo, meta) = successful_rebase.repo_and_meta_mut();
+        if !meta.can_persist_branch_stack_order() {
+            bail!(
+                "Cannot reorder '{subject_branch_name}' in single-branch mode without branch order metadata"
+            );
+        }
+        // Reorder against the existing chain. A movable subject is always part of `branch_order`
+        // (that's what makes it a projected segment), so the first lookup normally succeeds. The
+        // target and entrypoint lookups are defensive fallbacks so that, should the projection ever
+        // surface a segment that isn't tracked yet, we extend the real chain instead of clobbering
+        // it down to just the moved refs.
+        let existing_order = match meta.branch_stack_order(subject_branch_name)? {
+            Some(order) => order,
+            None => match meta.branch_stack_order(target_branch_name)? {
+                Some(order) => order,
+                None => entrypoint
+                    .as_ref()
+                    .map(|entrypoint| meta.branch_stack_order(entrypoint.as_ref()))
+                    .transpose()?
+                    .flatten()
+                    .unwrap_or_default(),
+            },
+        };
+        let new_order = reorder_empty_branch_in_stack_order(
+            existing_order,
+            target_branch_name,
+            subject_branch_name,
+        );
+
+        // Moving the subject on top of the checked-out branch makes it the new tip. The workspace
+        // only projects the entrypoint and the segments below it, so unless `HEAD` moves the subject
+        // would sit above the entrypoint and drop out of the projection. Report it as the new tip so
+        // the caller can check it out (mirroring `create_reference`); we don't move `HEAD` here.
+        let new_tip = (entrypoint.as_ref().map(|name| name.as_ref()) == Some(target_branch_name))
+            .then(|| subject_branch_name.to_owned());
+
+        Ok(Outcome {
+            rebase: successful_rebase,
+            ws_meta: None,
+            new_tip,
+            branch_stack_order: Some(new_order),
+        })
+    }
+
+    /// Move a branch within a managed workspace (one backed by a workspace commit).
+    fn move_branch_in_managed_workspace<'ws, 'meta, M: RefMetadata>(
+        successful_rebase: SuccessfulRebase<'ws, 'meta, M>,
+        workspace: but_graph::Workspace,
+        source: WorkspaceSegmentContext,
+        destination: WorkspaceSegmentContext,
+        subject_branch_name: &FullNameRef,
+        target_branch_name: &FullNameRef,
+    ) -> anyhow::Result<Outcome<'ws, 'meta, M>> {
+        let Some(workspace_head) = workspace.tip_commit().map(|commit| commit.id) else {
+            bail!("Couldn't find workspace head.")
         };
 
         let mut ws_meta = workspace.metadata.clone();
@@ -208,6 +312,8 @@ pub(super) mod function {
             return Ok(Outcome {
                 rebase: successful_rebase,
                 ws_meta,
+                new_tip: None,
+                branch_stack_order: None,
             });
         }
 
@@ -247,6 +353,8 @@ pub(super) mod function {
         Ok(Outcome {
             rebase: editor.rebase()?,
             ws_meta,
+            new_tip: None,
+            branch_stack_order: None,
         })
     }
 
@@ -309,6 +417,35 @@ pub(super) mod function {
         Ok((own_context(source), own_context(destination)))
     }
 
+    /// Reorder `subject` to sit directly on top of `target` in the tip-to-base ad-hoc `order`.
+    ///
+    /// Mirrors the [`Position::Above`](crate::branch::create_reference::Position) case of
+    /// `create_reference`'s `insert_into_branch_stack_order`: `subject` is removed and re-inserted
+    /// at `target`'s slot, pushing `target` (and everything below it) down.
+    ///
+    /// If `target` isn't tracked yet (stale or empty metadata) it is appended first, so that a move
+    /// where *both* branches are missing adds them both - `subject` on top of `target` - instead of
+    /// silently clobbering the rest of the ordering down to just `subject`.
+    fn reorder_empty_branch_in_stack_order(
+        mut order: Vec<gix::refs::FullName>,
+        target_branch_name: &FullNameRef,
+        subject_branch_name: &FullNameRef,
+    ) -> Vec<gix::refs::FullName> {
+        order.retain(|branch| branch.as_ref() != subject_branch_name);
+        let target_idx = match order
+            .iter()
+            .position(|branch| branch.as_ref() == target_branch_name)
+        {
+            Some(idx) => idx,
+            None => {
+                order.push(target_branch_name.to_owned());
+                order.len() - 1
+            }
+        };
+        order.insert(target_idx, subject_branch_name.to_owned());
+        order
+    }
+
     fn move_branch_in_metadata(
         ws_meta: &mut but_core::ref_metadata::Workspace,
         subject_branch_name: &FullNameRef,
@@ -327,6 +464,71 @@ pub(super) mod function {
                 but_core::ref_metadata::WorkspaceCommitRelation::Merged,
                 |_| StackId::generate(),
             );
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::reorder_empty_branch_in_stack_order;
+
+        fn r(name: &str) -> gix::refs::FullName {
+            gix::refs::FullName::try_from(name).expect("valid ref name")
+        }
+
+        fn names(order: &[gix::refs::FullName]) -> Vec<String> {
+            order.iter().map(|n| n.to_string()).collect()
+        }
+
+        #[test]
+        fn moves_subject_on_top_of_target_when_both_present() {
+            let order = vec![r("refs/heads/main"), r("refs/heads/a"), r("refs/heads/b")];
+            let new = reorder_empty_branch_in_stack_order(
+                order,
+                r("refs/heads/main").as_ref(),
+                r("refs/heads/b").as_ref(),
+            );
+            // `b` moves directly above `main`, `a` shifts down.
+            assert_eq!(
+                names(&new),
+                ["refs/heads/b", "refs/heads/main", "refs/heads/a"]
+            );
+        }
+
+        #[test]
+        fn adds_subject_above_target_when_only_target_is_present() {
+            let order = vec![r("refs/heads/main")];
+            let new = reorder_empty_branch_in_stack_order(
+                order,
+                r("refs/heads/main").as_ref(),
+                r("refs/heads/new").as_ref(),
+            );
+            assert_eq!(names(&new), ["refs/heads/new", "refs/heads/main"]);
+        }
+
+        #[test]
+        fn adds_both_in_order_when_neither_is_present() {
+            // Stale/empty metadata: neither branch is tracked yet. Both are added, subject on top of
+            // target, without dropping any pre-existing ordering.
+            let order = vec![r("refs/heads/main")];
+            let new = reorder_empty_branch_in_stack_order(
+                order,
+                r("refs/heads/target").as_ref(),
+                r("refs/heads/subject").as_ref(),
+            );
+            assert_eq!(
+                names(&new),
+                ["refs/heads/main", "refs/heads/subject", "refs/heads/target"]
+            );
+        }
+
+        #[test]
+        fn adds_both_in_order_from_empty_metadata() {
+            let new = reorder_empty_branch_in_stack_order(
+                Vec::new(),
+                r("refs/heads/target").as_ref(),
+                r("refs/heads/subject").as_ref(),
+            );
+            assert_eq!(names(&new), ["refs/heads/subject", "refs/heads/target"]);
         }
     }
 }

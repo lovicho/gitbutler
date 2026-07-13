@@ -37,7 +37,7 @@ impl AgentTarget {
             Self::ClaudeCode => "Claude Code",
             Self::Cursor => "Cursor",
             Self::GitHubCopilot => "GitHub Copilot",
-            Self::Windsurf => "Windsurf / Devin",
+            Self::Windsurf => "Windsurf",
             Self::OpenCode => "OpenCode",
             Self::AgentSkills => "Agent Skills",
         }
@@ -70,8 +70,7 @@ impl AgentTarget {
             detect_agent::Agent::Cursor | detect_agent::Agent::CursorCli => Some(Self::Cursor),
             detect_agent::Agent::GitHubCopilot => Some(Self::GitHubCopilot),
             detect_agent::Agent::OpenCode => Some(Self::OpenCode),
-            detect_agent::Agent::Devin => Some(Self::Windsurf),
-            detect_agent::Agent::Pi => Some(Self::AgentSkills),
+            detect_agent::Agent::Devin => Some(Self::AgentSkills),
             detect_agent::Agent::GeminiCli
             | detect_agent::Agent::Augment
             | detect_agent::Agent::Antigravity
@@ -85,6 +84,7 @@ impl AgentTarget {
             | detect_agent::Agent::RooCode
             | detect_agent::Agent::Trae
             | detect_agent::Agent::TabnineCli
+            | detect_agent::Agent::Pi
             | detect_agent::Agent::Unknown => None,
         }
     }
@@ -151,7 +151,7 @@ impl AgentTarget {
 
     /// This agent's `SKILL_FORMATS` display name. The install paths themselves
     /// are the single source of truth in `crate::command::skill`.
-    fn skill_format_name(self) -> &'static str {
+    pub(super) fn skill_format_name(self) -> &'static str {
         match self {
             Self::Codex => "Codex",
             Self::ClaudeCode => "Claude Code",
@@ -241,7 +241,7 @@ pub(super) fn collect_skill_installs(
     // base directory once, expanding `Both` into global + repository.
     let mut locations: Vec<(Scope, PathBuf)> = Vec::new();
     if matches!(scope, Scope::Global | Scope::Both) {
-        let home = dirs::home_dir()
+        let home = but_path::home_dir()
             .ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
         locations.push((Scope::Global, home));
     }
@@ -278,7 +278,7 @@ pub(super) fn collect_instruction_writes(
     let mut by_path: BTreeMap<PathBuf, Vec<AgentTarget>> = BTreeMap::new();
     let mut print_only_notes = Vec::new();
     let home = if matches!(scope, Scope::Global | Scope::Both) {
-        Some(dirs::home_dir().context("Could not determine home directory")?)
+        Some(but_path::home_dir().context("Could not determine home directory")?)
     } else {
         None
     };

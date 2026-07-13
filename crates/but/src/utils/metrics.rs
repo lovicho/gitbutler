@@ -53,6 +53,10 @@ impl OneshotMetricsContext {
             current_dir,
         }
     }
+
+    pub(crate) fn push_extra_prop<T: Serialize>(&mut self, key: &str, value: T) {
+        push_prop(&mut self.extra_props, key, value);
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, strum::Display)]

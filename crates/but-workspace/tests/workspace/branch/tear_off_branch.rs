@@ -51,12 +51,13 @@ fn tear_off_top_most_branch() -> anyhow::Result<()> {
 
     let editor = Editor::create(&mut ws, &mut meta, &repo)?;
     // Tear off C from the stack.
-    let but_workspace::branch::move_branch::Outcome { rebase, ws_meta } =
-        but_workspace::branch::tear_off_branch(
-            editor,
-            "refs/heads/C".try_into()?,
-            Some(StackId::from_number_for_testing(3)),
-        )?;
+    let but_workspace::branch::move_branch::Outcome {
+        rebase, ws_meta, ..
+    } = but_workspace::branch::tear_off_branch(
+        editor,
+        "refs/heads/C".try_into()?,
+        Some(StackId::from_number_for_testing(3)),
+    )?;
 
     // Materialize the operation
     rebase.materialize()?;
@@ -144,12 +145,13 @@ fn tear_off_bottom_most_branch() -> anyhow::Result<()> {
 
     let editor = Editor::create(&mut ws, &mut meta, &repo)?;
     // Tear off B from the stack.
-    let but_workspace::branch::move_branch::Outcome { rebase, ws_meta } =
-        but_workspace::branch::tear_off_branch(
-            editor,
-            "refs/heads/B".try_into()?,
-            Some(StackId::from_number_for_testing(3)),
-        )?;
+    let but_workspace::branch::move_branch::Outcome {
+        rebase, ws_meta, ..
+    } = but_workspace::branch::tear_off_branch(
+        editor,
+        "refs/heads/B".try_into()?,
+        Some(StackId::from_number_for_testing(3)),
+    )?;
 
     // Materialize the operation
     rebase.materialize()?;
@@ -237,12 +239,13 @@ fn tear_off_only_branch_in_stack() -> anyhow::Result<()> {
 
     let editor = Editor::create(&mut ws, &mut meta, &repo)?;
     // Tear off A from the stack. Should be a no-op.
-    let but_workspace::branch::move_branch::Outcome { rebase, ws_meta } =
-        but_workspace::branch::tear_off_branch(
-            editor,
-            "refs/heads/A".try_into()?,
-            Some(StackId::from_number_for_testing(3)),
-        )?;
+    let but_workspace::branch::move_branch::Outcome {
+        rebase, ws_meta, ..
+    } = but_workspace::branch::tear_off_branch(
+        editor,
+        "refs/heads/A".try_into()?,
+        Some(StackId::from_number_for_testing(3)),
+    )?;
 
     // Materialize the operation
     rebase.materialize()?;
@@ -318,12 +321,13 @@ fn tear_off_from_single_stack_in_ws_top() -> anyhow::Result<()> {
 
     let editor = Editor::create(&mut ws, &mut meta, &repo)?;
     // Tear off B from the stack.
-    let but_workspace::branch::move_branch::Outcome { rebase, ws_meta } =
-        but_workspace::branch::tear_off_branch(
-            editor,
-            "refs/heads/B".try_into()?,
-            Some(StackId::from_number_for_testing(3)),
-        )?;
+    let but_workspace::branch::move_branch::Outcome {
+        rebase, ws_meta, ..
+    } = but_workspace::branch::tear_off_branch(
+        editor,
+        "refs/heads/B".try_into()?,
+        Some(StackId::from_number_for_testing(3)),
+    )?;
 
     // Materialize the operation
     rebase.materialize()?;
@@ -396,12 +400,13 @@ fn tear_off_from_single_stack_in_ws_bottom() -> anyhow::Result<()> {
 
     let editor = Editor::create(&mut ws, &mut meta, &repo)?;
     // Tear off A from the stack.
-    let but_workspace::branch::move_branch::Outcome { rebase, ws_meta } =
-        but_workspace::branch::tear_off_branch(
-            editor,
-            "refs/heads/A".try_into()?,
-            Some(StackId::from_number_for_testing(3)),
-        )?;
+    let but_workspace::branch::move_branch::Outcome {
+        rebase, ws_meta, ..
+    } = but_workspace::branch::tear_off_branch(
+        editor,
+        "refs/heads/A".try_into()?,
+        Some(StackId::from_number_for_testing(3)),
+    )?;
 
     // Materialize the operation
     rebase.materialize()?;
@@ -474,12 +479,13 @@ fn tear_off_empty_branch() -> anyhow::Result<()> {
 
     let editor = Editor::create(&mut ws, &mut meta, &repo)?;
     // Tear off B from the stack.
-    let but_workspace::branch::move_branch::Outcome { rebase, ws_meta } =
-        but_workspace::branch::tear_off_branch(
-            editor,
-            "refs/heads/B".try_into()?,
-            Some(StackId::from_number_for_testing(3)),
-        )?;
+    let but_workspace::branch::move_branch::Outcome {
+        rebase, ws_meta, ..
+    } = but_workspace::branch::tear_off_branch(
+        editor,
+        "refs/heads/B".try_into()?,
+        Some(StackId::from_number_for_testing(3)),
+    )?;
 
     // Materialize the operation
     rebase.materialize()?;
@@ -550,12 +556,13 @@ fn tear_off_non_empty_branch() -> anyhow::Result<()> {
 
     let editor = Editor::create(&mut ws, &mut meta, &repo)?;
     // Tear off A from the stack.
-    let but_workspace::branch::move_branch::Outcome { rebase, ws_meta } =
-        but_workspace::branch::tear_off_branch(
-            editor,
-            "refs/heads/A".try_into()?,
-            Some(StackId::from_number_for_testing(3)),
-        )?;
+    let but_workspace::branch::move_branch::Outcome {
+        rebase, ws_meta, ..
+    } = but_workspace::branch::tear_off_branch(
+        editor,
+        "refs/heads/A".try_into()?,
+        Some(StackId::from_number_for_testing(3)),
+    )?;
 
     // Materialize the operation
     rebase.materialize()?;

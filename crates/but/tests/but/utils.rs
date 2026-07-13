@@ -136,6 +136,13 @@ impl Sandbox {
             .env("E2E_TEST_APP_DATA_DIR", self.app_data_dir())
             .current_dir(self.projects_root())
     }
+
+    /// The sandboxed home directory `but` resolves under `E2E_TEST_APP_DATA_DIR`
+    /// (see `but_path::home_dir`), for tests that inspect or seed user-level
+    /// files like skill installations.
+    pub fn home_dir(&self) -> PathBuf {
+        self.app_data_dir().join("home")
+    }
 }
 
 pub trait CommandExt {

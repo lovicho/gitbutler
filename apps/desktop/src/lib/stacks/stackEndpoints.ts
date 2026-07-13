@@ -61,6 +61,7 @@ import type {
 	BranchRemoveResult,
 	UncommitChangesFromCommitsResult,
 	UncommitChangesSource,
+	BranchRenameResult,
 } from "@gitbutler/but-sdk";
 
 export type BranchParams = {
@@ -524,6 +525,30 @@ export function buildStackEndpoints(build: BackendEndpointBuilder) {
 				invalidatesList(ReduxTag.BranchListing),
 			],
 		}),
+		branchRename: build.mutation<
+			BranchRenameResult,
+			{
+				projectId: string;
+				refName: number[];
+				newName: string;
+				// Carried for the optimistic UI side effect only; not sent to the backend.
+				// (`newName` above IS sent to the backend as part of the rename payload.)
+				laneId?: string;
+				branchName?: string;
+			}
+		>({
+			extraOptions: {
+				command: "branch_rename",
+				actionName: "Rename Branch",
+			},
+			query: ({ projectId, refName, newName }) => ({ projectId, refName, newName }),
+			invalidatesTags: [
+				invalidatesList(ReduxTag.HeadSha),
+				invalidatesList(ReduxTag.Stacks),
+				invalidatesList(ReduxTag.StackDetails),
+				invalidatesList(ReduxTag.BranchListing),
+			],
+		}),
 		uncommit: build.mutation<
 			UncommitResult,
 			{ projectId: string; stackId?: string; commitIds: string[] }
@@ -789,6 +814,10 @@ export function buildStackEndpoints(build: BackendEndpointBuilder) {
 				invalidatesList(ReduxTag.HeadSha),
 				invalidatesList(ReduxTag.WorktreeChanges), // Moving commits can cause conflicts
 				invalidatesList(ReduxTag.BranchChanges),
+				// Reordering empty branches in single-branch mode is metadata-only and doesn't move
+				// HEAD, so the stack/branch list must be invalidated explicitly to reflect the new order.
+				invalidatesList(ReduxTag.Stacks),
+				invalidatesList(ReduxTag.StackDetails),
 			],
 		}),
 		tearOffBranch: build.mutation<

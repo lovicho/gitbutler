@@ -79,7 +79,7 @@
 	const baseBranchNameQuery = $derived(baseBranchService.baseBranchShortName(projectId));
 	const baseBranchName = $derived(baseBranchNameQuery.response);
 	const [insertBlankCommitInBranch, commitInsertion] = stackService.insertBlankCommit.useMutation();
-	const [updateBranchNameMutation] = stackService.updateBranchName;
+	const [renameReference] = stackService.branchRename;
 	const [createBranch, branchCreation] = stackService.branchCreate;
 
 	// Component is read-only when stackId is undefined
@@ -125,8 +125,10 @@
 		aiConfigurationValid = await aiService.validateConfiguration();
 	}
 
-	async function generateBranchName(stackId: string, branchName: string) {
+	async function generateBranchName(branchName: string) {
 		if (!$aiGenEnabled || !aiConfigurationValid) return;
+		const refName = branchReference;
+		if (!refName) return;
 
 		const commitMessages = branchCommits.map((commit) => commit.message);
 		// The context-menu entry is disabled via `hasCommits` when there are
@@ -141,13 +143,17 @@
 			branchTemplate: prompt,
 		});
 
-		if (newBranchName && newBranchName !== branchName) {
-			await updateBranchNameMutation({
-				projectId: projectId,
-				stackId,
+		if (newBranchName) {
+			// Keep the optimistic selection aligned with the normalized ref returned by the backend.
+			const normalized = await stackService.normalizeBranchName(newBranchName);
+			if (!normalized || normalized === branchName) return;
+
+			await renameReference({
+				projectId,
+				refName: [...new TextEncoder().encode(refName)],
+				newName: normalized,
 				laneId,
 				branchName,
-				newName: newBranchName,
 			});
 		}
 	}
@@ -277,7 +283,7 @@
 						testId={TestId.BranchHeaderContextMenu_GenerateBranchName}
 						disabled={isReadOnly || !hasCommits}
 						onclick={() => {
-							generateBranchName(stackId, branchName);
+							generateBranchName(branchName);
 							close();
 						}}
 					/>

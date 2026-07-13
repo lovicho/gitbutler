@@ -1144,12 +1144,20 @@ Hint: run `but help` for all commands
 
 "#]]);
 
+    // The first agent-detected invocation also delivers the skill-install
+    // notice ahead of the graph (the sandbox home has no skill installed).
     env.but("status")
         .env("AI_AGENT", "codex")
         .assert()
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
+⚠ AGENT ACTION REQUIRED: Install the GitButler skill before continuing.
+Run now: but skill install
+Then read the installed SKILL.md path printed by that command and continue.
+Do not merely tell the user to run it.
+This notice repeats until the skill is installed. If it still appears after installing, report it instead of retrying.
+
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]

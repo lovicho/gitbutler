@@ -172,7 +172,27 @@ fn parse_ai_agent_var(lookup: &impl Fn(&str) -> Option<OsString>) -> Option<Agen
     if val.is_empty() {
         return None;
     }
-    Some(match_agent_name(&val).unwrap_or(Agent::Unknown))
+    Some(
+        match_agent_name(&val)
+            .or_else(|| match_agent_name_prefix(&val))
+            .unwrap_or(Agent::Unknown),
+    )
+}
+
+/// Match a normalized `AI_AGENT` value whose leading segments name a known
+/// agent, tolerating trailing decorations that embed a version without the
+/// `@` separator — Claude Code desktop sets e.g. `claude-code_2-1-202_agent`.
+/// Segments are dropped from the end one at a time, so the longest matching
+/// prefix wins (`claude-code-...` resolves before the `claude` alias could).
+fn match_agent_name_prefix(val: &str) -> Option<Agent> {
+    let mut prefix = val;
+    while let Some((rest, _)) = prefix.rsplit_once('-') {
+        if let Some(agent) = match_agent_name(rest) {
+            return Some(agent);
+        }
+        prefix = rest;
+    }
+    None
 }
 
 /// Parse the shorter `AGENT` convention (distinct from `AI_AGENT`), adopted by
@@ -451,6 +471,23 @@ mod tests {
             detect_with(env_from(&[("AI_AGENT", "some-new-agent")])),
             Some(Agent::Unknown),
         );
+    }
+
+    #[test]
+    fn ai_agent_matches_known_prefix_with_trailing_decorations() {
+        // Claude Code desktop embeds its version without the `@` separator.
+        for (value, expected) in [
+            ("claude-code_2-1-202_agent", Agent::ClaudeCode),
+            ("claude-code-2.1.202", Agent::ClaudeCode),
+            ("cursor-cli-extra", Agent::CursorCli),
+        ] {
+            assert_eq!(
+                detect_with(env_from(&[("AI_AGENT", value)])),
+                Some(expected),
+                "AI_AGENT={value} should prefix-match {}",
+                expected.name(),
+            );
+        }
     }
 
     #[test]

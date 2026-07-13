@@ -55,8 +55,11 @@
 	} {
 		if (!snapshotDetails) return { text: "", icon: "commit" };
 
-		function trailer(key: string) {
-			return snapshotDetails?.trailers.find((t) => t.key === key)?.value;
+		function trailer(...keys: string[]) {
+			for (const key of keys) {
+				const value = snapshotDetails?.trailers.find((t) => t.key === key)?.value;
+				if (value !== undefined) return value;
+			}
 		}
 		function entryTrailer(key: string) {
 			return entry.details?.trailers.find((t) => t.key === key)?.value;
@@ -88,7 +91,7 @@
 			// EDIT
 			case "UpdateBranchName":
 				return {
-					text: `Renamed branch "${trailer("before")}" to "${trailer("after")}"`,
+					text: `Renamed branch "${trailer("previous_name", "before")}" to "${trailer("name", "after")}"`,
 					icon: "edit",
 				};
 			case "UpdateBranchRemoteName":

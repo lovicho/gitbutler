@@ -273,12 +273,12 @@ fn uncommit_same_file_from_different_commits_same_branch() -> anyhow::Result<()>
     let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
     env.setup_metadata(&["A", "B"]);
 
-    // Three commits on branch A, each overwriting the same file.
+    // Different lengths prevent racy-clean false negatives on coarse-mtime filesystems.
     env.file("f.txt", "v1\n");
     env.but("commit A -m 'write v1'").assert().success();
-    env.file("f.txt", "v2\n");
+    env.file("f.txt", "v22\n");
     env.but("commit A -m 'write v2'").assert().success();
-    env.file("f.txt", "v3\n");
+    env.file("f.txt", "v333\n");
     env.but("commit A -m 'write v3'").assert().success();
 
     env.but("stf")
@@ -289,10 +289,10 @@ fn uncommit_same_file_from_different_commits_same_branch() -> anyhow::Result<()>
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   e128a9a write v3
-┊│     e:s M f.txt
-┊●   4dba526 write v2
+┊●   485d867 write v3
 ┊│     4:s M f.txt
+┊●   adeaad7 write v2
+┊│     a:s M f.txt
 ┊●   825d09f write v1
 ┊│     8:s A f.txt
 ┊●   9477ae7 add A
@@ -313,11 +313,11 @@ Hint: run `but help` for all commands
     // Commit contents before: newest-first is v3, v2, v1.
     assert_eq!(
         commit_file_content(&env, "A:f.txt").as_deref(),
-        Some("v3\n")
+        Some("v333\n")
     );
     assert_eq!(
         commit_file_content(&env, "A~1:f.txt").as_deref(),
-        Some("v2\n")
+        Some("v22\n")
     );
     assert_eq!(
         commit_file_content(&env, "A~2:f.txt").as_deref(),
@@ -375,7 +375,7 @@ Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "mes
     assert_eq!(commit_file_content(&env, "A:f.txt"), None);
     assert_eq!(commit_file_content(&env, "A~1:f.txt"), None);
     assert_eq!(commit_file_content(&env, "A~2:f.txt"), None);
-    assert_eq!(worktree_file_content(&env, "f.txt"), "v3\n");
+    assert_eq!(worktree_file_content(&env, "f.txt"), "v333\n");
 
     Ok(())
 }

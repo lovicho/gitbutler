@@ -21,7 +21,8 @@ pub enum Subcommands {
     /// Use --global to install the skill in a global location instead of the
     /// current repository.
     ///
-    /// In non-interactive mode, specify --path or --detect.
+    /// In non-interactive mode, a detected agent uses its global skill directory;
+    /// otherwise specify --path or --detect.
     ///
     /// ## Examples
     ///
