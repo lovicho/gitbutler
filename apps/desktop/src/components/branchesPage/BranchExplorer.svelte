@@ -46,9 +46,11 @@
 			"subject.lastCommiter.name",
 			"subject.stack.branches",
 			// Subject is pull request
+			"subject.number",
 			"subject.title",
 			"subject.author.email",
 			"subject.author.name",
+			"subject.sourceBranch",
 		],
 		threshold: 0.3, // 0 is the strictest.
 		ignoreLocation: true,
