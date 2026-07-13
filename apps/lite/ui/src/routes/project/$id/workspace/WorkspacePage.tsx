@@ -10,7 +10,6 @@ import {
 	focusSelectionScope,
 	getFocusedSelectionScope,
 	SelectionScope,
-	useOutlineSelection,
 } from "#ui/selection-scopes.ts";
 import { projectSlice } from "#ui/projects/state.ts";
 import { PickerDialog } from "#ui/components/PickerDialog.tsx";
@@ -383,10 +382,9 @@ const WorkspacePage: FC = () => {
 		absorptionTargetKeys,
 	});
 
-	const outlineSelection = useOutlineSelection({
-		projectId,
-		navigationIndex: outlineNavigationIndex,
-	});
+	const outlineSelection = useAppSelector((state) =>
+		projectSlice.selectors.selectSelectionOutline(state, projectId, outlineNavigationIndex),
+	);
 
 	const deferredOutlineSelection = useDeferredValue(outlineSelection);
 

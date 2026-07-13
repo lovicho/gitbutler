@@ -71,6 +71,7 @@ export const projectSlice = createSlice({
 		selectFilesVisible: fromProject(projectSelectors.selectFilesVisible),
 		selectDetailsFullWindow: fromProject(projectSelectors.selectDetailsFullWindow),
 		selectDialogState: fromProject(projectSelectors.selectDialogState),
+		selectIsSelectedOutline: fromProject(projectSelectors.selectIsSelectedOutline),
 		selectSelectionOutline: fromProject(projectSelectors.selectSelectionOutline),
 		selectSelectionFiles: fromProject(projectSelectors.selectSelectionFiles),
 		selectSelectionDiff: fromProject(projectSelectors.selectSelectionDiff),

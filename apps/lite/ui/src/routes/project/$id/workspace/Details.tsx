@@ -86,12 +86,7 @@ import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panel
 import styles from "./Details.module.css";
 import { diffHotkeys, pullRequestHotkeys, workspaceHotkeys } from "#ui/hotkeys.ts";
 import { useHotkey, useHotkeys } from "@tanstack/react-hotkeys";
-import {
-	type SelectionScope,
-	useDiffSelection,
-	useFilesSelection,
-	useNavigationIndexHotkeys,
-} from "#ui/selection-scopes.ts";
+import { type SelectionScope, useNavigationIndexHotkeys } from "#ui/selection-scopes.ts";
 import { FilesTree } from "#ui/routes/project/$id/workspace/FilesTree.tsx";
 import { TopLeftControls } from "#ui/routes/project/$id/workspace/TopLeftControls.tsx";
 import {
@@ -358,7 +353,9 @@ const DiffContents: FC<{
 	});
 	const openInEditor = useOpenInEditor();
 
-	const diffSelection = useDiffSelection(projectId, navigationIndex);
+	const diffSelection = useAppSelector((state) =>
+		projectSlice.selectors.selectSelectionDiff(state, projectId, navigationIndex),
+	);
 	const diffSelectionFile =
 		diffSelection !== null ? fileByHunkKey.get(hunkOperandIdentityKey(diffSelection)) : null;
 	const selectedRange = diffSelection
@@ -971,7 +968,9 @@ const Diff: FC<{
 		items: files,
 		indexByKey: buildIndexByKey(files, (path) => path),
 	};
-	const filesSelection = useFilesSelection(projectId, filesNavigationIndex);
+	const filesSelection = useAppSelector((state) =>
+		projectSlice.selectors.selectSelectionFiles(state, projectId, filesNavigationIndex),
+	);
 
 	const changesetKey = Match.value(outlineSelection).pipe(
 		Match.tags({

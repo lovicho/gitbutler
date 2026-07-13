@@ -1,14 +1,13 @@
 import { NavigationIndexContext } from "../OutlineNavigationIndexContext.ts";
 import { Row } from "../Row.tsx";
 import { projectSlice } from "#ui/projects/state.ts";
-import { useAppDispatch } from "#ui/store.ts";
+import { useAppDispatch, useAppSelector } from "#ui/store.ts";
 import { operandIdentityKey, type Operand } from "#ui/operands.ts";
 import { navigationIndexIncludes } from "#ui/workspace/navigation-index.ts";
 import { Tooltip } from "@base-ui/react";
 import { ComponentProps, FC, use } from "react";
 import { assert } from "#ui/assert.ts";
 import { TooltipPopup } from "#ui/components/Tooltip.tsx";
-import { useIsSelected } from "./useIsSelected.ts";
 import styles from "./ItemRow.module.css";
 
 const CommitTargetIndicator: FC = () => (
@@ -47,7 +46,9 @@ export const ItemRow: FC<
 > = ({ projectId, operand, isCommitTarget, ...props }) => {
 	const dispatch = useAppDispatch();
 	const navigationIndex = assert(use(NavigationIndexContext));
-	const isSelected = useIsSelected({ projectId, operand });
+	const isSelected = useAppSelector((state) =>
+		projectSlice.selectors.selectIsSelectedOutline(state, projectId, navigationIndex, operand),
+	);
 	const selectItem = () => {
 		dispatch(projectSlice.actions.selectOutline({ projectId, selection: operand }));
 	};

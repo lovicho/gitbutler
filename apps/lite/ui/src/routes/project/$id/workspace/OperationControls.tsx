@@ -16,7 +16,7 @@ import {
 } from "#ui/operations/operation.ts";
 import { projectSlice } from "#ui/projects/state.ts";
 import { operandLabel } from "#ui/routes/project/$id/workspace/operandLabel.ts";
-import { focusSelectionScope, useOutlineSelection } from "#ui/selection-scopes.ts";
+import { focusSelectionScope } from "#ui/selection-scopes.ts";
 import { useAppDispatch, useAppSelector } from "#ui/store.ts";
 import { Button, Tooltip } from "@base-ui/react";
 import { Toggle } from "@base-ui/react/toggle";
@@ -288,7 +288,9 @@ const TransferKeyboardOperationControls: FC<{
 	mode: KeyboardTransferMode;
 	outlineNavigationIndex: NavigationIndex<Operand>;
 }> = ({ headInfoIndex, projectId, mode, outlineNavigationIndex }) => {
-	const selection = useOutlineSelection({ projectId, navigationIndex: outlineNavigationIndex });
+	const selection = useAppSelector((state) =>
+		projectSlice.selectors.selectSelectionOutline(state, projectId, outlineNavigationIndex),
+	);
 
 	const dispatch = useAppDispatch();
 	const { mutate: runOperation } = useRunOperation();

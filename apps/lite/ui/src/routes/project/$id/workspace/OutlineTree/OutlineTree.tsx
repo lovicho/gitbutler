@@ -14,7 +14,6 @@ import {
 	type Operand,
 	operandEquals,
 } from "#ui/operands.ts";
-import { useOutlineSelection } from "#ui/selection-scopes.ts";
 import { projectSlice } from "#ui/projects/state.ts";
 import { OperationSourceC } from "#ui/routes/project/$id/workspace/OperationSourceC.tsx";
 import {
@@ -47,7 +46,6 @@ import { GraphSegment, GraphSegmentStatus } from "#ui/components/GraphSegment.ts
 import { segmentBottomRelativeTo } from "#ui/api/stack.ts";
 import { assert } from "#ui/assert.ts";
 import { useMergedRefs } from "@base-ui/utils/useMergedRefs";
-import { useIsSelected } from "./useIsSelected.ts";
 import { CommitRow } from "./CommitRow.tsx";
 import { BranchRow } from "./BranchRow.tsx";
 import { StackRow } from "./StackRow.tsx";
@@ -78,7 +76,10 @@ const TreeItem: FC<
 		operand: Operand;
 	} & useRender.ComponentProps<"div">
 > = ({ projectId, operand, render, ...props }) => {
-	const isSelected = useIsSelected({ projectId, operand });
+	const navigationIndex = assert(use(NavigationIndexContext));
+	const isSelected = useAppSelector((state) =>
+		projectSlice.selectors.selectIsSelectedOutline(state, projectId, navigationIndex, operand),
+	);
 
 	return useRender({
 		render,
@@ -98,36 +99,40 @@ const OperandC: FC<
 		outline: OperationTargetOutline;
 	} & useRender.ComponentProps<"div">
 > = ({ projectId, operand, outline, render, ...props }) => {
-	const isSelected = useIsSelected({ projectId, operand });
 	const absorptionTargetKeys = assert(use(AbsorptionTargetKeysContext));
 	const navigationIndex = assert(use(NavigationIndexContext));
+	const isSelected = useAppSelector((state) =>
+		projectSlice.selectors.selectIsSelectedOutline(state, projectId, navigationIndex, operand),
+	);
 
 	const activeOperation = useAppSelector((state) => {
 		const outlineMode = projectSlice.selectors.selectOutlineModeState(state, projectId);
 
 		return Match.value(outlineMode).pipe(
-			Match.when({ _tag: "Absorb" }, (): ActiveOperation | null => {
-				const isAbsorptionTarget = absorptionTargetKeys.has(operandIdentityKey(operand));
-				return isAbsorptionTarget ? { operationType: "into", tooltip: "Absorb target" } : null;
-			}),
-			Match.when({ _tag: "Transfer" }, ({ value: mode }): ActiveOperation | null => {
-				const isActive = Match.value(mode).pipe(
-					Match.tagsExhaustive({
-						Pointer: (mode) => mode.target !== null && operandEquals(mode.target, operand),
-						Keyboard: () => isSelected,
-					}),
-				);
+			Match.tags({
+				Absorb: (): ActiveOperation | null => {
+					const isAbsorptionTarget = absorptionTargetKeys.has(operandIdentityKey(operand));
+					return isAbsorptionTarget ? { operationType: "into", tooltip: "Absorb target" } : null;
+				},
+				Transfer: ({ value: mode }): ActiveOperation | null => {
+					const isActive = Match.value(mode).pipe(
+						Match.tagsExhaustive({
+							Pointer: (mode) => mode.target !== null && operandEquals(mode.target, operand),
+							Keyboard: () => isSelected,
+						}),
+					);
 
-				return isActive && mode.operationType !== null
-					? {
-							operationType: mode.operationType,
-							tooltip: getOperation({
-								source: mode.source,
-								target: operand,
+					return isActive && mode.operationType !== null
+						? {
 								operationType: mode.operationType,
-							})?.label,
-						}
-					: null;
+								tooltip: getOperation({
+									source: mode.source,
+									target: operand,
+									operationType: mode.operationType,
+								})?.label,
+							}
+						: null;
+				},
 			}),
 			Match.orElse(() => null),
 		);
@@ -245,7 +250,9 @@ const UncommittedFileRow: FC<{
 		path: item.path,
 	});
 	const navigationIndex = assert(use(NavigationIndexContext));
-	const isSelected = useIsSelected({ projectId, operand });
+	const isSelected = useAppSelector((state) =>
+		projectSlice.selectors.selectIsSelectedOutline(state, projectId, navigationIndex, operand),
+	);
 	const dispatch = useAppDispatch();
 
 	return (
@@ -527,32 +534,36 @@ const Stacks: FC<{
 }> = ({ projectId, commitTarget }) => {
 	const navigationIndex = assert(use(NavigationIndexContext));
 	const { data: headInfo } = useQuery(headInfoQueryOptions(projectId));
-	const selection = useOutlineSelection({ projectId, navigationIndex });
-	const outlineMode = useAppSelector((state) =>
-		projectSlice.selectors.selectOutlineModeState(state, projectId),
-	);
+	const dryRunOperation = useAppSelector((state) => {
+		const selection = projectSlice.selectors.selectSelectionOutline(
+			state,
+			projectId,
+			navigationIndex,
+		);
+		const outlineMode = projectSlice.selectors.selectOutlineModeState(state, projectId);
 
-	const dryRunOperation = Match.value(outlineMode).pipe(
-		Match.when({ _tag: "Transfer", value: { _tag: "Pointer" } }, ({ value: mode }) =>
-			mode.target && mode.operationType !== null
-				? getOperation({
-						source: mode.source,
-						target: mode.target,
-						operationType: mode.operationType,
-					})?.operation
-				: undefined,
-		),
-		Match.when({ _tag: "Transfer", value: { _tag: "Keyboard" } }, ({ value: mode }) =>
-			selection
-				? getOperation({
-						source: mode.source,
-						target: selection,
-						operationType: mode.operationType,
-					})?.operation
-				: undefined,
-		),
-		Match.orElse(() => undefined),
-	);
+		return Match.value(outlineMode).pipe(
+			Match.tags({
+				Transfer: ({ value: mode }) => {
+					const target = Match.value(mode).pipe(
+						Match.tagsExhaustive({
+							Pointer: (mode) => mode.target,
+							Keyboard: () => selection,
+						}),
+					);
+
+					return target && mode.operationType !== null
+						? getOperation({
+								source: mode.source,
+								target,
+								operationType: mode.operationType,
+							})?.operation
+						: undefined;
+				},
+			}),
+			Match.orElse(() => undefined),
+		);
+	});
 
 	// TODO: debounce?
 	const dryRunOperationQuery = useDryRunOperation({ projectId, operation: dryRunOperation });
@@ -584,7 +595,9 @@ export const OutlineTree: FC<
 	ref: refProp,
 	...props
 }) => {
-	const selection = useOutlineSelection({ projectId, navigationIndex });
+	const selection = useAppSelector((state) =>
+		projectSlice.selectors.selectSelectionOutline(state, projectId, navigationIndex),
+	);
 	const hasCheckedCommits = useAppSelector((state) =>
 		projectSlice.selectors.selectHasCheckedCommits(state, projectId),
 	);

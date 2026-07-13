@@ -5,6 +5,7 @@ import {
 	commitOperand,
 	hunkOperand,
 	operandEquals,
+	operandIdentityKey,
 	type BranchOperand,
 	type CommitOperand,
 	type HunkOperand,
@@ -23,6 +24,7 @@ import {
 	type OutlineMode,
 	type TransferMode,
 } from "#ui/outline/mode.ts";
+import { navigationIndexIncludes, type NavigationIndex } from "#ui/workspace/navigation-index.ts";
 import type { AbsorptionTarget, RefInfo, RelativeTo } from "@gitbutler/but-sdk";
 import { Match } from "effect";
 
@@ -75,6 +77,18 @@ export const createInitialProjectState = (): ProjectState => ({
 	filesVisible: false,
 	workspace: createInitialWorkspaceState(),
 });
+
+const resolveNavigationIndexSelection = <T>(
+	navigationIndex: NavigationIndex<T>,
+	selection: T | null,
+	getKey: (item: T) => string,
+): T | null =>
+	selection !== null && navigationIndexIncludes(navigationIndex, selection, getKey)
+		? selection
+		: (navigationIndex.items[0] ?? null);
+
+const hunkOperandIdentityKey = (operand: HunkOperand): string =>
+	operandIdentityKey(hunkOperand(operand));
 
 export const projectReducers = {
 	selectOutline: (state: ProjectState, { selection }: { selection: Operand | null }) => {
@@ -353,9 +367,36 @@ export const projectSelectors = {
 	selectFilesVisible: (state: ProjectState) => state.filesVisible,
 	selectDetailsFullWindow: (state: ProjectState) => state.detailsFullWindow,
 	selectDialogState: (state: ProjectState) => state.dialog,
-	selectSelectionOutline: (state: ProjectState) => state.workspace.selection.outline,
-	selectSelectionFiles: (state: ProjectState) => state.workspace.selection.files,
-	selectSelectionDiff: (state: ProjectState) => state.workspace.selection.diff,
+	selectIsSelectedOutline: (
+		state: ProjectState,
+		navigationIndex: NavigationIndex<Operand>,
+		operand: Operand,
+	) => {
+		const selection = resolveNavigationIndexSelection(
+			navigationIndex,
+			state.workspace.selection.outline,
+			operandIdentityKey,
+		);
+		return selection !== null && operandEquals(selection, operand);
+	},
+	selectSelectionOutline: (state: ProjectState, navigationIndex: NavigationIndex<Operand>) =>
+		resolveNavigationIndexSelection(
+			navigationIndex,
+			state.workspace.selection.outline,
+			operandIdentityKey,
+		),
+	selectSelectionFiles: (state: ProjectState, navigationIndex: NavigationIndex<string>) =>
+		resolveNavigationIndexSelection(
+			navigationIndex,
+			state.workspace.selection.files,
+			(item) => item,
+		),
+	selectSelectionDiff: (state: ProjectState, navigationIndex: NavigationIndex<HunkOperand>) =>
+		resolveNavigationIndexSelection(
+			navigationIndex,
+			state.workspace.selection.diff,
+			hunkOperandIdentityKey,
+		),
 	selectOutlineModeState: (state: ProjectState) => state.workspace.mode,
 	selectHighlightedCommitIds: (state: ProjectState) => state.workspace.highlightedCommitIds,
 	selectCommitChecked: (state: ProjectState, commitId: string) =>

@@ -20,11 +20,7 @@ import {
 	type Operand,
 } from "#ui/operands.ts";
 import { projectSlice } from "#ui/projects/state.ts";
-import {
-	focusSelectionScope,
-	useNavigationIndexHotkeys,
-	useOutlineSelection,
-} from "#ui/selection-scopes.ts";
+import { focusSelectionScope, useNavigationIndexHotkeys } from "#ui/selection-scopes.ts";
 import { useAppDispatch, useAppSelector } from "#ui/store.ts";
 import { type NavigationIndex } from "#ui/workspace/navigation-index.ts";
 import { prForgeUrl } from "#ui/pr.ts";
@@ -86,7 +82,9 @@ export const useOutlineTreeHotkeys = ({
 		select: getHeadInfoIndex,
 	});
 	const { data: forgeInfo } = useQuery(forgeInfoOptions(projectId));
-	const selection = useOutlineSelection({ projectId, navigationIndex });
+	const selection = useAppSelector((state) =>
+		projectSlice.selectors.selectSelectionOutline(state, projectId, navigationIndex),
+	);
 	const isDefaultMode = useAppSelector(
 		(state) => projectSlice.selectors.selectOutlineModeState(state, projectId)._tag === "Default",
 	);
