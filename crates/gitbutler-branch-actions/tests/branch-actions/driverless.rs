@@ -23,7 +23,10 @@ pub fn writable_context(script_name: &str, repo_name: &str) -> Result<(Context, 
     let (tmp, _) = gix_testtools::scripted_fixture_writable_with_args_with_post(
         script_name.clone(),
         None::<String>,
-        if script_name == "reorder.sh" || script_name == "workspace-commit.sh" {
+        if script_name == "reorder.sh"
+            || script_name == "workspace-commit.sh"
+            || script_name == "for-listing.sh"
+        {
             gix_testtools::Creation::Execute
         } else {
             gix_testtools::Creation::CopyFromReadOnly

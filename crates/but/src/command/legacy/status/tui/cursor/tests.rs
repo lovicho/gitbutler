@@ -99,9 +99,13 @@ fn hunk_assignment(path: &str, old_start: u32) -> HunkAssignment {
 }
 
 fn uncommitted_cli_id(path: &str, id: &str) -> Arc<CliId> {
+    uncommitted_cli_id_with_old_start(path, id, 1)
+}
+
+fn uncommitted_cli_id_with_old_start(path: &str, id: &str, old_start: u32) -> Arc<CliId> {
     Arc::new(CliId::UncommittedHunkOrFile(UncommittedHunkOrFile {
         id: id.to_owned(),
-        hunk_assignments: NonEmpty::new(hunk_assignment(path, 1)),
+        hunk_assignments: NonEmpty::new(hunk_assignment(path, old_start)),
         is_entire_file: true,
     }))
 }
@@ -223,29 +227,51 @@ fn new_defaults_to_zero_when_no_line_is_selectable() {
 }
 
 #[test]
-fn restore_returns_matching_line_by_cli_id() {
+fn restore_returns_matching_branch_after_short_ids_change() {
     let lines = vec![
         line(StatusOutputLineData::Connector),
-        line(StatusOutputLineData::Branch {
-            cli_id: Arc::new(CliId::Branch {
-                name: "main".into(),
-                id: "b0".into(),
-                stack_id: None,
-            }),
-            is_merged_upstream: false,
-        }),
-        line(StatusOutputLineData::UncommittedChanges {
-            cli_id: uncommitted_area("u0"),
-        }),
+        branch_line("main", "b"),
+        branch_line("other", "b0"),
     ];
 
     let selected_cli_id = CliId::Branch {
-        name: "any-other-name".into(),
+        name: "main".into(),
         id: "b0".into(),
         stack_id: None,
     };
 
-    assert_eq!(Cursor::restore(&selected_cli_id, &lines), Some(Cursor(1)));
+    assert_eq!(
+        Cursor::restore(&selected_cli_id, &lines),
+        Some(Cursor(1)),
+        "the stable branch name should win over matching the previous short ID"
+    );
+}
+
+#[test]
+fn restore_returns_matching_uncommitted_file_after_short_ids_change() {
+    let lines = vec![
+        uncommitted_file_line("other.txt", "f0"),
+        uncommitted_file_line("wanted.txt", "f"),
+    ];
+    let selected_cli_id = uncommitted_cli_id("wanted.txt", "f0");
+
+    assert_eq!(
+        Cursor::restore(&selected_cli_id, &lines),
+        Some(Cursor(1)),
+        "the stable file identity should win over matching the previous short ID"
+    );
+}
+
+#[test]
+fn restore_returns_matching_uncommitted_file_after_its_hunks_change() {
+    let lines = vec![uncommitted_file_line("wanted.txt", "f")];
+    let selected_cli_id = uncommitted_cli_id_with_old_start("wanted.txt", "f0", 2);
+
+    assert_eq!(
+        Cursor::restore(&selected_cli_id, &lines),
+        Some(Cursor(0)),
+        "the file path and assignment should identify a whole file as its hunks change"
+    );
 }
 
 #[test]

@@ -8,7 +8,7 @@ import {
 	showNativeMenuFromTrigger,
 	type NativeMenuItem,
 } from "#ui/native-menu.ts";
-import { selectProjectOutlineModeState } from "#ui/projects/state.ts";
+import { projectSlice } from "#ui/projects/state.ts";
 import { useAppSelector } from "#ui/store.ts";
 import { stackBottomRelativeTo } from "#ui/api/stack.ts";
 import { Toolbar } from "@base-ui/react/toolbar";
@@ -28,7 +28,7 @@ export const StackRow: FC<
 		? { kind: "rebase", selector: relativeTo }
 		: null;
 	const isDefaultMode = useAppSelector(
-		(state) => selectProjectOutlineModeState(state, projectId)._tag === "Default",
+		(state) => projectSlice.selectors.selectOutlineModeState(state, projectId)._tag === "Default",
 	);
 
 	const unapplyStackMutation = useUnapplyStack();

@@ -12,8 +12,8 @@ pub enum Subcommands {
     /// By default, the command prompts you to choose installation scope first
     /// (current repository or global home directory), then prompts you to
     /// select a skill folder format (Agent Skills / .agents, Claude Code,
-    /// OpenCode, Codex, GitHub Copilot, Cursor, Windsurf) unless you specify a
-    /// custom path with --path.
+    /// OpenCode, Codex, GitHub Copilot, Cursor, Windsurf, Poolside) unless you
+    /// specify a custom path with --path.
     /// When run outside a git repository, local scope is unavailable and the
     /// default install location is global (home directory). You can still
     /// install to a custom location with `--path` using an absolute or `~` path.

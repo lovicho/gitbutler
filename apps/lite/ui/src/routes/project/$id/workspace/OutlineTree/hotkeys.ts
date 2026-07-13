@@ -10,7 +10,7 @@ import {
 import { forgeInfoOptions, headInfoQueryOptions } from "#ui/api/queries.ts";
 import { decodeBytes } from "#ui/api/bytes.ts";
 import { getHeadInfoIndex } from "#ui/api/ref-info.ts";
-import { commitForgeUrl } from "#ui/commit.ts";
+import { commitForgeUrl, rewrittenCommitSelection } from "#ui/commit.ts";
 import { outlineHotkeys } from "#ui/hotkeys.ts";
 import {
 	branchOperand,
@@ -19,12 +19,7 @@ import {
 	uncommittedChangesOperand,
 	type Operand,
 } from "#ui/operands.ts";
-import {
-	projectActions,
-	selectProjectCommitChecked,
-	selectProjectOutlineModeState,
-} from "#ui/projects/state.ts";
-import { rewrittenCommitSelection } from "#ui/projects/workspace/state.ts";
+import { projectSlice } from "#ui/projects/state.ts";
 import {
 	focusSelectionScope,
 	useNavigationIndexHotkeys,
@@ -93,7 +88,7 @@ export const useOutlineTreeHotkeys = ({
 	const { data: forgeInfo } = useQuery(forgeInfoOptions(projectId));
 	const selection = useOutlineSelection({ projectId, navigationIndex });
 	const isDefaultMode = useAppSelector(
-		(state) => selectProjectOutlineModeState(state, projectId)._tag === "Default",
+		(state) => projectSlice.selectors.selectOutlineModeState(state, projectId)._tag === "Default",
 	);
 
 	const selectedStack =
@@ -108,13 +103,13 @@ export const useOutlineTreeHotkeys = ({
 	const selectedBranchCommitsChecked = useAppSelector((state) =>
 		selectedBranchSegment && selectedBranchSegment.commits.length > 0
 			? selectedBranchSegment.commits.every((commit) =>
-					selectProjectCommitChecked(state, projectId, commit.id),
+					projectSlice.selectors.selectCommitChecked(state, projectId, commit.id),
 				)
 			: false,
 	);
 	const selectedCommitChecked = useAppSelector((state) =>
 		selection?._tag === "Commit"
-			? selectProjectCommitChecked(state, projectId, selection.commitId)
+			? projectSlice.selectors.selectCommitChecked(state, projectId, selection.commitId)
 			: false,
 	);
 	const selectedCommit =
@@ -140,11 +135,11 @@ export const useOutlineTreeHotkeys = ({
 	const branchCreateMutation = useBranchCreate();
 
 	const openBranchPicker = () => {
-		dispatch(projectActions.openBranchPicker({ projectId }));
+		dispatch(projectSlice.actions.openDialog({ projectId, dialog: { _tag: "BranchPicker" } }));
 	};
 
 	const enterAbsorbMode = (source: Operand, sourceTarget: AbsorptionTarget) => {
-		dispatch(projectActions.enterAbsorbMode({ projectId, source, sourceTarget }));
+		dispatch(projectSlice.actions.enterAbsorbMode({ projectId, source, sourceTarget }));
 	};
 
 	const amendCommit = () => {
@@ -154,7 +149,7 @@ export const useOutlineTreeHotkeys = ({
 	};
 
 	const setCommitTarget = (relativeTo: RelativeTo) => {
-		dispatch(projectActions.setCommitTarget({ projectId, commitTarget: relativeTo }));
+		dispatch(projectSlice.actions.setCommitTarget({ projectId, commitTarget: relativeTo }));
 	};
 
 	const composeCommitHere = (relativeTo: RelativeTo) => {
@@ -214,7 +209,7 @@ export const useOutlineTreeHotkeys = ({
 
 					if (newBranchStack && newBranchStack.id !== null) {
 						dispatch(
-							projectActions.selectOutline({
+							projectSlice.actions.selectOutline({
 								projectId,
 								selection: branchOperand({
 									stackId: newBranchStack.id,
@@ -232,7 +227,7 @@ export const useOutlineTreeHotkeys = ({
 		if (!selection || selection._tag !== "Commit") return;
 
 		dispatch(
-			projectActions.setCommitChecked({
+			projectSlice.actions.setCommitChecked({
 				projectId,
 				commitId: selection.commitId,
 				checked: !selectedCommitChecked,
@@ -244,7 +239,7 @@ export const useOutlineTreeHotkeys = ({
 		if (!selectedBranchSegment) return;
 
 		dispatch(
-			projectActions.setCommitsChecked({
+			projectSlice.actions.setCommitsChecked({
 				projectId,
 				commitIds: selectedBranchSegment.commits.map((commit) => commit.id),
 				checked: !selectedBranchCommitsChecked,
@@ -300,7 +295,7 @@ export const useOutlineTreeHotkeys = ({
 			{
 				onSuccess: (response) => {
 					dispatch(
-						projectActions.selectOutline({
+						projectSlice.actions.selectOutline({
 							projectId,
 							selection: rewrittenCommitSelection({
 								selection: selectionAfterDiscard,
@@ -388,7 +383,8 @@ export const useOutlineTreeHotkeys = ({
 		navigationIndex,
 		projectId,
 		group: "Outline",
-		select: (newItem) => dispatch(projectActions.selectOutline({ projectId, selection: newItem })),
+		select: (newItem) =>
+			dispatch(projectSlice.actions.selectOutline({ projectId, selection: newItem })),
 		selection,
 		getKey: operandIdentityKey,
 		operationSourceForItem: (operand) => operand,
@@ -408,7 +404,9 @@ export const useOutlineTreeHotkeys = ({
 		{
 			hotkey: outlineHotkeys.selectChanges.hotkey,
 			callback: () => {
-				dispatch(projectActions.selectOutline({ projectId, selection: uncommittedChangesOperand }));
+				dispatch(
+					projectSlice.actions.selectOutline({ projectId, selection: uncommittedChangesOperand }),
+				);
 				focusSelectionScope("outline");
 			},
 			options: { conflictBehavior: "allow" },
@@ -429,7 +427,7 @@ export const useOutlineTreeHotkeys = ({
 					{
 						hotkey: outlineHotkeys.rewordCommit.hotkey,
 						callback: () => {
-							dispatch(projectActions.startRewordCommit({ projectId, commit: selection }));
+							dispatch(projectSlice.actions.startRewordCommit({ projectId, commit: selection }));
 						},
 						options: {
 							conflictBehavior: "allow",
@@ -443,7 +441,7 @@ export const useOutlineTreeHotkeys = ({
 					{
 						hotkey: outlineHotkeys.renameBranch.hotkey,
 						callback: () => {
-							dispatch(projectActions.startRenameBranch({ projectId, branch: selection }));
+							dispatch(projectSlice.actions.startRenameBranch({ projectId, branch: selection }));
 						},
 						options: {
 							conflictBehavior: "allow",

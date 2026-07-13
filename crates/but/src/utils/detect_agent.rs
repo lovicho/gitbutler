@@ -19,6 +19,7 @@ pub enum Agent {
     GeminiCli,
     GitHubCopilot,
     OpenCode,
+    Poolside,
     Augment,
     Antigravity,
     Replit,
@@ -48,6 +49,7 @@ impl Agent {
             Self::GeminiCli => "gemini-cli",
             Self::GitHubCopilot => "github-copilot",
             Self::OpenCode => "opencode",
+            Self::Poolside => "poolside",
             Self::Augment => "augment",
             Self::Antigravity => "antigravity",
             Self::Replit => "replit",
@@ -225,6 +227,7 @@ fn match_agent_name(val: &str) -> Option<Agent> {
             Agent::GitHubCopilot
         }
         "opencode" => Agent::OpenCode,
+        "poolside" | "pool" => Agent::Poolside,
         "augment" | "augment-cli" => Agent::Augment,
         "antigravity" => Agent::Antigravity,
         "replit" => Agent::Replit,
@@ -443,7 +446,7 @@ mod tests {
     }
 
     #[test]
-    fn ai_agent_accepts_vercel_aliases() {
+    fn ai_agent_accepts_known_aliases() {
         let cases = [
             ("claude", Agent::ClaudeCode),
             ("cowork", Agent::ClaudeCodeCowork),
@@ -452,6 +455,7 @@ mod tests {
             ("github-copilot-cli", Agent::GitHubCopilot),
             ("github_copilot_vscode_agent", Agent::GitHubCopilot),
             ("devin", Agent::Devin),
+            ("pool", Agent::Poolside),
             ("v0", Agent::V0),
         ];
 
@@ -643,6 +647,7 @@ mod tests {
             Agent::GeminiCli,
             Agent::GitHubCopilot,
             Agent::OpenCode,
+            Agent::Poolside,
             Agent::Augment,
             Agent::Antigravity,
             Agent::Replit,

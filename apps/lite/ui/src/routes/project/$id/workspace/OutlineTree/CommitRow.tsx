@@ -14,7 +14,13 @@ import { GraphSegment } from "#ui/components/GraphSegment.tsx";
 import { Icon } from "#ui/components/Icon.tsx";
 import { TooltipPopup } from "#ui/components/Tooltip.tsx";
 import { assert } from "#ui/assert.ts";
-import { commitBody, commitForgeUrl, commitIsDiverged, commitTitle } from "#ui/commit.ts";
+import {
+	commitBody,
+	commitForgeUrl,
+	commitIsDiverged,
+	commitTitle,
+	rewrittenCommitSelection,
+} from "#ui/commit.ts";
 import { errorMessageForToast } from "#ui/errors.ts";
 import { outlineHotkeys, selectionOperationHotkeys, toElectronAccelerator } from "#ui/hotkeys.ts";
 import {
@@ -25,13 +31,7 @@ import {
 	type NativeMenuItem,
 } from "#ui/native-menu.ts";
 import { branchOperand, commitOperand, operandEquals, type CommitOperand } from "#ui/operands.ts";
-import {
-	projectActions,
-	selectProjectCommitChecked,
-	selectProjectHighlightedCommitIds,
-	selectProjectOutlineModeState,
-} from "#ui/projects/state.ts";
-import { rewrittenCommitSelection } from "#ui/projects/workspace/state.ts";
+import { projectSlice } from "#ui/projects/state.ts";
 import { focusSelectionScope } from "#ui/selection-scopes.ts";
 import { useAppDispatch, useAppSelector } from "#ui/store.ts";
 import { RelativeTo, type Commit } from "@gitbutler/but-sdk";
@@ -66,10 +66,10 @@ export const CommitRow: FC<
 	const mforgeUrl = forgeInfo && commitForgeUrl(commit, forgeInfo);
 
 	const isHighlighted = useAppSelector((state) =>
-		selectProjectHighlightedCommitIds(state, projectId).includes(commit.id),
+		projectSlice.selectors.selectHighlightedCommitIds(state, projectId).includes(commit.id),
 	);
 	const isChecked = useAppSelector((state) =>
-		selectProjectCommitChecked(state, projectId, commit.id),
+		projectSlice.selectors.selectCommitChecked(state, projectId, commit.id),
 	);
 
 	const dispatch = useAppDispatch();
@@ -80,10 +80,10 @@ export const CommitRow: FC<
 	};
 	const operand = commitOperand(commitOperandV);
 	const isDefaultMode = useAppSelector(
-		(state) => selectProjectOutlineModeState(state, projectId)._tag === "Default",
+		(state) => projectSlice.selectors.selectOutlineModeState(state, projectId)._tag === "Default",
 	);
 	const isRewording = useAppSelector((state) => {
-		const outlineMode = selectProjectOutlineModeState(state, projectId);
+		const outlineMode = projectSlice.selectors.selectOutlineModeState(state, projectId);
 		return (
 			outlineMode._tag === "RewordCommit" &&
 			operandEquals(operand, commitOperand(outlineMode.operand))
@@ -138,7 +138,7 @@ export const CommitRow: FC<
 
 					if (newBranchStack && newBranchStack.id !== null) {
 						dispatch(
-							projectActions.selectOutline({
+							projectSlice.actions.selectOutline({
 								projectId,
 								selection: branchOperand({
 									stackId: newBranchStack.id,
@@ -167,7 +167,7 @@ export const CommitRow: FC<
 			{
 				onSuccess: (response) => {
 					dispatch(
-						projectActions.selectOutline({
+						projectSlice.actions.selectOutline({
 							projectId,
 							selection: rewrittenCommitSelection({
 								selection: selectionAfterDiscard,
@@ -183,7 +183,7 @@ export const CommitRow: FC<
 
 	const cutCommit = () => {
 		dispatch(
-			projectActions.enterKeyboardTransferMode({
+			projectSlice.actions.enterKeyboardTransferMode({
 				projectId,
 				source: operand,
 			}),
@@ -192,12 +192,12 @@ export const CommitRow: FC<
 	};
 
 	const startEditing = () => {
-		dispatch(projectActions.startRewordCommit({ projectId, commit: commitOperandV }));
+		dispatch(projectSlice.actions.startRewordCommit({ projectId, commit: commitOperandV }));
 	};
 
 	const endEditing = () => {
-		dispatch(projectActions.exitMode({ projectId }));
-		dispatch(projectActions.selectOutline({ projectId, selection: operand }));
+		dispatch(projectSlice.actions.exitMode({ projectId }));
+		dispatch(projectSlice.actions.selectOutline({ projectId, selection: operand }));
 		focusSelectionScope("outline");
 	};
 
@@ -237,7 +237,7 @@ export const CommitRow: FC<
 	};
 
 	const setCommitTarget = () => {
-		dispatch(projectActions.setCommitTarget({ projectId, commitTarget: relativeTo }));
+		dispatch(projectSlice.actions.setCommitTarget({ projectId, commitTarget: relativeTo }));
 	};
 
 	const composeCommitHere = () => {
@@ -381,7 +381,7 @@ export const CommitRow: FC<
 						render={<Tooltip.Trigger />}
 						onCheckedChange={(checked) => {
 							dispatch(
-								projectActions.setCommitChecked({ projectId, commitId: commit.id, checked }),
+								projectSlice.actions.setCommitChecked({ projectId, commitId: commit.id, checked }),
 							);
 						}}
 					/>

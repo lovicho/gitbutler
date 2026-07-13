@@ -1,43 +1,14 @@
 import {
-	type BranchOperand,
-	type CommitOperand,
-	type HunkOperand,
-	type Operand,
-} from "#ui/operands.ts";
-import { type OperationType } from "#ui/operations/operation.ts";
-import { type TransferMode } from "#ui/outline/mode.ts";
-import * as workspace from "#ui/projects/workspace/state.ts";
-import type { RootState } from "#ui/store.ts";
-import { type AbsorptionTarget, type RefInfo, type RelativeTo } from "@gitbutler/but-sdk";
+	createInitialProjectState,
+	projectReducers,
+	projectSelectors,
+	type ProjectState,
+} from "#ui/projects/project.ts";
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
-
-type Dialog =
-	| { _tag: "None" }
-	| { _tag: "ApplyBranchPicker" }
-	| { _tag: "BranchPicker" }
-	| { _tag: "CommandPalette" }
-	| { _tag: "ProjectPicker" }
-	| { _tag: "Settings" };
-
-type ProjectState = {
-	detailsFullWindow: boolean;
-	dialog: Dialog;
-	filesVisible: boolean;
-	workspace: workspace.WorkspaceState;
-};
 
 type ProjectSliceState = {
 	byProjectId: Record<string, ProjectState>;
 };
-
-const createInitialProjectState = (): ProjectState => ({
-	detailsFullWindow: false,
-	dialog: { _tag: "None" },
-	filesVisible: false,
-	workspace: workspace.createInitialState(),
-});
-
-const initialProjectState: ProjectState = createInitialProjectState();
 
 const initialState: ProjectSliceState = {
 	byProjectId: {},
@@ -52,263 +23,62 @@ const ensureProjectState = (state: ProjectSliceState, projectId: string): Projec
 	return projectState;
 };
 
-const projectSlice = createSlice({
+const initialProjectState: ProjectState = createInitialProjectState();
+const selectProjectState = (state: ProjectSliceState, projectId: string): ProjectState =>
+	state.byProjectId[projectId] ?? initialProjectState;
+
+const withProject =
+	<T>(reducer: (state: ProjectState, payload: T) => void) =>
+	(state: ProjectSliceState, action: PayloadAction<T & { projectId: string }>) => {
+		reducer(ensureProjectState(state, action.payload.projectId), action.payload);
+	};
+
+const fromProject =
+	<T extends Array<unknown>, R>(selector: (state: ProjectState, ...args: T) => R) =>
+	(state: ProjectSliceState, projectId: string, ...args: T): R =>
+		selector(selectProjectState(state, projectId), ...args);
+
+export const projectSlice = createSlice({
 	name: "project",
 	initialState,
 	reducers: {
-		selectOutline: (
-			state,
-			action: PayloadAction<{ projectId: string; selection: Operand | null }>,
-		) => {
-			const { projectId, selection } = action.payload;
-			const projectState = ensureProjectState(state, projectId);
-			workspace.selectOutline(projectState.workspace, selection);
-		},
-		selectFiles: (
-			state,
-			action: PayloadAction<{ projectId: string; selection: string | null }>,
-		) => {
-			const { projectId, selection } = action.payload;
-			const projectState = ensureProjectState(state, projectId);
-			workspace.selectFiles(projectState.workspace, selection);
-		},
-		selectDiff: (
-			state,
-			action: PayloadAction<{ projectId: string; selection: HunkOperand | null }>,
-		) => {
-			const { projectId, selection } = action.payload;
-			const projectState = ensureProjectState(state, projectId);
-			workspace.selectDiff(projectState.workspace, selection);
-		},
-		startRewordCommit: (
-			state,
-			action: PayloadAction<{ projectId: string; commit: CommitOperand }>,
-		) => {
-			const { projectId, commit } = action.payload;
-			const projectState = ensureProjectState(state, projectId);
-			workspace.startRewordCommit(projectState.workspace, commit);
-		},
-		startRenameBranch: (
-			state,
-			action: PayloadAction<{ projectId: string; branch: BranchOperand }>,
-		) => {
-			const { projectId, branch } = action.payload;
-			const projectState = ensureProjectState(state, projectId);
-			workspace.startRenameBranch(projectState.workspace, branch);
-		},
-		updateRewrittenBranchReferences: (
-			state,
-			action: PayloadAction<{
-				projectId: string;
-				oldBranch: BranchOperand;
-				newBranch: BranchOperand;
-			}>,
-		) => {
-			const { projectId, oldBranch, newBranch } = action.payload;
-			const projectState = ensureProjectState(state, projectId);
-			workspace.updateRewrittenBranchReferences(projectState.workspace, oldBranch, newBranch);
-		},
-		enterTransferMode: (
-			state,
-			action: PayloadAction<{ projectId: string; mode: TransferMode }>,
-		) => {
-			const { projectId, mode } = action.payload;
-			const projectState = ensureProjectState(state, projectId);
-			workspace.enterTransferMode(projectState.workspace, mode);
-		},
-		enterKeyboardTransferMode: (
-			state,
-			action: PayloadAction<{ projectId: string; source: Operand; operationType?: OperationType }>,
-		) => {
-			const { projectId, source, operationType } = action.payload;
-			const projectState = ensureProjectState(state, projectId);
-			workspace.enterKeyboardTransferMode(projectState.workspace, source, operationType);
-		},
-		enterAbsorbMode: (
-			state,
-			action: PayloadAction<{
-				projectId: string;
-				source: Operand;
-				sourceTarget: AbsorptionTarget;
-			}>,
-		) => {
-			const { projectId, source, sourceTarget } = action.payload;
-			const projectState = ensureProjectState(state, projectId);
-			workspace.enterAbsorbMode(projectState.workspace, source, sourceTarget);
-		},
-		updatePointerTransfer: (
-			state,
-			action: PayloadAction<{
-				projectId: string;
-				target: Operand | null;
-				operationType: OperationType | null;
-			}>,
-		) => {
-			const { projectId, target, operationType } = action.payload;
-			const projectState = ensureProjectState(state, projectId);
-			workspace.updatePointerTransfer(projectState.workspace, target, operationType);
-		},
-		updateTransferOperationType: (
-			state,
-			action: PayloadAction<{
-				projectId: string;
-				operationType: OperationType;
-			}>,
-		) => {
-			const { projectId, operationType } = action.payload;
-			const projectState = ensureProjectState(state, projectId);
-			workspace.updateTransferOperationType(projectState.workspace, operationType);
-		},
-		exitMode: (state, action: PayloadAction<{ projectId: string }>) => {
-			workspace.exitMode(ensureProjectState(state, action.payload.projectId).workspace);
-		},
-		cancelMode: (state, action: PayloadAction<{ projectId: string }>) => {
-			workspace.cancelMode(ensureProjectState(state, action.payload.projectId).workspace);
-		},
-		setHighlightedCommitIds: (
-			state,
-			action: PayloadAction<{ projectId: string; commitIds: Array<string> | null }>,
-		) => {
-			const { projectId, commitIds } = action.payload;
-			workspace.setHighlightedCommitIds(ensureProjectState(state, projectId).workspace, commitIds);
-		},
-		setCommitChecked: (
-			state,
-			action: PayloadAction<{ projectId: string; commitId: string; checked: boolean }>,
-		) => {
-			const { projectId, commitId, checked } = action.payload;
-			workspace.setCommitChecked(ensureProjectState(state, projectId).workspace, commitId, checked);
-		},
-		setCommitsChecked: (
-			state,
-			action: PayloadAction<{ projectId: string; commitIds: Array<string>; checked: boolean }>,
-		) => {
-			const { projectId, commitIds, checked } = action.payload;
-			workspace.setCommitsChecked(
-				ensureProjectState(state, projectId).workspace,
-				commitIds,
-				checked,
-			);
-		},
-		clearCheckedCommits: (state, action: PayloadAction<{ projectId: string }>) => {
-			workspace.clearCheckedCommits(ensureProjectState(state, action.payload.projectId).workspace);
-		},
-		setCommitTarget: (
-			state,
-			action: PayloadAction<{ projectId: string; commitTarget: RelativeTo | null }>,
-		) => {
-			const { projectId, commitTarget } = action.payload;
-			workspace.setCommitTarget(ensureProjectState(state, projectId).workspace, commitTarget);
-		},
-		updateRewrittenCommitReferences: (
-			state,
-			action: PayloadAction<{
-				projectId: string;
-				replacedCommits: Record<string, string>;
-				headInfo: RefInfo;
-			}>,
-		) => {
-			const { projectId, replacedCommits, headInfo } = action.payload;
-			workspace.updateRewrittenCommitReferences(
-				ensureProjectState(state, projectId).workspace,
-				replacedCommits,
-				headInfo,
-			);
-		},
-		toggleFiles: (state, action: PayloadAction<{ projectId: string }>) => {
-			const projectState = ensureProjectState(state, action.payload.projectId);
-			projectState.filesVisible = !projectState.filesVisible;
-		},
-		setDetailsFullWindow: (
-			state,
-			action: PayloadAction<{ projectId: string; fullWindow: boolean }>,
-		) => {
-			const { projectId, fullWindow } = action.payload;
-			ensureProjectState(state, projectId).detailsFullWindow = fullWindow;
-		},
-		toggleDetailsFullWindow: (state, action: PayloadAction<{ projectId: string }>) => {
-			const projectState = ensureProjectState(state, action.payload.projectId);
-			projectState.detailsFullWindow = !projectState.detailsFullWindow;
-		},
-		openCommandPalette: (
-			state,
-			action: PayloadAction<{
-				projectId: string;
-			}>,
-		) => {
-			const { projectId } = action.payload;
-			ensureProjectState(state, projectId).dialog = {
-				_tag: "CommandPalette",
-			};
-		},
-		openBranchPicker: (state, action: PayloadAction<{ projectId: string }>) => {
-			ensureProjectState(state, action.payload.projectId).dialog = {
-				_tag: "BranchPicker",
-			};
-		},
-		openApplyBranchPicker: (state, action: PayloadAction<{ projectId: string }>) => {
-			ensureProjectState(state, action.payload.projectId).dialog = {
-				_tag: "ApplyBranchPicker",
-			};
-		},
-		openProjectPicker: (state, action: PayloadAction<{ projectId: string }>) => {
-			ensureProjectState(state, action.payload.projectId).dialog = {
-				_tag: "ProjectPicker",
-			};
-		},
-		openSettings: (state, action: PayloadAction<{ projectId: string }>) => {
-			ensureProjectState(state, action.payload.projectId).dialog = {
-				_tag: "Settings",
-			};
-		},
-
-		closeDialog: (state, action: PayloadAction<{ projectId: string }>) => {
-			ensureProjectState(state, action.payload.projectId).dialog = { _tag: "None" };
-		},
+		selectOutline: withProject(projectReducers.selectOutline),
+		selectFiles: withProject(projectReducers.selectFiles),
+		selectDiff: withProject(projectReducers.selectDiff),
+		startRewordCommit: withProject(projectReducers.startRewordCommit),
+		startRenameBranch: withProject(projectReducers.startRenameBranch),
+		updateRewrittenBranchReferences: withProject(projectReducers.updateRewrittenBranchReferences),
+		enterTransferMode: withProject(projectReducers.enterTransferMode),
+		enterKeyboardTransferMode: withProject(projectReducers.enterKeyboardTransferMode),
+		enterAbsorbMode: withProject(projectReducers.enterAbsorbMode),
+		updatePointerTransfer: withProject(projectReducers.updatePointerTransfer),
+		updateTransferOperationType: withProject(projectReducers.updateTransferOperationType),
+		exitMode: withProject(projectReducers.exitMode),
+		cancelMode: withProject(projectReducers.cancelMode),
+		setHighlightedCommitIds: withProject(projectReducers.setHighlightedCommitIds),
+		setCommitChecked: withProject(projectReducers.setCommitChecked),
+		setCommitsChecked: withProject(projectReducers.setCommitsChecked),
+		clearCheckedCommits: withProject(projectReducers.clearCheckedCommits),
+		setCommitTarget: withProject(projectReducers.setCommitTarget),
+		updateRewrittenCommitReferences: withProject(projectReducers.updateRewrittenCommitReferences),
+		toggleFiles: withProject(projectReducers.toggleFiles),
+		setDetailsFullWindow: withProject(projectReducers.setDetailsFullWindow),
+		toggleDetailsFullWindow: withProject(projectReducers.toggleDetailsFullWindow),
+		openDialog: withProject(projectReducers.openDialog),
+		closeDialog: withProject(projectReducers.closeDialog),
+	},
+	selectors: {
+		selectFilesVisible: fromProject(projectSelectors.selectFilesVisible),
+		selectDetailsFullWindow: fromProject(projectSelectors.selectDetailsFullWindow),
+		selectDialogState: fromProject(projectSelectors.selectDialogState),
+		selectSelectionOutline: fromProject(projectSelectors.selectSelectionOutline),
+		selectSelectionFiles: fromProject(projectSelectors.selectSelectionFiles),
+		selectSelectionDiff: fromProject(projectSelectors.selectSelectionDiff),
+		selectOutlineModeState: fromProject(projectSelectors.selectOutlineModeState),
+		selectHighlightedCommitIds: fromProject(projectSelectors.selectHighlightedCommitIds),
+		selectCommitChecked: fromProject(projectSelectors.selectCommitChecked),
+		selectCheckedCommitCount: fromProject(projectSelectors.selectCheckedCommitCount),
+		selectHasCheckedCommits: fromProject(projectSelectors.selectHasCheckedCommits),
+		selectCommitTarget: fromProject(projectSelectors.selectCommitTarget),
 	},
 });
-
-export const projectActions = projectSlice.actions;
-export const projectReducer = projectSlice.reducer;
-
-const selectProjectState = (state: RootState, projectId: string): ProjectState =>
-	state.project.byProjectId[projectId] ?? initialProjectState;
-
-export const selectProjectFilesVisible = (state: RootState, projectId: string) =>
-	selectProjectState(state, projectId).filesVisible;
-
-export const selectProjectDetailsFullWindow = (state: RootState, projectId: string) =>
-	selectProjectState(state, projectId).detailsFullWindow;
-
-export const selectProjectDialogState = (state: RootState, projectId: string) =>
-	selectProjectState(state, projectId).dialog;
-
-const selectProjectWorkspaceState = (state: RootState, projectId: string) =>
-	selectProjectState(state, projectId).workspace;
-
-export const selectProjectSelectionOutline = (state: RootState, projectId: string) =>
-	workspace.selectSelectionOutlineState(selectProjectWorkspaceState(state, projectId));
-
-export const selectProjectSelectionFiles = (state: RootState, projectId: string) =>
-	workspace.selectSelectionFilesState(selectProjectWorkspaceState(state, projectId));
-
-export const selectProjectSelectionDiff = (state: RootState, projectId: string) =>
-	workspace.selectSelectionDiffState(selectProjectWorkspaceState(state, projectId));
-
-export const selectProjectOutlineModeState = (state: RootState, projectId: string) =>
-	workspace.selectMode(selectProjectWorkspaceState(state, projectId));
-
-export const selectProjectHighlightedCommitIds = (state: RootState, projectId: string) =>
-	workspace.selectHighlightedCommitIds(selectProjectWorkspaceState(state, projectId));
-
-export const selectProjectCommitChecked = (state: RootState, projectId: string, commitId: string) =>
-	workspace.selectCommitChecked(selectProjectWorkspaceState(state, projectId), commitId);
-
-export const selectProjectCheckedCommitCount = (state: RootState, projectId: string) =>
-	workspace.selectCheckedCommitCount(selectProjectWorkspaceState(state, projectId));
-
-export const selectProjectHasCheckedCommits = (state: RootState, projectId: string) =>
-	workspace.selectHasCheckedCommits(selectProjectWorkspaceState(state, projectId));
-
-export const selectProjectCommitTarget = (state: RootState, projectId: string) =>
-	workspace.selectCommitTarget(selectProjectWorkspaceState(state, projectId));

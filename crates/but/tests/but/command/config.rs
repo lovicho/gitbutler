@@ -1,6 +1,28 @@
 use crate::utils::{CommandExt as _, Sandbox};
 use snapbox::str;
 
+#[cfg(feature = "legacy")]
+#[test]
+fn target_configures_distinct_push_remote_for_fork() {
+    let env = Sandbox::open_with_default_settings("repo-with-remote-and-head");
+    env.but("setup").assert().success();
+    env.invoke_git("remote add upstream .");
+    env.invoke_git("update-ref refs/remotes/upstream/main refs/remotes/origin/main");
+
+    env.but("config target upstream/main --push-remote origin")
+        .assert()
+        .success();
+
+    assert_eq!(
+        env.invoke_git("config --local --get gitbutler.project.targetRef"),
+        "refs/remotes/upstream/main"
+    );
+    assert_eq!(
+        env.invoke_git("config --local --get gitbutler.project.pushRemote"),
+        "origin"
+    );
+}
+
 #[test]
 fn ai_openai_defaults_to_global_config() {
     let env = Sandbox::empty();

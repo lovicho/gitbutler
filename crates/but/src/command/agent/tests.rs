@@ -556,6 +556,18 @@ fn skill_installs_copilot_repo_and_global_diverge() {
 }
 
 #[test]
+fn poolside_skill_paths_follow_scope() {
+    assert_eq!(
+        AgentTarget::Poolside.skill_path_components(Scope::Repository),
+        Some(&[".poolside", "skills", "but"][..])
+    );
+    assert_eq!(
+        AgentTarget::Poolside.skill_path_components(Scope::Global),
+        Some(&[".config", "poolside", "skills", "but"][..])
+    );
+}
+
+#[test]
 fn skill_installs_global_only_uses_home_paths() {
     let installs = collect_skill_installs(
         &[

@@ -10,7 +10,7 @@ import {
 	type NativeMenuItem,
 } from "#ui/native-menu.ts";
 import { uncommittedChangesOperand, type Operand } from "#ui/operands.ts";
-import { projectActions, selectProjectOutlineModeState } from "#ui/projects/state.ts";
+import { projectSlice } from "#ui/projects/state.ts";
 import { focusSelectionScope } from "#ui/selection-scopes.ts";
 import { useAppDispatch, useAppSelector } from "#ui/store.ts";
 import { Toolbar } from "@base-ui/react/toolbar";
@@ -48,13 +48,13 @@ export const UncommittedChangesRow: FC<{
 
 	const operand = uncommittedChangesOperand;
 	const isDefaultMode = useAppSelector(
-		(state) => selectProjectOutlineModeState(state, projectId)._tag === "Default",
+		(state) => projectSlice.selectors.selectOutlineModeState(state, projectId)._tag === "Default",
 	);
 	const discardWorktreeChanges = useDiscardWorktreeChanges();
 
 	const dispatch = useAppDispatch();
 	const enterAbsorbMode = (source: Operand, sourceTarget: AbsorptionTarget) => {
-		dispatch(projectActions.enterAbsorbMode({ projectId, source, sourceTarget }));
+		dispatch(projectSlice.actions.enterAbsorbMode({ projectId, source, sourceTarget }));
 	};
 
 	const absorb = () => {
@@ -63,7 +63,7 @@ export const UncommittedChangesRow: FC<{
 
 	const cutChanges = () => {
 		dispatch(
-			projectActions.enterKeyboardTransferMode({
+			projectSlice.actions.enterKeyboardTransferMode({
 				projectId,
 				source: operand,
 			}),

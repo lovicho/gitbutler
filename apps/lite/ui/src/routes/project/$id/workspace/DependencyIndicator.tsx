@@ -1,4 +1,4 @@
-import { projectActions } from "#ui/projects/state.ts";
+import { projectSlice } from "#ui/projects/state.ts";
 import { useAppDispatch } from "#ui/store.ts";
 import { TooltipPopup } from "#ui/components/Tooltip.tsx";
 import { Tooltip } from "@base-ui/react";
@@ -21,14 +21,14 @@ export const DependencyIndicator: FC<
 			: "Unknown dependencies";
 	const highlightCommitIds = () => {
 		dispatch(
-			projectActions.setHighlightedCommitIds({
+			projectSlice.actions.setHighlightedCommitIds({
 				projectId,
 				commitIds,
 			}),
 		);
 	};
 	const clearHighlightedCommitIds = () => {
-		dispatch(projectActions.setHighlightedCommitIds({ projectId, commitIds: null }));
+		dispatch(projectSlice.actions.setHighlightedCommitIds({ projectId, commitIds: null }));
 	};
 
 	return (

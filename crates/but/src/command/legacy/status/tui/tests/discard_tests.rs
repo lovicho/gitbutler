@@ -294,7 +294,7 @@ fn mark_and_discard_uncommitted_files() {
     tui.input(' ');
 
     tui.input('x');
-    tui.input('y');
+    tui.input('y').assert_current_line_eq(str!["┊   o A three"]);
 
     tui.reload().assert_rendered_term_svg_eq(file![
         "snapshots/mark_and_discard_uncommitted_files_final.svg"

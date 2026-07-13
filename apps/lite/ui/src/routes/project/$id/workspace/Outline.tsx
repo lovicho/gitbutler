@@ -8,11 +8,7 @@ import { Icon } from "#ui/components/Icon.tsx";
 import { TooltipPopup } from "#ui/components/Tooltip.tsx";
 import { globalHotkeys, workspaceHotkeys } from "#ui/hotkeys.ts";
 import { branchOperand, type BranchOperand, type Operand } from "#ui/operands.ts";
-import {
-	projectActions,
-	selectProjectCommitTarget,
-	selectProjectOutlineModeState,
-} from "#ui/projects/state.ts";
+import { projectSlice } from "#ui/projects/state.ts";
 import { focusSelectionScope, type SelectionScope } from "#ui/selection-scopes.ts";
 import { useAppDispatch, useAppSelector } from "#ui/store.ts";
 import type { NavigationIndex } from "#ui/workspace/navigation-index.ts";
@@ -58,11 +54,13 @@ export const Outline: FC<
 	} & ComponentProps<"div">
 > = ({ absorptionTargetKeys, navigationIndex, project, projectId, ...restProps }) => {
 	const dispatch = useAppDispatch();
-	const outlineMode = useAppSelector((state) => selectProjectOutlineModeState(state, projectId));
+	const outlineMode = useAppSelector((state) =>
+		projectSlice.selectors.selectOutlineModeState(state, projectId),
+	);
 
 	const selectBranch = (branch: BranchOperand) => {
 		dispatch(
-			projectActions.selectOutline({
+			projectSlice.actions.selectOutline({
 				projectId,
 				selection: branchOperand(branch),
 			}),
@@ -71,15 +69,15 @@ export const Outline: FC<
 	};
 
 	const openApplyBranchPicker = () => {
-		dispatch(projectActions.openApplyBranchPicker({ projectId }));
+		dispatch(projectSlice.actions.openDialog({ projectId, dialog: { _tag: "ApplyBranchPicker" } }));
 	};
 
 	const openProjectPicker = () => {
-		dispatch(projectActions.openProjectPicker({ projectId }));
+		dispatch(projectSlice.actions.openDialog({ projectId, dialog: { _tag: "ProjectPicker" } }));
 	};
 
 	const openSettings = () => {
-		dispatch(projectActions.openSettings({ projectId }));
+		dispatch(projectSlice.actions.openDialog({ projectId, dialog: { _tag: "Settings" } }));
 	};
 
 	const branchCreateMutation = useBranchCreate();
@@ -105,7 +103,9 @@ export const Outline: FC<
 
 	const { data: headInfo } = useQuery(headInfoQueryOptions(projectId));
 	const headInfoIndex = headInfo ? getHeadInfoIndex(headInfo) : undefined;
-	const commitTargetState = useAppSelector((state) => selectProjectCommitTarget(state, projectId));
+	const commitTargetState = useAppSelector((state) =>
+		projectSlice.selectors.selectCommitTarget(state, projectId),
+	);
 	const targetComboboxItems = buildCommitTargetComboboxItems({
 		headInfo,
 		headInfoIndex,

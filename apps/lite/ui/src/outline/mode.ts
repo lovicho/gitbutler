@@ -8,8 +8,8 @@ import {
 	type Operand,
 } from "#ui/operands.ts";
 import { OperationType } from "#ui/operations/operation.ts";
+import type { SelectionState } from "#ui/projects/project.ts";
 import { AbsorptionTarget } from "@gitbutler/but-sdk";
-import { SelectionState } from "#ui/projects/workspace/state.ts";
 
 /** @public */
 export type AbsorbMode = {

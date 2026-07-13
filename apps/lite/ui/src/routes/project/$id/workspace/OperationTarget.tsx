@@ -8,7 +8,7 @@ import {
 	useRunOperation,
 } from "#ui/operations/operation.ts";
 import { classes } from "#ui/components/classes.ts";
-import { projectActions } from "#ui/projects/state.ts";
+import { projectSlice } from "#ui/projects/state.ts";
 import { useAppDispatch } from "#ui/store.ts";
 import { dropTargetForElements } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import {
@@ -90,7 +90,7 @@ const useOperationDropTarget = ({
 				const operationType = getOperationTypeFromData(args.self.data);
 
 				dispatch(
-					projectActions.updatePointerTransfer({
+					projectSlice.actions.updatePointerTransfer({
 						projectId,
 						target,
 						operationType,
@@ -99,7 +99,7 @@ const useOperationDropTarget = ({
 			},
 			onDragLeave: () => {
 				dispatch(
-					projectActions.updatePointerTransfer({
+					projectSlice.actions.updatePointerTransfer({
 						projectId,
 						target: null,
 						operationType: null,
@@ -124,11 +124,11 @@ const useOperationDropTarget = ({
 						: null;
 
 				if (!operation) {
-					dispatch(projectActions.cancelMode({ projectId }));
+					dispatch(projectSlice.actions.cancelMode({ projectId }));
 					return;
 				}
 
-				dispatch(projectActions.exitMode({ projectId }));
+				dispatch(projectSlice.actions.exitMode({ projectId }));
 				runOperation(operation.operation);
 			},
 		});

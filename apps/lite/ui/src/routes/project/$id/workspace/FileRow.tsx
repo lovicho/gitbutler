@@ -2,10 +2,7 @@ import { FileIcon } from "#ui/components/FileIcon.tsx";
 import rowStyles from "./Row.module.css";
 import { showNativeContextMenu, showNativeMenuFromTrigger } from "#ui/native-menu.ts";
 import { FileParent } from "#ui/operands.ts";
-import {
-	selectProjectHasCheckedCommits,
-	selectProjectOutlineModeState,
-} from "#ui/projects/state.ts";
+import { projectSlice } from "#ui/projects/state.ts";
 import { useAppSelector } from "#ui/store.ts";
 import { Icon } from "#ui/components/Icon.tsx";
 import { classes } from "#ui/components/classes.ts";
@@ -31,7 +28,9 @@ export const FileRow: FC<
 > = ({ item, projectId, fileParent, branchNameByCommitId, id, ...restProps }) => {
 	const relativePath = item._tag === "Change" ? item.change.path : item.path;
 
-	const outlineMode = useAppSelector((state) => selectProjectOutlineModeState(state, projectId));
+	const outlineMode = useAppSelector((state) =>
+		projectSlice.selectors.selectOutlineModeState(state, projectId),
+	);
 	const menuItems = useFileMenuItems({
 		projectId,
 		operand: { parent: fileParent, path: relativePath },
@@ -40,7 +39,7 @@ export const FileRow: FC<
 	});
 
 	const hasCheckedCommits = useAppSelector((state) =>
-		selectProjectHasCheckedCommits(state, projectId),
+		projectSlice.selectors.selectHasCheckedCommits(state, projectId),
 	);
 
 	const lastSepIdx = relativePath.lastIndexOf("/");

@@ -1,4 +1,6 @@
-import type { Commit, ForgeInfo } from "@gitbutler/but-sdk";
+import { getHeadInfoIndex } from "#ui/api/ref-info.ts";
+import { commitOperand, type CommitOperand, type Operand } from "#ui/operands.ts";
+import type { Commit, ForgeInfo, RefInfo } from "@gitbutler/but-sdk";
 
 export const shortCommitId = (commitId: string): string => commitId.slice(0, 7);
 
@@ -18,6 +20,45 @@ export const commitBody = (input: string): string | undefined => {
 
 export const commitIsDiverged = (commit: Commit): boolean =>
 	commit.state.type === "LocalAndRemote" && commit.state.subject !== commit.id;
+
+export const rewrittenCommitOperand = ({
+	commit,
+	headInfo,
+	replacedCommits,
+}: {
+	commit: CommitOperand;
+	headInfo: RefInfo;
+	replacedCommits: Record<string, string>;
+}): CommitOperand | null => {
+	const commitId = replacedCommits[commit.commitId];
+	if (commitId === undefined) return null;
+
+	const stackId = getHeadInfoIndex(headInfo).commitContextById(commitId)?.stack.id;
+	if (stackId == null) return null;
+
+	return { stackId, commitId };
+};
+
+export const rewrittenCommitSelection = ({
+	selection,
+	replacedCommits,
+	headInfo,
+}: {
+	selection: Operand | null;
+	replacedCommits: Record<string, string>;
+	headInfo: RefInfo;
+}): Operand | null => {
+	if (selection?._tag !== "Commit") return selection;
+
+	const commit = rewrittenCommitOperand({
+		commit: selection,
+		replacedCommits,
+		headInfo,
+	});
+	if (!commit) return selection;
+
+	return commitOperand(commit);
+};
 
 type ForgeUrlFreshness = "fresh" | "stale";
 

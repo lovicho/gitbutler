@@ -37,11 +37,7 @@ import {
 	type HunkOperand,
 	type Operand,
 } from "#ui/operands.ts";
-import {
-	projectActions,
-	selectProjectDetailsFullWindow,
-	selectProjectFilesVisible,
-} from "#ui/projects/state.ts";
+import { projectSlice } from "#ui/projects/state.ts";
 import { getButtonClassName } from "#ui/components/Button.tsx";
 import { Icon } from "#ui/components/Icon.tsx";
 import { TooltipPopup } from "#ui/components/Tooltip.tsx";
@@ -370,7 +366,7 @@ const DiffContents: FC<{
 		: null;
 
 	const selectDiff = (selection: HunkOperand) => {
-		dispatch(projectActions.selectDiff({ projectId, selection }));
+		dispatch(projectSlice.actions.selectDiff({ projectId, selection }));
 
 		const selectedRange = hunkByKey.get(hunkOperandIdentityKey(selection))?.selectedLines;
 		if (!selectedRange) return;
@@ -459,7 +455,7 @@ const DiffContents: FC<{
 
 	// We currently only support selecting contiguous blocks.
 	const handleLinesSelected = (sel: CodeViewLineSelection | null): void => {
-		if (!sel) return void dispatch(projectActions.selectDiff({ projectId, selection: null }));
+		if (!sel) return void dispatch(projectSlice.actions.selectDiff({ projectId, selection: null }));
 
 		const file = fileByItemId.get(sel.id);
 		if (!file) throw new Error("Could not get file by item ID");
@@ -477,7 +473,7 @@ const DiffContents: FC<{
 		if (!selection) return;
 
 		dispatch(
-			projectActions.selectDiff({
+			projectSlice.actions.selectDiff({
 				projectId,
 				selection: {
 					parent: {
@@ -773,7 +769,9 @@ const FilesToggle: FC<
 > = (toggleProps) => {
 	const { id: projectId } = useParams({ from: "/project/$id/workspace" });
 	const dispatch = useAppDispatch();
-	const filesVisible = useAppSelector((state) => selectProjectFilesVisible(state, projectId));
+	const filesVisible = useAppSelector((state) =>
+		projectSlice.selectors.selectFilesVisible(state, projectId),
+	);
 
 	return (
 		<Tooltip.Root>
@@ -783,7 +781,7 @@ const FilesToggle: FC<
 						{...toggleProps}
 						aria-label="Toggle files"
 						pressed={filesVisible}
-						onPressedChange={() => dispatch(projectActions.toggleFiles({ projectId }))}
+						onPressedChange={() => dispatch(projectSlice.actions.toggleFiles({ projectId }))}
 					/>
 				}
 			/>
@@ -1009,7 +1007,7 @@ const Diff: FC<{
 		onFileSelection(selection);
 
 		dispatch(
-			projectActions.selectDiff({
+			projectSlice.actions.selectDiff({
 				projectId,
 				selection: diffView.fileByPath.get(selection)?.hunks[0]?.operand ?? null,
 			}),
@@ -1495,15 +1493,17 @@ export const Details: FC<
 	const headInfoIndex = headInfo ? getHeadInfoIndex(headInfo) : null;
 	const dispatch = useAppDispatch();
 	const detailsFullWindow = useAppSelector((state) =>
-		selectProjectDetailsFullWindow(state, projectId),
+		projectSlice.selectors.selectDetailsFullWindow(state, projectId),
 	);
-	const filesVisible = useAppSelector((state) => selectProjectFilesVisible(state, projectId));
+	const filesVisible = useAppSelector((state) =>
+		projectSlice.selectors.selectFilesVisible(state, projectId),
+	);
 	const [commitBodyCollapsed, setCommitBodyCollapsed] = useState(true);
 	const [branchTab, setBranchTab] = useState<BranchTab>("diff");
 	const commitBodyId = useId();
 
 	const selectFile = (selection: string) => {
-		dispatch(projectActions.selectFiles({ projectId, selection }));
+		dispatch(projectSlice.actions.selectFiles({ projectId, selection }));
 	};
 
 	if (!outlineSelection) return;

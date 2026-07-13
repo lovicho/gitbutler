@@ -14,11 +14,7 @@ import {
 	type OperationType,
 	type OperationsByType,
 } from "#ui/operations/operation.ts";
-import {
-	projectActions,
-	selectProjectCheckedCommitCount,
-	selectProjectOutlineModeState,
-} from "#ui/projects/state.ts";
+import { projectSlice } from "#ui/projects/state.ts";
 import { operandLabel } from "#ui/routes/project/$id/workspace/operandLabel.ts";
 import { focusSelectionScope, useOutlineSelection } from "#ui/selection-scopes.ts";
 import { useAppDispatch, useAppSelector } from "#ui/store.ts";
@@ -141,7 +137,7 @@ const CheckedCommitOperationControls: FC<{ checkedCommitCount: number; projectId
 	const dispatch = useAppDispatch();
 
 	const cancel = () => {
-		dispatch(projectActions.clearCheckedCommits({ projectId }));
+		dispatch(projectSlice.actions.clearCheckedCommits({ projectId }));
 		focusSelectionScope("outline");
 	};
 
@@ -173,14 +169,14 @@ const AbsorbOperationControls: FC<{
 	const absorbMutation = useAbsorb({ projectId });
 
 	const confirm = () => {
-		dispatch(projectActions.exitMode({ projectId }));
+		dispatch(projectSlice.actions.exitMode({ projectId }));
 		focusSelectionScope("outline");
 
 		absorbMutation.mutate(absorptionPlan.data);
 	};
 
 	const cancel = () => {
-		dispatch(projectActions.cancelMode({ projectId }));
+		dispatch(projectSlice.actions.cancelMode({ projectId }));
 		focusSelectionScope("outline");
 	};
 
@@ -211,7 +207,7 @@ const TransferTypeToggleGroup: FC<{
 	const dispatch = useAppDispatch();
 
 	const setOperationType = (operationType: OperationType) =>
-		dispatch(projectActions.updateTransferOperationType({ projectId, operationType }));
+		dispatch(projectSlice.actions.updateTransferOperationType({ projectId, operationType }));
 
 	useHotkeys([
 		{
@@ -305,7 +301,7 @@ const TransferKeyboardOperationControls: FC<{
 	const operation = operations[mode.operationType];
 
 	const run = () => {
-		dispatch(projectActions.exitMode({ projectId }));
+		dispatch(projectSlice.actions.exitMode({ projectId }));
 		focusSelectionScope("outline");
 
 		if (!operation) return;
@@ -314,7 +310,7 @@ const TransferKeyboardOperationControls: FC<{
 	};
 
 	const cancel = () => {
-		dispatch(projectActions.cancelMode({ projectId }));
+		dispatch(projectSlice.actions.cancelMode({ projectId }));
 		focusSelectionScope("outline");
 	};
 
@@ -352,13 +348,15 @@ export const OperationControls: FC<{ outlineNavigationIndex: NavigationIndex<Ope
 	outlineNavigationIndex,
 }) => {
 	const { id: projectId } = useParams({ from: "/project/$id/workspace" });
-	const outlineMode = useAppSelector((state) => selectProjectOutlineModeState(state, projectId));
+	const outlineMode = useAppSelector((state) =>
+		projectSlice.selectors.selectOutlineModeState(state, projectId),
+	);
 	const { data: headInfoIndex } = useQuery({
 		...headInfoQueryOptions(projectId),
 		select: getHeadInfoIndex,
 	});
 	const checkedCommitCount = useAppSelector((state) =>
-		selectProjectCheckedCommitCount(state, projectId),
+		projectSlice.selectors.selectCheckedCommitCount(state, projectId),
 	);
 
 	return Match.value(outlineMode).pipe(

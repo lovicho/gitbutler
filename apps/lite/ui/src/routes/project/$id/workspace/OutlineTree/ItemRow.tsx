@@ -1,6 +1,6 @@
 import { NavigationIndexContext } from "../OutlineNavigationIndexContext.ts";
 import { Row } from "../Row.tsx";
-import { projectActions } from "#ui/projects/state.ts";
+import { projectSlice } from "#ui/projects/state.ts";
 import { useAppDispatch } from "#ui/store.ts";
 import { operandIdentityKey, type Operand } from "#ui/operands.ts";
 import { navigationIndexIncludes } from "#ui/workspace/navigation-index.ts";
@@ -49,7 +49,7 @@ export const ItemRow: FC<
 	const navigationIndex = assert(use(NavigationIndexContext));
 	const isSelected = useIsSelected({ projectId, operand });
 	const selectItem = () => {
-		dispatch(projectActions.selectOutline({ projectId, selection: operand }));
+		dispatch(projectSlice.actions.selectOutline({ projectId, selection: operand }));
 	};
 
 	return (

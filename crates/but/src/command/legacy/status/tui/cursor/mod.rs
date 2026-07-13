@@ -75,20 +75,11 @@ impl Cursor {
     }
 
     pub fn restore(selected_cli_id: &CliId, lines: &[StatusOutputLine]) -> Option<Self> {
-        let idx = lines
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, line)| {
-                let cli_id = line.data.cli_id()?;
-                Some((idx, cli_id))
-            })
-            .find_map(|(idx, cli_id)| {
-                if &**cli_id == selected_cli_id {
-                    Some(idx)
-                } else {
-                    None
-                }
-            })?;
+        let idx = lines.iter().position(|line| {
+            line.data
+                .cli_id()
+                .is_some_and(|cli_id| same_entity_for_reload(selected_cli_id, cli_id))
+        })?;
         Some(Self(idx))
     }
 
@@ -637,6 +628,71 @@ fn first_selectable_in_section(
         .take(next_section_start.saturating_sub(section_start))
         .find(|(idx, _)| is_cursor_selectable_at_index(*idx, lines, mode, show_files))
         .map(|(idx, _)| idx)
+}
+
+/// Short IDs are recomputed on reload, so compare the underlying entity instead.
+fn same_entity_for_reload(previous: &CliId, current: &CliId) -> bool {
+    match (previous, current) {
+        (CliId::UncommittedHunkOrFile(previous), CliId::UncommittedHunkOrFile(current)) => {
+            if previous.is_entire_file != current.is_entire_file {
+                return false;
+            }
+            if previous.is_entire_file {
+                let previous = previous.hunk_assignments.first();
+                let current = current.hunk_assignments.first();
+                previous.path_bytes == current.path_bytes && previous.stack_id == current.stack_id
+            } else {
+                previous == current
+            }
+        }
+        (
+            CliId::PathPrefix {
+                hunk_assignments: previous,
+                ..
+            },
+            CliId::PathPrefix {
+                hunk_assignments: current,
+                ..
+            },
+        ) => previous
+            .iter()
+            .map(|(_, assignment)| assignment)
+            .eq(current.iter().map(|(_, assignment)| assignment)),
+        (
+            CliId::CommittedFile {
+                commit_id: previous_commit,
+                path: previous_path,
+                ..
+            },
+            CliId::CommittedFile {
+                commit_id: current_commit,
+                path: current_path,
+                ..
+            },
+        ) => previous_commit == current_commit && previous_path == current_path,
+        (CliId::Branch { name: previous, .. }, CliId::Branch { name: current, .. }) => {
+            previous == current
+        }
+        (
+            CliId::Commit {
+                commit_id: previous,
+                ..
+            },
+            CliId::Commit {
+                commit_id: current, ..
+            },
+        ) => previous == current,
+        (CliId::Uncommitted { .. }, CliId::Uncommitted { .. }) => true,
+        (
+            CliId::Stack {
+                stack_id: previous, ..
+            },
+            CliId::Stack {
+                stack_id: current, ..
+            },
+        ) => previous == current,
+        _ => false,
+    }
 }
 
 fn select_after_reload_for_cli_id(cli_id: &Arc<CliId>) -> SelectAfterReload {

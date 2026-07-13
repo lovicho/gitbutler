@@ -453,6 +453,50 @@ fn output_format_parses_agent() {
     assert!(matches!(args.format.format, OutputFormat::Agent));
 }
 
+mod config_target {
+    use clap::Parser;
+
+    use crate::args::{
+        Args, Subcommands,
+        config::{Platform as ConfigPlatform, Subcommands as ConfigCmd},
+    };
+
+    #[test]
+    fn parses_push_remote_for_fork() {
+        let args = Args::try_parse_from([
+            "but",
+            "config",
+            "target",
+            "upstream/main",
+            "--push-remote",
+            "origin",
+        ])
+        .expect("parse args");
+
+        match args.cmd.expect("subcommand") {
+            Subcommands::Config(ConfigPlatform {
+                cmd:
+                    Some(ConfigCmd::Target {
+                        branch,
+                        push_remote,
+                    }),
+            }) => {
+                assert_eq!(branch.as_deref(), Some("upstream/main"));
+                assert_eq!(push_remote.as_deref(), Some("origin"));
+            }
+            _ => panic!("unexpected command shape"),
+        }
+    }
+
+    #[test]
+    fn push_remote_requires_target_branch() {
+        let err = Args::try_parse_from(["but", "config", "target", "--push-remote", "origin"])
+            .expect_err("push remote requires a target branch");
+
+        assert_eq!(err.kind(), clap::error::ErrorKind::MissingRequiredArgument);
+    }
+}
+
 #[test]
 fn output_format_agent_is_text_without_human_ui() {
     let format = OutputFormat::Agent;

@@ -452,11 +452,32 @@ impl App {
             | CliId::Stack { .. } => return Ok(()),
         };
 
+        let next_stack_id = stack_ids_in_display_order(&self.status_lines)
+            .into_iter()
+            .skip_while(|candidate| *candidate != stack_id)
+            .nth(1);
+        let select_after_reload = next_stack_id
+            .and_then(|next_stack_id| {
+                self.status_lines
+                    .iter()
+                    .filter_map(|line| match line.data.cli_id().map(|id| &**id) {
+                        Some(CliId::Branch {
+                            name,
+                            stack_id: Some(candidate),
+                            ..
+                        }) if *candidate == next_stack_id => Some(name.to_owned()),
+                        _ => None,
+                    })
+                    .next_back()
+            })
+            .map(SelectAfterReload::Branch)
+            .unwrap_or(SelectAfterReload::Uncommitted);
+
         but_api::legacy::virtual_branches::unapply_stack(ctx, stack_id)?;
 
         messages.extend([
             Message::EnterNormalModeAfterConfirmingOperation,
-            Message::Reload(None, ReloadCause::Mutation),
+            Message::Reload(Some(select_after_reload), ReloadCause::Mutation),
             Message::ShowToast {
                 kind: ToastKind::Info,
                 text: Text::from(Line::from_iter([

@@ -854,6 +854,7 @@ impl App {
         }
 
         self.status_lines = new_lines;
+        self.ensure_cursor_is_on_selectable_line();
 
         if self.is_details_visible {
             match cause {

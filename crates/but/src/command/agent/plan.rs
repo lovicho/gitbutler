@@ -17,17 +17,19 @@ pub(super) enum AgentTarget {
     GitHubCopilot,
     Windsurf,
     OpenCode,
+    Poolside,
     AgentSkills,
 }
 
 impl AgentTarget {
-    pub(super) const ALL: [Self; 7] = [
+    pub(super) const ALL: [Self; 8] = [
         Self::Codex,
         Self::ClaudeCode,
         Self::Cursor,
         Self::GitHubCopilot,
         Self::Windsurf,
         Self::OpenCode,
+        Self::Poolside,
         Self::AgentSkills,
     ];
 
@@ -39,6 +41,7 @@ impl AgentTarget {
             Self::GitHubCopilot => "GitHub Copilot",
             Self::Windsurf => "Windsurf",
             Self::OpenCode => "OpenCode",
+            Self::Poolside => "Poolside",
             Self::AgentSkills => "Agent Skills",
         }
     }
@@ -55,6 +58,7 @@ impl AgentTarget {
                 "Install the Windsurf skill and write Cascade-compatible AGENTS.md steering."
             }
             Self::OpenCode => "Install the OpenCode skill and write OpenCode AGENTS.md steering.",
+            Self::Poolside => "Install the Poolside skill and write Poolside AGENTS.md steering.",
             Self::AgentSkills => {
                 "Install the shared .agents skill format and write generic AGENTS.md steering."
             }
@@ -70,6 +74,7 @@ impl AgentTarget {
             detect_agent::Agent::Cursor | detect_agent::Agent::CursorCli => Some(Self::Cursor),
             detect_agent::Agent::GitHubCopilot => Some(Self::GitHubCopilot),
             detect_agent::Agent::OpenCode => Some(Self::OpenCode),
+            detect_agent::Agent::Poolside => Some(Self::Poolside),
             detect_agent::Agent::Devin => Some(Self::AgentSkills),
             detect_agent::Agent::GeminiCli
             | detect_agent::Agent::Augment
@@ -120,6 +125,7 @@ impl AgentTarget {
             Self::Cursor => &[".cursor"],
             Self::GitHubCopilot => &[".copilot"],
             Self::OpenCode => &[".config", "opencode"],
+            Self::Poolside => &[".config", "poolside"],
             Self::Windsurf => &[".codeium"],
             // The shared `.agents` format has no agent-specific config to detect.
             Self::AgentSkills => return None,
@@ -133,6 +139,7 @@ impl AgentTarget {
             Self::ClaudeCode => &["CLAUDE.md"],
             Self::GitHubCopilot => &[".github", "copilot-instructions.md"],
             Self::Cursor => &[".cursor"],
+            Self::Poolside => &[".poolside"],
             Self::Codex | Self::OpenCode | Self::Windsurf | Self::AgentSkills => return None,
         })
     }
@@ -159,6 +166,7 @@ impl AgentTarget {
             Self::GitHubCopilot => "GitHub Copilot",
             Self::Windsurf => "Windsurf",
             Self::OpenCode => "OpenCode",
+            Self::Poolside => "Poolside",
             Self::AgentSkills => "Agent Skills",
         }
     }
@@ -168,9 +176,12 @@ impl AgentTarget {
             // Cursor reads AGENTS.md without rule metadata, so prefer it over a
             // `.cursor/rules/*.mdc` file, which would need YAML frontmatter
             // (e.g. `alwaysApply: true`) to be loaded automatically.
-            Self::Codex | Self::OpenCode | Self::AgentSkills | Self::Cursor | Self::Windsurf => {
-                &["AGENTS.md"]
-            }
+            Self::Codex
+            | Self::OpenCode
+            | Self::Poolside
+            | Self::AgentSkills
+            | Self::Cursor
+            | Self::Windsurf => &["AGENTS.md"],
             Self::ClaudeCode => &["CLAUDE.md"],
             Self::GitHubCopilot => &[".github", "copilot-instructions.md"],
         }
@@ -182,6 +193,7 @@ impl AgentTarget {
             Self::ClaudeCode => Some(&[".claude", "rules", "gitbutler.md"]),
             Self::GitHubCopilot => Some(&[".copilot", "copilot-instructions.md"]),
             Self::OpenCode => Some(&[".config", "opencode", "AGENTS.md"]),
+            Self::Poolside => Some(&[".config", "poolside", "AGENTS.md"]),
             Self::Windsurf => Some(&[".codeium", "windsurf", "memories", "global_rules.md"]),
             Self::Cursor | Self::AgentSkills => None,
         }

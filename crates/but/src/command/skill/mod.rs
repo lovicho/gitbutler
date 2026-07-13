@@ -223,6 +223,13 @@ const SKILL_FORMATS: &[SkillFormat] = &[
         path_components: &[".windsurf", "skills", "gitbutler"],
     },
     SkillFormat::global("Windsurf", &[".codeium", "windsurf", "skills", "gitbutler"]),
+    SkillFormat {
+        name: "Poolside",
+        description: "Poolside local skill format",
+        availability: SkillFormatAvailability::LocalOnly,
+        path_components: &[".poolside", "skills", "but"],
+    },
+    SkillFormat::global("Poolside", &[".config", "poolside", "skills", "but"]),
     SkillFormat::global("Gemini CLI", &[".gemini", "skills", "gitbutler"]),
     SkillFormat::global("Augment", &[".augment", "skills", "gitbutler"]),
     SkillFormat::global(
@@ -249,6 +256,7 @@ fn skill_format_for_agent(agent: Agent, global: bool) -> Option<&'static SkillFo
         Agent::Cursor | Agent::CursorCli => "Cursor",
         Agent::GitHubCopilot => "GitHub Copilot",
         Agent::OpenCode => "OpenCode",
+        Agent::Poolside => "Poolside",
         Agent::GeminiCli => "Gemini CLI",
         Agent::Augment => "Augment",
         Agent::Antigravity => "Antigravity",

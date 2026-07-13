@@ -272,6 +272,7 @@ where
         let terminal_area: Rect = terminal_guard.terminal_mut().size()?.into();
         event_to_messages(event, app, terminal_area, messages);
     }
+    dedup_mutation_messages(messages, other_messages);
 
     // check for any out of band messages
     app.incoming_out_of_band_messages
@@ -733,4 +734,154 @@ where
     {
         f()
     }
+}
+
+/// If the user has a high key repeat and hold down a key that causes a mutation (like 'n') the app
+/// will slow down significantly while running multiple mutations per update. Messages that don't
+/// mutate the git repo, such as scrolling are safe to execute multiple times per update.
+///
+/// This function fixes that by only allowing one mutation per update.
+fn dedup_mutation_messages(messages: &mut Vec<Message>, other_messages: &mut Vec<Message>) {
+    fn is_repo_mutation(m: &Message) -> bool {
+        match m {
+            Message::AndThen { lhs, rhs } => is_repo_mutation(lhs) || is_repo_mutation(rhs),
+            Message::WithOneFrameDelay(m) => is_repo_mutation(m),
+            Message::Reload(_, cause) => match cause {
+                ReloadCause::Mutation
+                | ReloadCause::Watcher
+                | ReloadCause::ViewOnly
+                | ReloadCause::Manual => true,
+            },
+            Message::Confirm(message) => match message {
+                ConfirmMessage::Confirm | ConfirmMessage::Yes => true,
+                ConfirmMessage::Left | ConfirmMessage::Right | ConfirmMessage::No => false,
+            },
+            Message::Commit(message) => match message {
+                CommitMessage::CreateEmpty
+                | CommitMessage::Confirm
+                | CommitMessage::CommitToNewBranch => true,
+                CommitMessage::Start
+                | CommitMessage::ToggleMessageComposer(_)
+                | CommitMessage::ToggleInsertSide => false,
+            },
+            Message::Rub(message) => match message {
+                RubMessage::Confirm => true,
+                RubMessage::Start
+                | RubMessage::StartReverse
+                | RubMessage::UseTargetMessage
+                | RubMessage::UseSourceMessage => false,
+            },
+            Message::Reword(message) => match message {
+                RewordMessage::WithEditor
+                | RewordMessage::OpenEditor
+                | RewordMessage::InlineConfirm => true,
+                RewordMessage::InlineStart | RewordMessage::InlineInput(_) => false,
+            },
+            Message::Command(message) => match message {
+                CommandMessage::Confirm => true,
+                CommandMessage::Start(_) | CommandMessage::Input(_) => false,
+            },
+            Message::Files(message) => match message {
+                FilesMessage::ToggleGlobalFilesList
+                | FilesMessage::ToggleFilesForSelectedCommit => false,
+            },
+            Message::Move(message) => match message {
+                MoveMessage::Confirm => true,
+                MoveMessage::Start | MoveMessage::ToggleInsertSide => false,
+            },
+            Message::Stack(message) => match message {
+                StackMessage::Unapply | StackMessage::MoveConfirm => true,
+                StackMessage::Enter | StackMessage::ShowApplyPicker | StackMessage::MoveStart => {
+                    false
+                }
+            },
+            Message::Details(message) => match message {
+                DetailsMessage::Deselect
+                | DetailsMessage::SelectFirstSection
+                | DetailsMessage::CopyCurrentHunk
+                | DetailsMessage::SelectNextSection
+                | DetailsMessage::SelectPrevSection
+                | DetailsMessage::ScrollUp(_)
+                | DetailsMessage::ScrollDown(_)
+                | DetailsMessage::GotoTop
+                | DetailsMessage::GotoBottom
+                | DetailsMessage::Discard
+                | DetailsMessage::DropToBeDiscarded => false,
+            },
+            Message::DetailsLayout(message) => match message {
+                DetailsLayoutMessage::Focus { .. }
+                | DetailsLayoutMessage::ToggleFullScreen
+                | DetailsLayoutMessage::ToggleVisibility
+                | DetailsLayoutMessage::Dismiss => false,
+            },
+            Message::FuzzyPicker(message) => match message {
+                FuzzyPickerMessage::Confirm => true,
+                FuzzyPickerMessage::MoveCursorDown
+                | FuzzyPickerMessage::MoveCursorUp
+                | FuzzyPickerMessage::Input(_)
+                | FuzzyPickerMessage::Close => false,
+            },
+            Message::Help(message) => match message {
+                HelpMessage::Close | HelpMessage::ScrollUp(_) | HelpMessage::ScrollDown(_) => false,
+            },
+            Message::Jump(message) => match message {
+                JumpMessage::Enter
+                | JumpMessage::Input(_)
+                | JumpMessage::Previous
+                | JumpMessage::Next
+                | JumpMessage::Confirm => false,
+            },
+            Message::ShowModal(modal) => match modal {
+                Modal::Confirm { .. }
+                | Modal::CopySelectionPicker { .. }
+                | Modal::GotoBranchPicker { .. }
+                | Modal::ApplyStackPicker { .. }
+                | Modal::Help { .. } => false,
+            },
+            Message::Undo | Message::Redo | Message::Discard | Message::NewBranch => true,
+            Message::JustRender
+            | Message::Quit
+            | Message::ConfirmAndQuit
+            | Message::EnterNormalModeAfterConfirmingOperation
+            | Message::ShowError(..)
+            | Message::ShowToast { .. }
+            | Message::DropToBeDiscarded
+            | Message::GrowDetails
+            | Message::ShrinkDetails
+            | Message::SetHasFocus(_)
+            | Message::Back
+            | Message::UnfocusDetails
+            | Message::MoveCursorUp(_)
+            | Message::MoveCursorDown(_)
+            | Message::MoveCursorPreviousSection
+            | Message::MoveCursorNextSection
+            | Message::SelectUncommitted
+            | Message::SelectMergeBase
+            | Message::PickAndGotoBranch
+            | Message::SelectBranch(..)
+            | Message::ToggleHelp
+            | Message::Mark
+            | Message::ClearNormalModeMarks
+            | Message::CopySelection
+            | Message::CopySelectionPicker
+            | Message::RegisterOutOfBandMessage(..)
+            | Message::Debug(_) => false,
+        }
+    }
+
+    assert!(other_messages.is_empty());
+
+    let mut seen_mutation = false;
+    for m in messages.drain(..) {
+        if is_repo_mutation(&m) {
+            if seen_mutation {
+                continue;
+            } else {
+                seen_mutation = true;
+            }
+        }
+        other_messages.push(m);
+    }
+
+    std::mem::swap(messages, other_messages);
 }

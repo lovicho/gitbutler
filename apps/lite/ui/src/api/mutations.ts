@@ -16,7 +16,7 @@ import {
 	rejectedChangesToastOptions,
 } from "#ui/operations/toastOptions.tsx";
 import { commitOperand, type BranchOperand } from "#ui/operands.ts";
-import { projectActions } from "#ui/projects/state.ts";
+import { projectSlice } from "#ui/projects/state.ts";
 import { type AppDispatch, useAppDispatch } from "#ui/store.ts";
 import { Toast } from "@base-ui/react";
 import {
@@ -53,7 +53,7 @@ export const syncCoreCaches = (
 
 	queryClient.setQueryData(headInfoQueryOptions(projectId).queryKey, workspace.headInfo);
 	dispatch(
-		projectActions.updateRewrittenCommitReferences({
+		projectSlice.actions.updateRewrittenCommitReferences({
 			projectId,
 			replacedCommits: workspace.replacedCommits,
 			headInfo: workspace.headInfo,
@@ -417,7 +417,7 @@ export const useCommitCreate = ({ projectId }: { projectId: string }) => {
 
 			if (input.relativeTo.type === "commit" && response.newCommit !== null) {
 				dispatch(
-					projectActions.setCommitTarget({
+					projectSlice.actions.setCommitTarget({
 						projectId,
 						commitTarget: { type: "commit", subject: response.newCommit },
 					}),
@@ -530,7 +530,7 @@ export const useCommitInsertBlank = () => {
 			)?.stack.id;
 			if (stackId != null) {
 				dispatch(
-					projectActions.selectOutline({
+					projectSlice.actions.selectOutline({
 						projectId: input.projectId,
 						selection: commitOperand({ stackId, commitId: response.newCommit }),
 					}),
@@ -847,7 +847,7 @@ export const useUpdateBranchName = ({
 			});
 
 			dispatch(
-				projectActions.updateRewrittenBranchReferences({
+				projectSlice.actions.updateRewrittenBranchReferences({
 					projectId,
 					oldBranch,
 					newBranch,
@@ -863,7 +863,7 @@ export const useUpdateBranchName = ({
 				newBranch: newRef.displayName,
 			});
 
-			dispatch(projectActions.exitMode({ projectId }));
+			dispatch(projectSlice.actions.exitMode({ projectId }));
 		},
 		onError: (error) => {
 			// oxlint-disable-next-line no-console

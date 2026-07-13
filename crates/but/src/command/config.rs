@@ -89,7 +89,10 @@ pub async fn exec(
 ) -> Result<()> {
     match cmd {
         Some(Subcommands::User { cmd }) => user_config(ctx, out, cmd).await,
-        Some(Subcommands::Target { branch }) => target_config(ctx, out, branch).await,
+        Some(Subcommands::Target {
+            branch,
+            push_remote,
+        }) => target_config(ctx, out, branch, push_remote).await,
         Some(Subcommands::Forge { cmd }) => forge_config(out, cmd).await,
         Some(Subcommands::Metrics { status }) => metrics_config(out, status).await,
         Some(Subcommands::Ai { local, global, cmd }) => {
@@ -1764,6 +1767,7 @@ async fn target_config(
     ctx: &mut Context,
     out: &mut OutputChannel,
     branch: Option<String>,
+    push_remote: Option<String>,
 ) -> Result<()> {
     let t = theme::get();
     match branch {
@@ -1866,17 +1870,26 @@ async fn target_config(
                 )?;
             }
 
-            // from the new_branch string, we need to parse out the remote name and branch name
+            if let Some(push_remote) = push_remote.as_deref() {
+                ctx.repo
+                    .get()?
+                    .find_remote(push_remote)
+                    .with_context(|| format!("Failed to find push remote '{push_remote}'"))?;
+            }
+
+            let target_ref: gix::refs::FullName = format!("refs/remotes/{new_branch}")
+                .try_into()
+                .context("Invalid target branch name")?;
+            drop((guard, ws));
             cfg_if! {
                 if #[cfg(feature = "legacy")] {
-                    drop((guard, ws));
-                    but_api::legacy::virtual_branches::set_base_branch(
+                    but_api::workspace::set_target_ref_and_init_project(
                         ctx,
-                        new_branch.clone(),
-                        None,
+                        target_ref.as_ref(),
+                        push_remote,
                     )?;
                 } else {
-                    anyhow::bail!("Cannot yet set the base-branch without legacy functions - needs port")
+                    anyhow::bail!("Cannot yet set the target branch without legacy functions")
                 }
             };
         }

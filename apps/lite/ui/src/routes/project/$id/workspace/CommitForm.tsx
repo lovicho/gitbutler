@@ -14,7 +14,7 @@ import {
 	toElectronAccelerator,
 } from "#ui/hotkeys.ts";
 import { nativeMenuItem, showNativeMenuFromTrigger, type NativeMenuItem } from "#ui/native-menu.ts";
-import { projectActions, selectProjectOutlineModeState } from "#ui/projects/state.ts";
+import { projectSlice } from "#ui/projects/state.ts";
 import { focusSelectionScope } from "#ui/selection-scopes.ts";
 import { useAppDispatch, useAppSelector } from "#ui/store.ts";
 import { Button, Tooltip } from "@base-ui/react";
@@ -71,7 +71,7 @@ export const CommitForm: FC<{
 	const commitTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
 	const isDefaultMode = useAppSelector(
-		(state) => selectProjectOutlineModeState(state, projectId)._tag === "Default",
+		(state) => projectSlice.selectors.selectOutlineModeState(state, projectId)._tag === "Default",
 	);
 
 	const { data: headInfoIndex } = useQuery({
@@ -92,7 +92,7 @@ export const CommitForm: FC<{
 
 	const selectBranch = (option: CommitTargetComboboxItem | null) => {
 		dispatch(
-			projectActions.setCommitTarget({
+			projectSlice.actions.setCommitTarget({
 				projectId,
 				commitTarget: option?.relativeTo ?? null,
 			}),

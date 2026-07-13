@@ -409,7 +409,7 @@ function git(pathToRepo: string, args: string[]): string {
 function localBranches(pathToRepo: string): string[] {
 	return git(pathToRepo, ["for-each-ref", "--format=%(refname:short)", "refs/heads"])
 		.split("\n")
-		.filter(Boolean);
+		.filter((branch) => branch && !branch.startsWith("gitbutler/"));
 }
 
 async function createGeneratedBranch(

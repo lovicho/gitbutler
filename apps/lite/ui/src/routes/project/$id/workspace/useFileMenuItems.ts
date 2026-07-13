@@ -17,7 +17,7 @@ import {
 import { type NativeMenuItem, nativeMenuItem, nativeMenuItemsFromGroups } from "#ui/native-menu.ts";
 import { fileOperand, type FileOperand } from "#ui/operands.ts";
 import { createDiffSpec } from "#ui/operations/diff-specs.ts";
-import { projectActions } from "#ui/projects/state.ts";
+import { projectSlice } from "#ui/projects/state.ts";
 import { useAppDispatch } from "#ui/store.ts";
 import { focusSelectionScope } from "#ui/selection-scopes.ts";
 import type { TreeChange } from "@gitbutler/but-sdk";
@@ -52,7 +52,7 @@ export const useFileMenuItems = ({
 	const openInEditor = useOpenInEditor();
 	const cutFile = () => {
 		dispatch(
-			projectActions.enterKeyboardTransferMode({
+			projectSlice.actions.enterKeyboardTransferMode({
 				projectId,
 				source: fileOperand(operand),
 			}),
@@ -158,7 +158,7 @@ export const useFileMenuItems = ({
 					Match.when({ parent: { _tag: "UncommittedChanges" } }, (operand) => {
 						const absorb = () => {
 							dispatch(
-								projectActions.enterAbsorbMode({
+								projectSlice.actions.enterAbsorbMode({
 									projectId,
 									source: fileOperand(operand),
 									sourceTarget: {

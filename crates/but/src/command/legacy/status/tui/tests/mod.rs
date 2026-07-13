@@ -1120,7 +1120,7 @@ fn jumping_up_down() {
     let mut tui = test_tui(env);
 
     tui.input('j');
-    for n in 1..=30 {
+    for n in 1..=12 {
         tui.input('n');
         tui.input(KeyCode::Enter);
         tui.input(format!("commit #{n}"));
@@ -1128,12 +1128,12 @@ fn jumping_up_down() {
     }
 
     tui.reload()
-        .assert_current_line_eq("┊●   1a89cbc commit #30 (no changes)");
+        .assert_current_line_eq("┊●   0856e2b commit #12 (no changes)");
 
     tui.input((KeyModifiers::CONTROL, 'd'))
-        .assert_current_line_eq("┊●   90ce384 commit #20 (no changes)");
+        .assert_current_line_eq("┊●   f2262ae commit #2 (no changes)");
     tui.input((KeyModifiers::CONTROL, 'u'))
-        .assert_current_line_eq("┊●   1a89cbc commit #30 (no changes)");
+        .assert_current_line_eq("┊●   0856e2b commit #12 (no changes)");
 }
 
 #[test]
@@ -1147,7 +1147,7 @@ fn jumping_up_down_non_normal_mode() {
 
     tui.input('j');
     tui.input('j');
-    for n in 1..=30 {
+    for n in 1..=12 {
         tui.input('n');
         tui.input(KeyCode::Enter);
         tui.input(format!("commit #{n}"));
@@ -1158,7 +1158,7 @@ fn jumping_up_down_non_normal_mode() {
     tui.input('r');
 
     tui.input((KeyModifiers::CONTROL, 'd'))
-        .assert_current_line_eq("┊●   << amend >> 9d9282f commit #21 (no changes)");
+        .assert_current_line_eq("┊●   << amend >> 9a7be93 commit #3 (no changes)");
     tui.input((KeyModifiers::CONTROL, 'u'))
         .assert_current_line_eq("╭┄<< source >> << noop >> zz [uncommitted]");
 }

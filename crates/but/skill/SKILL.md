@@ -35,6 +35,8 @@ but commit <branch> -c -m "<msg>" --changes <id>,<id>
 
 `--changes` (or `-p`) takes comma-separated file or hunk IDs from `but diff` / `but status -fv`. A hunk ID is written `<file-id>:<hunk-id>` (e.g. `qs:5`, copied from `but diff`) — the part after the colon is the hunk's ID, **not** a line range (`qs:16-40` is invalid). Do not invent flags like `--hunk` / `--hunks` / `--ids`, pass a line range, or pass change IDs as positional arguments.
 
+CLI IDs may be a single character when unambiguous; copy them exactly from command output. Longer unambiguous prefixes also work.
+
 ## Non-Negotiable Rules
 
 1. Use `but` for all write operations. Never run `git add`, `git commit`, `git push`, `git checkout`, `git merge`, `git rebase`, `git stash`, or `git cherry-pick`. If the user says a `git` write command, translate it to `but` and run that. Sole exception: `git add -- <path>` to mark a conflicted uncommitted file resolved — see "Conflicts in uncommitted files".

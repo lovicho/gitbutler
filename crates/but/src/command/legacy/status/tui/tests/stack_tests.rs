@@ -28,7 +28,27 @@ fn unapply_stack() {
 
     tui.input('k');
     tui.input('u')
+        .assert_current_line_eq(str!["┊├┄g0 [A]"])
         .assert_rendered_term_svg_eq(file!["snapshots/unapply_stack_004.svg"]);
+}
+
+#[test]
+fn unapply_stack_selects_base_branch_when_next_stack_has_commits() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    let mut tui = test_tui(env);
+
+    tui.input('j');
+    tui.input('b');
+    tui.input('n');
+
+    tui.input((KeyModifiers::SHIFT, 'G'));
+    tui.input('b');
+
+    tui.input('g');
+    tui.input('s');
+    tui.input('u').assert_current_line_eq(str!["┊├┄g0 [A]"]);
 }
 
 #[test]

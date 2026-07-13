@@ -96,9 +96,18 @@ pub enum Subcommands {
     /// ```text
     /// but config target origin/main
     /// ```
+    ///
+    /// Set a target branch and push branches to a fork:
+    ///
+    /// ```text
+    /// but config target upstream/main --push-remote origin
+    /// ```
     Target {
         /// New target branch to set (e.g., "origin/main")
         branch: Option<String>,
+        /// Remote to push branches to (e.g., "origin" for a fork).
+        #[clap(long, value_name = "REMOTE", requires = "branch")]
+        push_remote: Option<String>,
     },
 
     /// View or set metrics collection.

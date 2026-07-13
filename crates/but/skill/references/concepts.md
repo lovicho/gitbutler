@@ -44,15 +44,15 @@ workspace (gitbutler/workspace)
 Every object gets a short, human-readable CLI ID shown in `but status`. IDs are generated per-session and are unique across all entity types (no two objects share an ID) — always read them from `but status`.
 
 ```
-Commits:    1b, 8f, c2     (short hex prefixes of the SHA, long enough to be unique)
+Commits:    1, 8f, c2      (short hex prefixes of the SHA, long enough to be unique)
 Branches:   fe, bu, ui     (unique 2–3 char substring of the branch name, e.g. "fe" from "feature-x";
                              falls back to auto-generated ID if no unique substring exists)
-Files:      g0, qs, uo     (derived from the file path, 2–3 chars)
-Hunks:      qs:5, uo:d     (<file-id>:<hunk-id>; the hunk part is derived from the hunk's content)
+Files:      g, qs, uo      (derived from the file path, long enough to be unique)
+Hunks:      g:5, uo:d      (<file-id>:<hunk-id>; the hunk part is derived from the hunk's content)
 Stacks:     m0, n0          (auto-generated, 2–3 chars)
 ```
 
-**Why?** Git commit SHAs are long (40 chars). CLI IDs are short (2-3 chars) and unique within your current workspace context.
+**Why?** Git commit SHAs are long (40 chars). CLI IDs are short, variable-length, and unique within your current workspace context. Commits, files, and hunks may use a single character when that is unambiguous.
 
 **Stability:** File/hunk IDs copied from the current output generally remain usable across ordinary commits, so you can reference several in a row, including across chained `but commit` calls. If an ID stops resolving, re-read the diff and continue. Commit IDs are SHA prefixes that get rewritten by history edits (`amend`, `squash`, `move`, `uncommit`) — amending a commit also gives every commit stacked above it a new ID — so run those one at a time and re-read commit IDs from the returned status rather than chaining.
 

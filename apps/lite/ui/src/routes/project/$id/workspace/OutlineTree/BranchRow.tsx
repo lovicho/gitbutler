@@ -30,7 +30,7 @@ import {
 	type NativeMenuItem,
 } from "#ui/native-menu.ts";
 import { branchOperand, operandEquals, type BranchOperand } from "#ui/operands.ts";
-import { projectActions, selectProjectOutlineModeState } from "#ui/projects/state.ts";
+import { projectSlice } from "#ui/projects/state.ts";
 import { focusSelectionScope } from "#ui/selection-scopes.ts";
 import { useAppDispatch, useAppSelector } from "#ui/store.ts";
 import { prForgeUrl } from "#ui/pr.ts";
@@ -154,10 +154,10 @@ export const BranchRow: FC<
 	};
 	const operand = branchOperand(branchOperandV);
 	const isDefaultMode = useAppSelector(
-		(state) => selectProjectOutlineModeState(state, projectId)._tag === "Default",
+		(state) => projectSlice.selectors.selectOutlineModeState(state, projectId)._tag === "Default",
 	);
 	const isRenaming = useAppSelector((state) => {
-		const outlineMode = selectProjectOutlineModeState(state, projectId);
+		const outlineMode = projectSlice.selectors.selectOutlineModeState(state, projectId);
 		return (
 			outlineMode._tag === "RenameBranch" &&
 			operandEquals(operand, branchOperand(outlineMode.operand))
@@ -177,12 +177,12 @@ export const BranchRow: FC<
 	});
 
 	const startEditing = () => {
-		dispatch(projectActions.startRenameBranch({ projectId, branch: branchOperandV }));
+		dispatch(projectSlice.actions.startRenameBranch({ projectId, branch: branchOperandV }));
 	};
 
 	const endEditing = () => {
-		dispatch(projectActions.exitMode({ projectId }));
-		dispatch(projectActions.selectOutline({ projectId, selection: operand }));
+		dispatch(projectSlice.actions.exitMode({ projectId }));
+		dispatch(projectSlice.actions.selectOutline({ projectId, selection: operand }));
 		focusSelectionScope("outline");
 	};
 
@@ -227,7 +227,7 @@ export const BranchRow: FC<
 		side === "below" && bottomRelativeTo !== null ? bottomRelativeTo : relativeTo;
 
 	const setCommitTarget = () => {
-		dispatch(projectActions.setCommitTarget({ projectId, commitTarget: relativeTo }));
+		dispatch(projectSlice.actions.setCommitTarget({ projectId, commitTarget: relativeTo }));
 	};
 
 	const composeCommitHere = () => {
@@ -237,7 +237,7 @@ export const BranchRow: FC<
 
 	const cutBranch = () => {
 		dispatch(
-			projectActions.enterKeyboardTransferMode({
+			projectSlice.actions.enterKeyboardTransferMode({
 				projectId,
 				source: operand,
 			}),
@@ -275,7 +275,7 @@ export const BranchRow: FC<
 
 					if (newBranchStack && newBranchStack.id !== null) {
 						dispatch(
-							projectActions.selectOutline({
+							projectSlice.actions.selectOutline({
 								projectId,
 								selection: branchOperand({
 									stackId: newBranchStack.id,

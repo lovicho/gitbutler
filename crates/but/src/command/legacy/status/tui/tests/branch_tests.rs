@@ -2,7 +2,9 @@ use but_testsupport::Sandbox;
 use crossterm::event::*;
 use snapbox::{file, str};
 
-use crate::command::legacy::status::tui::tests::utils::test_tui;
+use crate::command::legacy::status::tui::{
+    Message, ReloadCause, SelectAfterReload, tests::utils::test_tui,
+};
 
 #[test]
 fn branch_key_from_uncommitted_creates_new_branch() {
@@ -240,4 +242,23 @@ fn cannot_select_merged_branches() {
 
     tui.input('j')
         .assert_rendered_term_svg_eq(file!["snapshots/cannot_select_merged_branches_002.svg"]);
+}
+
+#[test]
+fn reload_moves_selection_off_merged_branch() {
+    let env =
+        Sandbox::init_scenario_with_target_and_default_settings("upstream-integrated-with-updates");
+    env.setup_metadata(&["A", "B"]);
+    env.set_target_sha("refs/heads/base");
+
+    let mut tui = test_tui(env);
+
+    tui.render_with_messages(
+        None,
+        vec![Message::Reload(
+            Some(SelectAfterReload::Branch("A".into())),
+            ReloadCause::Mutation,
+        )],
+    )
+    .assert_current_line_eq(str!["┊╭┄h0 [B]"]);
 }
