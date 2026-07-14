@@ -1,10 +1,5 @@
 <script lang="ts">
-	import {
-		fModeEnabled,
-		newBranchApplyFeature,
-		newIntegrateUpstreamModalFeature,
-		newPushFeature,
-	} from "$lib/config/uiFeatureFlags";
+	import { fModeEnabled } from "$lib/config/uiFeatureFlags";
 	import { SETTINGS_SERVICE } from "$lib/settings/appSettings";
 	import { USER_SERVICE } from "$lib/user/userService.svelte";
 	import { inject } from "@gitbutler/core/context";
@@ -59,54 +54,6 @@
 			{/snippet}
 		</CardGroup.Item>
 	{/if}
-
-	<CardGroup.Item labelFor="new-push">
-		{#snippet title()}
-			New push
-		{/snippet}
-		{#snippet caption()}
-			Use the workspace-based push implementation.
-		{/snippet}
-		{#snippet actions()}
-			<Toggle
-				id="new-push"
-				checked={$newPushFeature}
-				onclick={() => newPushFeature.set(!$newPushFeature)}
-			/>
-		{/snippet}
-	</CardGroup.Item>
-
-	<CardGroup.Item labelFor="new-branch-apply">
-		{#snippet title()}
-			New branch apply
-		{/snippet}
-		{#snippet caption()}
-			Use the newer branch apply implementation from the branches view.
-		{/snippet}
-		{#snippet actions()}
-			<Toggle
-				id="new-branch-apply"
-				checked={$newBranchApplyFeature}
-				onclick={() => newBranchApplyFeature.set(!$newBranchApplyFeature)}
-			/>
-		{/snippet}
-	</CardGroup.Item>
-
-	<CardGroup.Item labelFor="new-integrate-upstream-modal">
-		{#snippet title()}
-			New integrate upstream modal
-		{/snippet}
-		{#snippet caption()}
-			Use the newer upstream integration flow. Disable to use the deprecated modal.
-		{/snippet}
-		{#snippet actions()}
-			<Toggle
-				id="new-integrate-upstream-modal"
-				checked={$newIntegrateUpstreamModalFeature}
-				onclick={() => newIntegrateUpstreamModalFeature.set(!$newIntegrateUpstreamModalFeature)}
-			/>
-		{/snippet}
-	</CardGroup.Item>
 
 	<CardGroup.Item labelFor="irc">
 		{#snippet title()}

@@ -1,5 +1,4 @@
 import { getBranchNameFromRef } from "$lib/branches/branchUtils";
-import { newPushFeature } from "$lib/config/uiFeatureFlags";
 import { sortLikeFileTree } from "$lib/files/filetreeV3";
 import { showWarning } from "$lib/notifications/toasts";
 import {
@@ -25,7 +24,6 @@ import { type UiState } from "$lib/state/uiState.svelte";
 import { InjectionToken } from "@gitbutler/core/context";
 import { reactive } from "@gitbutler/shared/reactiveUtils.svelte";
 import { isDefined } from "@gitbutler/ui/utils/typeguards";
-import { get } from "svelte/store";
 import type { NormalizedError } from "$lib/error/normalizedError";
 import type { BackendApi } from "$lib/state/backendApi";
 import type { AppDispatch } from "$lib/state/clientState.svelte";
@@ -425,11 +423,7 @@ export class StackService {
 			throwSilentError: true,
 		};
 
-		if (get(newPushFeature)) {
-			return this.backendApi.endpoints.pushWorkspaceBranchAndAncestors.useMutation(options);
-		} else {
-			return this.backendApi.endpoints.pushStack.useMutation(options);
-		}
+		return this.backendApi.endpoints.pushWorkspaceBranchAndAncestors.useMutation(options);
 	}
 
 	createCommit() {

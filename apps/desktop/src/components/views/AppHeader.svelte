@@ -3,10 +3,8 @@
 	import CreateBranchModal from "$components/branch/CreateBranchModal.svelte";
 	import SyncButton from "$components/forge/SyncButton.svelte";
 	import IntegrateUpstreamModal from "$components/upstream/IntegrateUpstreamModal.svelte";
-	import IntegrateUpstreamModalDeprecated from "$components/upstream/IntegrateUpstreamModalDeprecated.svelte";
 	import { BACKEND } from "$lib/backend";
 	import { BASE_BRANCH_SERVICE } from "$lib/baseBranch/baseBranchService.svelte";
-	import { newIntegrateUpstreamModalFeature } from "$lib/config/uiFeatureFlags";
 	import { MODE_SERVICE } from "$lib/mode/modeService";
 	import { handleAddProjectOutcome } from "$lib/project/project";
 	import { PROJECTS_SERVICE } from "$lib/project/projectsService";
@@ -70,9 +68,7 @@
 	const upstreamCommits = $derived(base?.behind ?? 0);
 	const isHasUpstreamCommits = $derived(upstreamCommits > 0);
 
-	let modal = $state<
-		ReturnType<typeof IntegrateUpstreamModal> | ReturnType<typeof IntegrateUpstreamModalDeprecated>
-	>();
+	let modal = $state<ReturnType<typeof IntegrateUpstreamModal>>();
 
 	const projects = $derived(projectsService.projects());
 
@@ -101,11 +97,7 @@
 </script>
 
 {#if projectId}
-	{#if $newIntegrateUpstreamModalFeature}
-		<IntegrateUpstreamModal bind:this={modal} {projectId} />
-	{:else}
-		<IntegrateUpstreamModalDeprecated bind:this={modal} {projectId} />
-	{/if}
+	<IntegrateUpstreamModal bind:this={modal} {projectId} />
 {/if}
 
 <div

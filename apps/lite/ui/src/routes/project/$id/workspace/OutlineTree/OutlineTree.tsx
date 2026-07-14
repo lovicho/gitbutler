@@ -28,7 +28,6 @@ import { navigationIndexIncludes, type NavigationIndex } from "#ui/workspace/nav
 import { mergeProps, useRender } from "@base-ui/react";
 import {
 	BranchReference,
-	Commit,
 	RelativeTo,
 	Segment,
 	Stack,
@@ -61,7 +60,7 @@ import {
 
 const DryRunWorkspaceContext = createContext<WorkspaceState | null>(null);
 
-const AbsorptionTargetKeysContext = createContext<ReadonlySet<string> | null>(null);
+const AbsorptionTargetCommitIdsContext = createContext<ReadonlySet<string> | null>(null);
 
 // This must be unique as to not collide with other IDs, and stable because it's
 // stored in local storage.
@@ -99,7 +98,7 @@ const OperandC: FC<
 		outline: OperationTargetOutline;
 	} & useRender.ComponentProps<"div">
 > = ({ projectId, operand, outline, render, ...props }) => {
-	const absorptionTargetKeys = assert(use(AbsorptionTargetKeysContext));
+	const absorptionTargetCommitIds = assert(use(AbsorptionTargetCommitIdsContext));
 	const navigationIndex = assert(use(NavigationIndexContext));
 	const isSelected = useAppSelector((state) =>
 		projectSlice.selectors.selectIsSelectedOutline(state, projectId, navigationIndex, operand),
@@ -111,27 +110,31 @@ const OperandC: FC<
 		return Match.value(outlineMode).pipe(
 			Match.tags({
 				Absorb: (): ActiveOperation | null => {
-					const isAbsorptionTarget = absorptionTargetKeys.has(operandIdentityKey(operand));
-					return isAbsorptionTarget ? { operationType: "into", tooltip: "Absorb target" } : null;
+					const isActive =
+						operand._tag === "Commit" && absorptionTargetCommitIds.has(operand.commitId);
+					if (!isActive) return null;
+
+					return { operationType: "into", tooltip: "Absorb target" };
 				},
 				Transfer: ({ value: mode }): ActiveOperation | null => {
+					if (mode.operationType === null) return null;
+
 					const isActive = Match.value(mode).pipe(
 						Match.tagsExhaustive({
 							Pointer: (mode) => mode.target !== null && operandEquals(mode.target, operand),
 							Keyboard: () => isSelected,
 						}),
 					);
+					if (!isActive) return null;
 
-					return isActive && mode.operationType !== null
-						? {
-								operationType: mode.operationType,
-								tooltip: getOperation({
-									source: mode.source,
-									target: operand,
-									operationType: mode.operationType,
-								})?.label,
-							}
-						: null;
+					return {
+						operationType: mode.operationType,
+						tooltip: getOperation({
+							source: mode.source,
+							target: operand,
+							operationType: mode.operationType,
+						})?.label,
+					};
 				},
 			}),
 			Match.orElse(() => null),
@@ -159,40 +162,6 @@ const OperandC: FC<
 		defaultTagName: "div",
 		props,
 	});
-};
-
-const CommitC: FC<{
-	commit: Commit;
-	projectId: string;
-	stackId: string;
-	isCommitTarget: boolean;
-	dryRunCommit: Commit | null;
-}> = ({ commit, projectId, stackId, isCommitTarget, dryRunCommit }) => {
-	const operand = commitOperand({ stackId, commitId: commit.id });
-
-	return (
-		<TreeItem
-			projectId={projectId}
-			operand={operand}
-			aria-label={commitTitle(commit.message) ?? "(no message)"}
-			render={
-				<OperandC
-					projectId={projectId}
-					operand={operand}
-					outline="outside"
-					render={
-						<CommitRow
-							commit={commit}
-							projectId={projectId}
-							stackId={stackId}
-							isCommitTarget={isCommitTarget}
-							dryRunCommit={dryRunCommit}
-						/>
-					}
-				/>
-			}
-		/>
-	);
 };
 
 const UncommittedChanges: FC<{
@@ -407,23 +376,41 @@ const SegmentContent: FC<{
 	return (
 		<div>
 			{segment.commits.map((commit) => {
+				const operand = commitOperand({ stackId, commitId: commit.id });
 				const dryRunCommitId = dryRunWorkspace?.replacedCommits[commit.id];
 				const dryRunCommit =
 					dryRunCommitId !== undefined
 						? (dryRunHeadInfoIndex?.commitContextById(dryRunCommitId)?.commit ?? null)
 						: null;
 				return (
-					<CommitC
+					<TreeItem
 						key={commit.id}
-						commit={commit}
 						projectId={projectId}
-						stackId={stackId}
-						isCommitTarget={
-							commitTarget
-								? relativeToEquals(commitTarget, { type: "commit", subject: commit.id })
-								: false
+						operand={operand}
+						aria-label={commitTitle(commit.message) ?? "(no message)"}
+						render={
+							<OperandC
+								projectId={projectId}
+								operand={operand}
+								outline="outside"
+								render={
+									<CommitRow
+										commit={commit}
+										projectId={projectId}
+										stackId={stackId}
+										isCommitTarget={
+											commitTarget
+												? relativeToEquals(commitTarget, {
+														type: "commit",
+														subject: commit.id,
+													})
+												: false
+										}
+										dryRunCommit={dryRunCommit}
+									/>
+								}
+							/>
 						}
-						dryRunCommit={dryRunCommit}
 					/>
 				);
 			})}
@@ -545,20 +532,21 @@ const Stacks: FC<{
 		return Match.value(outlineMode).pipe(
 			Match.tags({
 				Transfer: ({ value: mode }) => {
+					if (mode.operationType === null) return;
+
 					const target = Match.value(mode).pipe(
 						Match.tagsExhaustive({
 							Pointer: (mode) => mode.target,
 							Keyboard: () => selection,
 						}),
 					);
+					if (!target) return;
 
-					return target && mode.operationType !== null
-						? getOperation({
-								source: mode.source,
-								target,
-								operationType: mode.operationType,
-							})?.operation
-						: undefined;
+					return getOperation({
+						source: mode.source,
+						target,
+						operationType: mode.operationType,
+					})?.operation;
 				},
 			}),
 			Match.orElse(() => undefined),
@@ -585,13 +573,13 @@ export const OutlineTree: FC<
 		projectId: string;
 		commitTarget: RelativeTo | null;
 		navigationIndex: NavigationIndex<Operand>;
-		absorptionTargetKeys: ReadonlySet<string>;
+		absorptionTargetCommitIds: ReadonlySet<string>;
 	} & ComponentProps<"div">
 > = ({
 	projectId,
 	commitTarget,
 	navigationIndex,
-	absorptionTargetKeys,
+	absorptionTargetCommitIds,
 	ref: refProp,
 	...props
 }) => {
@@ -617,7 +605,7 @@ export const OutlineTree: FC<
 
 	return (
 		<NavigationIndexContext value={navigationIndex}>
-			<AbsorptionTargetKeysContext value={absorptionTargetKeys}>
+			<AbsorptionTargetCommitIdsContext value={absorptionTargetCommitIds}>
 				<Group
 					{...props}
 					id={layoutId}
@@ -656,7 +644,7 @@ export const OutlineTree: FC<
 						<Stacks projectId={projectId} commitTarget={commitTarget} />
 					</Panel>
 				</Group>
-			</AbsorptionTargetKeysContext>
+			</AbsorptionTargetCommitIdsContext>
 		</NavigationIndexContext>
 	);
 };

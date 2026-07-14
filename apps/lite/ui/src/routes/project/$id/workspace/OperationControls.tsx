@@ -168,7 +168,7 @@ const AbsorbOperationControls: FC<{
 		!absorptionPlan.isPending && !!absorptionPlan.data && absorptionPlan.data.length > 0;
 	const absorbMutation = useAbsorb({ projectId });
 
-	const confirm = () => {
+	const run = () => {
 		dispatch(projectSlice.actions.exitMode({ projectId }));
 		focusSelectionScope("outline");
 
@@ -193,7 +193,7 @@ const AbsorbOperationControls: FC<{
 						{absorptionPlan.data.length} commits
 					</Label>
 				)}
-				<Controls onCancel={cancel} confirm={{ canRun: canAbsorb, onRun: confirm }} />
+				<Controls onCancel={cancel} confirm={{ canRun: canAbsorb, onRun: run }} />
 			</ControlsRow>
 		</Container>
 	);

@@ -552,12 +552,4 @@ export const getOperation = (x: {
 	source: Operand;
 	target: Operand;
 	operationType: OperationType;
-}): OperationWithLabel | null => {
-	const { into, above, below } = getOperations(x.source, x.target);
-	return Match.value(x.operationType).pipe(
-		Match.when("into", () => into),
-		Match.when("above", () => above),
-		Match.when("below", () => below),
-		Match.exhaustive,
-	);
-};
+}): OperationWithLabel | null => getOperations(x.source, x.target)[x.operationType];

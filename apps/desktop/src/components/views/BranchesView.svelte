@@ -18,14 +18,13 @@
 	import TargetCommitList from "$components/views/TargetCommitList.svelte";
 	import { BASE_BRANCH_SERVICE } from "$lib/baseBranch/baseBranchService.svelte";
 	import { BRANCH_SERVICE } from "$lib/branches/branchService.svelte";
-	import { newBranchApplyFeature } from "$lib/config/uiFeatureFlags";
 	import { isNormalizedError } from "$lib/error/normalizedError";
 	import { useBitbucketForgeUser } from "$lib/forge/bitbucket/hooks.svelte";
 	import { FORGE_INFO_SERVICE } from "$lib/forge/forgeInfo.svelte";
 	import { useGitHubForgeUser } from "$lib/forge/github/hooks.svelte";
 	import { useGitLabForgeUser } from "$lib/forge/gitlab/hooks.svelte";
 	import { workspacePath } from "$lib/routes/routes.svelte";
-	import { handleApplyOutcome, handleCreateBranchFromBranchOutcome } from "$lib/stacks/stack";
+	import { handleApplyOutcome } from "$lib/stacks/stack";
 	import { STACK_SERVICE } from "$lib/stacks/stackService.svelte";
 	import { combineResults } from "$lib/state/helpers";
 	import { inject } from "@gitbutler/core/context";
@@ -106,27 +105,17 @@
 	async function applyBranchToWorkspace(args: {
 		branchName: string;
 		remote?: string;
-		prNumber?: number;
 		hasLocal: boolean;
 	}) {
-		const { remote, hasLocal, branchName, prNumber } = args;
+		const { remote, hasLocal, branchName } = args;
 		const remoteRef = remote ? `refs/remotes/${remote}/${branchName}` : undefined;
 		const branchRef = hasLocal ? `refs/heads/${branchName}` : remoteRef;
 		if (branchRef) {
-			if ($newBranchApplyFeature) {
-				const outcome = await stackService.branchApply({
-					projectId,
-					existingBranch: branchRef,
-				});
-				handleApplyOutcome(outcome);
-			} else {
-				const outcome = await stackService.createVirtualBranchFromBranch({
-					projectId,
-					branch: branchRef,
-					prNumber,
-				});
-				handleCreateBranchFromBranchOutcome(outcome);
-			}
+			const outcome = await stackService.branchApply({
+				projectId,
+				existingBranch: branchRef,
+			});
+			handleApplyOutcome(outcome);
 			await baseBranchService.refreshBaseBranch(projectId);
 		}
 		goto(workspacePath(projectId));
@@ -165,12 +154,7 @@
 	let multiDiffView = $state<MultiDiffView>();
 </script>
 
-{#snippet branchActions(
-	branchName: string,
-	remote: string | undefined,
-	hasLocal: boolean,
-	prNumber: number | undefined,
-)}
+{#snippet branchActions(branchName: string, remote: string | undefined, hasLocal: boolean)}
 	<div class="branch-actions">
 		<AsyncButton
 			testId={TestId.BranchesViewApplyBranchButton}
@@ -181,7 +165,6 @@
 					remote,
 					branchName,
 					hasLocal,
-					prNumber,
 				});
 			}}
 		>
@@ -367,7 +350,6 @@
 									result={combineResults(selectedBranch.result, listing.result)}
 								>
 									{#snippet children([branch, listing])}
-										{@const prNumber = branch.stack?.pullRequests[branchName]}
 										{@const inWorkspace = branch.stack?.inWorkspace}
 										{@const hasLocal = listing.hasLocal}
 
@@ -378,7 +360,7 @@
 													{@const stackIsLive = liveStack !== null}
 													{@const isAppliedInCurrentWorkspace = inWorkspace === true && stackIsLive}
 													{#if branchName && !isAppliedInCurrentWorkspace}
-														{@render branchActions(branchName, remote, hasLocal, prNumber)}
+														{@render branchActions(branchName, remote, hasLocal)}
 													{/if}
 
 													{#if stackIsLive}
@@ -432,7 +414,7 @@
 											</ReduxResult>
 										{:else if branchName}
 											{#if inWorkspace !== true}
-												{@render branchActions(branchName, remote, hasLocal, prNumber)}
+												{@render branchActions(branchName, remote, hasLocal)}
 											{/if}
 											<BranchesViewBranch
 												{projectId}

@@ -14,9 +14,3 @@ export type StagingBehavior = "all" | "selection" | "none";
 export const stagingBehaviorFeature = persisted<StagingBehavior>("all", "feature-staging-behavior");
 export const fModeEnabled = persisted(true, "f-mode");
 export const newlineOnEnter = persisted(false, "feature-newline-on-enter");
-export const newPushFeature = persisted(true, "feature-new-push");
-export const newBranchApplyFeature = persisted(true, "feature-new-branch-apply");
-export const newIntegrateUpstreamModalFeature = persisted(
-	true,
-	"feature-new-integrate-upstream-modal",
-);

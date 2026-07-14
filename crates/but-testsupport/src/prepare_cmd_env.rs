@@ -57,6 +57,7 @@ fn updates() -> Vec<EnvOp> {
         EnvOp::Remove("GIT_EDITOR"),
         EnvOp::Remove("VISUAL"),
         EnvOp::Remove("EDITOR"),
+        EnvOp::Remove("BUT_THEME"),
         // Keep ambient agent environments from changing default CLI test output.
         EnvOp::Remove("AI_AGENT"),
         EnvOp::Remove("CLAUDE_CODE_IS_COWORK"),

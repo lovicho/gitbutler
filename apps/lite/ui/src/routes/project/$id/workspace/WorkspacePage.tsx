@@ -180,10 +180,10 @@ const hasAnyOperation = (source: Operand, target: Operand) => {
 
 const useOutlineNavigationIndex = ({
 	projectId,
-	absorptionTargetKeys,
+	absorptionTargetCommitIds,
 }: {
 	projectId: string;
-	absorptionTargetKeys: ReadonlySet<string>;
+	absorptionTargetCommitIds: ReadonlySet<string>;
 }): NavigationIndex<Operand> => {
 	const { data: headInfo } = useQuery(headInfoQueryOptions(projectId));
 	const { data: worktreeChanges } = useQuery(changesInWorktreeQueryOptions(projectId));
@@ -203,7 +203,7 @@ const useOutlineNavigationIndex = ({
 				items.filter(
 					(operand) =>
 						operandContains(operand, activeMode.source) ||
-						absorptionTargetKeys.has(operandIdentityKey(operand)),
+						(operand._tag === "Commit" && absorptionTargetCommitIds.has(operand.commitId)),
 				),
 			Transfer: (activeMode) =>
 				items.filter(
@@ -371,15 +371,13 @@ const WorkspacePage: FC = () => {
 			absorptionPlanQueryOptions({ projectId, target }),
 		),
 	});
-	const absorptionTargetKeys = new Set(
-		absorptionPlanQuery?.data?.map(({ stackId, commitId }) =>
-			operandIdentityKey(commitOperand({ stackId, commitId })),
-		),
+	const absorptionTargetCommitIds = new Set(
+		absorptionPlanQuery?.data?.map(({ commitId }) => commitId),
 	);
 
 	const outlineNavigationIndex = useOutlineNavigationIndex({
 		projectId,
-		absorptionTargetKeys,
+		absorptionTargetCommitIds,
 	});
 
 	const outlineSelection = useAppSelector((state) =>
@@ -430,7 +428,7 @@ const WorkspacePage: FC = () => {
 							projectId={projectId}
 							project={selectedProject}
 							navigationIndex={outlineNavigationIndex}
-							absorptionTargetKeys={absorptionTargetKeys}
+							absorptionTargetCommitIds={absorptionTargetCommitIds}
 						/>
 					</Panel>
 					<Separator className={styles.resizeHandle} />
