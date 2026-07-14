@@ -8,7 +8,7 @@ use std::{
     str::FromStr,
 };
 
-use bstr::BString;
+use bstr::{BString, ByteSlice};
 use but_core::{WORKSPACE_REF_NAME, ref_metadata};
 use but_graph::{SegmentIndex, workspace::StackCommitFlags};
 use gix::Repository;
@@ -604,7 +604,87 @@ pub fn graph_to_ref_info(
     Ok(info)
 }
 
+/// Set (or clear) the forge review association on a segment's metadata.
+///
+/// `review` is the number resolved from the forge cache for the segment, or `None`
+/// when nothing matched. A match on a segment that has no stored metadata (e.g.
+/// an ad-hoc branch in single-branch mode) synthesizes a default metadata entry
+/// to carry the association; a non-match only clears an existing entry and never
+/// synthesizes one. `review_id` is projection-unused and always cleared.
+fn apply_review_to_metadata(
+    metadata: &mut Option<but_core::ref_metadata::Branch>,
+    review: Option<usize>,
+) {
+    match review {
+        Some(number) => {
+            let meta = metadata.get_or_insert_with(Default::default);
+            meta.review.pull_request = Some(number);
+            meta.review.review_id = None;
+        }
+        None => {
+            if let Some(meta) = metadata.as_mut() {
+                meta.review.pull_request = None;
+                meta.review.review_id = None;
+            }
+        }
+    }
+}
+
+fn forge_review_for_branch(
+    reviews_by_head: &std::collections::HashMap<String, usize>,
+    short_name: &str,
+) -> Option<usize> {
+    if let Some(review) = reviews_by_head.get(short_name) {
+        return Some(*review);
+    }
+
+    let mut prefixed_matches = reviews_by_head.iter().filter_map(|(head, review)| {
+        let (_, branch) = head.rsplit_once(':')?;
+        (branch == short_name).then_some(*review)
+    });
+    let review = prefixed_matches.next()?;
+    prefixed_matches
+        .all(|candidate| candidate == review)
+        .then_some(review)
+}
+
 impl RefInfo {
+    /// Resolve each segment's forge review association from a cache-derived map,
+    /// keyed by the segment's remote/pushed short name (what the forge records as
+    /// a review's `source_branch`).
+    ///
+    /// This is a projection-time view of forge truth, not stored state: the value
+    /// is as fresh as the last cache sync and is not persisted here. A stale
+    /// stored number is overwritten (or cleared when the review is gone), and a match
+    /// on an otherwise metadata-less segment synthesizes metadata so single-branch
+    /// mode surfaces the association too. `reviews_by_head` maps a pushed short name
+    /// to its review number; build it from the forge review cache at the call boundary so
+    /// this crate stays free of DB and forge wiring. As a defensive fallback, a uniquely
+    /// matching `owner:branch` key is accepted, while ambiguous fork heads are ignored.
+    pub fn apply_forge_review_associations(
+        &mut self,
+        repo: &gix::Repository,
+        reviews_by_head: &std::collections::HashMap<String, usize>,
+    ) {
+        let remote_names = repo.remote_names();
+        for segment in self
+            .stacks
+            .iter_mut()
+            .flat_map(|stack| stack.segments.iter_mut())
+        {
+            let review = segment
+                .remote_tracking_ref_name
+                .as_ref()
+                .and_then(|rtb| {
+                    but_core::extract_remote_name_and_short_name(rtb.as_ref(), &remote_names)
+                })
+                .and_then(|(_, short)| {
+                    forge_review_for_branch(reviews_by_head, short.to_str().ok()?)
+                });
+            apply_review_to_metadata(&mut segment.metadata, review);
+        }
+    }
+
     /// Enrich standard `RefInfo` output with Gerrit review metadata.
     ///
     /// The regular construction path has already computed stack shape, commit
@@ -809,4 +889,102 @@ pub(crate) fn workspace_data_of_default_workspace_branch(
         meta,
         WORKSPACE_REF_NAME.try_into().expect("statically known"),
     )
+}
+
+#[cfg(test)]
+mod review_association_tests {
+    use std::collections::HashMap;
+
+    use super::{apply_review_to_metadata, forge_review_for_branch};
+    use but_core::ref_metadata::Branch;
+
+    fn branch_with_review(review: Option<usize>) -> Branch {
+        let mut branch = Branch::default();
+        branch.review.pull_request = review;
+        branch
+    }
+
+    #[test]
+    fn managed_segment_gets_the_matched_review() {
+        let mut metadata = Some(branch_with_review(None));
+        apply_review_to_metadata(&mut metadata, Some(42));
+        assert_eq!(metadata.unwrap().review.pull_request, Some(42));
+    }
+
+    #[test]
+    fn ad_hoc_segment_synthesizes_metadata_on_a_match() {
+        // Single-branch mode: no stored metadata, but a cache match still surfaces.
+        let mut metadata = None;
+        apply_review_to_metadata(&mut metadata, Some(7));
+        assert_eq!(metadata.expect("synthesized").review.pull_request, Some(7));
+    }
+
+    #[test]
+    fn stale_stored_review_is_cleared_when_nothing_matches() {
+        let mut metadata = Some(branch_with_review(Some(99)));
+        apply_review_to_metadata(&mut metadata, None);
+        assert_eq!(
+            metadata.expect("metadata kept").review.pull_request,
+            None,
+            "a closed/renamed review must not linger"
+        );
+    }
+
+    #[test]
+    fn ad_hoc_segment_without_a_match_stays_metadata_less() {
+        let mut metadata = None;
+        apply_review_to_metadata(&mut metadata, None);
+        assert!(
+            metadata.is_none(),
+            "no match must not fabricate metadata on a plain branch"
+        );
+    }
+
+    #[test]
+    fn review_id_is_always_cleared() {
+        let mut branch = Branch::default();
+        branch.review.review_id = Some("stale".into());
+        let mut metadata = Some(branch);
+        apply_review_to_metadata(&mut metadata, Some(1));
+        assert!(metadata.unwrap().review.review_id.is_none());
+    }
+
+    #[test]
+    fn owner_prefixed_review_head_matches_the_short_branch_name() {
+        let reviews = HashMap::from([("alice:feature".to_string(), 42)]);
+
+        assert_eq!(
+            forge_review_for_branch(&reviews, "feature"),
+            Some(42),
+            "a uniquely matching fork head should be accepted defensively"
+        );
+    }
+
+    #[test]
+    fn exact_review_head_takes_precedence_over_a_prefixed_head() {
+        let reviews = HashMap::from([
+            ("feature".to_string(), 42),
+            ("alice:feature".to_string(), 99),
+        ]);
+
+        assert_eq!(
+            forge_review_for_branch(&reviews, "feature"),
+            Some(42),
+            "the forge's normal short-name representation should take precedence"
+        );
+    }
+
+    #[test]
+    fn ambiguous_owner_prefixed_review_heads_do_not_match() {
+        let reviews = HashMap::from([
+            ("alice:feature".to_string(), 42),
+            ("bob:feature".to_string(), 99),
+        ]);
+
+        assert_eq!(
+            forge_review_for_branch(&reviews, "feature"),
+            None,
+            "a short branch name cannot safely select between fork owners"
+        );
+    }
 }

@@ -25,6 +25,42 @@ mod stack_tests;
 mod utils;
 
 #[test]
+fn git_activity_only_reloads_for_a_new_head() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    let mut tui = test_tui(env);
+    let mut ctx = tui.env().context();
+    let project_id = ctx.legacy_project.id.clone();
+    let head_sha = super::operations::head_sha(&mut ctx).unwrap();
+    drop(ctx);
+
+    tui.env().file("external-change.txt", "content");
+
+    tui.render_with_messages(
+        None,
+        vec![Message::WatcherEvent(
+            gitbutler_watcher::Change::GitActivity {
+                project_id: project_id.clone(),
+                head_sha,
+            },
+        )],
+    )
+    .assert_rendered_not_contains("external-change.txt");
+
+    tui.render_with_messages(
+        None,
+        vec![Message::WatcherEvent(
+            gitbutler_watcher::Change::GitActivity {
+                project_id,
+                head_sha: "new-head".to_owned(),
+            },
+        )],
+    )
+    .assert_rendered_contains("external-change.txt");
+}
+
+#[test]
 fn shows_full_error_when_message_wraps() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
     env.setup_metadata(&["A"]);
@@ -117,6 +153,37 @@ fn help_popup_opens_over_status_view() {
 
     tui.input(KeyCode::Esc)
         .assert_rendered_term_svg_eq(file!["snapshots/help_popup_opens_over_status_view_002.svg"]);
+}
+
+#[test]
+fn help_popup_searches_descriptions() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    let mut tui = test_tui(env);
+
+    tui.input('?');
+    tui.input('/')
+        .assert_rendered_term_svg_eq(file!["snapshots/help_popup_searches_descriptions_001.svg"]);
+
+    tui.input('s');
+    tui.input(KeyCode::Enter);
+    tui.input("hm")
+        .assert_rendered_term_svg_eq(file!["snapshots/help_popup_searches_descriptions_002.svg"]);
+
+    tui.input(KeyCode::Esc)
+        .assert_rendered_term_svg_eq(file!["snapshots/help_popup_searches_descriptions_003.svg"]);
+
+    tui.input('/');
+    tui.input('s');
+    tui.input((KeyModifiers::CONTROL, 'm'));
+    tui.input("hm")
+        .assert_rendered_term_svg_eq(file!["snapshots/help_popup_searches_descriptions_002.svg"]);
+    tui.input('/')
+        .assert_rendered_term_svg_eq(file!["snapshots/help_popup_searches_descriptions_004.svg"]);
+
+    tui.input(KeyCode::Esc)
+        .assert_rendered_term_svg_eq(file!["snapshots/help_popup_searches_descriptions_005.svg"]);
 }
 
 #[test]
@@ -498,11 +565,11 @@ fn creating_empty_commits() {
 
     tui.input('n')
         .assert_rendered_term_svg_eq(file!["snapshots/creating_empty_commits_002.svg"])
-        .assert_current_line_eq(str!["┊●   f184fc7 (no commit message) (no changes)"]);
+        .assert_current_line_eq(str!["┊●   1 f184fc7 (no commit message) (no changes)"]);
 
     tui.input('n')
         .assert_rendered_term_svg_eq(file!["snapshots/creating_empty_commits_003.svg"])
-        .assert_current_line_eq(str!["┊●   9638f28 (no commit message) (no changes)"]);
+        .assert_current_line_eq(str!["┊●   1#0 9638f28 (no commit message) (no changes)"]);
 }
 
 #[test]
@@ -521,7 +588,7 @@ fn inline_reword() {
 
     tui.input('n')
         .assert_rendered_term_svg_eq(file!["snapshots/inline_reword_002.svg"])
-        .assert_current_line_eq(str!["┊●   f184fc7 (no commit message) (no changes)"]);
+        .assert_current_line_eq(str!["┊●   1 f184fc7 (no commit message) (no changes)"]);
 
     tui.input(KeyCode::Enter)
         .assert_rendered_term_svg_eq(file!["snapshots/inline_reword_003.svg"]);
@@ -531,7 +598,7 @@ fn inline_reword() {
 
     tui.input(KeyCode::Enter)
         .assert_rendered_term_svg_eq(file!["snapshots/inline_reword_005.svg"])
-        .assert_current_line_eq(str!["┊●   cb96911 foo (no changes)"]);
+        .assert_current_line_eq(str!["┊●   1 cb96911 foo (no changes)"]);
 }
 
 #[test]
@@ -758,7 +825,7 @@ fn rubbing() {
         .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
 
     tui.input('n')
-        .assert_current_line_eq(str!["┊●   f184fc7 (no commit message) (no changes)"]);
+        .assert_current_line_eq(str!["┊●   1 f184fc7 (no commit message) (no changes)"]);
 
     tui.input([KeyCode::Up, KeyCode::Up])
         .assert_current_line_eq(str!["┊   v A test.txt"]);
@@ -767,7 +834,7 @@ fn rubbing() {
         .assert_current_line_eq(str!["┊   << source >> << noop >> v A test.txt"]);
 
     tui.input(KeyCode::Down).assert_current_line_eq(str![
-        "┊●   << amend >> f184fc7 (no commit message) (no changes)"
+        "┊●   << amend >> 1 f184fc7 (no commit message) (no changes)"
     ]);
 
     tui.input(KeyCode::Down)
@@ -858,12 +925,12 @@ fn commit_file_toggle_on_commit_without_files_is_noop() {
     with_var("GIT_AUTHOR_DATE", Some("2000-01-01T00:00:00Z"), || {
         with_var("GIT_COMMITTER_DATE", Some("2000-01-01T00:00:00Z"), || {
             tui.input('n')
-                .assert_current_line_eq(str!["┊●   f184fc7 (no commit message) (no changes)"]);
+                .assert_current_line_eq(str!["┊●   1 f184fc7 (no commit message) (no changes)"]);
         });
     });
 
     tui.input('f')
-        .assert_current_line_eq(str!["┊●   f184fc7 (no commit message) (no changes)"]);
+        .assert_current_line_eq(str!["┊●   1 f184fc7 (no commit message) (no changes)"]);
 
     tui.input([KeyCode::Down, KeyCode::Down, KeyCode::Down])
         .assert_current_line_eq(str!["┴ 0dc3733 (common base) 2000-01-02 add M"])
@@ -1109,7 +1176,7 @@ fn consistent_commit_shas_in_tests() {
 
     tui.input('b');
     tui.input('n')
-        .assert_current_line_eq("┊●   0b42c46 (no commit message) (no changes)");
+        .assert_current_line_eq(str!["┊●   1 0b42c46 (no commit message) (no changes)"]);
 }
 
 #[test]
@@ -1128,12 +1195,12 @@ fn jumping_up_down() {
     }
 
     tui.reload()
-        .assert_current_line_eq("┊●   0856e2b commit #12 (no changes)");
+        .assert_current_line_eq("┊●   1#0 0856e2b commit #12 (no changes)");
 
     tui.input((KeyModifiers::CONTROL, 'd'))
-        .assert_current_line_eq("┊●   f2262ae commit #2 (no changes)");
+        .assert_current_line_eq("┊●   1#10 f2262ae commit #2 (no changes)");
     tui.input((KeyModifiers::CONTROL, 'u'))
-        .assert_current_line_eq("┊●   0856e2b commit #12 (no changes)");
+        .assert_current_line_eq("┊●   1#0 0856e2b commit #12 (no changes)");
 }
 
 #[test]
@@ -1158,7 +1225,7 @@ fn jumping_up_down_non_normal_mode() {
     tui.input('r');
 
     tui.input((KeyModifiers::CONTROL, 'd'))
-        .assert_current_line_eq("┊●   << amend >> 9a7be93 commit #3 (no changes)");
+        .assert_current_line_eq("┊●   << amend >> 1#9 9a7be93 commit #3 (no changes)");
     tui.input((KeyModifiers::CONTROL, 'u'))
         .assert_current_line_eq("╭┄<< source >> << noop >> zz [uncommitted]");
 }

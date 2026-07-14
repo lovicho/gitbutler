@@ -1,6 +1,7 @@
 use super::ForgeReview;
 
 const MERGED_REVIEW_RETENTION_DAYS: i64 = 15;
+const ABSENT_OPEN_REVIEW_GRACE_SECONDS: i64 = 60;
 
 impl TryFrom<ForgeReview> for but_db::ForgeReview {
     type Error = anyhow::Error;
@@ -109,14 +110,15 @@ pub(crate) fn cache_reviews(
     db: &mut but_db::DbHandle,
     reviews: &[ForgeReview],
 ) -> anyhow::Result<()> {
-    let cutoff =
-        chrono::Local::now().naive_local() - chrono::Duration::days(MERGED_REVIEW_RETENTION_DAYS);
+    let now = chrono::Local::now().naive_local();
+    let merged_cutoff = now - chrono::Duration::days(MERGED_REVIEW_RETENTION_DAYS);
+    let absent_open_cutoff = now - chrono::Duration::seconds(ABSENT_OPEN_REVIEW_GRACE_SECONDS);
     let db_reviews = reviews
         .iter()
         .map(|review| review.clone().try_into())
         .collect::<anyhow::Result<Vec<_>>>()?;
     db.forge_reviews_mut()?
-        .reconcile_listed(db_reviews, cutoff)
+        .reconcile_listed(db_reviews, merged_cutoff, absent_open_cutoff)
         .map_err(anyhow::Error::from)?;
     Ok(())
 }

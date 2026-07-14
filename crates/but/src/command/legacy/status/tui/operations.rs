@@ -27,6 +27,17 @@ use crate::{
     utils::{WriteWithUtils, diff_specs},
 };
 
+pub fn head_sha(ctx: &mut Context) -> anyhow::Result<String> {
+    let repo = ctx.repo.get()?;
+    Ok(repo
+        .head()
+        .context("failed to read HEAD")?
+        .peel_to_commit()
+        .context("failed to peel HEAD to a commit")?
+        .id
+        .to_string())
+}
+
 pub fn reload_legacy(
     ctx: &mut Context,
     out: &mut dyn WriteWithUtils,

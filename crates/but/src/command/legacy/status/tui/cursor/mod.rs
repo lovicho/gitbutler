@@ -631,7 +631,7 @@ fn first_selectable_in_section(
 }
 
 /// Short IDs are recomputed on reload, so compare the underlying entity instead.
-fn same_entity_for_reload(previous: &CliId, current: &CliId) -> bool {
+pub(super) fn same_entity_for_reload(previous: &CliId, current: &CliId) -> bool {
     match (previous, current) {
         (CliId::UncommittedHunkOrFile(previous), CliId::UncommittedHunkOrFile(current)) => {
             if previous.is_entire_file != current.is_entire_file {

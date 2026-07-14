@@ -5,20 +5,27 @@ use gitbutler_operating_modes::OperatingMode;
 #[derive(Debug, Clone)]
 #[expect(missing_docs)]
 pub enum Change {
+    /// Emitted when a fetch updates the repository's fetched state.
     GitFetch(ProjectHandleOrLegacyProjectId),
+    /// Emitted when HEAD changes its symbolic target or becomes attached or detached.
     GitHead {
         project_id: ProjectHandleOrLegacyProjectId,
         /// The symbolic ref HEAD points at, or `None` when HEAD is detached.
         head: Option<String>,
         operating_mode: OperatingMode,
     },
+    /// Emitted when the commit at the current HEAD changes.
     GitActivity {
         project_id: ProjectHandleOrLegacyProjectId,
         head_sha: String,
     },
+    /// Emitted when branches, remote-tracking state, or an external refresh may have changed which
+    /// commits and branches compose the GitButler workspace.
     WorkspaceActivity {
         project_id: ProjectHandleOrLegacyProjectId,
     },
+    /// Emitted after worktree files or the index change. Carries freshly computed file diffs
+    /// together with hunk assignment and dependency information.
     WorktreeChanges {
         project_id: ProjectHandleOrLegacyProjectId,
         changes: but_hunk_assignment::WorktreeChanges,

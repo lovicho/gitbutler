@@ -250,11 +250,22 @@ pub fn help_key_binds() -> KeyBinds {
         .register();
 
     builder
-        .key_bind(
-            "back",
-            press().code(KeyCode::Char('?')).alt_code(KeyCode::Esc),
-            || Message::Help(HelpMessage::Close),
-        )
+        .key_bind("search", press().code(KeyCode::Char('/')), || {
+            Message::Help(HelpMessage::ToggleSearch)
+        })
+        .register();
+
+    builder
+        .key_bind("back", press().code(KeyCode::Esc), || {
+            Message::Help(HelpMessage::Escape)
+        })
+        .register();
+
+    builder
+        .key_bind("back", press().code(KeyCode::Char('?')), || {
+            Message::Help(HelpMessage::Close)
+        })
+        .hide_from_hotbar()
         .register();
 
     builder

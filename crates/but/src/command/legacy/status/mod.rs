@@ -5,7 +5,7 @@ use assignment::FileAssignment;
 use bstr::{BStr, BString, ByteSlice};
 use but_api::diff::ComputeLineStats;
 use but_core::{
-    IgnoredWorktreeTreeChangeStatus, RepositoryExt, TreeStatus,
+    ChangeId, IgnoredWorktreeTreeChangeStatus, RepositoryExt, TreeStatus,
     ref_metadata::StackId,
     sync::{RepoExclusive, RepoExclusiveGuard},
     ui,
@@ -350,6 +350,7 @@ fn build_status_context<'a>(
         remote_commits_by_id,
         stacks,
         resolved_target,
+        commit_id_to_change_id,
     ) = {
         let (repo, ws, _db) = ctx.workspace_and_db_with_perm(perm.read_permission())?;
         let head_info = but_workspace::graph_to_ref_info(
@@ -364,6 +365,8 @@ fn build_status_context<'a>(
         let mut push_statuses_by_segment_id = HashMap::<SegmentIndex, PushStatus>::new();
         let mut local_commits_by_id = HashMap::<gix::ObjectId, LocalCommit>::new();
         let mut remote_commits_by_id = HashMap::<gix::ObjectId, Commit>::new();
+        let mut commit_id_to_change_id =
+            gix::hashtable::HashMap::<gix::ObjectId, ChangeId>::default();
         for stack in head_info.stacks {
             for segment in stack.segments {
                 let Segment {
@@ -373,9 +376,15 @@ fn build_status_context<'a>(
                     ..
                 } = segment;
                 for local_commit in commits {
+                    if let Some(change_id) = &local_commit.inner.change_id {
+                        commit_id_to_change_id.insert(local_commit.id, change_id.clone());
+                    }
                     local_commits_by_id.insert(local_commit.id, local_commit);
                 }
                 for remote_commit in commits_on_remote {
+                    if let Some(change_id) = &remote_commit.change_id {
+                        commit_id_to_change_id.insert(remote_commit.id, change_id.clone());
+                    }
                     remote_commits_by_id.insert(remote_commit.id, remote_commit);
                 }
                 push_statuses_by_segment_id.insert(segment.id, push_status);
@@ -389,6 +398,7 @@ fn build_status_context<'a>(
             remote_commits_by_id,
             ws.stacks.clone(),
             resolved_target,
+            commit_id_to_change_id,
         )
     };
 
@@ -411,7 +421,11 @@ fn build_status_context<'a>(
         .collect();
     conflicted_paths.sort();
 
-    let id_map = IdMap::new(stacks, worktree_changes.assignments.clone())?;
+    let id_map = IdMap::new(
+        stacks,
+        worktree_changes.assignments.clone(),
+        commit_id_to_change_id,
+    )?;
 
     let stacks = id_map.stacks();
     // Store the count of stacks for hint logic later
@@ -1340,6 +1354,10 @@ fn print_group(
                     status_ctx,
                     stack_with_id.id,
                     commit.short_id.clone(),
+                    commit
+                        .change_id
+                        .as_ref()
+                        .map(|change_id| change_id.short_id.clone()),
                     inner,
                     CommitChanges::Remote(&details.diff_with_first_parent),
                     CommitClassification::Upstream,
@@ -1369,6 +1387,10 @@ fn print_group(
                     status_ctx,
                     stack_with_id.id,
                     commit.short_id.clone(),
+                    commit
+                        .change_id
+                        .as_ref()
+                        .map(|change_id| change_id.short_id.clone()),
                     &inner.inner,
                     CommitChanges::Workspace(&commit.tree_changes_using_repo(&repo)?),
                     classification,
@@ -1496,6 +1518,7 @@ fn print_commit(
     status_ctx: &StatusContext<'_>,
     stack_id: Option<StackId>,
     short_id: ShortId,
+    short_change_id: Option<ShortId>,
     commit: &but_workspace::ref_info::Commit,
     commit_changes: CommitChanges,
     classification: CommitClassification,
@@ -1516,6 +1539,7 @@ fn print_commit(
     let (details_line, _) = display_cli_commit_details(
         repo,
         short_id.clone(),
+        short_change_id,
         commit,
         match commit_changes {
             CommitChanges::Workspace(tree_changes) => !tree_changes.is_empty(),
@@ -1543,6 +1567,7 @@ fn print_commit(
             Vec::from([Span::raw("┊"), dot, Span::raw(" ")]),
             CommitLineContent {
                 sha: details_line.sha,
+                change_id: details_line.change_id,
                 author: details_line.author,
                 message: details_line.message,
                 suffix: details_line
@@ -1585,6 +1610,7 @@ fn print_commit(
             Vec::from([Span::raw("┊"), dot, Span::raw("   ")]),
             CommitLineContent {
                 sha: details_line.sha,
+                change_id: details_line.change_id,
                 author: details_line.author,
                 message: details_line.message,
                 suffix: details_line
@@ -1677,6 +1703,7 @@ impl CliDisplay for but_core::TreeChange {
 fn display_cli_commit_details(
     repo: &gix::Repository,
     short_id: ShortId,
+    short_change_id: Option<ShortId>,
     commit: &but_workspace::ref_info::Commit,
     has_changes: bool,
     verbose: bool,
@@ -1697,6 +1724,23 @@ fn display_cli_commit_details(
     };
     let start_id = Span::styled(short_id.to_string(), t.cli_id);
 
+    let change_id =
+        if let (Some(short_change_id), Some(change_id)) = (short_change_id, &commit.change_id) {
+            let change_id_str = change_id.to_string();
+            let hint_end = 3.min(change_id_str.len());
+            let hint = change_id_str
+                .get(short_change_id.len()..hint_end)
+                .unwrap_or("")
+                .to_string();
+            vec![
+                Span::styled(short_change_id.to_string(), t.change_id),
+                Span::styled(hint, t.hint),
+                Span::raw(" "),
+            ]
+        } else {
+            vec![]
+        };
+
     let no_changes = if has_changes {
         None
     } else {
@@ -1715,6 +1759,7 @@ fn display_cli_commit_details(
         let formatted_time = created_at.format_or_unix(CLI_DATE);
         (
             CommitLineContent {
+                change_id,
                 sha: Vec::from_iter([start_id, end_id]),
                 author: Vec::from_iter([Span::raw(" "), Span::raw(commit.author.name.to_string())]),
                 message: Vec::new(),
@@ -1733,6 +1778,7 @@ fn display_cli_commit_details(
         (
             CommitLineContent {
                 sha: Vec::from([start_id, end_id]),
+                change_id,
                 author: Vec::new(),
                 message: Vec::from_iter([Span::raw(" "), message]),
                 suffix: maybe_with_leading_space(no_changes, conflicted),
@@ -1760,6 +1806,7 @@ fn maybe_with_leading_space(
 
 fn dim_commit_line_content(content: CommitLineContent) -> CommitLineContent {
     let sha = dim_spans(content.sha);
+    let change_id = dim_spans(content.change_id);
     let mut author = dim_spans(content.author);
     let message = dim_spans(content.message);
     let mut suffix = dim_spans(content.suffix);
@@ -1774,6 +1821,7 @@ fn dim_commit_line_content(content: CommitLineContent) -> CommitLineContent {
 
     CommitLineContent {
         sha,
+        change_id,
         author,
         message,
         suffix,

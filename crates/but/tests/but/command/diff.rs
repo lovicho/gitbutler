@@ -329,7 +329,7 @@ fn json_target_committed_file() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   3f40d29 committed-file-target
+┊●   1 3f40d29 committed-file-target
 ┊│     3:k A committed-other.txt
 ┊│     3:w A committed-target.txt
 ┊●   9477ae7 add A
@@ -610,12 +610,12 @@ fn json_commit_target_tree_change_statuses() -> anyhow::Result<()> {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   dafe86a status-target
+┊●   1#0 dafe86a status-target
 ┊│     da:nx A added.txt
 ┊│     da:nm D deleted.txt
 ┊│     da:u M modified.txt
 ┊│     da:o R renamed-after.txt
-┊●   db7d00b status-base
+┊●   1#1 db7d00b status-base
 ┊│     db:n A deleted.txt
 ┊│     db:u A modified.txt
 ┊│     db:z A renamed-before.txt

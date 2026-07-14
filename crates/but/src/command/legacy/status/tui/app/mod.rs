@@ -2,12 +2,12 @@ use std::{
     borrow::Cow,
     cell::Cell,
     sync::{Arc, mpsc::Receiver},
-    time::Instant,
 };
 
 use anyhow::Context as _;
 use bstr::ByteSlice;
 use but_ctx::Context;
+use crossterm::event::Event;
 use gitbutler_operating_modes::OperatingMode;
 use gix::refs::{Category, FullName};
 use nonempty::NonEmpty;
@@ -34,8 +34,8 @@ use super::{
     cursor::{Cursor, is_selectable_in_mode},
     file_browser::FileBrowser,
     fps::FpsCounter,
-    fuzzy_picker::{Col, FuzzyPicker, FuzzyPickerItem, SearchableToken},
-    help::Help,
+    fuzzy_picker::{Col, FuzzyPicker, FuzzyPickerItem, FuzzyPickerMessage, SearchableToken},
+    help::{Help, HelpMessage},
     highlight::Highlights,
     key_bind::{
         KeyBinds, confirm_key_binds, default_key_binds, fuzzy_picker_key_binds, help_key_binds,
@@ -104,8 +104,9 @@ pub struct App {
     pub theme: &'static Theme,
     pub has_focus: bool,
     pub backstack: Backstack,
-    pub previous_reload_caused_by_mutation_timestamp: Option<Instant>,
     pub file_browser: Option<FileBrowser>,
+    pub head_sha: String,
+    pub has_pending_workspace_activity_event: bool,
 }
 
 impl App {
@@ -115,6 +116,8 @@ impl App {
         launch_options: TuiLaunchOptions,
         run_options: TuiRunOptions,
         show_file_browser: bool,
+        mut incoming_out_of_band_messages: Vec<Receiver<Message>>,
+        head_sha: String,
     ) -> Self {
         let cursor = if let Some(object_id) = launch_options.select_commit {
             Cursor::select_commit(object_id, &status_lines)
@@ -126,7 +129,7 @@ impl App {
         let theme = crate::theme::get();
 
         let (details_tx, details_rx) = std::sync::mpsc::channel::<Message>();
-        let incoming_out_of_band_messages = Vec::from([details_rx]);
+        incoming_out_of_band_messages.push(details_rx);
 
         let details = Details::new(theme, details_tx);
         let is_details_visible = launch_options.show_diff;
@@ -162,7 +165,6 @@ impl App {
             to_be_discarded: Default::default(),
             modal: Default::default(),
             backstack: Default::default(),
-            previous_reload_caused_by_mutation_timestamp: Default::default(),
             fps: FpsCounter::new(),
             details,
             is_details_visible,
@@ -171,6 +173,8 @@ impl App {
             theme,
             has_focus: true,
             file_browser,
+            head_sha,
+            has_pending_workspace_activity_event: false,
         }
     }
 
@@ -422,7 +426,10 @@ impl App {
                     let terminal_area = Rect::from(terminal_guard.terminal_mut().size()?);
                     self.modal = help
                         .handle_message(help_message, terminal_area)?
-                        .map(|help| Modal::Help { help, key_binds });
+                        .map(|help| Modal::Help {
+                            help: Box::new(help),
+                            key_binds,
+                        });
                 }
                 modal => self.modal = modal,
             },
@@ -479,7 +486,7 @@ impl App {
                 self.handle_clear_normal_mode_marks();
             }
             Message::SetHasFocus(has_focus) => {
-                self.has_focus = has_focus;
+                self.handle_set_focus(has_focus, messages);
             }
             Message::Undo => {
                 self.handle_undo(ctx, messages)?;
@@ -491,6 +498,9 @@ impl App {
             Message::Jump(jump_message) => self.handle_jump(jump_message, messages),
             Message::ShowModal(modal) => {
                 self.modal = Some(modal);
+            }
+            Message::WatcherEvent(change) => {
+                self.handle_watcher_event(change, messages);
             }
         }
 
@@ -729,6 +739,78 @@ impl App {
         Ok(())
     }
 
+    fn handle_watcher_event(
+        &mut self,
+        change: gitbutler_watcher::Change,
+        messages: &mut Vec<Message>,
+    ) {
+        tracing::debug!("watcher event: {change:?}");
+
+        match change {
+            gitbutler_watcher::Change::GitHead { .. } | gitbutler_watcher::Change::GitFetch(..) => {
+                messages.push(Message::Reload(
+                    None,
+                    ReloadCause::Watcher {
+                        details_selection_changed: false,
+                    },
+                ));
+            }
+            gitbutler_watcher::Change::GitActivity { head_sha, .. } => {
+                if head_sha != self.head_sha {
+                    messages.push(Message::Reload(
+                        None,
+                        ReloadCause::Watcher {
+                            details_selection_changed: false,
+                        },
+                    ));
+                }
+            }
+            gitbutler_watcher::Change::WorktreeChanges { .. } => {
+                if self.is_details_visible
+                    && let Some(selection) = self.details.selection()
+                {
+                    match selection {
+                        CliId::UncommittedHunkOrFile(..) | CliId::Uncommitted { .. } => {
+                            messages.push(Message::Reload(
+                                None,
+                                ReloadCause::Watcher {
+                                    details_selection_changed: true,
+                                },
+                            ));
+                        }
+                        CliId::PathPrefix { .. }
+                        | CliId::CommittedFile { .. }
+                        | CliId::Branch { .. }
+                        | CliId::Commit { .. }
+                        | CliId::Stack { .. } => {
+                            messages.push(Message::Reload(
+                                None,
+                                ReloadCause::Watcher {
+                                    details_selection_changed: false,
+                                },
+                            ));
+                        }
+                    }
+                } else {
+                    messages.push(Message::Reload(
+                        None,
+                        ReloadCause::Watcher {
+                            details_selection_changed: false,
+                        },
+                    ));
+                }
+            }
+            gitbutler_watcher::Change::WorkspaceActivity { .. } => {
+                // TODO: We currently dont have a good way of detecting changes made by external
+                // processes and only then reloading. Always reloading here would result in double
+                // reloads when the TUI performs a mutation.
+                if !self.has_focus {
+                    self.has_pending_workspace_activity_event = true;
+                }
+            }
+        }
+    }
+
     /// Handles reloading status output and restoring selection.
     fn handle_reload(
         &mut self,
@@ -740,10 +822,17 @@ impl App {
     ) -> anyhow::Result<()> {
         tracing::debug!("handle_reload");
 
+        self.has_pending_workspace_activity_event = false;
+
         let close_empty_global_file_list_after_reload = matches!(
             (&self.flags.show_files, &select_after_reload),
             (FilesStatusFlag::All, Some(SelectAfterReload::Commit(_)))
         );
+        let details_selection_before_reload = self
+            .cursor
+            .selected_line(&self.status_lines)
+            .and_then(|line| line.data.cli_id())
+            .cloned();
 
         let select_details_section_after_reload = match &select_after_reload {
             Some(SelectAfterReload::UncommittedDetailsSection { index, direction }) => {
@@ -795,6 +884,7 @@ impl App {
         }
 
         let new_lines = operations::reload_legacy(ctx, out, mode, self.flags, self.launch_options)?;
+        self.head_sha = operations::head_sha(ctx)?;
 
         self.cursor = if let Some(select_after_reload) = select_after_reload {
             match select_after_reload {
@@ -856,23 +946,38 @@ impl App {
         self.status_lines = new_lines;
         self.ensure_cursor_is_on_selectable_line();
 
+        let details_selection_after_reload = self
+            .cursor
+            .selected_line(&self.status_lines)
+            .and_then(|line| line.data.cli_id());
+        let details_selection_changed = match (
+            details_selection_before_reload.as_deref(),
+            details_selection_after_reload.map(|cli_id| &**cli_id),
+        ) {
+            (Some(previous), Some(current)) => !cursor::same_entity_for_reload(previous, current),
+            (None, None) => false,
+            (Some(_), None) | (None, Some(_)) => true,
+        };
+
+        let mut reload_details_view = details_selection_changed;
         if self.is_details_visible {
             match cause {
-                ReloadCause::Mutation | ReloadCause::Watcher | ReloadCause::Manual => {
-                    let details_focused = matches!(&*self.mode, Mode::Details(..));
-                    self.details.clear_selection_for_reload(details_focused);
-                    if let Some((index, direction)) = select_details_section_after_reload {
-                        self.details.select_section_when_available(index, direction);
-                    }
+                ReloadCause::Watcher {
+                    details_selection_changed: details_selection_changed_from_event,
+                } => {
+                    reload_details_view |= details_selection_changed_from_event;
+                }
+                ReloadCause::Mutation | ReloadCause::Manual => {
+                    reload_details_view = true;
                 }
                 ReloadCause::ViewOnly => {}
             }
         }
-
-        match cause {
-            ReloadCause::Watcher | ReloadCause::ViewOnly | ReloadCause::Manual => {}
-            ReloadCause::Mutation => {
-                self.previous_reload_caused_by_mutation_timestamp = Some(Instant::now());
+        if reload_details_view {
+            let details_focused = matches!(&*self.mode, Mode::Details(..));
+            self.details.clear_selection_for_reload(details_focused);
+            if let Some((index, direction)) = select_details_section_after_reload {
+                self.details.select_section_when_available(index, direction);
             }
         }
 
@@ -1173,7 +1278,7 @@ impl App {
             self.modal = None;
         } else {
             self.modal = Some(Modal::Help {
-                help: Help::new([&self.app_key_binds.key_binds], self.theme),
+                help: Box::new(Help::new([&self.app_key_binds.key_binds], self.theme)),
                 key_binds: help_key_binds(),
             });
         }
@@ -1189,6 +1294,22 @@ impl App {
         } else {
             self.theme.selection_highlight
         }
+    }
+
+    pub fn handle_set_focus(&mut self, has_focus: bool, messages: &mut Vec<Message>) {
+        if !self.has_focus
+            && has_focus
+            && std::mem::take(&mut self.has_pending_workspace_activity_event)
+        {
+            messages.push(Message::Reload(
+                None,
+                ReloadCause::Watcher {
+                    details_selection_changed: false,
+                },
+            ));
+        }
+
+        self.has_focus = has_focus;
     }
 }
 
@@ -1252,18 +1373,23 @@ pub enum Modal {
         key_binds: KeyBinds,
     },
     Help {
-        help: Help,
+        help: Box<Help>,
         key_binds: KeyBinds,
     },
 }
 
 impl Modal {
-    pub fn is_picker(&self) -> bool {
+    pub fn input_message(&self, event: Event) -> Option<Message> {
         match self {
             Modal::CopySelectionPicker { .. }
             | Modal::GotoBranchPicker { .. }
-            | Modal::ApplyStackPicker { .. } => true,
-            Modal::Confirm { .. } | Modal::Help { .. } => false,
+            | Modal::ApplyStackPicker { .. } => {
+                Some(Message::FuzzyPicker(FuzzyPickerMessage::Input(event)))
+            }
+            Modal::Help { help, .. } if help.is_search_focused() => {
+                Some(Message::Help(HelpMessage::Input(event)))
+            }
+            Modal::Confirm { .. } | Modal::Help { .. } => None,
         }
     }
 }

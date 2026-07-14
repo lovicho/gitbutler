@@ -330,6 +330,7 @@ mod tests {
         CliId::Commit {
             commit_id: gix::ObjectId::empty_tree(gix::hash::Kind::Sha1),
             id: id.to_string(),
+            change_id: None,
         }
     }
 

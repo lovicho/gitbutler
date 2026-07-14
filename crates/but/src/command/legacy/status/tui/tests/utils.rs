@@ -1,4 +1,4 @@
-use std::{convert::Infallible, path::PathBuf, sync::atomic::AtomicBool, time::Duration};
+use std::{convert::Infallible, path::PathBuf, time::Duration};
 
 use but_testsupport::Sandbox;
 use crossterm::event::*;
@@ -118,7 +118,18 @@ pub fn test_tui_with_options(env: Sandbox, options: TestTuiOptions) -> TestTui {
     build_status_output(&ctx, &status_ctx, &mut status_output)
         .expect("failed to build status output");
 
-    let app = App::new(lines, flags, launch_options, run_options, show_file_browser);
+    let incoming_out_of_band_messages = Vec::new();
+    let head_sha = super::super::operations::head_sha(&mut ctx).expect("failed to read HEAD");
+
+    let app = App::new(
+        lines,
+        flags,
+        launch_options,
+        run_options,
+        show_file_browser,
+        incoming_out_of_band_messages,
+        head_sha,
+    );
     let terminal =
         Terminal::new(TestBackend::new(width, height)).expect("failed to create test terminal");
 
@@ -204,7 +215,6 @@ impl TestTui {
                 &mut events,
                 &mut messages,
                 &mut other_messages,
-                &AtomicBool::default(),
                 &mut ctx,
                 &mut out,
                 &self.mode,
@@ -613,66 +623,113 @@ fn backend_to_svg(backend: &TestBackend) -> String {
     ));
 
     for y in area.y..area.y.saturating_add(area.height) {
-        for x in area.x..area.x.saturating_add(area.width) {
-            let cell = &buffer[(x, y)];
-            let bg = color_to_rgb(cell.bg, default_bg);
-            if bg != default_bg {
-                let rect_x = PADDING + (x - area.x) * CELL_WIDTH;
-                let rect_y = PADDING + (y - area.y) * CELL_HEIGHT;
-                svg.push_str(&format!(
-                    "  <rect x=\"{rect_x}\" y=\"{rect_y}\" width=\"{CELL_WIDTH}\" height=\"{CELL_HEIGHT}\" fill=\"{}\" />\n",
-                    rgb_hex(bg)
-                ));
-            }
-        }
-    }
-
-    for y in area.y..area.y.saturating_add(area.height) {
-        let text_y = PADDING + (y - area.y + 1) * CELL_HEIGHT - 4;
-
-        for x in area.x..area.x.saturating_add(area.width) {
-            let cell = &buffer[(x, y)];
-            let symbol = cell.symbol();
-            if symbol.is_empty() || symbol == " " {
+        let mut x = area.x;
+        let row_end = area.x.saturating_add(area.width);
+        while x < row_end {
+            let bg = color_to_rgb(buffer[(x, y)].bg, default_bg);
+            if bg == default_bg {
+                x += 1;
                 continue;
             }
 
-            let mut fg = color_to_rgb(cell.fg, default_fg);
-            let mut bg = color_to_rgb(cell.bg, default_bg);
-            if cell.modifier.contains(Modifier::REVERSED) {
-                std::mem::swap(&mut fg, &mut bg);
+            let run_start = x;
+            x += 1;
+            while x < row_end && color_to_rgb(buffer[(x, y)].bg, default_bg) == bg {
+                x += 1;
             }
 
-            let text_x = PADDING + (x - area.x) * CELL_WIDTH;
-            let style = {
-                let mut style = format!("fill:{};", rgb_hex(fg));
-                if cell.modifier.contains(Modifier::BOLD) {
-                    style.push_str("font-weight:bold;");
-                }
-                if cell.modifier.contains(Modifier::DIM) {
-                    style.push_str("opacity:0.75;");
-                }
-                if cell.modifier.contains(Modifier::ITALIC) {
-                    style.push_str("font-style:italic;");
-                }
-                if cell.modifier.contains(Modifier::UNDERLINED) {
-                    style.push_str("text-decoration:underline;");
-                }
-                if cell.modifier.contains(Modifier::CROSSED_OUT) {
-                    style.push_str("text-decoration:line-through;");
-                }
-                style
-            };
-
+            let rect_x = PADDING + (run_start - area.x) * CELL_WIDTH;
+            let rect_y = PADDING + (y - area.y) * CELL_HEIGHT;
+            let rect_width = (x - run_start) * CELL_WIDTH;
             svg.push_str(&format!(
-                "  <text x=\"{text_x}\" y=\"{text_y}\" style=\"{style}\" font-family=\"Menlo, Monaco, 'Courier New', monospace\" font-size=\"{FONT_SIZE}\" xml:space=\"preserve\">{}</text>\n",
-                escape_xml(symbol)
+                "  <rect x=\"{rect_x}\" y=\"{rect_y}\" width=\"{rect_width}\" height=\"{CELL_HEIGHT}\" fill=\"{}\" />\n",
+                rgb_hex(bg)
             ));
         }
     }
 
-    svg.push_str("</svg>\n");
+    svg.push_str(&format!(
+        "  <g font-family=\"Menlo, Monaco, 'Courier New', monospace\" font-size=\"{FONT_SIZE}\" xml:space=\"preserve\">\n"
+    ));
+    for y in area.y..area.y.saturating_add(area.height) {
+        let text_y = PADDING + (y - area.y + 1) * CELL_HEIGHT - 4;
+        let row_end = area.x.saturating_add(area.width);
+        let mut x = area.x;
+
+        while x < row_end {
+            let cell = &buffer[(x, y)];
+            let symbol = cell.symbol();
+            if symbol.is_empty() || symbol == " " {
+                x += 1;
+                continue;
+            }
+
+            let style = svg_text_style(cell.fg, cell.bg, cell.modifier, default_fg, default_bg);
+            let mut positions = vec![(PADDING + (x - area.x) * CELL_WIDTH).to_string()];
+            let mut symbols = symbol.to_owned();
+            let can_join = symbol.chars().count() == 1;
+            x += 1;
+
+            if can_join {
+                while x < row_end {
+                    let next = &buffer[(x, y)];
+                    let next_symbol = next.symbol();
+                    if next_symbol.is_empty()
+                        || next_symbol == " "
+                        || next_symbol.chars().count() != 1
+                        || svg_text_style(next.fg, next.bg, next.modifier, default_fg, default_bg)
+                            != style
+                    {
+                        break;
+                    }
+
+                    positions.push((PADDING + (x - area.x) * CELL_WIDTH).to_string());
+                    symbols.push_str(next_symbol);
+                    x += 1;
+                }
+            }
+
+            let positions = positions.join(" ");
+            svg.push_str(&format!(
+                "    <text x=\"{positions}\" y=\"{text_y}\" style=\"{style}\">{}</text>\n",
+                escape_xml(&symbols)
+            ));
+        }
+    }
+    svg.push_str("  </g>\n</svg>\n");
     svg
+}
+
+fn svg_text_style(
+    foreground: Color,
+    background: Color,
+    modifier: Modifier,
+    default_foreground: (u8, u8, u8),
+    default_background: (u8, u8, u8),
+) -> String {
+    let mut foreground = color_to_rgb(foreground, default_foreground);
+    let mut background = color_to_rgb(background, default_background);
+    if modifier.contains(Modifier::REVERSED) {
+        std::mem::swap(&mut foreground, &mut background);
+    }
+
+    let mut style = format!("fill:{};", rgb_hex(foreground));
+    if modifier.contains(Modifier::BOLD) {
+        style.push_str("font-weight:bold;");
+    }
+    if modifier.contains(Modifier::DIM) {
+        style.push_str("opacity:0.75;");
+    }
+    if modifier.contains(Modifier::ITALIC) {
+        style.push_str("font-style:italic;");
+    }
+    if modifier.contains(Modifier::UNDERLINED) {
+        style.push_str("text-decoration:underline;");
+    }
+    if modifier.contains(Modifier::CROSSED_OUT) {
+        style.push_str("text-decoration:line-through;");
+    }
+    style
 }
 
 fn color_to_rgb(color: Color, default: (u8, u8, u8)) -> (u8, u8, u8) {

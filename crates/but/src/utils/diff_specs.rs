@@ -63,7 +63,11 @@ impl<'a> DiffSpecBuilder<'a> {
             CliId::Branch { name, id, stack_id } => {
                 self.push_changes_from_branch(name, id, *stack_id)
             }
-            CliId::Commit { commit_id, id } => self.push_changes_from_commit(*commit_id, id),
+            CliId::Commit {
+                commit_id,
+                id,
+                change_id: _,
+            } => self.push_changes_from_commit(*commit_id, id),
             CliId::Uncommitted { id: _ } => self.push_changes_from_uncommitted_area(),
             CliId::Stack { id: _, stack_id } => self.push_changes_from_stack(*stack_id),
         }

@@ -592,13 +592,28 @@ fn render_status_list_item(
             }
             StatusOutputContent::Commit(CommitLineContent {
                 sha,
+                change_id,
                 author,
                 message,
                 suffix,
             }) => {
+                if !change_id.is_empty()
+                    && let Mode::Jump(jump_mode) = &*app.mode
+                {
+                    line.extend(style_jump_mode_matches(
+                        change_id,
+                        jump_mode,
+                        is_selected || line_is_jump_match,
+                    ));
+                } else {
+                    line.extend(change_id.iter().cloned());
+                }
+
                 if line_has_copied_highlight {
                     line.extend(sha.iter().cloned().map(with_highlight));
-                } else if let Mode::Jump(jump_mode) = &*app.mode {
+                } else if change_id.is_empty()
+                    && let Mode::Jump(jump_mode) = &*app.mode
+                {
                     line.extend(style_jump_mode_matches(
                         sha,
                         jump_mode,
@@ -1335,12 +1350,23 @@ fn style_jump_mode_matches(
     };
 
     let (leading, rest) = content.split_at(first_non_whitespace_index);
-    let Some((first_non_whitespace, trailing)) = rest.split_first() else {
-        return Either::Left(content.iter().cloned());
-    };
 
-    let first_non_whitespace_content = first_non_whitespace.content.as_ref();
-    if !first_non_whitespace_content.starts_with(query) {
+    let mut remaining_query = query;
+    for span in rest {
+        if remaining_query.is_empty() {
+            break;
+        }
+
+        let span_content = span.content.as_ref();
+        if let Some(remaining) = remaining_query.strip_prefix(span_content) {
+            remaining_query = remaining;
+        } else if span_content.starts_with(remaining_query) {
+            remaining_query = "";
+        } else {
+            return Either::Left(content.iter().cloned());
+        }
+    }
+    if !remaining_query.is_empty() {
         return Either::Left(content.iter().cloned());
     }
 
@@ -1352,31 +1378,38 @@ fn style_jump_mode_matches(
 
     let mut styled_content = Vec::with_capacity(content.len() + 2);
     styled_content.extend(leading.iter().cloned());
-    if query.len() >= first_non_whitespace_content.len() {
-        styled_content.push(first_non_whitespace.clone().style(next_char_style));
-    } else {
-        let (matching, rest_of_first) = first_non_whitespace_content.split_at(query.len());
-        let next_char_len = rest_of_first
+
+    let mut remaining_query_len = query.len();
+    let mut highlighted_next_char = false;
+    for span in rest {
+        let span_content = span.content.as_ref();
+        if highlighted_next_char || remaining_query_len >= span_content.len() {
+            remaining_query_len = remaining_query_len.saturating_sub(span_content.len());
+            styled_content.push(span.clone());
+            continue;
+        }
+
+        let (matching, after_match) = span_content.split_at(remaining_query_len);
+        let next_char_len = after_match
             .chars()
             .next()
             .map(char::len_utf8)
             .unwrap_or_default();
-        let (next_char, remaining) = rest_of_first.split_at(next_char_len);
-        styled_content.push(Span::styled(
-            matching.to_owned(),
-            first_non_whitespace.style,
-        ));
-        styled_content.push(
-            Span::styled(next_char.to_owned(), first_non_whitespace.style).style(next_char_style),
-        );
-        if !remaining.is_empty() {
-            styled_content.push(Span::styled(
-                remaining.to_owned(),
-                first_non_whitespace.style,
-            ));
+        let (next_char, remaining) = after_match.split_at(next_char_len);
+        if !matching.is_empty() {
+            styled_content.push(Span::styled(matching.to_owned(), span.style));
         }
+        styled_content.push(Span::styled(next_char.to_owned(), span.style).style(next_char_style));
+        if !remaining.is_empty() {
+            styled_content.push(Span::styled(remaining.to_owned(), span.style));
+        }
+        highlighted_next_char = true;
     }
-    styled_content.extend(trailing.iter().cloned());
+
+    if !highlighted_next_char && let Some(last_match) = styled_content.last_mut() {
+        last_match.style = next_char_style;
+    }
+
     Either::Right(styled_content.into_iter())
 }
 
@@ -1501,7 +1534,7 @@ pub struct RenderSingleLineSpans<'a, 'b> {
 }
 
 impl<'a, 'b> RenderSingleLineSpans<'a, 'b> {
-    fn new(frame: &'a mut Frame<'b>, area: Rect) -> Self {
+    pub(super) fn new(frame: &'a mut Frame<'b>, area: Rect) -> Self {
         Self { frame, area }
     }
 

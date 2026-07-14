@@ -222,7 +222,7 @@ impl App {
                                     tx.remove_reference(refname.as_ref())?;
                                     if !commits.is_empty() {
                                         tx.discard_commits(
-                                            commits.into_iter().map(|(commit, _)| commit),
+                                            commits.into_iter().map(|(commit, _, _)| commit),
                                         )?;
                                     }
                                     Ok(())

@@ -7,7 +7,7 @@
 #![forbid(missing_docs)]
 
 use std::collections::{BTreeMap, HashMap};
-use std::str::FromStr as _;
+use std::str::{self, FromStr as _};
 
 use bstr::{BStr, BString, ByteSlice};
 use but_core::sync::RepoShared;
@@ -38,7 +38,7 @@ pub(crate) type ShortId = String;
 
 pub(crate) const UNCOMMITTED: &str = "zz";
 
-const INDEX_SEPARATOR: &str = "#";
+const INDEX_SEPARATOR: char = '#';
 
 /// The ID of a hunk, without its namespace (file).
 #[derive(Debug, Clone, Default)]
@@ -120,24 +120,63 @@ fn create_reverse_hex_id(
     Ok(change_id)
 }
 
-/// Assign short IDs to each `Some` entry such that they are unambiguous with
-/// respect to every other entry. `reverse_hex_short_ids` must already be
-/// sorted.
+/// Assign short IDs to each `Some` entry such that they are unambiguous with respect to every other
+/// entry.
+///
+/// `None` entries represent reserved IDs that cannot be changed, such as filenames. They are only
+/// there to cause disambiguation with other IDs that we can change. There is currently no mechanism
+/// to deal with multiple colliding `None` entries. These will simply slip through.
+///
+/// Short IDs are disambiguated in two ways:
+///
+/// 1. By lengthening if the IDs match by prefix but are not identical.
+/// 2. By appending an index for collisions.
+///
+/// These two mechanisms interact. For example, given three IDs 123, 123 and 132, the output short
+/// IDs will be 12#0, 12#1 and 13. 123 and 132 are disambiguated against each other by lengthening
+/// both, and the duplicate 123 entries are then internally disambiguated by index.
+///
+/// Note that the algorithm only guarantees that the exact short IDs are distinct. Prefix matching
+/// with short IDs is therefore only advisable if the underlying IDs are known to not have cases
+/// where one ID is a prefix of another ID.
+///
+/// TODO Index disambiguation should be structured data. Right now we just append it to the short ID
+/// as a string, but that is rather inconvenient when it comes to rendering and matching. The
+/// [`ShortId`] type needs to carry collision information in the same way that [`UnqualifiedHunkId`]
+/// does.
 fn assign_short_ids(
-    reverse_hex_short_ids: &mut [(ChangeId, Option<&mut ShortId>)],
+    reverse_hex_short_ids: BTreeMap<ChangeId, Vec<Option<&mut ShortId>>>,
 ) -> anyhow::Result<()> {
     let mut common_with_previous_len = 0;
-    let mut remaining = reverse_hex_short_ids;
-    while let Some(((reverse_hex, short_id), rest)) = remaining.split_first_mut() {
+    let mut reverse_hex_short_ids: Vec<_> = reverse_hex_short_ids.into_iter().collect();
+    let mut remaining = reverse_hex_short_ids.as_mut_slice();
+
+    while let Some(((reverse_hex, short_ids), rest)) = remaining.split_first_mut() {
+        // TODO should compare UTF8 chars instead of bytes once we start putting full branch names
+        // in here. Otherwise we risk splitting in the middle of a UTF8 character.
         let common_with_next_len = rest
             .first()
             .map_or(0, |(next_reverse_hex, _next_short_id)| {
                 common_prefix_len(reverse_hex, next_reverse_hex)
             });
-        if let Some(short_id) = short_id {
-            short_id.push_str(str::from_utf8(
-                &reverse_hex[..(1 + common_with_previous_len.max(common_with_next_len))],
-            )?);
+
+        let min_disambiguation_len = 1 + common_with_previous_len.max(common_with_next_len);
+
+        let num_conflicting_ids = short_ids.len();
+        for (i, short_id) in short_ids.iter_mut().flatten().enumerate() {
+            short_id.clear();
+
+            let reverse_hex_utf8 = str::from_utf8(reverse_hex)?;
+            if min_disambiguation_len > reverse_hex.len() {
+                short_id.push_str(reverse_hex_utf8);
+            } else {
+                short_id.push_str(str::from_utf8(&reverse_hex[..min_disambiguation_len])?);
+            }
+
+            if num_conflicting_ids > 1 {
+                short_id.push(INDEX_SEPARATOR);
+                short_id.push_str(&i.to_string());
+            }
         }
         common_with_previous_len = common_with_next_len;
         remaining = rest;
@@ -157,12 +196,16 @@ fn short_ids_from_tree_changes(
             ShortId::default(),
         ));
     }
-    let mut reverse_hex_short_ids: Vec<(ChangeId, Option<&mut ShortId>)> = short_ids
-        .iter_mut()
-        .map(|(_changes, reverse_hex, short_id)| (reverse_hex.clone(), Some(short_id)))
-        .collect();
-    reverse_hex_short_ids.sort();
-    assign_short_ids(reverse_hex_short_ids.as_mut_slice())?;
+    let mut reverse_hex_short_ids = BTreeMap::<ChangeId, Vec<_>>::new();
+
+    for (_, reverse_hex, short_id) in short_ids.iter_mut() {
+        reverse_hex_short_ids
+            .entry(reverse_hex.clone())
+            .or_default()
+            .push(Some(short_id));
+    }
+
+    assign_short_ids(reverse_hex_short_ids)?;
     Ok(short_ids)
 }
 
@@ -213,14 +256,35 @@ pub struct TreeChangeWithId {
     pub inner: but_core::TreeChange,
 }
 
+/// A change ID with an accompanying distinct short ID
+#[derive(Debug, Clone)]
+pub struct ChangeIdWithShortId {
+    /// The full change ID
+    pub change_id: ChangeId,
+    /// The shortened version of [`Self::change_id`]
+    pub short_id: ShortId,
+}
+
+impl From<ChangeId> for ChangeIdWithShortId {
+    fn from(value: ChangeId) -> Self {
+        Self {
+            short_id: ShortId::default(),
+            change_id: value,
+        }
+    }
+}
+
 /// A workspace commit with its short ID.
 #[derive(Debug, Clone)]
 pub struct WorkspaceCommitWithId {
     /// The short ID.
     pub short_id: ShortId,
+    /// The change ID
+    pub change_id: Option<ChangeIdWithShortId>,
     /// The original workspace commit.
     pub inner: StackCommit,
 }
+
 impl WorkspaceCommitWithId {
     /// The object ID of the commit.
     pub fn commit_id(&self) -> gix::ObjectId {
@@ -302,6 +366,7 @@ impl<'a> Node<'a> for &'a WorkspaceCommitWithId {
         Ok(Some(CliId::Commit {
             commit_id: self.commit_id(),
             id: self.short_id.clone(),
+            change_id: self.change_id.as_ref().map(|id| id.change_id.clone()),
         }))
     }
 }
@@ -311,6 +376,8 @@ impl<'a> Node<'a> for &'a WorkspaceCommitWithId {
 pub struct RemoteCommitWithId {
     /// The short ID.
     pub short_id: ShortId,
+    /// The change ID.
+    pub change_id: Option<ChangeIdWithShortId>,
     /// The original remote commit.
     pub inner: StackCommit,
 }
@@ -338,6 +405,7 @@ impl<'a> Node<'a> for &'a RemoteCommitWithId {
         Ok(Some(CliId::Commit {
             commit_id: self.commit_id(),
             id: self.short_id.clone(),
+            change_id: self.change_id.as_ref().map(|id| id.change_id.clone()),
         }))
     }
 }
@@ -498,16 +566,24 @@ fn common_prefix_len(a: &[u8], b: &[u8]) -> usize {
 impl IdMap {
     /// Initializes CLI IDs for branches, commits, and uncommitted
     /// files/hunks.
-    pub fn new(stacks: Vec<Stack>, hunk_assignments: Vec<HunkAssignment>) -> anyhow::Result<Self> {
+    pub fn new(
+        stacks: Vec<Stack>,
+        hunk_assignments: Vec<HunkAssignment>,
+        commit_id_to_change_id: gix::hashtable::HashMap<gix::ObjectId, ChangeId>,
+    ) -> anyhow::Result<Self> {
         let UncommittedInfo {
             partitioned_hunks,
             uncommitted_short_filenames,
         } = UncommittedInfo::from_hunk_assignments(hunk_assignments)?;
         let StacksInfo {
-            stacks,
+            mut stacks,
             mut id_usage,
             non_hex_used_short_ids,
-        } = StacksInfo::new(stacks, &uncommitted_short_filenames)?;
+        } = StacksInfo::new(
+            stacks,
+            &uncommitted_short_filenames,
+            &commit_id_to_change_id,
+        )?;
 
         let mut uncommitted_files: BTreeMap<ChangeId, UncommittedFile> = BTreeMap::new();
         for hunk_assignments in partitioned_hunks {
@@ -551,8 +627,34 @@ impl IdMap {
         for short_id in non_hex_used_short_ids {
             reverse_hex_short_ids.push((ChangeId::from(BString::from(short_id.as_str())), None));
         }
-        reverse_hex_short_ids.sort();
-        assign_short_ids(&mut reverse_hex_short_ids)?;
+
+        for change_id in stacks
+            .iter_mut()
+            .flat_map(|stack| stack.segments.iter_mut())
+            .flat_map(|segment| {
+                let ws_commits = segment
+                    .workspace_commits
+                    .iter_mut()
+                    .filter_map(|c| c.change_id.as_mut());
+                let remote_commits = segment
+                    .remote_commits
+                    .iter_mut()
+                    .filter_map(|c| c.change_id.as_mut());
+                ws_commits.chain(remote_commits)
+            })
+        {
+            reverse_hex_short_ids.push((change_id.change_id.clone(), Some(&mut change_id.short_id)))
+        }
+
+        let mut mapped_reverse_hex_short_ids =
+            BTreeMap::<ChangeId, Vec<Option<&mut ShortId>>>::new();
+        for (id, short_id) in reverse_hex_short_ids {
+            mapped_reverse_hex_short_ids
+                .entry(id)
+                .or_default()
+                .push(short_id);
+        }
+        assign_short_ids(mapped_reverse_hex_short_ids)?;
 
         let mut uncommitted_hunks = HashMap::new();
         for uncommitted_file in uncommitted_files.values_mut() {
@@ -724,7 +826,46 @@ impl IdMap {
             }
         };
 
-        Self::new(ws.stacks.clone(), hunk_assignments)
+        let commit_ids = ws
+            .stacks
+            .iter()
+            .flat_map(|stack| &stack.segments)
+            .flat_map(|segment| {
+                segment
+                    .commits
+                    .iter()
+                    .chain(segment.commits_on_remote.iter())
+            })
+            .map(|c| c.id);
+
+        let commit_id_to_change_id = commit_ids
+            .filter_map(|commit_id| {
+                let result = (|| {
+                    let commit = repo.find_commit(commit_id)?;
+                    let commit = commit.decode()?;
+                    let change_id = but_core::commit::Headers::try_from_commit_headers(|| {
+                        commit.extra_headers()
+                    })
+                    .and_then(|headers| headers.change_id);
+                    Ok::<(gix::ObjectId, Option<ChangeId>), anyhow::Error>((commit_id, change_id))
+                })();
+
+                match result {
+                    Ok((commit_id, Some(change_id))) => Some((commit_id, change_id)),
+                    Ok((_, None)) => None,
+                    Err(err) => {
+                        tracing::error!(
+                            ?commit_id,
+                            ?err,
+                            "Failed to resolve commit when mapping change IDs"
+                        );
+                        None
+                    }
+                }
+            })
+            .collect();
+
+        Self::new(ws.stacks.clone(), hunk_assignments, commit_id_to_change_id)
     }
 }
 
@@ -823,26 +964,51 @@ impl IdMap {
             return Ok(matches);
         }
 
-        // Only try SHA matching if the input looks like a hex string
-        if element
+        // Match against commits
+        let maybe_element_hex_prefix = if element
             .chars()
             .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
-            && let Ok(prefix) = gix::hash::Prefix::from_hex_nonempty(element)
         {
-            for stack_with_id in self.indexed_stacks.borrow_owner().iter() {
-                for segment_with_id in stack_with_id.segments.iter() {
-                    for workspace_commit_with_id in segment_with_id.workspace_commits.iter() {
-                        if prefix
-                            .cmp_oid(&workspace_commit_with_id.commit_id())
-                            .is_eq()
-                        {
-                            matches.push(Box::new(workspace_commit_with_id));
-                        }
+            gix::hash::Prefix::from_hex_nonempty(element).ok()
+        } else {
+            None
+        };
+
+        let element_matches_commit =
+            |id: gix::ObjectId, maybe_change_id: Option<&ChangeIdWithShortId>| {
+                if let Some(element_hex_prefix) = maybe_element_hex_prefix
+                    && element_hex_prefix.cmp_oid(&id).is_eq()
+                {
+                    return true;
+                }
+
+                if let Some(change_id) = maybe_change_id
+                    && (change_id.change_id.starts_with_str(element)
+                        || element == change_id.short_id)
+                {
+                    return true;
+                }
+
+                false
+            };
+
+        for stack_with_id in self.indexed_stacks.borrow_owner().iter() {
+            for segment_with_id in stack_with_id.segments.iter() {
+                for workspace_commit_with_id in segment_with_id.workspace_commits.iter() {
+                    if element_matches_commit(
+                        workspace_commit_with_id.commit_id(),
+                        workspace_commit_with_id.change_id.as_ref(),
+                    ) {
+                        matches.push(Box::new(workspace_commit_with_id))
                     }
-                    for remote_commit_with_id in segment_with_id.remote_commits.iter() {
-                        if prefix.cmp_oid(&remote_commit_with_id.commit_id()).is_eq() {
-                            matches.push(Box::new(remote_commit_with_id));
-                        }
+                }
+
+                for remote_commit_with_id in segment_with_id.remote_commits.iter() {
+                    if element_matches_commit(
+                        remote_commit_with_id.commit_id(),
+                        remote_commit_with_id.change_id.as_ref(),
+                    ) {
+                        matches.push(Box::new(remote_commit_with_id))
                     }
                 }
             }
@@ -1167,6 +1333,8 @@ pub enum CliId {
         /// among all commits in all stacks (but not necessarily among all
         /// commits in the repo).
         id: ShortId,
+        /// The stable change ID from the commit headers, if present.
+        change_id: Option<but_core::ChangeId>,
     },
     /// The uncommitted area, as a designated area that files can be put in.
     Uncommitted {

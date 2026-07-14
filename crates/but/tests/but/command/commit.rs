@@ -18,7 +18,7 @@ fn commit_moved_file_replaced_by_directory() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   25c45c4 Commit everything
+┊●   1 25c45c4 Commit everything
 ┊│     2:q A A/file
 ┊│     2:p R B
 ┊●   9477ae7 add A
@@ -380,7 +380,7 @@ Created blank commit at the tip of branch 'A'
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   2594ce3 (no commit message) (no changes)
+┊●   1 2594ce3 (no commit message) (no changes)
 ┊●   9477ae7 add A
 ├╯
 ┊
@@ -586,8 +586,8 @@ Created blank commit above branch 'bottom'
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   76b24fa add second
-┊●   32d198c (no commit message) (no changes)
+┊●   ywx 76b24fa add second
+┊●   1 32d198c (no commit message) (no changes)
 ┊│
 ┊├┄bo [bottom]
 ┊●   fe12bcd add first
@@ -632,7 +632,7 @@ Created blank commit at the tip of branch 'A'
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   2594ce3 (no commit message) (no changes)
+┊●   1 2594ce3 (no commit message) (no changes)
 ┊●   9477ae7 add A
 ├╯
 ┊
@@ -1568,7 +1568,7 @@ Created new independent branch 'a-branch-1'
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄br [a-branch-1]
-┊●   d215849 Add file
+┊●   1 d215849 Add file
 ┊│     d:q A file
 ├╯
 ┊

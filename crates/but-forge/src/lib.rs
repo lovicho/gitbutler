@@ -3,18 +3,20 @@ use git_url_parse::{GitUrl, types::provider::GenericProvider};
 mod forge;
 pub use crate::forge::{ForgeName, ForgeRepoInfo, ForgeUser, deserialize_preferred_forge_user_opt};
 
+mod association;
 mod ci;
 mod db;
 mod forge_info;
 mod repo;
 mod review;
+pub use association::{review_for_head_ref, reviews_by_head};
 pub use ci::{CiCheck, CiConclusion, CiOutput, CiStatus, ci_checks_for_ref_with_cache};
 pub use forge_info::{ForgeCapabilities, ForgeInfo, ForgeUnitInfo, compare_branch_url, forge_info};
 pub use repo::{RepoInfo, RepoPermissions, get_repo_info};
 pub use review::{
     CacheConfig, CreateForgeReviewParams, ForgeAccountValidity, ForgeReview, ForgeReviewFilter,
     ForgeReviewTargetUpdate, ForgeReviewUpdate, ReviewMergeMethod, ReviewMergeStatus, ReviewState,
-    ReviewTemplateFunctions, ReviewUpdatePayload, available_review_templates,
+    ReviewTemplateFunctions, ReviewUpdatePayload, available_review_templates, cache_review,
     check_forge_account_is_valid, compute_review_target_updates, create_forge_review,
     get_forge_review, get_review_base_repo_url, get_review_merge_status,
     get_review_template_functions, list_forge_reviews_for_branch, list_forge_reviews_with_cache,

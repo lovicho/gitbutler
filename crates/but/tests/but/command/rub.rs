@@ -732,7 +732,7 @@ fn uncommit_command_with_discard_on_commit() -> anyhow::Result<()> {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   fce8ecc create a.txt and b.txt
+┊●   1 fce8ecc create a.txt and b.txt
 ┊│     f:n A a.txt
 ┊│     f:p A b.txt
 ┊●   9477ae7 add A
@@ -816,7 +816,7 @@ fn uncommit_command_with_discard_on_committed_file() -> anyhow::Result<()> {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   fce8ecc create a.txt and b.txt
+┊●   1 fce8ecc create a.txt and b.txt
 ┊│     f:n A a.txt
 ┊│     f:p A b.txt
 ┊●   9477ae7 add A
@@ -860,7 +860,7 @@ Hint: run `but help` for all commands
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   993513d create a.txt and b.txt
+┊●   1 993513d create a.txt and b.txt
 ┊│     99:n A a.txt
 ┊●   9477ae7 add A
 ┊│     94:t A A
@@ -1601,7 +1601,7 @@ fn rub_commit_without_message_to_commit() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   aec35ac add one.txt
+┊●   1 aec35ac add one.txt
 ┊●   9477ae7 add A
 ├╯
 ┊
@@ -1618,8 +1618,8 @@ fn rub_commit_without_message_to_commit() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   5e5c05a (no commit message) (no changes)
-┊●   aec35ac add one.txt
+┊●   1#0 5e5c05a (no commit message) (no changes)
+┊●   1#1 aec35ac add one.txt
 ┊●   9477ae7 add A
 ├╯
 ┊
@@ -1636,7 +1636,7 @@ fn rub_commit_without_message_to_commit() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   aec35ac add one.txt
+┊●   1 aec35ac add one.txt
 ┊●   9477ae7 add A
 ├╯
 ┊
@@ -2234,7 +2234,7 @@ fn rubbing_modified_and_renamed_file() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄br [a-branch-1]
-┊●   e3f869d add files
+┊●   1 e3f869d add files
 ┊│     e:q A file
 ┊│     e:k A file-2
 ├╯
@@ -2257,7 +2257,7 @@ Hint: run `but help` for all commands
 ┊   k D file-2
 ┊
 ┊╭┄br [a-branch-1]
-┊●   e3f869d add files
+┊●   1 e3f869d add files
 ┊│     e:q A file
 ┊│     e:k A file-2
 ├╯
@@ -2277,7 +2277,7 @@ Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "mes
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄br [a-branch-1]
-┊●   3a32c97 add files
+┊●   1 3a32c97 add files
 ┊│     3:q A file
 ├╯
 ┊
@@ -2305,7 +2305,7 @@ fn committing_modified_and_renamed_file() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄br [a-branch-1]
-┊●   e3f869d add files
+┊●   1 e3f869d add files
 ┊│     e:q A file
 ┊│     e:k A file-2
 ├╯
@@ -2328,7 +2328,7 @@ Hint: run `but help` for all commands
 ┊   k D file-2
 ┊
 ┊╭┄br [a-branch-1]
-┊●   e3f869d add files
+┊●   1 e3f869d add files
 ┊│     e:q A file
 ┊│     e:k A file-2
 ├╯
@@ -2348,10 +2348,10 @@ Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "mes
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄br [a-branch-1]
-┊●   e419886 change file
+┊●   1#0 e419886 change file
 ┊│     e4:q M file
 ┊│     e4:k D file-2
-┊●   e3f869d add files
+┊●   1#1 e3f869d add files
 ┊│     e3:q A file
 ┊│     e3:k A file-2
 ├╯

@@ -1,3 +1,4 @@
+use bstr::ByteSlice;
 use crossterm::event::Event;
 use ratatui::prelude::*;
 use ratatui_textarea::{CursorMove, TextArea};
@@ -51,7 +52,7 @@ pub enum JumpMessage {
     Confirm,
 }
 
-fn find_line_by_short_id<'a>(
+fn find_line_by_jump_id<'a>(
     query: &str,
     lines: &'a [StatusOutputLine],
     return_mode: &Mode,
@@ -69,7 +70,7 @@ fn find_line_by_short_id<'a>(
 
     if matches.next().is_none()
         && let Some(id) = needle.data.cli_id()
-        && short_id(id) == query
+        && jump_id_has_prefix(id, query)
     {
         Some(needle)
     } else {
@@ -92,19 +93,34 @@ pub fn prefix_match(
     if query.is_empty() {
         true
     } else {
-        short_id(id).starts_with(query)
+        jump_id_has_prefix(id, query)
     }
 }
 
-fn short_id(id: &CliId) -> &str {
+fn jump_id_has_prefix(id: &CliId, query: &str) -> bool {
     match id {
-        CliId::UncommittedHunkOrFile(hunk) => &hunk.id,
+        CliId::UncommittedHunkOrFile(hunk) => hunk.id.starts_with(query),
+        CliId::Commit {
+            commit_id,
+            id,
+            change_id,
+        } => {
+            if let Some(change_id) = change_id {
+                change_id
+                    .as_bytes()
+                    .to_str()
+                    .unwrap_or(id)
+                    .starts_with(query)
+            } else {
+                let mut buf = gix::hash::Kind::hex_buf();
+                commit_id.hex_to_buf(&mut buf).starts_with(query)
+            }
+        }
         CliId::PathPrefix { id, .. }
         | CliId::CommittedFile { id, .. }
         | CliId::Branch { id, .. }
-        | CliId::Commit { id, .. }
         | CliId::Uncommitted { id }
-        | CliId::Stack { id, .. } => id,
+        | CliId::Stack { id, .. } => id.starts_with(query),
     }
 }
 
@@ -181,7 +197,7 @@ impl App {
 
         mode.textarea.input(ev);
 
-        if let Some(line) = find_line_by_short_id(
+        if let Some(line) = find_line_by_jump_id(
             mode.query(),
             &self.status_lines,
             &mode.return_mode,

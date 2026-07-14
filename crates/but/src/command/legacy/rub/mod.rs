@@ -1253,11 +1253,16 @@ pub(crate) fn route_operation<'a>(
             Commit {
                 commit_id: target_commit_id,
                 id: _,
+                change_id: _,
             } => {
                 if let Some(commits) = sources
                     .iter()
                     .map(|source| match source {
-                        Commit { commit_id, id: _ } => Some(*commit_id),
+                        Commit {
+                            commit_id,
+                            id: _,
+                            change_id: _,
+                        } => Some(*commit_id),
                         UncommittedHunkOrFile(..)
                         | PathPrefix { .. }
                         | CommittedFile { .. }
@@ -2179,6 +2184,7 @@ mod tests {
         CliId::Commit {
             commit_id: gix::ObjectId::empty_tree(gix::hash::Kind::Sha1),
             id: "gh".to_string(),
+            change_id: None,
         }
     }
 

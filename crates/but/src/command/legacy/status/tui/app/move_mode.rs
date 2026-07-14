@@ -86,6 +86,7 @@ impl MoveSource {
                 if let CliId::Commit {
                     commit_id: rhs_commit_id,
                     id: rhs_id,
+                    change_id: _,
                 } = other
                 {
                     commits
@@ -102,6 +103,7 @@ impl MoveSource {
                 if let CliId::Commit {
                     commit_id: commit_id_rhs,
                     id: id_rhs,
+                    change_id: _,
                 } = other
                 {
                     commit_id_lhs == commit_id_rhs && id_lhs == id_rhs
@@ -135,7 +137,11 @@ impl TryFrom<CliId> for MoveSource {
     fn try_from(id: CliId) -> Result<Self, Self::Error> {
         match id {
             CliId::Branch { name, id, stack_id } => Ok(Self::Branch { name, id, stack_id }),
-            CliId::Commit { commit_id, id } => Ok(Self::Commit { commit_id, id }),
+            CliId::Commit {
+                commit_id,
+                id,
+                change_id: _,
+            } => Ok(Self::Commit { commit_id, id }),
             CliId::UncommittedHunkOrFile(uncommitted_cli_id) => {
                 anyhow::bail!("cannot move: {:?}", uncommitted_cli_id.id)
             }

@@ -46,6 +46,7 @@ fn commit_cli_id(hex: &str, id: &str) -> Arc<CliId> {
     Arc::new(CliId::Commit {
         commit_id: commit_id(hex),
         id: id.into(),
+        change_id: None,
     })
 }
 

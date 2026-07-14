@@ -125,10 +125,10 @@ fn discard_top_commit_selects_next_commit_in_branch() {
         .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
 
     tui.input('n')
-        .assert_current_line_eq(str!["┊●   f184fc7 (no commit message) (no changes)"]);
+        .assert_current_line_eq(str!["┊●   1 f184fc7 (no commit message) (no changes)"]);
 
     tui.input('n')
-        .assert_current_line_eq(str!["┊●   9638f28 (no commit message) (no changes)"]);
+        .assert_current_line_eq(str!["┊●   1#0 9638f28 (no commit message) (no changes)"]);
 
     tui.input('x')
         .assert_rendered_contains("Discard commit")
@@ -137,7 +137,7 @@ fn discard_top_commit_selects_next_commit_in_branch() {
     tui.input('y');
 
     tui.reload()
-        .assert_current_line_eq(str!["┊●   f184fc7 (no commit message) (no changes)"]);
+        .assert_current_line_eq(str!["┊●   1 f184fc7 (no commit message) (no changes)"]);
 }
 
 #[test]
@@ -344,7 +344,7 @@ fn discard_individual_committed_files_from_local_file_list() {
         "snapshots/discard_individual_committed_files_from_local_file_list_006.svg"
     ]);
     tui.input('y')
-        .assert_current_line_eq(str![["┊●   0b42c46 (no commit message) (no changes)"]])
+        .assert_current_line_eq(str!["┊●   1 0b42c46 (no commit message) (no changes)"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/discard_individual_committed_files_from_local_file_list_007.svg"
         ])
@@ -432,7 +432,7 @@ fn discard_marked_committed_files_from_local_file_list() {
 
     tui.input('x');
     tui.input('y')
-        .assert_current_line_eq(str![["┊●   0b42c46 (no commit message) (no changes)"]])
+        .assert_current_line_eq(str!["┊●   1 0b42c46 (no commit message) (no changes)"])
         .assert_backstack_eq([])
         .assert_rendered_term_svg_eq(file![
             "snapshots/discard_marked_committed_files_from_local_file_list_005.svg"

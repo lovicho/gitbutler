@@ -84,7 +84,7 @@ fn commiting_with_no_uncommitted_changes() {
         ]);
 
     tui.input(KeyCode::Enter)
-        .assert_current_line_eq(str!["┊●   f184fc7 (no commit message) (no changes)"])
+        .assert_current_line_eq(str!["┊●   1 f184fc7 (no commit message) (no changes)"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/commiting_with_no_uncommitted_changes_003.svg"
         ]);
@@ -117,11 +117,11 @@ fn commit_from_unstaged_changes_creates_commit_visible_in_tui() {
 
     with_var("GIT_EDITOR", Some(editor_command), || {
         tui.input(KeyCode::Enter)
-            .assert_current_line_eq(str!["┊●   48fdc38 commit from tui test"]);
+            .assert_current_line_eq(str!["┊●   1 48fdc38 commit from tui test"]);
     });
 
     tui.reload()
-        .assert_current_line_eq(str!["┊●   48fdc38 commit from tui test"])
+        .assert_current_line_eq(str!["┊●   1 48fdc38 commit from tui test"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/commit_from_unstaged_changes_creates_commit_visible_in_tui_final.svg"
         ]);
@@ -154,11 +154,11 @@ fn commit_from_unstaged_changes_to_new_branch_creates_branch_and_commit() {
 
     with_var("GIT_EDITOR", Some(editor_command), || {
         tui.input('b')
-            .assert_current_line_eq(str!["┊●   48fdc38 commit from tui test"]);
+            .assert_current_line_eq(str!["┊●   1 48fdc38 commit from tui test"]);
     });
 
     tui.reload()
-        .assert_current_line_eq(str!["┊●   48fdc38 commit from tui test"])
+        .assert_current_line_eq(str!["┊●   1 48fdc38 commit from tui test"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/commit_from_unstaged_changes_to_new_branch_creates_branch_and_commit_final.svg"
         ]);
@@ -197,7 +197,7 @@ fn commit_from_unstaged_changes_with_multiple_hunks_in_same_file_commits_all_cha
 
     with_var("GIT_EDITOR", Some(editor_command.clone()), || {
         tui.input(KeyCode::Enter)
-            .assert_current_line_eq(str!["┊●   7f81dac commit from tui test"]);
+            .assert_current_line_eq(str!["┊●   1 7f81dac commit from tui test"]);
     });
 
     let changed = base
@@ -226,7 +226,7 @@ fn commit_from_unstaged_changes_with_multiple_hunks_in_same_file_commits_all_cha
 
     with_var("GIT_EDITOR", Some(editor_command), || {
         tui.input(KeyCode::Enter)
-            .assert_current_line_eq(str!["┊●   ab9015b commit from tui test"]);
+            .assert_current_line_eq(str!["┊●   1#0 ab9015b commit from tui test"]);
     });
 
     let status = tui.env().invoke_git("status --porcelain");
@@ -292,11 +292,11 @@ fn commit_to_commit_above_creates_commit_visible_in_tui() {
 
     with_var("GIT_EDITOR", Some(editor_command), || {
         tui.input(KeyCode::Enter)
-            .assert_current_line_eq(str!["┊●   48fdc38 commit from tui test"]);
+            .assert_current_line_eq(str!["┊●   1 48fdc38 commit from tui test"]);
     });
 
     tui.reload()
-        .assert_current_line_eq(str!["┊●   48fdc38 commit from tui test"])
+        .assert_current_line_eq(str!["┊●   1 48fdc38 commit from tui test"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/commit_to_commit_above_creates_commit_visible_in_tui_final_002.svg"
         ]);
@@ -333,11 +333,11 @@ fn commit_to_commit_below_creates_commit_visible_in_tui() {
 
     with_var("GIT_EDITOR", Some(editor_command), || {
         tui.input(KeyCode::Enter)
-            .assert_current_line_eq(str!["┊●   584b4d0 commit from tui test"]);
+            .assert_current_line_eq(str!["┊●   1 584b4d0 commit from tui test"]);
     });
 
     tui.reload()
-        .assert_current_line_eq(str!["┊●   584b4d0 commit from tui test"])
+        .assert_current_line_eq(str!["┊●   1 584b4d0 commit from tui test"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/commit_to_commit_below_creates_commit_visible_in_tui_final.svg"
         ]);
@@ -429,13 +429,13 @@ fn commit_with_inline_reword() {
         .assert_rendered_term_svg_eq(file!["snapshots/commit_with_inline_reword_004.svg"]);
 
     tui.input(KeyCode::Enter)
-        .assert_current_line_eq(str!["┊●   6bdd3d2"]);
+        .assert_current_line_eq(str!["┊●   1 6bdd3d2"]);
 
     tui.input("commit message here")
-        .assert_current_line_eq(str!["┊●   6bdd3d2 commit message here"]);
+        .assert_current_line_eq(str!["┊●   1 6bdd3d2 commit message here"]);
 
     tui.input(KeyCode::Enter)
-        .assert_current_line_eq(str!["┊●   072c144 commit message here"]);
+        .assert_current_line_eq(str!["┊●   1 072c144 commit message here"]);
 }
 
 #[test]

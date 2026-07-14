@@ -1,6 +1,6 @@
 use but_testsupport::Sandbox;
 use crossterm::event::{KeyCode, KeyModifiers};
-use snapbox::file;
+use snapbox::{file, str};
 
 use crate::command::legacy::status::tui::{BackstackEntry, tests::test_tui};
 
@@ -37,8 +37,6 @@ fn jumping_around() {
 
     // jumping to zz
     tui.input('/');
-    tui.input('z')
-        .assert_rendered_term_svg_eq(file!["snapshots/jumping_around_007.svg"]);
     tui.input('z')
         .assert_rendered_term_svg_eq(file!["snapshots/jumping_around_008.svg"]);
 }
@@ -126,4 +124,28 @@ fn highlights_exact_matches_when_file_list_is_open() {
         .assert_rendered_term_svg_eq(file![
             "snapshots/highlights_exact_matches_when_file_list_is_open_003.svg"
         ]);
+}
+
+#[test]
+fn when_branch_short_code_matches_commit_sha_without_change_id() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings(
+        "branch-short-code-matches-commit-sha",
+    );
+    env.setup_metadata(&["branch"]);
+
+    let mut tui = test_tui(env);
+
+    tui.input("g");
+    tui.input("/");
+    tui.input("b").assert_rendered_term_svg_eq(file![
+        "snapshots/when_branch_short_code_matches_commit_sha_without_change_id_001.svg"
+    ]);
+    tui.input("r")
+        .assert_current_line_eq(str![["┊╭┄br [branch]"]]);
+
+    tui.input("g");
+    tui.input("/");
+    tui.input("b");
+    tui.input("0")
+        .assert_current_line_eq(str![["┊●   b0f22e6 add branch 814"]]);
 }

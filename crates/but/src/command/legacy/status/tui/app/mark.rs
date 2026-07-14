@@ -2,7 +2,7 @@ use std::{convert::Infallible, ops::Deref};
 
 use anyhow::Context as _;
 use bstr::{BStr, BString};
-use but_core::ref_metadata::StackId;
+use but_core::{ChangeId, ref_metadata::StackId};
 use but_ctx::Context;
 use nonempty::NonEmpty;
 use strum::VariantArray;
@@ -159,7 +159,12 @@ impl<'a> MarksRef<'a> {
                     .any(|hunk| hunk == uncommitted)
             }
             Self::Commits { head, tail } => {
-                let CliId::Commit { commit_id, id } = cli_id else {
+                let CliId::Commit {
+                    commit_id,
+                    id,
+                    change_id: _,
+                } = cli_id
+                else {
                     return false;
                 };
                 std::iter::once(head)
@@ -379,7 +384,15 @@ impl Markable {
             Markable::Uncommitted(uncommitted_cli_id) => {
                 CliId::UncommittedHunkOrFile(uncommitted_cli_id)
             }
-            Markable::Commit(MarkedCommit { commit_id, id }) => CliId::Commit { commit_id, id },
+            Markable::Commit(MarkedCommit {
+                commit_id,
+                id,
+                change_id,
+            }) => CliId::Commit {
+                commit_id,
+                id,
+                change_id,
+            },
             Markable::CommittedFile(MarkedCommittedFile {
                 commit_id,
                 path,
@@ -405,6 +418,7 @@ impl Markable {
 pub struct MarkedCommit {
     pub commit_id: gix::ObjectId,
     pub id: ShortId,
+    pub change_id: Option<ChangeId>,
 }
 
 impl MarkedCommit {
@@ -412,6 +426,7 @@ impl MarkedCommit {
         MarkedCommitRef {
             commit_id: self.commit_id,
             id: &self.id,
+            change_id: self.change_id.as_ref(),
         }
     }
 }
@@ -441,10 +456,16 @@ impl<'a> MarkableRef<'a> {
                     }
                 }
                 MarkableRefDiscriminants::Commit => {
-                    if let CliId::Commit { commit_id, id } = cli_id {
+                    if let CliId::Commit {
+                        commit_id,
+                        id,
+                        change_id,
+                    } = cli_id
+                    {
                         return Some(Self::Commit(MarkedCommitRef {
                             commit_id: *commit_id,
                             id,
+                            change_id: change_id.as_ref(),
                         }));
                     }
                 }
@@ -497,6 +518,7 @@ impl PartialEq<Markable> for MarkableRef<'_> {
 pub struct MarkedCommitRef<'a> {
     pub commit_id: gix::ObjectId,
     pub id: &'a str,
+    pub change_id: Option<&'a ChangeId>,
 }
 
 impl MarkedCommitRef<'_> {
@@ -504,6 +526,7 @@ impl MarkedCommitRef<'_> {
         MarkedCommit {
             commit_id: self.commit_id,
             id: self.id.to_owned(),
+            change_id: self.change_id.cloned(),
         }
     }
 }
@@ -692,9 +715,14 @@ fn handle_mark_branch(
     stack_id: StackId,
     name: &str,
 ) -> anyhow::Result<()> {
-    let commits = commits_on_branch(ctx, stack_id, name)?
-        .into_iter()
-        .map(|(commit_id, id)| MarkedCommit { commit_id, id });
+    let commits =
+        commits_on_branch(ctx, stack_id, name)?
+            .into_iter()
+            .map(|(commit_id, id, change_id)| MarkedCommit {
+                commit_id,
+                id,
+                change_id,
+            });
 
     toggle_markables(marks, commits)?;
 
@@ -771,7 +799,7 @@ pub fn commits_on_branch(
     ctx: &Context,
     stack_id: StackId,
     name: &str,
-) -> anyhow::Result<Vec<(gix::ObjectId, String)>> {
+) -> anyhow::Result<Vec<(gix::ObjectId, String, Option<ChangeId>)>> {
     let guard = ctx.shared_worktree_access();
     let id_map = IdMap::new_from_context(ctx, None, guard.read_permission())?;
 
@@ -790,7 +818,16 @@ pub fn commits_on_branch(
     let commits = segment
         .workspace_commits
         .iter()
-        .map(|commit| (commit.commit_id(), commit.short_id.clone()))
+        .map(|commit| {
+            (
+                commit.commit_id(),
+                commit.short_id.clone(),
+                commit
+                    .change_id
+                    .as_ref()
+                    .map(|change_id| change_id.change_id.clone()),
+            )
+        })
         .collect::<Vec<_>>();
 
     Ok(commits)

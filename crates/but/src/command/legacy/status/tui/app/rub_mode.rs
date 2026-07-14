@@ -75,10 +75,17 @@ impl RubMarks {
                 .collect(),
             Self::Commits(commits) => commits
                 .iter()
-                .map(|MarkedCommit { commit_id, id }| CliId::Commit {
-                    commit_id: *commit_id,
-                    id: id.clone(),
-                })
+                .map(
+                    |MarkedCommit {
+                         commit_id,
+                         id,
+                         change_id,
+                     }| CliId::Commit {
+                        commit_id: *commit_id,
+                        id: id.clone(),
+                        change_id: change_id.clone(),
+                    },
+                )
                 .collect(),
         }
     }

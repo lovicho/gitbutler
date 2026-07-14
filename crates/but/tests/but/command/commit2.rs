@@ -14,7 +14,7 @@ fn no_message_nothing_to_commit() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   1049574 (no commit message) (no changes)
+┊●   1 1049574 (no commit message) (no changes)
 ┊●   9477ae7 add A
 ├╯
 ┊
@@ -47,7 +47,7 @@ Created commit 7bbfdca on branch 'A'
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   7bbfdca (no commit message)
+┊●   1 7bbfdca (no commit message)
 ┊●   9477ae7 add A
 ├╯
 ┊
@@ -116,7 +116,7 @@ fn no_args_single_head_message_from_editor() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   d4e7c2a commit from editor
+┊●   1 d4e7c2a commit from editor
 ┊●   9477ae7 add A
 ├╯
 ┊
@@ -143,7 +143,7 @@ fn single_head_with_message() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   a41148c add file.txt
+┊●   1 a41148c add file.txt
 ┊●   9477ae7 add A
 ├╯
 ┊
@@ -172,7 +172,7 @@ fn can_repeat_message() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊● b141567 author 2000-01-01 00:00:00 +0000
+┊● 1 b141567 author 2000-01-01 00:00:00 +0000
 ┊│     add file.txt  with more  text lines
 ┊● 9477ae7 author 2000-01-01 00:00:00 +0000
 ┊│     add A 
@@ -229,7 +229,7 @@ fn editor_user_writes_no_message() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   3b915b5 (no commit message)
+┊●   1 3b915b5 (no commit message)
 ┊●   9477ae7 add A
 ├╯
 ┊
@@ -278,7 +278,7 @@ fn create_commit_on_new_branch() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄br [a-branch-1]
-┊●   d4910f8 (no commit message)
+┊●   1 d4910f8 (no commit message)
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -306,7 +306,7 @@ fn create_commit_on_user_provided_branch() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄fi [file]
-┊●   5a6fc56 add first
+┊●   1 5a6fc56 add first
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -328,8 +328,8 @@ Hint: run `but help` for all commands
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄fi [file]
-┊●   49fc2f0 add second
-┊●   5a6fc56 add first
+┊●   1#0 49fc2f0 add second
+┊●   1#1 5a6fc56 add first
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -351,12 +351,12 @@ Hint: run `but help` for all commands
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄ot [other]
-┊●   ed433d3 add third
+┊●   1#0 ed433d3 add third
 ├╯
 ┊
 ┊╭┄fi [file]
-┊●   49fc2f0 add second
-┊●   5a6fc56 add first
+┊●   1#1 49fc2f0 add second
+┊●   1#2 5a6fc56 add first
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -378,13 +378,13 @@ Hint: run `but help` for all commands
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄ot [other]
-┊●   81bd527 add fourth
-┊●   ed433d3 add third
+┊●   1#0 81bd527 add fourth
+┊●   1#1 ed433d3 add third
 ├╯
 ┊
 ┊╭┄fi [file]
-┊●   49fc2f0 add second
-┊●   5a6fc56 add first
+┊●   1#2 49fc2f0 add second
+┊●   1#3 5a6fc56 add first
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -410,7 +410,7 @@ fn create_commit_on_new_branch_with_canned_name() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄br [a-branch-1]
-┊●   633b765 add file.txt
+┊●   1 633b765 add file.txt
 ├╯
 ┊
 ┊╭┄g0 [A]
@@ -505,7 +505,7 @@ fn empty_flag_to_force_empty_commit_when_changes_exist() {
 ┊   v A changes
 ┊
 ┊╭┄br [a-branch-1]
-┊●   341ce70 empty commit despite changes in worktree (no changes)
+┊●   1 341ce70 empty commit despite changes in worktree (no changes)
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -548,8 +548,8 @@ Hint: run `but help` for all commands
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   955bee4 add second
-┊●   4400448 (no commit message) (no changes)
+┊●   ywx 955bee4 add second
+┊●   1 4400448 (no commit message) (no changes)
 ┊●   fe12bcd add first
 ├╯
 ┊
@@ -593,9 +593,9 @@ Hint: run `but help` for all commands
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   eee1eaf add second
-┊●   c149530 add first
-┊●   8b16ff4 (no commit message) (no changes)
+┊●   ywx eee1eaf add second
+┊●   zll c149530 add first
+┊●   1 8b16ff4 (no commit message) (no changes)
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -641,8 +641,8 @@ Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "mes
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   e38b8f7 add second
-┊●   94fecae add file.txt
+┊●   ywx e38b8f7 add second
+┊●   1 94fecae add file.txt
 ┊●   fe12bcd add first
 ├╯
 ┊
@@ -688,7 +688,7 @@ Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "mes
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄br [a-branch-1]
-┊●   092d7a9 add file.txt
+┊●   1 092d7a9 add file.txt
 ┊│
 ┊├┄g0 [A]
 ┊●   9477ae7 add A
@@ -737,9 +737,9 @@ Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "mes
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   d7e6d8f add second
-┊●   12982b7 add first
-┊●   bdfeaa4 add file.txt
+┊●   ywx d7e6d8f add second
+┊●   zll 12982b7 add first
+┊●   1 bdfeaa4 add file.txt
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -784,10 +784,10 @@ Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "mes
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   8a3fbb3 add A
+┊●   tpm 8a3fbb3 add A
 ┊│
 ┊├┄br [a-branch-1]
-┊●   28e38bd add file.txt
+┊●   1 28e38bd add file.txt
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -833,11 +833,11 @@ Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "mes
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   d7e6d8f add second
-┊●   12982b7 add first
+┊●   ywx d7e6d8f add second
+┊●   zll 12982b7 add first
 ┊│
 ┊├┄br [a-branch-1]
-┊●   bdfeaa4 add file.txt
+┊●   1 bdfeaa4 add file.txt
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -1075,7 +1075,7 @@ Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "mes
 ┊   twop A two
 ┊
 ┊╭┄g0 [A]
-┊●   f86bb7b (no commit message)
+┊●   1 f86bb7b (no commit message)
 ┊│     f:k A one
 ┊●   9477ae7 add A
 ┊│     9:t A A
@@ -1133,9 +1133,9 @@ q:2 file│
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   f0a3edc (no commit message)
+┊●   1#0 f0a3edc (no commit message)
 ┊│     f:q M file
-┊●   21b345e (no commit message)
+┊●   1#1 21b345e (no commit message)
 ┊│     2:q A file
 ┊●   9477ae7 add A
 ┊│     9:t A A
@@ -1160,9 +1160,9 @@ Hint: run `but help` for all commands
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   f0a3edc (no commit message)
+┊●   1#0 f0a3edc (no commit message)
 ┊│     f:q M file
-┊●   21b345e (no commit message)
+┊●   1#1 21b345e (no commit message)
 ┊│     2:q A file
 ┊●   9477ae7 add A
 ┊│     9:t A A
@@ -1220,9 +1220,9 @@ q:2 file│
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   f0a3edc (no commit message)
+┊●   1#0 f0a3edc (no commit message)
 ┊│     f:q M file
-┊●   21b345e (no commit message)
+┊●   1#1 21b345e (no commit message)
 ┊│     2:q A file
 ┊●   9477ae7 add A
 ┊│     9:t A A
@@ -1247,9 +1247,9 @@ Hint: run `but help` for all commands
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   f0a3edc (no commit message)
+┊●   1#0 f0a3edc (no commit message)
 ┊│     f:q M file
-┊●   21b345e (no commit message)
+┊●   1#1 21b345e (no commit message)
 ┊│     2:q A file
 ┊●   9477ae7 add A
 ┊│     9:t A A
@@ -1316,7 +1316,7 @@ Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "mes
 ┊   o A path/other/to/third.txt
 ┊
 ┊╭┄g0 [A]
-┊●   e1c5473 (no commit message)
+┊●   1 e1c5473 (no commit message)
 ┊│     e:m A path/to/first.txt
 ┊│     e:r A path/to/second.txt
 ┊●   9477ae7 add A
@@ -1358,7 +1358,7 @@ fn path_prefix_with_mix_of_modifications() {
 ┊   x M dir/to_modify.txt
 ┊
 ┊╭┄g0 [A]
-┊●   d199c17 (no commit message)
+┊●   1 d199c17 (no commit message)
 ┊│     d:l A dir/to_delete.txt
 ┊│     d:n A dir/to_empty.txt
 ┊│     d:x A dir/to_modify.txt
@@ -1381,11 +1381,11 @@ Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "mes
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   d1a6de8 (no commit message)
+┊●   1#0 d1a6de8 (no commit message)
 ┊│     d1a:l D dir/to_delete.txt
 ┊│     d1a:n M dir/to_empty.txt
 ┊│     d1a:x M dir/to_modify.txt
-┊●   d199c17 (no commit message)
+┊●   1#1 d199c17 (no commit message)
 ┊│     d19:l A dir/to_delete.txt
 ┊│     d19:n A dir/to_empty.txt
 ┊│     d19:x A dir/to_modify.txt
@@ -1455,7 +1455,7 @@ fn committing_above_an_empty_branch() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄br [a-branch-1]
-┊●   75b9f19 add one
+┊●   1 75b9f19 add one
 ┊│
 ┊├┄to [top] (no commits)
 ├╯
@@ -1489,7 +1489,7 @@ fn committing_below_empty_branch_with_empty_branch_below() {
 ┊╭┄to [top] (no commits)
 ┊│
 ┊├┄br [a-branch-1]
-┊●   75b9f19 add one
+┊●   1 75b9f19 add one
 ┊│
 ┊├┄mi [middle] (no commits)
 ├╯
@@ -1531,10 +1531,10 @@ fn committing_below_non_top_empty_branch() {
 ┊├┄mi [middle] (no commits)
 ┊│
 ┊├┄br [a-branch-1]
-┊●   af4ddbe add two
+┊●   1#0 af4ddbe add two
 ┊│
 ┊├┄bo [bottom]
-┊●   75b9f19 add one
+┊●   1#1 75b9f19 add one
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1585,7 +1585,7 @@ Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "mes
 ┊╭┄to [top] (no commits)
 ┊│
 ┊├┄br [a-branch-1]
-┊●   75b9f19 add one
+┊●   1 75b9f19 add one
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1609,10 +1609,10 @@ Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "mes
 ┊╭┄to [top] (no commits)
 ┊│
 ┊├┄br [a-branch-1]
-┊●   af4ddbe add two
+┊●   1#0 af4ddbe add two
 ┊│
 ┊├┄bo [bottom]
-┊●   75b9f19 add one
+┊●   1#1 75b9f19 add one
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1650,7 +1650,7 @@ fn commit_to_existing_branch_via_short_code() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   2e0e1d8 new commit (no changes)
+┊●   1 2e0e1d8 new commit (no changes)
 ┊●   9477ae7 add A
 ├╯
 ┊
@@ -1677,7 +1677,7 @@ fn commit_to_new_branch_with_same_name_as_file() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄fi [file]
-┊●   46b0823 add file
+┊●   1 46b0823 add file
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1715,7 +1715,7 @@ q:3 file│
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄br [a-branch-1]
-┊●   d215849 Add file
+┊●   1 d215849 Add file
 ┊│     d:q A file
 ├╯
 ┊
@@ -1825,7 +1825,7 @@ fn new_branches_are_created_on_top() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄br [a-branch-1]
-┊●   7adb8e6 (no commit message) (no changes)
+┊●   1 7adb8e6 (no commit message) (no changes)
 ├╯
 ┊
 ┊╭┄g0 [A]

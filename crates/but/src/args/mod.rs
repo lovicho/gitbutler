@@ -124,17 +124,28 @@ pub enum HelpTopic {
     ///
     /// Typical CLI IDs include:
     ///
-    /// * **Commit:** The first few characters of the commit hash
-    /// * **Branch:** A couple of characters from the branch name
-    /// * **Uncommitted file:** A path-derived ID that's typically 2-3 characters
+    /// * **Commit:**
+    ///     - The entire commit ID
+    ///     - The entire change ID
+    ///     - Any prefix of the commit ID or change ID that is unique in the current context. `but status`
+    ///       highlights the shortest possible prefix.
+    /// * **Branch:**
+    ///     - The entire branch name
+    ///     - An exact short ID for the branch name, as shown by `but status`
+    /// * **Uncommitted file:** A path-derived ID that is typically 1-3 characters
     /// * **Uncommitted hunk:** `<uncommitted_file_cli_id>:<hunk_cli_id>`
     ///     - Run `but diff` to show all current uncommitted hunks and their IDs
     /// * **Uncommitted area:** Always `zz`
     /// * **Committed file:** `<commit_cli_id>:<file_cli_id>`
     ///     - Run `but status -f` to show committed files
     ///
-    /// CLI IDs depend on the context and may change if the context changes, such as when new data
-    /// is written to files, commits are made or rearranged and branches are created or deleted.
+    /// Many CLI IDs depend on the context and may change if the context changes, such as when new
+    /// data is written to files, commits are made or rearranged and branches are created or
+    /// deleted.
+    ///
+    /// Some CLI IDs are more stable than others. For example, a commit's change ID is stable even
+    /// when commits are made and moved around, but the minimum prefix may increase as other IDs are
+    /// introduced.
     ///
     /// Most but not all commands accept CLI IDs to perform various actions. See the documentation
     /// for the individual command (`but <command> --help`) for details on how to use CLI IDs for

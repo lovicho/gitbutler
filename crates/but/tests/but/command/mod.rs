@@ -49,6 +49,9 @@ mod reword;
 mod rub;
 #[cfg(feature = "legacy")]
 mod setup;
+#[cfg(feature = "but-2")]
+// behind but-2 feature flag as we use _commit2 in the tests for convenience
+mod show;
 mod skill;
 #[cfg(feature = "legacy")]
 mod squash;

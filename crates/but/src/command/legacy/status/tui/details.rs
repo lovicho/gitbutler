@@ -159,6 +159,10 @@ impl Details {
         self.reset_line_reader();
     }
 
+    pub fn selection(&self) -> Option<&CliId> {
+        self.selection.as_ref()
+    }
+
     pub fn clear_selection_for_reload(&mut self, select_first_section_when_available: bool) {
         self.selection = None;
         self.reset_line_reader();
