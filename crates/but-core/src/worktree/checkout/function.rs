@@ -149,7 +149,7 @@ pub fn safe_checkout_from_head(
 
         git2_repo.checkout_tree(
             &destination_tree,
-            Some(opts.update_index(true).force().disable_pathspec_match(true)),
+            Some(opts.force().disable_pathspec_match(true)),
         )?;
 
         if num_deleted_files > 0
