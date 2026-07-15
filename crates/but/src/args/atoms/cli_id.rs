@@ -32,6 +32,11 @@ impl CliIdArg {
     #[expect(missing_docs)]
     pub const TARGET_MISSING_HINT: &str = "Run `but status` for applicable targets.";
 
+    /// Parse this argument into all matching CLI IDs in the workspace.
+    pub fn parse(&self, repo: &gix::Repository, id_map: &IdMap) -> CliResult<Vec<CliId>> {
+        Ok(id_map.parse_using_repo(&self.0, repo)?)
+    }
+
     /// Resolve the argument to something that exists in the workspace.
     ///
     /// Returns an error if attempting to resolve a branch that isn't applied, since its not in the
@@ -273,10 +278,7 @@ fn try_resolve_cli_id(
     purpose: Purpose,
     priority: Option<Priority>,
 ) -> CliResult<Option<CliId>> {
-    let mut target_ids = id_map
-        .parse_using_repo(&arg.0, repo)?
-        .into_iter()
-        .peekable();
+    let mut target_ids = arg.parse(repo, id_map)?.into_iter().peekable();
     let Some(target) = target_ids.next() else {
         return Ok(None);
     };

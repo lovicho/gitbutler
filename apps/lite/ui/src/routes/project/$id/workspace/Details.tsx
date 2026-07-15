@@ -351,7 +351,7 @@ const DiffContents: FC<{
 		...getGUISettingsQueryOptions(),
 		select: (cfg) => cfg.diffTabSize,
 	});
-	const openInEditor = useOpenInEditor();
+	const { mutate: openInEditor } = useOpenInEditor();
 
 	const diffSelection = useAppSelector((state) =>
 		projectSlice.selectors.selectSelectionDiff(state, projectId, navigationIndex),
@@ -418,7 +418,7 @@ const DiffContents: FC<{
 			callback: () =>
 				diffSelectionFile &&
 				preferredEditor &&
-				openInEditor.mutate({
+				openInEditor({
 					projectId,
 					editorId: preferredEditor.id,
 					path: diffSelectionFile.change.path,
@@ -800,7 +800,7 @@ const DiffOverflowToggle: FC<
 		...getGUISettingsQueryOptions(),
 		select: (cfg) => cfg.diffOverflow,
 	});
-	const saveGUISettings = useSaveGUISettings();
+	const { mutate: saveGUISettings } = useSaveGUISettings();
 
 	return (
 		<Tooltip.Root>
@@ -811,7 +811,7 @@ const DiffOverflowToggle: FC<
 						aria-label="Toggle line wrapping"
 						pressed={(diffOverflow ?? diffDefaults.diffOverflow) === "wrap"}
 						onPressedChange={(pressed) =>
-							saveGUISettings.mutate({ diffOverflow: pressed ? "wrap" : "scroll" })
+							saveGUISettings({ diffOverflow: pressed ? "wrap" : "scroll" })
 						}
 					/>
 				}
@@ -832,7 +832,7 @@ const DiffBackgroundsToggle: FC<
 		...getGUISettingsQueryOptions(),
 		select: (cfg) => cfg.diffBackground,
 	});
-	const saveGUISettings = useSaveGUISettings();
+	const { mutate: saveGUISettings } = useSaveGUISettings();
 
 	return (
 		<Tooltip.Root>
@@ -842,7 +842,7 @@ const DiffBackgroundsToggle: FC<
 						{...toggleProps}
 						aria-label="Toggle diff backgrounds"
 						pressed={diffBackgrounds ?? diffDefaults.diffBackground}
-						onPressedChange={(enabled) => saveGUISettings.mutate({ diffBackground: enabled })}
+						onPressedChange={(enabled) => saveGUISettings({ diffBackground: enabled })}
 					/>
 				}
 			/>
@@ -865,7 +865,7 @@ const DiffStyleToggleGroup: FC<
 		...getGUISettingsQueryOptions(),
 		select: (cfg) => cfg.diffStyle,
 	});
-	const saveGUISettings = useSaveGUISettings();
+	const { mutate: saveGUISettings } = useSaveGUISettings();
 
 	return (
 		<Tooltip.Root>
@@ -879,7 +879,7 @@ const DiffStyleToggleGroup: FC<
 							const head = value[0];
 							if (head === undefined) return;
 
-							saveGUISettings.mutate({ diffStyle: head });
+							saveGUISettings({ diffStyle: head });
 						}}
 					/>
 				}
@@ -993,7 +993,8 @@ const Diff: FC<{
 
 	const treeChangeDiffs = useSuspenseQueries({
 		queries: changes.map((change) => treeChangeDiffsQueryOptions({ projectId, change })),
-	}).map((result) => result.data);
+		combine: (results) => results.map((result) => result.data),
+	});
 
 	const diffView = getDiffView({
 		fileParent,
@@ -1028,7 +1029,7 @@ const Diff: FC<{
 		}),
 	});
 
-	const saveGUISettings = useSaveGUISettings();
+	const { mutate: saveGUISettings } = useSaveGUISettings();
 
 	const diffContentsEl = useRef<HTMLElement | null>(null);
 	const [canUseSplitDiff, setCanUseSplitDiff] = useState<boolean | undefined>();
@@ -1037,7 +1038,7 @@ const Diff: FC<{
 		{
 			hotkey: diffHotkeys.toggleDiffStyle.hotkey,
 			callback: () =>
-				saveGUISettings.mutate({
+				saveGUISettings({
 					diffStyle:
 						(diffSettings?.diffStyle ?? diffDefaults.diffStyle) === "split" ? "unified" : "split",
 				}),
@@ -1179,8 +1180,8 @@ const PullRequestForm: FC<{
 	title: string | null;
 	body: string | null;
 }> = ({ projectId, sourceBranch, targetBranch, reviewId, title, body }) => {
-	const publishReview = usePublishReview();
-	const updateReview = useUpdateReview();
+	const { isPending: isPublishReviewPending, mutate: publishReview } = usePublishReview();
+	const { isPending: isUpdateReviewPending, mutate: updateReview } = useUpdateReview();
 	const formRef = useRef<HTMLFormElement | null>(null);
 
 	const remoteOrEmptyDocument = {
@@ -1195,17 +1196,17 @@ const PullRequestForm: FC<{
 		body: persistedDocument?.body ?? body ?? "",
 		isDraft: persistedDocument?.isDraft ?? false,
 	});
-	const persistDraftPR = usePersistDraftPR();
+	const { mutate: persistDraftPR } = usePersistDraftPR();
 
 	const isNew = reviewId === null;
-	const isAnyPending = publishReview.isPending || updateReview.isPending;
+	const isAnyPending = isPublishReviewPending || isUpdateReviewPending;
 	const hasChanges =
 		localDocument.title !== remoteOrEmptyDocument.title ||
 		localDocument.body !== remoteOrEmptyDocument.body ||
 		(isNew && localDocument.isDraft);
 
 	const handleBlur = () => {
-		persistDraftPR.mutate({
+		persistDraftPR({
 			projectId,
 			branchName: sourceBranch,
 			draft: localDocument,
@@ -1215,7 +1216,7 @@ const PullRequestForm: FC<{
 	const handleReset = () => {
 		const resetDocument = { ...remoteOrEmptyDocument, isDraft: false };
 		setLocalDocument(resetDocument);
-		persistDraftPR.mutate({
+		persistDraftPR({
 			projectId,
 			branchName: sourceBranch,
 			draft: resetDocument,
@@ -1227,7 +1228,7 @@ const PullRequestForm: FC<{
 		if (isAnyPending || localDocument.title.trim() === "") return;
 
 		if (reviewId === null) {
-			publishReview.mutate({
+			publishReview({
 				projectId,
 				params: {
 					title: localDocument.title,
@@ -1238,7 +1239,7 @@ const PullRequestForm: FC<{
 				},
 			});
 		} else {
-			updateReview.mutate({
+			updateReview({
 				projectId,
 				reviewId,
 				title: localDocument.title,
@@ -1328,26 +1329,28 @@ const PullRequestPrimaryAction: FC<{
 		enabled: !isDraft,
 	});
 
-	const updateReview = useUpdateReview();
-	const mergeReview = useMergeReview();
-	const setReviewDraftiness = useSetReviewDraftiness();
-	const setReviewAutoMerge = useSetReviewAutoMerge();
+	const { isPending: isUpdateReviewPending, mutate: updateReview } = useUpdateReview();
+	const { isPending: isMergeReviewPending, mutate: mergeReview } = useMergeReview();
+	const { isPending: isSetReviewDraftinessPending, mutate: setReviewDraftiness } =
+		useSetReviewDraftiness();
+	const { isPending: isSetReviewAutoMergePending, mutate: setReviewAutoMerge } =
+		useSetReviewAutoMerge();
 
 	const isAnyPending =
-		updateReview.isPending ||
-		mergeReview.isPending ||
-		setReviewDraftiness.isPending ||
-		setReviewAutoMerge.isPending;
+		isUpdateReviewPending ||
+		isMergeReviewPending ||
+		isSetReviewDraftinessPending ||
+		isSetReviewAutoMergePending;
 
 	return (
 		<div className={styles.prActions}>
 			<button
 				className={getButtonClassName({ variant: !isDraft ? "outline" : "pop" })}
 				disabled={isAnyPending}
-				onClick={() => setReviewDraftiness.mutate({ projectId, reviewId, draft: !isDraft })}
+				onClick={() => setReviewDraftiness({ projectId, reviewId, draft: !isDraft })}
 				type="button"
 			>
-				{setReviewDraftiness.isPending && <Icon name="spinner" />}
+				{isSetReviewDraftinessPending && <Icon name="spinner" />}
 				{isDraft ? "Mark as Ready" : "Convert to draft"}
 			</button>
 
@@ -1355,7 +1358,7 @@ const PullRequestPrimaryAction: FC<{
 				className={getButtonClassName({ variant: "danger" })}
 				disabled={isAnyPending}
 				onClick={() =>
-					updateReview.mutate({
+					updateReview({
 						projectId,
 						reviewId,
 						state: "closed",
@@ -1366,7 +1369,7 @@ const PullRequestPrimaryAction: FC<{
 				}
 				type="button"
 			>
-				{updateReview.isPending && <Icon name="spinner" />}
+				{isUpdateReviewPending && <Icon name="spinner" />}
 				Close
 			</button>
 
@@ -1376,20 +1379,20 @@ const PullRequestPrimaryAction: FC<{
 						className={getButtonClassName({ variant: "outline" })}
 						// Currently missing automerge state from SDK.
 						disabled
-						onClick={() => setReviewAutoMerge.mutate({ projectId, reviewId, enable: true })}
+						onClick={() => setReviewAutoMerge({ projectId, reviewId, enable: true })}
 						type="button"
 					>
-						{setReviewAutoMerge.isPending && <Icon name="spinner" />}
+						{isSetReviewAutoMergePending && <Icon name="spinner" />}
 						Enable auto-merge
 					</button>
 
 					<button
 						className={getButtonClassName({ variant: "pop" })}
 						disabled={isAnyPending || mergeStatus?.isMergeable !== true}
-						onClick={() => mergeReview.mutate({ projectId, reviewId, mergeMethod: null })}
+						onClick={() => mergeReview({ projectId, reviewId, mergeMethod: null })}
 						type="button"
 					>
-						{mergeReview.isPending && <Icon name="spinner" />}
+						{isMergeReviewPending && <Icon name="spinner" />}
 						Merge
 					</button>
 				</>

@@ -17,6 +17,10 @@ impl Backstack {
         self.push_front(BackstackEntry::LeaveNormalMode);
     }
 
+    pub fn push_leave_command_mode(&mut self) {
+        self.push_front(BackstackEntry::LeaveCommandMode);
+    }
+
     pub fn remove_leave_normal_mode(&mut self) {
         self.remove(BackstackEntry::LeaveNormalMode);
     }
@@ -84,6 +88,7 @@ impl Backstack {
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum BackstackEntry {
     LeaveNormalMode,
+    LeaveCommandMode,
     ShowFileList,
     Mark,
     OpenSplitDetailsView,

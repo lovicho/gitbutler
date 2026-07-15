@@ -10,8 +10,12 @@ use crate::{
         output::StatusOutputLineData,
         tui::{
             Mode, NormalMode, PickChangesMode, SelectAfterReload,
-            app::mark::{Marks, MarksRef},
-            app::{CommitSource, prefix_match},
+            app::{
+                CommitSource,
+                mark::{Marks, MarksRef},
+                prefix_match,
+            },
+            mode::ModeRef,
             render::{
                 commit_operation_display, move_operation_display, reorder_operation_display,
                 stack_operation_display,
@@ -675,13 +679,21 @@ pub(super) fn same_entity_for_reload(previous: &CliId, current: &CliId) -> bool 
         }
         (
             CliId::Commit {
-                commit_id: previous,
+                commit_id: previous_commit_id,
+                change_id: previous_change_id,
                 ..
             },
             CliId::Commit {
-                commit_id: current, ..
+                commit_id: current_commit_id,
+                change_id: current_change_id,
+                ..
             },
-        ) => previous == current,
+        ) => match (previous_change_id, current_change_id) {
+            (Some(previous), Some(current)) => previous == current,
+            (Some(_), None) | (None, Some(_)) | (None, None) => {
+                previous_commit_id == current_commit_id
+            }
+        },
         (CliId::Uncommitted { .. }, CliId::Uncommitted { .. }) => true,
         (
             CliId::Stack {
@@ -773,7 +785,7 @@ fn is_cursor_selectable_at_index(
         return false;
     };
 
-    is_selectable_in_mode(line, mode, show_files_flag)
+    is_selectable_in_mode(line, mode.as_ref(), show_files_flag)
         && !is_noop_move_stack_target(idx, lines, mode)
 }
 
@@ -803,11 +815,11 @@ fn is_noop_move_stack_target(idx: usize, lines: &[StatusOutputLine], mode: &Mode
 
 pub fn is_selectable_in_mode(
     line: &StatusOutputLine,
-    mode: &Mode,
+    mode: ModeRef<'_>,
     show_files_flag: FilesStatusFlag,
 ) -> bool {
     if !line.is_selectable() {
-        if let Mode::MoveStack(..) = mode
+        if let ModeRef::MoveStack(..) = mode
             && let StatusOutputLineData::BetweenStacks = line.data
         {
             // `BetweenStacks` lines are selectable in reorder mode
@@ -818,46 +830,46 @@ pub fn is_selectable_in_mode(
 
     // selecting the source line should always be possible
     match mode {
-        Mode::Rub(rub_mode) => {
+        ModeRef::Rub(rub_mode) => {
             if let Some(cli_id) = line.data.cli_id()
                 && rub_mode.source.contains(cli_id)
             {
                 return true;
             }
         }
-        Mode::Commit(commit_mode) => {
+        ModeRef::Commit(commit_mode) => {
             if let Some(cli_id) = line.data.cli_id()
                 && commit_mode.source.contains(cli_id)
             {
                 return true;
             }
         }
-        Mode::Move(move_mode) => {
+        ModeRef::Move(move_mode) => {
             if let Some(cli_id) = line.data.cli_id()
                 && move_mode.source.contains(cli_id)
             {
                 return true;
             }
         }
-        Mode::MoveStack(move_mode) => {
+        ModeRef::MoveStack(move_mode) => {
             if let Some(cli_id) = line.data.cli_id()
                 && move_mode.source.matches(cli_id)
             {
                 return true;
             }
         }
-        Mode::Command(..)
-        | Mode::InlineReword(..)
-        | Mode::Normal(..)
-        | Mode::PickChanges(..)
-        | Mode::Details(..)
-        | Mode::Jump(..)
-        | Mode::Stack(..) => {}
+        ModeRef::Command(..)
+        | ModeRef::InlineReword(..)
+        | ModeRef::Normal(..)
+        | ModeRef::PickChanges(..)
+        | ModeRef::Details(..)
+        | ModeRef::Jump(..)
+        | ModeRef::Stack(..) => {}
     }
 
     // don't allow mixing marks
     match mode {
-        Mode::Normal(NormalMode { marks }) => match marks {
+        ModeRef::Normal(NormalMode { marks }) => match marks {
             Marks::Empty => {}
             Marks::Hunks(..) => {
                 if !matches!(
@@ -882,7 +894,7 @@ pub fn is_selectable_in_mode(
                 }
             }
         },
-        Mode::PickChanges(PickChangesMode { marks }) => {
+        ModeRef::PickChanges(PickChangesMode { marks }) => {
             if !marks.is_empty()
                 && !matches!(
                     &line.data,
@@ -893,15 +905,15 @@ pub fn is_selectable_in_mode(
                 return false;
             }
         }
-        Mode::Rub(..)
-        | Mode::InlineReword(..)
-        | Mode::Command(..)
-        | Mode::Commit(..)
-        | Mode::Move(..)
-        | Mode::Details(..)
-        | Mode::MoveStack(..)
-        | Mode::Jump(..)
-        | Mode::Stack(..) => {}
+        ModeRef::Rub(..)
+        | ModeRef::InlineReword(..)
+        | ModeRef::Command(..)
+        | ModeRef::Commit(..)
+        | ModeRef::Move(..)
+        | ModeRef::Details(..)
+        | ModeRef::MoveStack(..)
+        | ModeRef::Jump(..)
+        | ModeRef::Stack(..) => {}
     }
 
     if let FilesStatusFlag::All = show_files_flag
@@ -919,7 +931,7 @@ pub fn is_selectable_in_mode(
     }
 
     match mode {
-        Mode::Normal(..) | Mode::Details(..) => match show_files_flag {
+        ModeRef::Normal(..) => match show_files_flag {
             FilesStatusFlag::None | FilesStatusFlag::All => true,
             FilesStatusFlag::Commit(object_id) => {
                 if let Some(cli_id) = line.data.cli_id()
@@ -931,15 +943,18 @@ pub fn is_selectable_in_mode(
                 }
             }
         },
-        Mode::Rub(rub_mode) => line
+        ModeRef::Details(details_mode) => {
+            is_selectable_in_mode(line, details_mode.return_mode.as_ref(), show_files_flag)
+        }
+        ModeRef::Rub(rub_mode) => line
             .data
             .cli_id()
             .is_some_and(|cli_id| rub_mode.available_targets.contains(cli_id)),
-        Mode::Commit(commit_mode) => commit_operation_display(&line.data, commit_mode).is_some(),
-        Mode::Move(move_mode) => move_operation_display(&line.data, move_mode).is_some(),
-        Mode::MoveStack(move_mode) => reorder_operation_display(&line.data, move_mode).is_some(),
-        Mode::Stack(stack_mode) => stack_operation_display(&line.data, stack_mode).is_some(),
-        Mode::PickChanges(..) => {
+        ModeRef::Commit(commit_mode) => commit_operation_display(&line.data, commit_mode).is_some(),
+        ModeRef::Move(move_mode) => move_operation_display(&line.data, move_mode).is_some(),
+        ModeRef::MoveStack(move_mode) => reorder_operation_display(&line.data, move_mode).is_some(),
+        ModeRef::Stack(stack_mode) => stack_operation_display(&line.data, stack_mode).is_some(),
+        ModeRef::PickChanges(..) => {
             if let Some(cli_id) = line.data.cli_id() {
                 match &**cli_id {
                     CliId::UncommittedHunkOrFile(..) | CliId::Uncommitted { .. } => true,
@@ -953,12 +968,11 @@ pub fn is_selectable_in_mode(
                 false
             }
         }
-        Mode::InlineReword(..) | Mode::Command(..) => {
-            // you can't actually move the selection in these modes
-            // but returning `false` would dim every line which hurts UX
-            true
+        ModeRef::Command(command_mode) => {
+            is_selectable_in_mode(line, command_mode.return_mode.as_ref(), show_files_flag)
         }
-        Mode::Jump(jump_mode) => prefix_match(
+        ModeRef::InlineReword(..) => true,
+        ModeRef::Jump(jump_mode) => prefix_match(
             jump_mode.query(),
             line,
             &jump_mode.return_mode,

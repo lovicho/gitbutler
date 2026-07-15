@@ -4,7 +4,7 @@ use but_core::{ChangeId, ref_metadata::StackId};
 use but_graph::workspace::Stack;
 use but_hunk_assignment::HunkAssignment;
 use but_testsupport::{hex_to_id, hunk_header};
-use snapbox::prelude::*;
+use snapbox::{assert_data_eq, prelude::*};
 
 use crate::{CliId, IdMap, id::id_usage::UintId};
 
@@ -1266,6 +1266,64 @@ fn committed_files_are_deduplicated_by_commit_oid_path() -> anyhow::Result<()> {
     );
 
     Ok(())
+}
+
+#[test]
+fn committed_file_can_be_referenced_by_either_change_id_or_commit_id() {
+    let id = id(1);
+    let stacks = vec![stack([segment("branch", [id], None, [])])];
+    let commit_id_to_change_id: gix::hashtable::HashMap<gix::ObjectId, ChangeId> = [
+        (id, ChangeId::from_bytes("sv".as_bytes())), // swstzzzz...
+    ]
+    .into_iter()
+    .collect();
+    let id_map = IdMap::new(stacks, Vec::new(), commit_id_to_change_id).unwrap();
+
+    let changed_paths_fn = |commit_id: gix::ObjectId,
+                            parent_id: Option<gix::ObjectId>|
+     -> anyhow::Result<Vec<but_core::TreeChange>> {
+        if commit_id == id {
+            Ok(vec![
+                tree_change_addition("file.txt"),
+                tree_change_addition("other_file.txt"),
+            ])
+        } else {
+            anyhow::bail!("unexpected IDs {commit_id} {parent_id:?}");
+        }
+    };
+
+    assert_data_eq!(
+        id_map
+            .parse("0:u", Box::new(changed_paths_fn))
+            .unwrap()
+            .to_debug(),
+        snapbox::str![[r#"
+[
+    CommittedFile {
+        commit_id: Sha1(0101010101010101010101010101010101010101),
+        path: "file.txt",
+        id: "s:u",
+    },
+]
+
+"#]]
+    );
+    assert_data_eq!(
+        id_map
+            .parse("s:u", Box::new(changed_paths_fn))
+            .unwrap()
+            .to_debug(),
+        snapbox::str![[r#"
+[
+    CommittedFile {
+        commit_id: Sha1(0101010101010101010101010101010101010101),
+        path: "file.txt",
+        id: "s:u",
+    },
+]
+
+"#]]
+    );
 }
 
 #[test]

@@ -554,8 +554,11 @@ const Stacks: FC<{
 	});
 
 	// TODO: debounce?
-	const dryRunOperationQuery = useDryRunOperation({ projectId, operation: dryRunOperation });
-	const dryRunWorkspace = dryRunOperationQuery.data?.workspace ?? null;
+	const { data: dryRunOperationResult } = useDryRunOperation({
+		projectId,
+		operation: dryRunOperation,
+	});
+	const dryRunWorkspace = dryRunOperationResult?.workspace ?? null;
 
 	return (
 		<DryRunWorkspaceContext value={dryRunWorkspace}>

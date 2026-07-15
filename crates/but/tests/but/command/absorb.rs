@@ -310,13 +310,13 @@ n:5 a.txt│
 ┊
 ┊╭┄g0 [A]
 ┊●   1#0 a7aa4ef partial change to a.txt 3
-┊│     a:n M a.txt
+┊│     1#0:n M a.txt
 ┊●   1#1 889385c partial change to a.txt 2
-┊│     88:n M a.txt
+┊│     1#1:n M a.txt
 ┊●   1#2 8dc39e0 partial change to a.txt 1
-┊│     8d:n M a.txt
+┊│     1#2:n M a.txt
 ┊●   1#3 f4ea7f8 a.txt
-┊│     f:n A a.txt
+┊│     1#3:n A a.txt
 ┊●   9477ae7 add A
 ┊│     9:t A A
 ├╯
@@ -361,13 +361,13 @@ Hint: you can run `but undo` to undo these changes
 ┊
 ┊╭┄g0 [A]
 ┊●   1#0 4822140 partial change to a.txt 3
-┊│     48:n M a.txt
+┊│     1#0:n M a.txt
 ┊●   1#1 4593422 partial change to a.txt 2
-┊│     45:n M a.txt
+┊│     1#1:n M a.txt
 ┊●   1#2 8dc39e0 partial change to a.txt 1
-┊│     8:n M a.txt
+┊│     1#2:n M a.txt
 ┊●   1#3 f4ea7f8 a.txt
-┊│     f:n A a.txt
+┊│     1#3:n A a.txt
 ┊●   9477ae7 add A
 ┊│     9:t A A
 ├╯

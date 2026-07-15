@@ -80,9 +80,9 @@ export const Outline: FC<
 		dispatch(projectSlice.actions.openDialog({ projectId, dialog: { _tag: "Settings" } }));
 	};
 
-	const branchCreateMutation = useBranchCreate();
+	const { isPending: isBranchCreatePending, mutate: branchCreate } = useBranchCreate();
 	const createIndependentBranch = () => {
-		branchCreateMutation.mutate(
+		branchCreate(
 			{
 				projectId,
 				newRef: null,
@@ -120,9 +120,10 @@ export const Outline: FC<
 			const relativeTo = stackBottomRelativeTo(stack);
 			return relativeTo ? [{ kind: "rebase", selector: relativeTo }] : [];
 		}) ?? [];
-	const workspaceIntegrateUpstreamMutation = useWorkspaceIntegrateUpstream();
+	const { isPending: isWorkspaceIntegrateUpstreamPending, mutate: workspaceIntegrateUpstream } =
+		useWorkspaceIntegrateUpstream();
 	const updateWorkspace = () => {
-		workspaceIntegrateUpstreamMutation.mutate({ projectId, updates: rebaseUpdates, dryRun: false });
+		workspaceIntegrateUpstream({ projectId, updates: rebaseUpdates, dryRun: false });
 	};
 
 	// This should be false if all stacks are up-to-date, but we're currently
@@ -131,10 +132,9 @@ export const Outline: FC<
 	const canUpdateWorkspace =
 		outlineMode._tag === "Default" &&
 		rebaseUpdates.length > 0 &&
-		!workspaceIntegrateUpstreamMutation.isPending;
+		!isWorkspaceIntegrateUpstreamPending;
 
-	const canCreateIndependentBranch =
-		outlineMode._tag === "Default" && !branchCreateMutation.isPending;
+	const canCreateIndependentBranch = outlineMode._tag === "Default" && !isBranchCreatePending;
 
 	const canApplyBranch = outlineMode._tag === "Default";
 
@@ -230,7 +230,7 @@ export const Outline: FC<
 								// the tooltip. Other props should be passed above.
 								render={<Button focusableWhenDisabled disabled={!canCreateIndependentBranch} />}
 							>
-								{branchCreateMutation.isPending ? <Icon name="spinner" /> : <Icon name="plus" />}
+								{isBranchCreatePending ? <Icon name="spinner" /> : <Icon name="plus" />}
 							</Tooltip.Trigger>
 							<Tooltip.Portal>
 								<Tooltip.Positioner sideOffset={4}>

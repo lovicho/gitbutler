@@ -66,11 +66,11 @@ fn squash_two_commits() {
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   1#0 f55169f add three
-┊│     f5:o A three
+┊│     1#0:o A three
 ┊●   1#1 f63361f add two
-┊│     f6:t A two
+┊│     1#1:t A two
 ┊●   1#2 ea345ba add one
-┊│     e:k A one
+┊│     1#2:k A one
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -95,10 +95,10 @@ Squashed f55169f into f63361f to create 7251301
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   1#0 7251301 squashed
-┊│     7:o A three
-┊│     7:t A two
+┊│     1#0:o A three
+┊│     1#0:t A two
 ┊●   1#1 ea345ba add one
-┊│     e:k A one
+┊│     1#1:k A one
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -150,9 +150,9 @@ Squashed f55169f, f63361f into ea345ba to create e355a10
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   1 e355a10 squashed
-┊│     e:k A one
-┊│     e:o A three
-┊│     e:t A two
+┊│     1:k A one
+┊│     1:o A three
+┊│     1:t A two
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -179,11 +179,11 @@ fn use_target_message() {
 ┊╭┄br [a-branch-1]
 ┊● 1#0 5ab5165 author 2000-01-01 00:00:00 +0000
 ┊│     add two
-┊│     5:o A three
-┊│     5:t A two
+┊│     1#0:o A three
+┊│     1#0:t A two
 ┊● 1#1 ea345ba author 2000-01-01 00:00:00 +0000
 ┊│     add one
-┊│     e:k A one
+┊│     1#1:k A one
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -210,11 +210,11 @@ fn use_source_message() {
 ┊╭┄br [a-branch-1]
 ┊● 1#0 c441d34 author 2000-01-01 00:00:00 +0000
 ┊│     add three
-┊│     c:o A three
-┊│     c:t A two
+┊│     1#0:o A three
+┊│     1#0:t A two
 ┊● 1#1 ea345ba author 2000-01-01 00:00:00 +0000
 ┊│     add one
-┊│     e:k A one
+┊│     1#1:k A one
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -245,9 +245,9 @@ Squashed branch 'a-branch-1' to create commit a694042
 ┊╭┄br [a-branch-1]
 ┊● 1 a694042 author 2000-01-01 00:00:00 +0000
 ┊│     squashed a branch
-┊│     a:k A one
-┊│     a:o A three
-┊│     a:t A two
+┊│     1:k A one
+┊│     1:o A three
+┊│     1:t A two
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -312,7 +312,7 @@ fn squash_whole_branch_into_commit_on_other_branch() {
 ┊╭┄fi [add-file-branch]
 ┊● 1#0 e528488 author 2000-01-01 00:00:00 +0000
 ┊│     add file
-┊│     e5:q A file
+┊│     1#0:q A file
 ├╯
 ┊
 ┊╭┄ta [target-branch]
@@ -323,13 +323,13 @@ fn squash_whole_branch_into_commit_on_other_branch() {
 ┊╭┄br [a-branch-1]
 ┊● 1#2 f55169f author 2000-01-01 00:00:00 +0000
 ┊│     add three
-┊│     f5:o A three
+┊│     1#2:o A three
 ┊● 1#3 f63361f author 2000-01-01 00:00:00 +0000
 ┊│     add two
-┊│     f6:t A two
+┊│     1#3:t A two
 ┊● 1#4 ea345ba author 2000-01-01 00:00:00 +0000
 ┊│     add one
-┊│     ea:k A one
+┊│     1#4:k A one
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -355,10 +355,10 @@ Squashed branches 'a-branch-1', 'add-file-branch' to create commit 44aa30a
 ┊╭┄ta [target-branch]
 ┊● 1 44aa30a author 2000-01-01 00:00:00 +0000
 ┊│     new commit on new branch
-┊│     4:q A file
-┊│     4:k A one
-┊│     4:o A three
-┊│     4:t A two
+┊│     1:q A file
+┊│     1:k A one
+┊│     1:o A three
+┊│     1:t A two
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -393,7 +393,7 @@ fn squash_multiple_branches_into_commit_on_one_of_the_branch_sources() {
 ┊╭┄fi [add-file-branch]
 ┊● 1#0 e528488 author 2000-01-01 00:00:00 +0000
 ┊│     add file
-┊│     e5:q A file
+┊│     1#0:q A file
 ├╯
 ┊
 ┊╭┄ta [target-branch]
@@ -406,13 +406,13 @@ fn squash_multiple_branches_into_commit_on_one_of_the_branch_sources() {
 ┊╭┄br [a-branch-1]
 ┊● 1#3 f55169f author 2000-01-01 00:00:00 +0000
 ┊│     add three
-┊│     f5:o A three
+┊│     1#3:o A three
 ┊● 1#4 f63361f author 2000-01-01 00:00:00 +0000
 ┊│     add two
-┊│     f6:t A two
+┊│     1#4:t A two
 ┊● 1#5 ea345ba author 2000-01-01 00:00:00 +0000
 ┊│     add one
-┊│     ea:k A one
+┊│     1#5:k A one
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -438,10 +438,10 @@ Squashed branches 'target-branch', 'a-branch-1', 'add-file-branch' to create com
 ┊╭┄ta [target-branch]
 ┊● 1 0653794 author 2000-01-01 00:00:00 +0000
 ┊│     target commit
-┊│     0:q A file
-┊│     0:k A one
-┊│     0:o A three
-┊│     0:t A two
+┊│     1:q A file
+┊│     1:k A one
+┊│     1:o A three
+┊│     1:t A two
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -480,9 +480,9 @@ Squashed branch 'a-branch-1' to create commit 7b3d915
 ┊╭┄br [a-branch-1]
 ┊● 1 7b3d915 author 2000-01-01 00:00:00 +0000
 ┊│     message from editor
-┊│     7:k A one
-┊│     7:o A three
-┊│     7:t A two
+┊│     1:k A one
+┊│     1:o A three
+┊│     1:t A two
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -518,9 +518,9 @@ Squashed branch 'a-branch-1' to create commit abb21d9
 ┊╭┄br [a-branch-1]
 ┊● 1 abb21d9 author 2000-01-01 00:00:00 +0000
 ┊│     add one  add three  add two
-┊│     a:k A one
-┊│     a:o A three
-┊│     a:t A two
+┊│     1:k A one
+┊│     1:o A three
+┊│     1:t A two
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -697,11 +697,11 @@ fn aborts_on_conflicts() {
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   1#0 d5e51af remove file
-┊│     d:u D file.txt
+┊│     1#0:u D file.txt
 ┊●   1#1 5b59611 change file
-┊│     5:u M file.txt
+┊│     1#1:u M file.txt
 ┊●   1#2 11a2a8a add file
-┊│     1:u A file.txt
+┊│     1#2:u A file.txt
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -731,16 +731,16 @@ fn cannot_squash_into_commits_on_unapplied_branches() {
 ┊
 ┊╭┄se [second]
 ┊●   1#0 d15f721 add four
-┊│     d:q A four
+┊│     1#0:q A four
 ┊●   1#1 66a5286 add three
-┊│     6:o A three
+┊│     1#1:o A three
 ├╯
 ┊
 ┊╭┄on [one]
 ┊●   1#2 f63361f add two
-┊│     f:t A two
+┊│     1#2:t A two
 ┊●   1#3 ea345ba add one
-┊│     e:k A one
+┊│     1#3:k A one
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -830,10 +830,10 @@ Squashed f55169f into f63361f to create 5ab5165
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   1#0 5ab5165 add two
-┊│     5:o A three
-┊│     5:t A two
+┊│     1#0:o A three
+┊│     1#0:t A two
 ┊●   1#1 ea345ba add one
-┊│     e:k A one
+┊│     1#1:k A one
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -863,11 +863,11 @@ Squashed branch 'one' to create commit 00e6751
 ┊
 ┊╭┄se [second]
 ┊●   1#0 00e6751 add four
-┊│     0:q A four
-┊│     0:k A one
-┊│     0:t A two
+┊│     1#0:q A four
+┊│     1#0:k A one
+┊│     1#0:t A two
 ┊●   1#1 66a5286 add three
-┊│     6:o A three
+┊│     1#1:o A three
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -917,8 +917,8 @@ Amended 7adb8e6 to create d2f176a
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   1 d2f176a (no commit message)
-┊│     d:k A one
-┊│     d:t A two
+┊│     1:k A one
+┊│     1:t A two
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -967,9 +967,9 @@ Amended 7adb8e6 to create 0e76889
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   1 0e76889 (no commit message)
-┊│     0:k A one
-┊│     0:o A three
-┊│     0:t A two
+┊│     1:k A one
+┊│     1:o A three
+┊│     1:t A two
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1060,11 +1060,11 @@ Amended f55169f to create f55169f
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   1#0 f55169f add three
-┊│     f5:o A three
+┊│     1#0:o A three
 ┊●   1#1 f63361f add two
-┊│     f6:t A two
+┊│     1#1:t A two
 ┊●   1#2 ea345ba add one
-┊│     e:k A one
+┊│     1#2:k A one
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1095,10 +1095,10 @@ Amended f63361f to create 5ab5165
 ┊╭┄br [a-branch-1]
 ┊●   1#0 bb84ecc add three (no changes)
 ┊●   1#1 5ab5165 add two
-┊│     5:o A three
-┊│     5:t A two
+┊│     1#1:o A three
+┊│     1#1:t A two
 ┊●   1#2 ea345ba add one
-┊│     e:k A one
+┊│     1#2:k A one
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1120,11 +1120,11 @@ fn cannot_amend_files_from_different_commits() {
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   1#0 f55169f add three
-┊│     f5:o A three
+┊│     1#0:o A three
 ┊●   1#1 f63361f add two
-┊│     f6:t A two
+┊│     1#1:t A two
 ┊●   1#2 ea345ba add one
-┊│     e:k A one
+┊│     1#2:k A one
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1164,11 +1164,11 @@ fn cannot_amend_files_in_ways_that_cause_conflicts() {
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   1#0 beafa55 remove file
-┊│     b:q D file
+┊│     1#0:q D file
 ┊●   1#1 623d399 change file
-┊│     6:q M file
+┊│     1#1:q M file
 ┊●   1#2 5c348d7 add file
-┊│     5:q A file
+┊│     1#2:q A file
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1208,12 +1208,12 @@ Amended f55169f to create 13baa98
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   1#0 13baa98 add three
-┊│     1:q A file
-┊│     1:o A three
+┊│     1#0:q A file
+┊│     1#0:o A three
 ┊●   1#1 f63361f add two
-┊│     f:t A two
+┊│     1#1:t A two
 ┊●   1#2 ea345ba add one
-┊│     e:k A one
+┊│     1#2:k A one
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1326,9 +1326,9 @@ Uncommitted f55169f
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   1#0 f63361f add two
-┊│     f:t A two
+┊│     1#0:t A two
 ┊●   1#1 ea345ba add one
-┊│     e:k A one
+┊│     1#1:k A one
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1357,11 +1357,11 @@ fn squash_into_zz_to_uncommit_file() {
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   1#0 f55169f add three
-┊│     f5:o A three
+┊│     1#0:o A three
 ┊●   1#1 f63361f add two
-┊│     f6:t A two
+┊│     1#1:t A two
 ┊●   1#2 ea345ba add one
-┊│     e:k A one
+┊│     1#2:k A one
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1388,9 +1388,9 @@ Uncommitted from f55169f
 ┊╭┄br [a-branch-1]
 ┊●   1#0 aba928c add three (no changes)
 ┊●   1#1 f63361f add two
-┊│     f:t A two
+┊│     1#1:t A two
 ┊●   1#2 ea345ba add one
-┊│     e:k A one
+┊│     1#2:k A one
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1422,11 +1422,11 @@ fn cannot_uncommit_files_in_ways_that_cause_conflicts() {
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   1#0 beafa55 remove file
-┊│     b:q D file
+┊│     1#0:q D file
 ┊●   1#1 623d399 change file
-┊│     6:q M file
+┊│     1#1:q M file
 ┊●   1#2 5c348d7 add file
-┊│     5:q A file
+┊│     1#2:q A file
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M

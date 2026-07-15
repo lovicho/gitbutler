@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use bstr::BString;
-use but_core::{HunkHeader, ref_metadata::StackId};
+use but_core::{ChangeId, HunkHeader, ref_metadata::StackId};
 use but_hunk_assignment::HunkAssignment;
 use but_rebase::graph_rebase::mutate::InsertSide;
 use but_workspace::commit::squash_commits::MessageCombinationStrategy;
@@ -47,6 +47,14 @@ fn commit_cli_id(hex: &str, id: &str) -> Arc<CliId> {
         commit_id: commit_id(hex),
         id: id.into(),
         change_id: None,
+    })
+}
+
+fn commit_cli_id_with_change_id(hex: &str, id: &str, change_id: u128) -> Arc<CliId> {
+    Arc::new(CliId::Commit {
+        commit_id: commit_id(hex),
+        id: id.into(),
+        change_id: Some(ChangeId::from_number_for_testing(change_id)),
     })
 }
 
@@ -245,6 +253,57 @@ fn restore_returns_matching_branch_after_short_ids_change() {
         Cursor::restore(&selected_cli_id, &lines),
         Some(Cursor(1)),
         "the stable branch name should win over matching the previous short ID"
+    );
+}
+
+#[test]
+fn restore_returns_matching_commit_by_change_id_after_object_id_changes() {
+    let selected_cli_id =
+        commit_cli_id_with_change_id("1111111111111111111111111111111111111111", "c0", 1);
+    let lines = vec![line(StatusOutputLineData::Commit {
+        cli_id: commit_cli_id_with_change_id("2222222222222222222222222222222222222222", "c1", 1),
+        stack_id: None,
+        classification: CommitClassification::LocalOnly,
+    })];
+
+    assert_eq!(
+        Cursor::restore(&selected_cli_id, &lines),
+        Some(Cursor(0)),
+        "a stable change ID should preserve selection across a commit rewrite"
+    );
+}
+
+#[test]
+fn restore_does_not_match_commits_with_different_change_ids() {
+    let object_id = "1111111111111111111111111111111111111111";
+    let selected_cli_id = commit_cli_id_with_change_id(object_id, "c0", 1);
+    let lines = vec![line(StatusOutputLineData::Commit {
+        cli_id: commit_cli_id_with_change_id(object_id, "c1", 2),
+        stack_id: None,
+        classification: CommitClassification::LocalOnly,
+    })];
+
+    assert_eq!(
+        Cursor::restore(&selected_cli_id, &lines),
+        None,
+        "change IDs should take precedence when both commits provide one"
+    );
+}
+
+#[test]
+fn restore_falls_back_to_commit_id_when_a_change_id_is_missing() {
+    let object_id = "1111111111111111111111111111111111111111";
+    let selected_cli_id = commit_cli_id_with_change_id(object_id, "c0", 1);
+    let lines = vec![line(StatusOutputLineData::Commit {
+        cli_id: commit_cli_id(object_id, "c1"),
+        stack_id: None,
+        classification: CommitClassification::LocalOnly,
+    })];
+
+    assert_eq!(
+        Cursor::restore(&selected_cli_id, &lines),
+        Some(Cursor(0)),
+        "the object ID should restore selection when either change ID is unavailable"
     );
 }
 
@@ -2094,17 +2153,17 @@ fn is_selectable_in_rub_mode_requires_available_target() {
 
     assert!(is_selectable_in_mode(
         &selectable_line,
-        &mode,
+        mode.as_ref(),
         FilesStatusFlag::All
     ));
     assert!(!is_selectable_in_mode(
         &blocked_line,
-        &mode,
+        mode.as_ref(),
         FilesStatusFlag::All
     ));
     assert!(!is_selectable_in_mode(
         &not_selectable_line,
-        &mode,
+        mode.as_ref(),
         FilesStatusFlag::All
     ));
 }
@@ -2194,7 +2253,7 @@ fn is_selectable_is_true_in_inline_reword_mode() {
     // Inline reword intentionally returns selectable so rows are not dimmed during editing.
     assert!(is_selectable_in_mode(
         &selectable_line,
-        &inline_reword,
+        inline_reword.as_ref(),
         FilesStatusFlag::All
     ));
 }
@@ -2224,12 +2283,12 @@ fn is_selectable_in_commit_mode_scopes_commit_targets_to_stack() {
 
     assert!(is_selectable_in_mode(
         &same_stack_commit_line,
-        &mode,
+        mode.as_ref(),
         FilesStatusFlag::All
     ));
     assert!(!is_selectable_in_mode(
         &other_stack_commit_line,
-        &mode,
+        mode.as_ref(),
         FilesStatusFlag::All
     ));
 }

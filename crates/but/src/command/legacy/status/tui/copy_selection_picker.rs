@@ -5,6 +5,7 @@ use bstr::{BString, ByteSlice as _};
 use but_core::{CommitOwned, TreeChange, diff::CommitDetails};
 use but_ctx::Context;
 use but_hunk_assignment::HunkAssignment;
+use gitbutler_commit::commit_ext::CommitExt;
 use gix::{prelude::ObjectIdExt as _, refs::FullName};
 use nonempty::NonEmpty;
 use ratatui::style::Style;
@@ -25,6 +26,7 @@ pub fn commit_picker(
         NonEmpty::from_slice(&[
             CopySelectionItem::CommitSha(commit_id),
             CopySelectionItem::ShortCommitSha(commit_id),
+            CopySelectionItem::ChangeId(commit_id),
             CopySelectionItem::CommitMessageTitle(commit_id),
             CopySelectionItem::WholeCommitMessage(commit_id),
             CopySelectionItem::CommitAuthor(commit_id),
@@ -106,6 +108,7 @@ pub enum CopySelectionItem {
 
     // commits
     CommitSha(gix::ObjectId),
+    ChangeId(gix::ObjectId),
     ShortCommitSha(gix::ObjectId),
     CommitMessageTitle(gix::ObjectId),
     WholeCommitMessage(gix::ObjectId),
@@ -125,6 +128,7 @@ impl CopySelectionItem {
     fn as_str(&self) -> &'static str {
         match self {
             CopySelectionItem::CommitSha(_) => "Commit ID",
+            CopySelectionItem::ChangeId(_) => "Change ID",
             CopySelectionItem::ShortCommitSha(_) => "Short commit ID",
             CopySelectionItem::CommitMessageTitle(_) => "Message title",
             CopySelectionItem::WholeCommitMessage(_) => "Whole message",
@@ -143,6 +147,11 @@ impl CopySelectionItem {
         let repo = ctx.repo.get()?;
         match self {
             CopySelectionItem::CommitSha(commit_id) => Ok(commit_id.to_string()),
+            CopySelectionItem::ChangeId(commit_id) => {
+                let commit = repo.find_commit(*commit_id)?;
+                let change_id = commit.change_id().context("commit has no change id")?;
+                Ok(change_id.to_string())
+            }
             CopySelectionItem::ShortCommitSha(commit_id) => {
                 Ok(commit_id.to_hex_with_len(7).to_string())
             }

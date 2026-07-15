@@ -313,7 +313,14 @@ impl WorkspaceCommitWithId {
             .into_iter()
             .flat_map(|(changes, _change_id, short_id)| {
                 changes.into_iter().map(move |change| TreeChangeWithId {
-                    short_id: format!("{}:{}", self.short_id, short_id.clone()),
+                    short_id: format!(
+                        "{}:{}",
+                        self.change_id
+                            .as_ref()
+                            .map(|cid| &cid.short_id)
+                            .unwrap_or(&self.short_id),
+                        short_id.clone()
+                    ),
                     inner: change,
                 })
             })
@@ -350,7 +357,14 @@ impl<'a> Node<'a> for &'a WorkspaceCommitWithId {
                     cli_id: CliId::CommittedFile {
                         commit_id: self.commit_id(),
                         path: tree_changes.first().path.clone(),
-                        id: format!("{}:{}", self.short_id, short_id),
+                        id: format!(
+                            "{}:{}",
+                            self.change_id
+                                .as_ref()
+                                .map(|cid| &cid.short_id)
+                                .unwrap_or(&self.short_id),
+                            short_id
+                        ),
                     },
                 }));
             }

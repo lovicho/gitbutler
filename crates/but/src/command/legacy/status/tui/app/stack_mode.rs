@@ -602,7 +602,7 @@ impl App {
                 *mode = Mode::Normal(NormalMode::default());
             });
             if let Some(line) = self.cursor.selected_line(&self.status_lines)
-                && !is_selectable_in_mode(line, &self.mode, self.flags.show_files)
+                && !is_selectable_in_mode(line, self.mode.as_ref(), self.flags.show_files)
             {
                 messages.push(Message::MoveCursorDown(1));
             }

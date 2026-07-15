@@ -210,12 +210,12 @@ fn committed_file_to_uncommitted_area() -> anyhow::Result<()> {
 ...
               "changes": [
                 {
-                  "cliId": "e:n",
+                  "cliId": "1#0:n",
                   "filePath": "a.txt",
                   "changeType": "modified"
                 },
                 {
-                  "cliId": "e:p",
+                  "cliId": "1#0:p",
                   "filePath": "b.txt",
                   "changeType": "modified"
                 }
@@ -225,12 +225,12 @@ fn committed_file_to_uncommitted_area() -> anyhow::Result<()> {
 ...
               "changes": [
                 {
-                  "cliId": "f:n",
+                  "cliId": "1#1:n",
                   "filePath": "a.txt",
                   "changeType": "added"
                 },
                 {
-                  "cliId": "f:p",
+                  "cliId": "1#1:p",
                   "filePath": "b.txt",
                   "changeType": "added"
                 }
@@ -287,7 +287,7 @@ Uncommitted changes
 ...
               "changes": [
                 {
-                  "cliId": "c:n",
+                  "cliId": "1#0:n",
                   "filePath": "a.txt",
                   "changeType": "modified"
                 }
@@ -297,12 +297,12 @@ Uncommitted changes
 ...
               "changes": [
                 {
-                  "cliId": "f:n",
+                  "cliId": "1#1:n",
                   "filePath": "a.txt",
                   "changeType": "added"
                 },
                 {
-                  "cliId": "f:p",
+                  "cliId": "1#1:p",
                   "filePath": "b.txt",
                   "changeType": "added"
                 }
@@ -733,8 +733,8 @@ fn uncommit_command_with_discard_on_commit() -> anyhow::Result<()> {
 ┊
 ┊╭┄g0 [A]
 ┊●   1 fce8ecc create a.txt and b.txt
-┊│     f:n A a.txt
-┊│     f:p A b.txt
+┊│     1:n A a.txt
+┊│     1:p A b.txt
 ┊●   9477ae7 add A
 ┊│     9:t A A
 ├╯
@@ -817,8 +817,8 @@ fn uncommit_command_with_discard_on_committed_file() -> anyhow::Result<()> {
 ┊
 ┊╭┄g0 [A]
 ┊●   1 fce8ecc create a.txt and b.txt
-┊│     f:n A a.txt
-┊│     f:p A b.txt
+┊│     1:n A a.txt
+┊│     1:p A b.txt
 ┊●   9477ae7 add A
 ┊│     9:t A A
 ├╯
@@ -861,7 +861,7 @@ Hint: run `but help` for all commands
 ┊
 ┊╭┄g0 [A]
 ┊●   1 993513d create a.txt and b.txt
-┊│     99:n A a.txt
+┊│     1:n A a.txt
 ┊●   9477ae7 add A
 ┊│     94:t A A
 ├╯
@@ -2235,8 +2235,8 @@ fn rubbing_modified_and_renamed_file() {
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   1 e3f869d add files
-┊│     e:q A file
-┊│     e:k A file-2
+┊│     1:q A file
+┊│     1:k A file-2
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -2258,8 +2258,8 @@ Hint: run `but help` for all commands
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   1 e3f869d add files
-┊│     e:q A file
-┊│     e:k A file-2
+┊│     1:q A file
+┊│     1:k A file-2
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -2278,7 +2278,7 @@ Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "mes
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   1 3a32c97 add files
-┊│     3:q A file
+┊│     1:q A file
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -2306,8 +2306,8 @@ fn committing_modified_and_renamed_file() {
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   1 e3f869d add files
-┊│     e:q A file
-┊│     e:k A file-2
+┊│     1:q A file
+┊│     1:k A file-2
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -2329,8 +2329,8 @@ Hint: run `but help` for all commands
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   1 e3f869d add files
-┊│     e:q A file
-┊│     e:k A file-2
+┊│     1:q A file
+┊│     1:k A file-2
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -2349,11 +2349,11 @@ Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "mes
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   1#0 e419886 change file
-┊│     e4:q M file
-┊│     e4:k D file-2
+┊│     1#0:q M file
+┊│     1#0:k D file-2
 ┊●   1#1 e3f869d add files
-┊│     e3:q A file
-┊│     e3:k A file-2
+┊│     1#1:q A file
+┊│     1#1:k A file-2
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M

@@ -41,16 +41,17 @@ export const UncommittedChangesRow: FC<{
 	changes: Array<TreeChange>;
 	projectId: string;
 }> = ({ changes, projectId }) => {
-	const treeChangeDiffs = useQueries({
+	const lineStats = useQueries({
 		queries: changes.map((change) => treeChangeDiffsQueryOptions({ projectId, change })),
+		combine: (results) => getLineStats(results.map((result) => result.data)),
 	});
-	const lineStats = getLineStats(treeChangeDiffs.map((result) => result.data));
 
 	const operand = uncommittedChangesOperand;
 	const isDefaultMode = useAppSelector(
 		(state) => projectSlice.selectors.selectOutlineModeState(state, projectId)._tag === "Default",
 	);
-	const discardWorktreeChanges = useDiscardWorktreeChanges();
+	const { isPending: isDiscardWorktreeChangesPending, mutate: discardWorktreeChanges } =
+		useDiscardWorktreeChanges();
 
 	const dispatch = useAppDispatch();
 	const enterAbsorbMode = (source: Operand, sourceTarget: AbsorptionTarget) => {
@@ -72,7 +73,7 @@ export const UncommittedChangesRow: FC<{
 	};
 
 	const discardChanges = () => {
-		discardWorktreeChanges.mutate({
+		discardWorktreeChanges({
 			projectId,
 			changes: changes.map((change) => createDiffSpec(change, [])),
 		});
@@ -93,7 +94,7 @@ export const UncommittedChangesRow: FC<{
 		}),
 		nativeMenuItem({
 			label: "Discard Changes",
-			enabled: changes.length > 0 && !discardWorktreeChanges.isPending,
+			enabled: changes.length > 0 && !isDiscardWorktreeChangesPending,
 			onSelect: discardChanges,
 		}),
 	];

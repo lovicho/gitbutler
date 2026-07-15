@@ -333,6 +333,17 @@ pub enum Subcommands {
     #[clap(hide = true, name = "_diff2")]
     _Diff2(diff2::Platform),
 
+    /// Debug command for expanding a CLI ID into any matching resources.
+    ///
+    /// This is not considered a feature of the CLI and should not be relied upon. It is only for
+    /// testing and debugging.
+    #[cfg(feature = "but-2")]
+    #[clap(hide = true, name = "_expand")]
+    _Expand {
+        /// CLI ID to parse.
+        cli_id: CliIdArg,
+    },
+
     /// Stages a file or hunk to a specific branch.
     ///
     /// Without arguments, opens an interactive TUI for selecting files and hunks to stage.

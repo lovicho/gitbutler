@@ -217,6 +217,18 @@ const SKILL_FORMATS: &[SkillFormat] = &[
         path_components: &[".cursor", "skills", "gitbutler"],
     },
     SkillFormat {
+        name: "Kiro",
+        description: "Kiro skill format",
+        availability: SkillFormatAvailability::LocalAndGlobal,
+        path_components: &[".kiro", "skills", "gitbutler"],
+    },
+    SkillFormat {
+        name: "Junie",
+        description: "Junie skill format",
+        availability: SkillFormatAvailability::LocalAndGlobal,
+        path_components: &[".junie", "skills", "gitbutler"],
+    },
+    SkillFormat {
         name: "Windsurf",
         description: "Windsurf local skill format",
         availability: SkillFormatAvailability::LocalOnly,
@@ -269,7 +281,21 @@ fn skill_format_for_agent(agent: Agent, global: bool) -> Option<&'static SkillFo
         Agent::TabnineCli => "Tabnine CLI",
         Agent::Pi => "Pi",
         Agent::Devin => "Devin",
-        Agent::V0 | Agent::PulumiNeo | Agent::Unknown => return None,
+        Agent::KiroCli => "Kiro",
+        Agent::Junie => "Junie",
+        Agent::QwenCode
+        | Agent::GitLabDuoCli
+        | Agent::KiloCode
+        | Agent::Hermes
+        | Agent::V0
+        | Agent::PulumiNeo
+        | Agent::AmazonQ
+        | Agent::CodeBuddy
+        | Agent::GrokBuild
+        | Agent::Warp
+        | Agent::OpenHands
+        | Agent::OpenClaw
+        | Agent::Unknown => return None,
     };
     skill_format_for_name(name, global)
 }

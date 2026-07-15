@@ -63,8 +63,12 @@ export const CommitForm: FC<{
 	targetComboboxItems: Array<CommitTargetComboboxItem>;
 }> = ({ projectId, commitTarget, targetComboboxItems }) => {
 	const dispatch = useAppDispatch();
-	const commitCreateMutation = useCommitCreate({ projectId });
-	const commitAmendMutation = useCommitAmend({ projectId });
+	const { isPending: isCommitCreatePending, mutate: commitCreate } = useCommitCreate({
+		projectId,
+	});
+	const { isPending: isCommitAmendPending, mutate: commitAmend } = useCommitAmend({
+		projectId,
+	});
 
 	const { data: worktreeChanges } = useQuery(changesInWorktreeQueryOptions(projectId));
 
@@ -78,7 +82,7 @@ export const CommitForm: FC<{
 		...headInfoQueryOptions(projectId),
 		select: getHeadInfoIndex,
 	});
-	const isCommitOrAmendPending = commitCreateMutation.isPending || commitAmendMutation.isPending;
+	const isCommitOrAmendPending = isCommitCreatePending || isCommitAmendPending;
 	const canCommitOrAmendBase = isDefaultMode && commitTarget !== null && !isCommitOrAmendPending;
 	const canCommit = canCommitOrAmendBase;
 	const canAmend =
@@ -103,7 +107,7 @@ export const CommitForm: FC<{
 	const createCommit = () => {
 		if (!commitTarget) return;
 
-		commitCreateMutation.mutate(
+		commitCreate(
 			{
 				message: commitTextareaRef.current?.value ?? "",
 				relativeTo: commitTarget.relativeTo,
@@ -126,7 +130,7 @@ export const CommitForm: FC<{
 		});
 		if (commitId === null) throw new Error("No commit to amend.");
 
-		commitAmendMutation.mutate({ commitId });
+		commitAmend({ commitId });
 	};
 	const submit: SubmitEventHandler = (event) => {
 		event.preventDefault();

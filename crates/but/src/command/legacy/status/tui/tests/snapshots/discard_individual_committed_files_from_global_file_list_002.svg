@@ -30,15 +30,15 @@
     <text x="66 74" y="96" style="fill:#000000;font-weight:bold;">&lt;&lt;</text>
     <text x="90 98 106 114 122 130 138" y="96" style="fill:#000000;font-weight:bold;">discard</text>
     <text x="154 162" y="96" style="fill:#000000;font-weight:bold;">&gt;&gt;</text>
-    <text x="178 186 194" y="96" style="fill:#0000AA;font-weight:bold;text-decoration:line-through;">b:k</text>
+    <text x="178 186 194" y="96" style="fill:#0000AA;font-weight:bold;text-decoration:line-through;">1:k</text>
     <text x="210" y="96" style="fill:#FFFFFF;font-weight:bold;text-decoration:line-through;">A</text>
     <text x="226 234 242" y="96" style="fill:#00AA00;font-weight:bold;text-decoration:line-through;">one</text>
     <text x="10 18" y="114" style="fill:#CCCCCC;">┊│</text>
-    <text x="66 74 82" y="114" style="fill:#0000AA;font-weight:bold;">b:o</text>
+    <text x="66 74 82" y="114" style="fill:#0000AA;font-weight:bold;">1:o</text>
     <text x="98" y="114" style="fill:#CCCCCC;">A</text>
     <text x="114 122 130 138 146" y="114" style="fill:#00AA00;">three</text>
     <text x="10 18" y="132" style="fill:#CCCCCC;">┊│</text>
-    <text x="66 74 82" y="132" style="fill:#0000AA;font-weight:bold;">b:t</text>
+    <text x="66 74 82" y="132" style="fill:#0000AA;font-weight:bold;">1:t</text>
     <text x="98" y="132" style="fill:#CCCCCC;">A</text>
     <text x="114 122 130" y="132" style="fill:#00AA00;">two</text>
     <text x="10 18" y="150" style="fill:#CCCCCC;">├╯</text>

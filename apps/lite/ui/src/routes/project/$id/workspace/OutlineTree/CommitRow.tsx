@@ -101,15 +101,15 @@ export const CommitRow: FC<
 	};
 	const { hasConflicts } = dryRunCommit ? dryRunCommit : commitWithOptimisticMessage;
 
-	const commitInsertBlankMutation = useCommitInsertBlank();
-	const commitDiscardMutation = useCommitDiscard();
-	const commitUncommitMutation = useCommitUncommit();
-	const commitRewordMutation = useCommitReword();
-	const commitAmendMutation = useCommitAmend({ projectId });
-	const branchCreateMutation = useBranchCreate();
+	const { mutate: commitInsertBlank } = useCommitInsertBlank();
+	const { isPending: isCommitDiscardPending, mutate: commitDiscard } = useCommitDiscard();
+	const { isPending: isCommitUncommitPending, mutate: commitUncommit } = useCommitUncommit();
+	const { mutateAsync: commitReword } = useCommitReword();
+	const { isPending: isCommitAmendPending, mutate: commitAmend } = useCommitAmend({ projectId });
+	const { mutate: branchCreate } = useBranchCreate();
 
 	const insertBlankCommit = (side: "above" | "below") => {
-		commitInsertBlankMutation.mutate({
+		commitInsertBlank({
 			projectId,
 			relativeTo: { type: "commit", subject: commit.id },
 			side,
@@ -118,7 +118,7 @@ export const CommitRow: FC<
 	};
 
 	const createDependentBranch = (side: "above" | "below") => {
-		branchCreateMutation.mutate(
+		branchCreate(
 			{
 				projectId,
 				newRef: null,
@@ -158,7 +158,7 @@ export const CommitRow: FC<
 			commit: commitOperandV,
 		});
 
-		commitDiscardMutation.mutate(
+		commitDiscard(
 			{
 				projectId,
 				subjectCommitId: commit.id,
@@ -210,7 +210,7 @@ export const CommitRow: FC<
 		startCommitMessageTransition(async () => {
 			setOptimisticMessage(trimmed);
 			try {
-				await commitRewordMutation.mutateAsync({
+				await commitReword({
 					projectId,
 					commitId: commit.id,
 					message: trimmed,
@@ -233,7 +233,7 @@ export const CommitRow: FC<
 	const relativeTo: RelativeTo = { type: "commit", subject: commit.id };
 
 	const amendCommit = () => {
-		commitAmendMutation.mutate({ commitId: commit.id });
+		commitAmend({ commitId: commit.id });
 	};
 
 	const setCommitTarget = () => {
@@ -264,7 +264,7 @@ export const CommitRow: FC<
 		nativeMenuItem({
 			label: "Amend Commit",
 			accelerator: toElectronAccelerator(outlineHotkeys.amendCommit.hotkey),
-			enabled: isDefaultMode && !commitAmendMutation.isPending,
+			enabled: isDefaultMode && !isCommitAmendPending,
 			onSelect: amendCommit,
 		}),
 		nativeMenuItem({
@@ -333,15 +333,15 @@ export const CommitRow: FC<
 		nativeMenuSeparator,
 		nativeMenuItem({
 			label: "Delete Commit",
-			enabled: !commitDiscardMutation.isPending,
+			enabled: !isCommitDiscardPending,
 			accelerator: toElectronAccelerator(outlineHotkeys.deleteCommit.hotkey),
 			onSelect: deleteCommit,
 		}),
 		nativeMenuItem({
 			label: "Uncommit",
-			enabled: !commitUncommitMutation.isPending,
+			enabled: !isCommitUncommitPending,
 			onSelect: () =>
-				commitUncommitMutation.mutate({
+				commitUncommit({
 					projectId,
 					assignTo: null,
 					subjectCommitIds: [commit.id],

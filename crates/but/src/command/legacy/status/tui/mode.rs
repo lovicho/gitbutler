@@ -5,8 +5,8 @@ use crate::{
         InlineRewordMode,
         app::mark::MarksRef,
         app::{
-            CommandMode, CommitMode, CommitSource, JumpMode, MoveMode, MoveSource, MoveStackMode,
-            NormalMode, PickChangesMode, RubMode, RubSource, StackMode,
+            CommandMode, CommandReturnMode, CommitMode, CommitSource, JumpMode, MoveMode,
+            MoveSource, MoveStackMode, NormalMode, PickChangesMode, RubMode, RubSource, StackMode,
         },
         render::ModeRender,
     },
@@ -48,31 +48,22 @@ impl Mode {
     }
 
     pub fn marks_ref(&self) -> MarksRef<'_> {
+        self.as_ref().marks_ref()
+    }
+
+    pub fn as_ref(&self) -> ModeRef<'_> {
         match self {
-            Mode::Normal(normal_mode) => normal_mode.marks.as_ref(),
-            Mode::Rub(rub_mode) => match &rub_mode.source {
-                RubSource::Marks(marks) => marks.as_ref(),
-                RubSource::CliId(..) => MarksRef::Empty,
-            },
-            Mode::Commit(commit_mode) => match &*commit_mode.source {
-                CommitSource::Marks(hunks) => MarksRef::from_hunks(hunks),
-                CommitSource::UncommittedArea(..)
-                | CommitSource::Uncommitted(..)
-                | CommitSource::Stack(..) => MarksRef::Empty,
-            },
-            Mode::PickChanges(pick_uncommitted_mode) => {
-                MarksRef::from_hunk_slice(&pick_uncommitted_mode.marks)
-            }
-            Mode::Details(details_mode) => details_mode.return_mode.marks(),
-            Mode::Move(move_mode) => match &*move_mode.source {
-                MoveSource::Marks(commits) => MarksRef::from_commits(commits),
-                MoveSource::Commit { .. } | MoveSource::Branch { .. } => MarksRef::Empty,
-            },
-            Mode::InlineReword(..)
-            | Mode::Command(..)
-            | Mode::Stack(..)
-            | Mode::MoveStack(..)
-            | Mode::Jump(..) => MarksRef::Empty,
+            Mode::Normal(inner) => ModeRef::Normal(inner),
+            Mode::Rub(inner) => ModeRef::Rub(inner),
+            Mode::InlineReword(inner) => ModeRef::InlineReword(inner),
+            Mode::Command(inner) => ModeRef::Command(inner),
+            Mode::Commit(inner) => ModeRef::Commit(inner),
+            Mode::Move(inner) => ModeRef::Move(inner),
+            Mode::Details(inner) => ModeRef::Details(inner),
+            Mode::Stack(inner) => ModeRef::Stack(inner),
+            Mode::MoveStack(inner) => ModeRef::MoveStack(inner),
+            Mode::PickChanges(inner) => ModeRef::PickChanges(inner),
+            Mode::Jump(inner) => ModeRef::Jump(inner),
         }
     }
 }
@@ -126,6 +117,56 @@ impl ModeDiscriminant {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum ModeRef<'a> {
+    Normal(&'a NormalMode),
+    Rub(&'a RubMode),
+    #[expect(dead_code)]
+    InlineReword(&'a InlineRewordMode),
+    Command(&'a CommandMode),
+    Commit(&'a CommitMode),
+    Move(&'a MoveMode),
+    Details(&'a DetailsMode),
+    Stack(&'a StackMode),
+    MoveStack(&'a MoveStackMode),
+    PickChanges(&'a PickChangesMode),
+    Jump(&'a JumpMode),
+}
+
+impl<'a> ModeRef<'a> {
+    pub fn marks_ref(self) -> MarksRef<'a> {
+        match self {
+            ModeRef::Normal(normal_mode) => normal_mode.marks.as_ref(),
+            ModeRef::Rub(rub_mode) => match &rub_mode.source {
+                RubSource::Marks(marks) => marks.as_ref(),
+                RubSource::CliId(..) => MarksRef::Empty,
+            },
+            ModeRef::Commit(commit_mode) => match &*commit_mode.source {
+                CommitSource::Marks(hunks) => MarksRef::from_hunks(hunks),
+                CommitSource::UncommittedArea(..)
+                | CommitSource::Uncommitted(..)
+                | CommitSource::Stack(..) => MarksRef::Empty,
+            },
+            ModeRef::PickChanges(pick_uncommitted_mode) => {
+                MarksRef::from_hunk_slice(&pick_uncommitted_mode.marks)
+            }
+            ModeRef::Details(details_mode) => details_mode.return_mode.marks(),
+            ModeRef::Command(command_mode) => match &command_mode.return_mode {
+                CommandReturnMode::Normal(normal_mode) => normal_mode.marks.as_ref(),
+                CommandReturnMode::Details(details_mode) => details_mode.return_mode.marks(),
+            },
+            ModeRef::Move(move_mode) => match &*move_mode.source {
+                MoveSource::Marks(commits) => MarksRef::from_commits(commits),
+                MoveSource::Commit { .. } | MoveSource::Branch { .. } => MarksRef::Empty,
+            },
+            ModeRef::InlineReword(..)
+            | ModeRef::Stack(..)
+            | ModeRef::MoveStack(..)
+            | ModeRef::Jump(..) => MarksRef::Empty,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct DetailsMode {
     pub full_screen: bool,
@@ -148,6 +189,13 @@ impl DetailsReturnMode {
             DetailsReturnMode::PickChanges(pick_uncommitted_mode) => {
                 MarksRef::from_hunk_slice(&pick_uncommitted_mode.marks)
             }
+        }
+    }
+
+    pub fn as_ref(&self) -> ModeRef<'_> {
+        match self {
+            DetailsReturnMode::Normal(inner) => ModeRef::Normal(inner),
+            DetailsReturnMode::PickChanges(inner) => ModeRef::PickChanges(inner),
         }
     }
 }

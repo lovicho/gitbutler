@@ -297,6 +297,7 @@ fn event_from_change(change: gitbutler_watcher::Change) -> WatcherEvent {
         gitbutler_watcher::Change::WorktreeChanges {
             project_id,
             changes,
+            changed_paths: _,
         } => WatcherEvent {
             name: format!("project://{project_id}/worktree_changes"),
             payload: serde_json::json!(WatcherPayload::WorktreeChanges(

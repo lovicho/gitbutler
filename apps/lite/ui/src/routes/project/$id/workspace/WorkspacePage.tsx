@@ -75,23 +75,25 @@ const useWorkspaceHotkeys = (projectId: string) => {
 	);
 	const outlineVisible = !detailsFullWindow;
 
-	const restoreSnapshotMutation = useRestoreSnapshot({ projectId });
+	const { isPending: isRestoreSnapshotPending, mutate: restoreSnapshot } = useRestoreSnapshot({
+		projectId,
+	});
 
 	useHotkeys([
 		{
 			hotkey: globalHotkeys.redo.hotkey,
-			callback: () => restoreSnapshotMutation.mutate("redo"),
+			callback: () => restoreSnapshot("redo"),
 			options: {
-				enabled: outlineMode._tag === "Default" && !restoreSnapshotMutation.isPending,
+				enabled: outlineMode._tag === "Default" && !isRestoreSnapshotPending,
 				meta: globalHotkeys.redo.meta,
 				ignoreInputs: true,
 			},
 		},
 		{
 			hotkey: globalHotkeys.undo.hotkey,
-			callback: () => restoreSnapshotMutation.mutate("undo"),
+			callback: () => restoreSnapshot("undo"),
 			options: {
-				enabled: outlineMode._tag === "Default" && !restoreSnapshotMutation.isPending,
+				enabled: outlineMode._tag === "Default" && !isRestoreSnapshotPending,
 				meta: globalHotkeys.undo.meta,
 				ignoreInputs: true,
 			},

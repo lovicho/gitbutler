@@ -86,7 +86,7 @@ impl Handler {
         ctx: &mut Context,
         perm: &mut RepoExclusive,
     ) -> Result<()> {
-        _ = self.emit_worktree_changes(project_id, ctx, perm);
+        _ = self.emit_worktree_changes(project_id, ctx, perm, paths);
         Ok(())
     }
 
@@ -95,6 +95,7 @@ impl Handler {
         project_id: ProjectHandleOrLegacyProjectId,
         ctx: &mut Context,
         perm: &mut RepoExclusive,
+        paths: Vec<PathBuf>,
     ) -> Result<()> {
         let context_lines = ctx.settings.context_lines;
         let (repo, ws, mut db) = ctx.workspace_and_db_mut_with_perm(perm.read_permission())?;
@@ -128,6 +129,7 @@ impl Handler {
         let _ = self.emit_app_event(Change::WorktreeChanges {
             project_id,
             changes,
+            changed_paths: Arc::from(paths),
         });
         Ok(())
     }
@@ -184,7 +186,7 @@ impl Handler {
                     })?;
                 }
                 INDEX => {
-                    let _ = self.emit_worktree_changes(project_id.clone(), ctx, perm);
+                    let _ = self.emit_worktree_changes(project_id.clone(), ctx, perm, Vec::new());
                 }
                 HEAD => {
                     let repo = ctx.repo.get()?;

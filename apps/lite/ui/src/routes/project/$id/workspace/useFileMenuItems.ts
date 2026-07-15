@@ -46,10 +46,13 @@ export const useFileMenuItems = ({
 	const selectedProject = projects.find((project) => project.id === projectId);
 	if (!selectedProject) throw new Error("Could not find selected project");
 
-	const commitUncommitChanges = useCommitUncommitChanges();
-	const commitDiscardChanges = useCommitDiscardChanges();
-	const discardWorktreeChanges = useDiscardWorktreeChanges();
-	const openInEditor = useOpenInEditor();
+	const { isPending: isCommitUncommitChangesPending, mutate: commitUncommitChanges } =
+		useCommitUncommitChanges();
+	const { isPending: isCommitDiscardChangesPending, mutate: commitDiscardChanges } =
+		useCommitDiscardChanges();
+	const { isPending: isDiscardWorktreeChangesPending, mutate: discardWorktreeChanges } =
+		useDiscardWorktreeChanges();
+	const { isPending: isOpenInEditorPending, mutate: openInEditor } = useOpenInEditor();
 	const cutFile = () => {
 		dispatch(
 			projectSlice.actions.enterKeyboardTransferMode({
@@ -65,10 +68,10 @@ export const useFileMenuItems = ({
 			preferredEditor
 				? nativeMenuItem({
 						label: `Open in ${preferredEditor.name}`,
-						enabled: !openInEditor.isPending,
+						enabled: !isOpenInEditorPending,
 						accelerator: toElectronAccelerator(changesFileHotkeys.openInEditor.hotkey),
 						onSelect: () =>
-							openInEditor.mutate({
+							openInEditor({
 								projectId,
 								editorId: preferredEditor.id,
 								path,
@@ -81,9 +84,9 @@ export const useFileMenuItems = ({
 							editors?.map((editor) =>
 								nativeMenuItem({
 									label: editor.name,
-									enabled: !openInEditor.isPending,
+									enabled: !isOpenInEditorPending,
 									onSelect: () =>
-										openInEditor.mutate({
+										openInEditor({
 											projectId,
 											editorId: editor.id,
 											path,
@@ -125,7 +128,7 @@ export const useFileMenuItems = ({
 					Match.withReturnType<Array<Array<NativeMenuItem>>>(),
 					Match.when({ parent: { _tag: "Commit" } }, (operand) => {
 						const uncommit = () =>
-							commitUncommitChanges.mutate({
+							commitUncommitChanges({
 								projectId,
 								commitId: operand.parent.commitId,
 								assignTo: null,
@@ -133,7 +136,7 @@ export const useFileMenuItems = ({
 								dryRun: false,
 							});
 						const discard = () =>
-							commitDiscardChanges.mutate({
+							commitDiscardChanges({
 								projectId,
 								commitId: operand.parent.commitId,
 								changes: [createDiffSpec(change, [])],
@@ -144,12 +147,12 @@ export const useFileMenuItems = ({
 							[
 								nativeMenuItem({
 									label: "Uncommit",
-									enabled: !commitUncommitChanges.isPending,
+									enabled: !isCommitUncommitChangesPending,
 									onSelect: uncommit,
 								}),
 								nativeMenuItem({
 									label: "Discard Changes",
-									enabled: !commitDiscardChanges.isPending,
+									enabled: !isCommitDiscardChangesPending,
 									onSelect: discard,
 								}),
 							],
@@ -173,7 +176,7 @@ export const useFileMenuItems = ({
 							focusSelectionScope("outline");
 						};
 						const discard = () =>
-							discardWorktreeChanges.mutate({
+							discardWorktreeChanges({
 								projectId,
 								changes: [createDiffSpec(change, [])],
 							});
@@ -187,7 +190,7 @@ export const useFileMenuItems = ({
 								}),
 								nativeMenuItem({
 									label: "Discard Changes",
-									enabled: !discardWorktreeChanges.isPending,
+									enabled: !isDiscardWorktreeChangesPending,
 									onSelect: discard,
 								}),
 							],

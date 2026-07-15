@@ -77,6 +77,12 @@ impl AgentTarget {
             detect_agent::Agent::Poolside => Some(Self::Poolside),
             detect_agent::Agent::Devin | detect_agent::Agent::Dirac => Some(Self::AgentSkills),
             detect_agent::Agent::GeminiCli
+            | detect_agent::Agent::KiroCli
+            | detect_agent::Agent::Junie
+            | detect_agent::Agent::QwenCode
+            | detect_agent::Agent::GitLabDuoCli
+            | detect_agent::Agent::KiloCode
+            | detect_agent::Agent::Hermes
             | detect_agent::Agent::Augment
             | detect_agent::Agent::Antigravity
             | detect_agent::Agent::Replit
@@ -90,6 +96,12 @@ impl AgentTarget {
             | detect_agent::Agent::Trae
             | detect_agent::Agent::TabnineCli
             | detect_agent::Agent::Pi
+            | detect_agent::Agent::AmazonQ
+            | detect_agent::Agent::CodeBuddy
+            | detect_agent::Agent::GrokBuild
+            | detect_agent::Agent::Warp
+            | detect_agent::Agent::OpenHands
+            | detect_agent::Agent::OpenClaw
             | detect_agent::Agent::Unknown => None,
         }
     }

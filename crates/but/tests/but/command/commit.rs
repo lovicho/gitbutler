@@ -19,8 +19,8 @@ fn commit_moved_file_replaced_by_directory() {
 ┊
 ┊╭┄g0 [A]
 ┊●   1 25c45c4 Commit everything
-┊│     2:q A A/file
-┊│     2:p R B
+┊│     1:q A A/file
+┊│     1:p R B
 ┊●   9477ae7 add A
 ┊│     9:t A A
 ├╯
@@ -1569,7 +1569,7 @@ Created new independent branch 'a-branch-1'
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   1 d215849 Add file
-┊│     d:q A file
+┊│     1:q A file
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M

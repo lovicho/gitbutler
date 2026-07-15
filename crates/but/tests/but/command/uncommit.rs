@@ -80,9 +80,9 @@ fn uncommit_different_files_from_different_commits_same_branch() -> anyhow::Resu
 ┊
 ┊╭┄g0 [A]
 ┊●   1#0 3d21fdd add c2
-┊│     3:w A c2.txt
+┊│     1#0:w A c2.txt
 ┊●   1#1 28b88fc add c1
-┊│     2:l A c1.txt
+┊│     1#1:l A c1.txt
 ┊●   9477ae7 add A
 ┊│     9:t A A
 ├╯
@@ -290,11 +290,11 @@ fn uncommit_same_file_from_different_commits_same_branch() -> anyhow::Result<()>
 ┊
 ┊╭┄g0 [A]
 ┊●   1#0 485d867 write v3
-┊│     4:s M f.txt
+┊│     1#0:s M f.txt
 ┊●   1#1 adeaad7 write v2
-┊│     a:s M f.txt
+┊│     1#1:s M f.txt
 ┊●   1#2 825d09f write v1
-┊│     8:s A f.txt
+┊│     1#2:s A f.txt
 ┊●   9477ae7 add A
 ┊│     9:t A A
 ├╯
@@ -400,14 +400,14 @@ fn uncommit_different_files_from_different_commits_different_branches() -> anyho
 ┊
 ┊╭┄g0 [A]
 ┊●   1#0 1675e0b add fa
-┊│     1:s A fa.txt
+┊│     1#0:s A fa.txt
 ┊●   9477ae7 add A
 ┊│     9:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
 ┊●   1#1 30b330c add fb
-┊│     3:q A fb.txt
+┊│     1#1:q A fb.txt
 ┊●   d3e2ba3 add B
 ┊│     d:p A B
 ├╯

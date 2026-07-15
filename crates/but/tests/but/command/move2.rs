@@ -976,9 +976,9 @@ Moved 1 changes from 9ac4652 to new commit 8e35f84 below commit fe12bcd
 ┊╭┄g0 [A]
 ┊●   ywx 01a55b8 add second (no changes)
 ┊●   zll 12b9152 add first
-┊│     1:l A first
+┊│     zl:l A first
 ┊●   1 8e35f84 (no commit message)
-┊│     8:w A second
+┊│     1:w A second
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -1028,9 +1028,9 @@ Moved 1 changes from fe12bcd to new commit c019027 above commit 9ac4652
 ┊
 ┊╭┄g0 [A]
 ┊●   1 c019027 (no commit message)
-┊│     c:l A first
+┊│     1:l A first
 ┊●   ywx 38b1f1a add second
-┊│     3:w A second
+┊│     y:w A second
 ┊●   d8dfd0f add first (no changes)
 ├╯
 ┊
@@ -1082,11 +1082,11 @@ Moved 1 changes from 9ac4652 to new commit 8e35f84 on new branch 'a-branch-1' be
 ┊╭┄g0 [A]
 ┊●   ywx 01a55b8 add second (no changes)
 ┊●   zll 12b9152 add first
-┊│     1:l A first
+┊│     zl:l A first
 ┊│
 ┊├┄br [a-branch-1]
 ┊●   1 8e35f84 (no commit message)
-┊│     8:w A second
+┊│     1:w A second
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -1136,11 +1136,11 @@ Moved 1 changes from fe12bcd to new commit c019027 on new branch 'a-branch-1' ab
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   1 c019027 (no commit message)
-┊│     c:l A first
+┊│     1:l A first
 ┊│
 ┊├┄g0 [A]
 ┊●   ywx 38b1f1a add second
-┊│     3:w A second
+┊│     y:w A second
 ┊●   d8dfd0f add first (no changes)
 ├╯
 ┊
@@ -1194,7 +1194,7 @@ Moved 1 changes from d3e2ba3 to new commit be174de to the tip of branch 'A'
 ┊
 ┊╭┄g0 [A]
 ┊●   1 be174de (no commit message)
-┊│     b:p A B
+┊│     1:p A B
 ┊●   9477ae7 add A
 ┊│     9:t A A
 ├╯
@@ -1250,7 +1250,7 @@ Moved 1 changes from 9ac4652 to new commit 8e35f84 on new branch 'new-branch'
 ┊
 ┊╭┄ne [new-branch]
 ┊●   1 8e35f84 (no commit message)
-┊│     8e:w A second
+┊│     1:w A second
 ├╯
 ┊
 ┊╭┄g0 [A]
@@ -1306,7 +1306,7 @@ Moved 1 changes from 9ac4652 to new commit 8e35f84 on new branch 'a-branch-1'
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   1 8e35f84 (no commit message)
-┊│     8e:w A second
+┊│     1:w A second
 ├╯
 ┊
 ┊╭┄g0 [A]
@@ -1348,11 +1348,11 @@ fn move_file_should_be_order_independent() {
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   1#0 e3d3e3a Prepare for moves!
-┊│     e:u R moved
-┊│     e:p A new/file
-┊│     e:t A unrelated
+┊│     1#0:u R moved
+┊│     1#0:p A new/file
+┊│     1#0:t A unrelated
 ┊●   1#1 24ac1e5 Add new file
-┊│     2:n A new
+┊│     1#1:n A new
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1377,12 +1377,12 @@ Moved 2 changes from e3d3e3a to new commit 99ef17e above commit e3d3e3a
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   1#0 99ef17e (no commit message)
-┊│     9:u R moved
-┊│     9:p A new/file
+┊│     1#0:u R moved
+┊│     1#0:p A new/file
 ┊●   1#1 f94e59f Prepare for moves!
-┊│     f:t A unrelated
+┊│     1#1:t A unrelated
 ┊●   1#2 24ac1e5 Add new file
-┊│     2:n A new
+┊│     1#2:n A new
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1409,12 +1409,12 @@ Moved 2 changes from e3d3e3a to new commit 99ef17e above commit e3d3e3a
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   1#0 99ef17e (no commit message)
-┊│     9:u R moved
-┊│     9:p A new/file
+┊│     1#0:u R moved
+┊│     1#0:p A new/file
 ┊●   1#1 f94e59f Prepare for moves!
-┊│     f:t A unrelated
+┊│     1#1:t A unrelated
 ┊●   1#2 24ac1e5 Add new file
-┊│     2:n A new
+┊│     1#2:n A new
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M

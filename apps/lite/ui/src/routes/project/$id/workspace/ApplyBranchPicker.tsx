@@ -86,7 +86,11 @@ export const ApplyBranchPicker: FC<Props> = ({ open, onOpenChange, projectId }) 
 		...headInfoQueryOptions(projectId),
 		select: getHeadInfoIndex,
 	});
-	const branchesQuery = useQuery({
+	const {
+		data: items = [],
+		isError,
+		isPending,
+	} = useQuery({
 		...listBranchesQueryOptions({ projectId, filter: null }),
 		select: (branches) =>
 			branches
@@ -95,20 +99,19 @@ export const ApplyBranchPicker: FC<Props> = ({ open, onOpenChange, projectId }) 
 				.filter((option) => !headInfoIndex?.branchContextByRefBytes(encodeBytes(option.branchRef))),
 	});
 	const [now] = useState(() => Date.now());
-	const items = branchesQuery.data ?? [];
-	const apply = useApply();
+	const { mutate: apply } = useApply();
 	const statusLabel =
 		items.length === 0
-			? branchesQuery.isPending
+			? isPending
 				? "Loading branches…"
-				: branchesQuery.isError
+				: isError
 					? "Unable to load branches."
 					: undefined
 			: undefined;
 
 	const selectBranch = (option: ApplyBranchPickerOption) => {
 		onOpenChange(false);
-		apply.mutate({ projectId, existingBranch: option.branchRef });
+		apply({ projectId, existingBranch: option.branchRef });
 	};
 
 	return (

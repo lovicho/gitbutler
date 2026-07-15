@@ -3,8 +3,12 @@ use crossterm::event::{KeyCode, KeyModifiers};
 use snapbox::file;
 use temp_env::with_var;
 
-use crate::command::legacy::status::tui::tests::utils::{
-    TestTuiOptions, test_tui, test_tui_with_options,
+use crate::command::legacy::status::{
+    TuiRunOptions,
+    tui::{
+        backstack::BackstackEntry,
+        tests::utils::{TestTuiOptions, test_tui, test_tui_with_options},
+    },
 };
 
 mod binds {
@@ -736,5 +740,420 @@ fn highlighting_multiline_things_work() {
 
     tui.input('d').assert_rendered_term_svg_eq(file![
         "snapshots/highlighting_multiline_things_work_001.svg"
+    ]);
+}
+
+#[test]
+fn marking_and_discarding_multiple_uncommitted_hunks() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.file("one", "content of one");
+    env.file("two", "content of two");
+    env.file("three", "content of three");
+
+    let mut tui = test_tui(env);
+
+    tui.input('d');
+    tui.input('l');
+    tui.input('j');
+    tui.input(' ').assert_rendered_term_svg_eq(file![
+        "snapshots/marking_and_discarding_multiple_uncommitted_hunks_001.svg"
+    ]);
+    tui.input(' ').assert_rendered_term_svg_eq(file![
+        "snapshots/marking_and_discarding_multiple_uncommitted_hunks_002.svg"
+    ]);
+    tui.input('x');
+    tui.input('y').assert_rendered_term_svg_eq(file![
+        "snapshots/marking_and_discarding_multiple_uncommitted_hunks_003.svg"
+    ]);
+    tui.input(' ').assert_rendered_term_svg_eq(file![
+        "snapshots/marking_and_discarding_multiple_uncommitted_hunks_004.svg"
+    ]);
+    tui.input('x');
+    tui.input('y').assert_rendered_term_svg_eq(file![
+        "snapshots/marking_and_discarding_multiple_uncommitted_hunks_005.svg"
+    ]);
+}
+
+#[test]
+fn detail_marks_use_the_backstack() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.file("one", "content of one");
+    env.file("two", "content of two");
+    env.file("three", "content of three");
+
+    let mut tui = test_tui(env);
+
+    tui.input('d');
+    tui.input('l');
+    tui.input('j')
+        .assert_backstack_eq([
+            BackstackEntry::LeaveNormalMode,
+            BackstackEntry::OpenSplitDetailsView,
+        ])
+        .assert_rendered_term_svg_eq(file!["snapshots/detail_marks_use_the_backstack_001.svg"]);
+    tui.input(' ');
+    tui.input(' ')
+        .assert_backstack_eq([
+            BackstackEntry::Mark,
+            BackstackEntry::LeaveNormalMode,
+            BackstackEntry::OpenSplitDetailsView,
+        ])
+        .assert_rendered_term_svg_eq(file!["snapshots/detail_marks_use_the_backstack_002.svg"]);
+    tui.input('g');
+    tui.input(KeyCode::Esc)
+        .assert_backstack_eq([
+            BackstackEntry::LeaveNormalMode,
+            BackstackEntry::OpenSplitDetailsView,
+        ])
+        .assert_rendered_term_svg_eq(file!["snapshots/detail_marks_use_the_backstack_003.svg"]);
+}
+
+#[test]
+fn detail_marks_clear_when_leaving_detail_mode() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.file("one", "content of one");
+    env.file("two", "content of two");
+    env.file("three", "content of three");
+
+    let mut tui = test_tui(env);
+
+    tui.input('d');
+    tui.input('l');
+    tui.input('j').assert_backstack_eq([
+        BackstackEntry::LeaveNormalMode,
+        BackstackEntry::OpenSplitDetailsView,
+    ]);
+    tui.input(' ');
+    tui.input(' ').assert_backstack_eq([
+        BackstackEntry::Mark,
+        BackstackEntry::LeaveNormalMode,
+        BackstackEntry::OpenSplitDetailsView,
+    ]);
+    tui.input('h')
+        .assert_backstack_eq([BackstackEntry::OpenSplitDetailsView])
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/detail_marks_clear_when_leaving_detail_mode_001.svg"
+        ]);
+}
+
+#[test]
+fn detail_marks_clear_when_closing_detail_view() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.file("one", "content of one");
+    env.file("two", "content of two");
+    env.file("three", "content of three");
+
+    let mut tui = test_tui(env);
+
+    tui.input('d');
+    tui.input('l');
+    tui.input('j').assert_backstack_eq([
+        BackstackEntry::LeaveNormalMode,
+        BackstackEntry::OpenSplitDetailsView,
+    ]);
+    tui.input(' ');
+    tui.input(' ').assert_backstack_eq([
+        BackstackEntry::Mark,
+        BackstackEntry::LeaveNormalMode,
+        BackstackEntry::OpenSplitDetailsView,
+    ]);
+    tui.input('d').assert_backstack_eq([]);
+    tui.input('d').assert_rendered_term_svg_eq(file![
+        "snapshots/detail_marks_clear_when_closing_detail_view_001.svg"
+    ]);
+}
+
+#[test]
+fn detail_marks_clear_when_closing_full_screen_detail_view() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.file("one", "content of one");
+    env.file("two", "content of two");
+    env.file("three", "content of three");
+
+    let mut tui = test_tui(env);
+
+    tui.input((KeyModifiers::SHIFT, 'D'));
+    tui.render_with_messages(None, Vec::new());
+    tui.input('j');
+    tui.input(' ');
+    tui.input(' ')
+        .assert_backstack_eq([
+            BackstackEntry::Mark,
+            BackstackEntry::LeaveNormalMode,
+            BackstackEntry::OpenFullScreenDetailsView,
+        ])
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/detail_marks_clear_when_closing_full_screen_detail_view_001.svg"
+        ]);
+    tui.input((KeyModifiers::SHIFT, 'D'))
+        .assert_backstack_eq([])
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/detail_marks_clear_when_closing_full_screen_detail_view_002.svg"
+        ]);
+    tui.input((KeyModifiers::SHIFT, 'D'))
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/detail_marks_clear_when_closing_full_screen_detail_view_003.svg"
+        ]);
+}
+
+#[test]
+fn marks_stay_when_going_straight_from_split_to_fullscreen() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.file("one", "content of one");
+    env.file("two", "content of two");
+    env.file("three", "content of three");
+
+    let mut tui = test_tui(env);
+
+    tui.input('d');
+    tui.input('l');
+    tui.input('j');
+    tui.input(' ').assert_backstack_eq([
+        BackstackEntry::Mark,
+        BackstackEntry::LeaveNormalMode,
+        BackstackEntry::OpenSplitDetailsView,
+    ]);
+
+    // go directly from split to full screen, the marks should be maintained
+    // the top entry in the backstack should be the mark
+    tui.input((KeyModifiers::SHIFT, 'D'))
+        .assert_backstack_eq([
+            BackstackEntry::Mark,
+            BackstackEntry::LeaveNormalMode,
+            BackstackEntry::OpenSplitDetailsView,
+        ])
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/marks_stay_when_going_straight_from_split_to_fullscreen_001.svg"
+        ]);
+
+    // closing the full screen details should also clear the marks and backstack
+    tui.input((KeyModifiers::SHIFT, 'D'))
+        .assert_backstack_eq([])
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/marks_stay_when_going_straight_from_split_to_fullscreen_002.svg"
+        ]);
+}
+
+#[test]
+fn discards_normal_mode_marks_when_marking_details() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.file("one", "content of one");
+    env.file("two", "content of two");
+    env.file("three", "content of three");
+
+    let mut tui = test_tui(env);
+
+    tui.input('j').assert_rendered_contains("┊      k A one");
+    tui.input(' ')
+        .assert_backstack_eq([BackstackEntry::Mark])
+        .assert_rendered_contains("┊✔︎     k A one");
+
+    tui.input('d');
+
+    // focusing the details should preserve the marks
+    tui.input('l')
+        .assert_rendered_contains("┊✔︎     k A one")
+        .assert_backstack_eq([
+            BackstackEntry::LeaveNormalMode,
+            BackstackEntry::OpenSplitDetailsView,
+            BackstackEntry::Mark,
+        ])
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/discards_normal_mode_marks_when_marking_details_001.svg"
+        ]);
+
+    // but marking from the details view clears the normal mode marks
+    tui.input('j');
+    tui.input(' ')
+        .assert_rendered_contains("┊      k A one")
+        .assert_backstack_eq([
+            BackstackEntry::Mark,
+            BackstackEntry::LeaveNormalMode,
+            BackstackEntry::OpenSplitDetailsView,
+        ])
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/discards_normal_mode_marks_when_marking_details_002.svg"
+        ]);
+}
+
+#[test]
+fn discards_normal_mode_marks_when_marking_full_screen_details() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.file("one", "content of one");
+    env.file("two", "content of two");
+    env.file("three", "content of three");
+
+    let mut tui = test_tui(env);
+
+    tui.input('j');
+    tui.input(' ')
+        .assert_backstack_eq([BackstackEntry::Mark])
+        .assert_rendered_contains("┊✔︎     k A one");
+
+    tui.input((KeyModifiers::SHIFT, 'D'));
+    tui.render_with_messages(None, Vec::new())
+        .assert_backstack_eq([
+            BackstackEntry::LeaveNormalMode,
+            BackstackEntry::OpenFullScreenDetailsView,
+            BackstackEntry::Mark,
+        ]);
+
+    tui.input('j');
+    tui.input(' ')
+        .assert_backstack_eq([
+            BackstackEntry::Mark,
+            BackstackEntry::LeaveNormalMode,
+            BackstackEntry::OpenFullScreenDetailsView,
+        ])
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/discards_normal_mode_marks_when_marking_full_screen_details_001.svg"
+        ]);
+
+    tui.input((KeyModifiers::SHIFT, 'D'))
+        .assert_rendered_contains("┊      k A one")
+        .assert_backstack_eq([])
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/discards_normal_mode_marks_when_marking_full_screen_details_002.svg"
+        ]);
+}
+
+#[test]
+fn discards_pick_changes_marks_when_marking_details() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.file("one", "content of one");
+    env.file("two", "content of two");
+    env.file("three", "content of three");
+
+    let mut tui = test_tui_with_options(
+        env,
+        TestTuiOptions {
+            run_options: TuiRunOptions::PickChanges,
+            ..Default::default()
+        },
+    );
+
+    tui.reload();
+    tui.input(' ')
+        .assert_backstack_eq([BackstackEntry::Mark])
+        .assert_rendered_contains("┊✔︎     k A one");
+
+    tui.input('l')
+        .assert_rendered_contains("┊✔︎     k A one")
+        .assert_backstack_eq([
+            BackstackEntry::LeaveNormalMode,
+            BackstackEntry::OpenSplitDetailsView,
+            BackstackEntry::Mark,
+        ]);
+
+    tui.input('g');
+    tui.input('j');
+    tui.input(' ')
+        .assert_backstack_eq([
+            BackstackEntry::Mark,
+            BackstackEntry::LeaveNormalMode,
+            BackstackEntry::OpenSplitDetailsView,
+        ])
+        .assert_rendered_contains("┊      k A one")
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/discards_pick_changes_marks_when_marking_details_001.svg"
+        ]);
+}
+
+#[test]
+fn keeps_normal_mode_marks_when_detail_section_cannot_be_marked() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    let mut tui = test_tui(env);
+
+    tui.input([KeyCode::Down, KeyCode::Down]);
+    tui.input(' ').assert_backstack_eq([BackstackEntry::Mark]);
+
+    tui.input('d');
+    tui.input('l').assert_backstack_eq([
+        BackstackEntry::LeaveNormalMode,
+        BackstackEntry::OpenSplitDetailsView,
+        BackstackEntry::Mark,
+    ]);
+
+    // Committed detail sections cannot be marked, so attempting to mark one preserves normal marks.
+    tui.input(' ')
+        .assert_backstack_eq([
+            BackstackEntry::LeaveNormalMode,
+            BackstackEntry::OpenSplitDetailsView,
+            BackstackEntry::Mark,
+        ])
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/keeps_normal_mode_marks_when_detail_section_cannot_be_marked_001.svg"
+        ]);
+}
+
+#[test]
+fn leaving_command_mode_from_details_puts_you_back_in_details() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    env.file("one", "content of one");
+    env.file("two", "content of two");
+    env.file("three", "content of three");
+
+    let mut tui = test_tui(env);
+
+    tui.input('d');
+    tui.input('l');
+    tui.input('j');
+    tui.input(' ');
+    tui.input('k');
+
+    tui.input(':').assert_backstack_eq([
+        BackstackEntry::LeaveCommandMode,
+        BackstackEntry::Mark,
+        BackstackEntry::LeaveNormalMode,
+        BackstackEntry::OpenSplitDetailsView,
+    ]);
+    tui.input(KeyCode::Esc)
+        .assert_backstack_eq([
+            BackstackEntry::Mark,
+            BackstackEntry::LeaveNormalMode,
+            BackstackEntry::OpenSplitDetailsView,
+        ])
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/leaving_command_mode_from_details_puts_you_back_in_details_001.svg"
+        ]);
+}
+
+#[test]
+fn dims_unselectable_lines_while_in_details_mode() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    env.file("one", "content of one");
+    env.file("two", "content of two");
+    env.file("three", "content of three");
+
+    let mut tui = test_tui(env);
+
+    tui.input(' ');
+    tui.input('d');
+    tui.input('l').assert_rendered_term_svg_eq(file![
+        "snapshots/dims_unselectable_lines_while_in_details_mode_001.svg"
     ]);
 }

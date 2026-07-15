@@ -204,6 +204,8 @@ impl Subcommands {
             },
             Subcommands::Completions { .. } => Completions,
             Subcommands::Help { .. } => Unknown,
+            #[cfg(feature = "but-2")]
+            Subcommands::_Expand { .. } => Unknown,
             Subcommands::Alias(alias_args::Platform { cmd }) => match cmd {
                 None | Some(alias_args::Subcommands::List) => AliasCheck,
                 Some(alias_args::Subcommands::Add { .. }) => AliasAdd,

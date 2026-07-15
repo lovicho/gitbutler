@@ -1,3 +1,5 @@
+use std::{path::PathBuf, sync::Arc};
+
 use but_ctx::ProjectHandleOrLegacyProjectId;
 use gitbutler_operating_modes::OperatingMode;
 
@@ -29,5 +31,9 @@ pub enum Change {
     WorktreeChanges {
         project_id: ProjectHandleOrLegacyProjectId,
         changes: but_hunk_assignment::WorktreeChanges,
+        /// The paths of the files that changed.
+        ///
+        /// This will be empty if the index changed.
+        changed_paths: Arc<[PathBuf]>,
     },
 }

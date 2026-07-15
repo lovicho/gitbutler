@@ -169,7 +169,7 @@ export const BranchRow: FC<
 	);
 	const [isRenamePending, startRenameTransition] = useTransition();
 
-	const updateBranchNameMutation = useUpdateBranchName({
+	const { mutateAsync: updateBranchName } = useUpdateBranchName({
 		projectId,
 		stackId,
 		branchRef: refName.fullNameBytes,
@@ -188,11 +188,14 @@ export const BranchRow: FC<
 
 	const toastManager = Toast.useToastManager();
 
-	const workspaceBranchAndAncestorsPushMutation = useWorkspaceBranchAndAncestorsPush();
-	const commitInsertBlankMutation = useCommitInsertBlank();
-	const tearOffBranchMutation = useTearOffBranch();
-	const removeBranchMutation = useRemoveBranch();
-	const branchCreateMutation = useBranchCreate();
+	const {
+		isPending: isWorkspaceBranchAndAncestorsPushPending,
+		mutate: workspaceBranchAndAncestorsPush,
+	} = useWorkspaceBranchAndAncestorsPush();
+	const { mutate: commitInsertBlank } = useCommitInsertBlank();
+	const { isPending: isTearOffBranchPending, mutate: tearOffBranch } = useTearOffBranch();
+	const { mutate: removeBranch } = useRemoveBranch();
+	const { mutate: branchCreate } = useBranchCreate();
 
 	const pushesMultipleBranches = downstackPushStatus.downstackBranches > 1;
 
@@ -202,7 +205,7 @@ export const BranchRow: FC<
 		startRenameTransition(async () => {
 			setOptimisticBranchDisplayName(trimmed);
 			try {
-				await updateBranchNameMutation.mutateAsync({
+				await updateBranchName({
 					projectId,
 					stackId,
 					branchName: refName.displayName,
@@ -246,7 +249,7 @@ export const BranchRow: FC<
 	};
 
 	const insertBlankCommit = (side: "above" | "below") => {
-		commitInsertBlankMutation.mutate({
+		commitInsertBlank({
 			projectId,
 			relativeTo,
 			side,
@@ -255,7 +258,7 @@ export const BranchRow: FC<
 	};
 
 	const createDependentBranch = (side: "above" | "below") => {
-		branchCreateMutation.mutate(
+		branchCreate(
 			{
 				projectId,
 				newRef: null,
@@ -289,16 +292,16 @@ export const BranchRow: FC<
 		);
 	};
 
-	const tearOffBranch = () => {
-		tearOffBranchMutation.mutate({
+	const tearOff = () => {
+		tearOffBranch({
 			projectId,
 			subjectBranch: decodeBytes(refName.fullNameBytes),
 			dryRun: false,
 		});
 	};
 
-	const workspaceBranchAndAncestorsPush = () => {
-		workspaceBranchAndAncestorsPushMutation.mutate({
+	const pushBranch = () => {
+		workspaceBranchAndAncestorsPush({
 			projectId,
 			branch: decodeBytes(refName.fullNameBytes),
 			withForce: downstackPushStatus.anyPushRequiresForce,
@@ -321,8 +324,7 @@ export const BranchRow: FC<
 	};
 
 	const workspaceBranchAndAncestorsPushDisabled =
-		workspaceBranchAndAncestorsPushMutation.isPending ||
-		downstackPushStatusDisabled(downstackPushStatus);
+		isWorkspaceBranchAndAncestorsPushPending || downstackPushStatusDisabled(downstackPushStatus);
 
 	const pushMenuLabel = pushesMultipleBranches
 		? downstackPushStatus.anyPushRequiresForce
@@ -337,7 +339,7 @@ export const BranchRow: FC<
 			label: pushMenuLabel,
 			enabled: !workspaceBranchAndAncestorsPushDisabled,
 			accelerator: toElectronAccelerator(outlineHotkeys.workspaceBranchAndAncestorsPush.hotkey),
-			onSelect: workspaceBranchAndAncestorsPush,
+			onSelect: pushBranch,
 		}),
 		nativeMenuSeparator,
 		nativeMenuItem({
@@ -393,14 +395,14 @@ export const BranchRow: FC<
 		nativeMenuSeparator,
 		nativeMenuItem({
 			label: "Tear Off Branch",
-			enabled: canTearOffBranch && !tearOffBranchMutation.isPending,
-			onSelect: tearOffBranch,
+			enabled: canTearOffBranch && !isTearOffBranchPending,
+			onSelect: tearOff,
 		}),
 		nativeMenuItem({
 			label: "Delete Branch Reference",
 			enabled: canRemoveBranch,
 			onSelect: () =>
-				removeBranchMutation.mutate({
+				removeBranch({
 					projectId,
 					stackId,
 					branchName: decodeBytes(refName.fullNameBytes),
@@ -473,7 +475,7 @@ export const BranchRow: FC<
 						{downstackPushStatus.anyRequiresPush &&
 							(() => {
 								const workspaceBranchAndAncestorsPushDisabledReason =
-									workspaceBranchAndAncestorsPushMutation.isPending
+									isWorkspaceBranchAndAncestorsPushPending
 										? "pushing"
 										: downstackPushStatus.anyHasConflicts
 											? "disabled due to conflicts"
@@ -493,7 +495,7 @@ export const BranchRow: FC<
 									<Tooltip.Root>
 										<Tooltip.Trigger
 											aria-label={pushButtonLabel}
-											onClick={workspaceBranchAndAncestorsPush}
+											onClick={pushBranch}
 											className={getRowButtonClassName({ variant: "outline" })}
 											// We pass `disabled` here because we want to disable the button, not
 											// the tooltip. Other props should be passed above.
@@ -505,7 +507,7 @@ export const BranchRow: FC<
 											}
 										>
 											Push
-											{workspaceBranchAndAncestorsPushMutation.isPending ? (
+											{isWorkspaceBranchAndAncestorsPushPending ? (
 												<Icon name="spinner" />
 											) : pushesMultipleBranches ? (
 												<Icon size={12} name="arrow-double-up" />

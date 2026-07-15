@@ -67,6 +67,7 @@ pub fn default_key_binds() -> KeyBinds {
                 builder.details_scroll_up().register();
                 builder.details_scroll_down().register();
 
+                builder.details_mark().register();
                 builder.details_discard().register();
 
                 builder.details_jump_up().register();
@@ -96,6 +97,11 @@ pub fn default_key_binds() -> KeyBinds {
                 builder.back().register();
 
                 builder.reload().register();
+                builder
+                    .confirm_and_quit()
+                    .hide_from_hotbar()
+                    .show_only_in_normal_mode_help_section()
+                    .register();
             }
             ModeDiscriminant::InlineReword => {
                 builder.reword_confirm().register();
@@ -752,7 +758,6 @@ impl KeyBindsBuilder<'_> {
             press().code(KeyCode::Enter).alt_code(KeyCode::Char('c')),
             || Message::ConfirmAndQuit,
         )
-        .long_description("Rub target into selection")
     }
 
     fn rub_use_target_message(&mut self) -> KeyBindsInModesBuilder<'_> {
@@ -909,6 +914,12 @@ impl KeyBindsBuilder<'_> {
                 .alt_code(KeyCode::Down),
             || Message::Details(DetailsMessage::ScrollDown(1)),
         )
+    }
+
+    fn details_mark(&mut self) -> KeyBindsInModesBuilder<'_> {
+        self.key_bind("mark", press().code(KeyCode::Char(' ')), || {
+            Message::Details(DetailsMessage::Mark)
+        })
     }
 
     fn details_discard(&mut self) -> KeyBindsInModesBuilder<'_> {

@@ -1,12 +1,15 @@
 use std::{ffi::OsString, process::Command};
 
+use anyhow::{Context as _, anyhow};
 use crossterm::event::Event;
 use ratatui::{backend::Backend, prelude::*};
 use ratatui_textarea::{CursorMove, TextArea};
 
 use crate::{
     command::legacy::status::tui::{
-        App, Message, Mode, ReloadCause, ToastKind, TuiInputOutputChannel, format_error_for_tui,
+        App, Message, Mode, NormalMode, ReloadCause, ToastKind, TuiInputOutputChannel,
+        format_error_for_tui,
+        mode::{DetailsMode, ModeRef},
         render::ModeRender,
     },
     tui::TerminalGuard,
@@ -17,6 +20,22 @@ use crate::{
 pub struct CommandMode {
     pub textarea: Box<TextArea<'static>>,
     pub kind: CommandModeKind,
+    pub return_mode: CommandReturnMode,
+}
+
+#[derive(Debug, Clone)]
+pub enum CommandReturnMode {
+    Normal(NormalMode),
+    Details(DetailsMode),
+}
+
+impl CommandReturnMode {
+    pub fn as_ref(&self) -> ModeRef<'_> {
+        match self {
+            CommandReturnMode::Normal(inner) => ModeRef::Normal(inner),
+            CommandReturnMode::Details(inner) => ModeRef::Details(inner),
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -83,13 +102,46 @@ impl App {
         textarea.set_cursor_line_style(self.theme.default);
         textarea.move_cursor(CursorMove::End);
 
-        self.mode
-            .update_and_push_leave_normal_mode(&mut self.backstack, |mode| {
-                *mode = Mode::Command(CommandMode {
-                    textarea: Box::new(textarea),
-                    kind,
-                });
+        self.mode.update(&mut self.backstack, |backstack, mode| {
+            let previous_mode = std::mem::take(mode);
+            let return_mode = match previous_mode {
+                Mode::Normal(normal_mode) => CommandReturnMode::Normal(normal_mode),
+                Mode::Details(details_mode) => CommandReturnMode::Details(details_mode),
+                Mode::Rub(..)
+                | Mode::InlineReword(..)
+                | Mode::Command(..)
+                | Mode::Commit(..)
+                | Mode::Move(..)
+                | Mode::Stack(..)
+                | Mode::MoveStack(..)
+                | Mode::PickChanges(..)
+                | Mode::Jump(..) => CommandReturnMode::Normal(NormalMode::default()),
+            };
+            backstack.push_leave_command_mode();
+
+            *mode = Mode::Command(CommandMode {
+                textarea: Box::new(textarea),
+                kind,
+                return_mode,
             });
+        });
+    }
+
+    pub(super) fn restore_mode_before_command(&mut self) -> bool {
+        self.mode.update(&mut self.backstack, |backstack, mode| {
+            let _ = backstack;
+            let previous_mode = std::mem::take(mode);
+            let Mode::Command(CommandMode { return_mode, .. }) = previous_mode else {
+                *mode = previous_mode;
+                return false;
+            };
+
+            *mode = match return_mode {
+                CommandReturnMode::Normal(normal_mode) => Mode::Normal(normal_mode),
+                CommandReturnMode::Details(details_mode) => Mode::Details(details_mode),
+            };
+            true
+        })
     }
 
     fn handle_command_input(&mut self, ev: Event) {
@@ -111,12 +163,11 @@ impl App {
         T: TerminalGuard,
         anyhow::Error: From<<T::Backend as Backend>::Error>,
     {
-        //
         // `cfg!(test)` is false for integration tests but we currently don't have integration
         // tests of the TUI so thats fine for now.
         const IN_TEST: bool = cfg!(test);
 
-        let Mode::Command(CommandMode { textarea, kind }) = &*self.mode else {
+        let Mode::Command(CommandMode { textarea, kind, .. }) = &*self.mode else {
             messages.push(Message::EnterNormalModeAfterConfirmingOperation);
             return Ok(());
         };
@@ -130,15 +181,26 @@ impl App {
         let mut cmd = match kind {
             CommandModeKind::But => {
                 let binary_path = current_exe_for_but_exec()?;
-                let args = shell_words::split(input)?.into_iter().map(OsString::from);
+                let args = match shell_words::split(input) {
+                    Ok(args) => args.into_iter().map(OsString::from),
+                    Err(err) => {
+                        self.push_transient_error(err.into());
+                        return Ok(());
+                    }
+                };
                 let mut cmd = Command::new(binary_path);
                 cmd.args(args);
                 cmd
             }
             CommandModeKind::Shell => {
-                let mut args = shell_words::split(input)?.into_iter().map(OsString::from);
+                let mut args = match shell_words::split(input) {
+                    Ok(args) => args.into_iter().map(OsString::from),
+                    Err(err) => {
+                        self.push_transient_error(err.into());
+                        return Ok(());
+                    }
+                };
                 let Some(binary) = args.next() else {
-                    messages.push(Message::EnterNormalModeAfterConfirmingOperation);
                     return Ok(());
                 };
                 let mut cmd = Command::new(binary);
@@ -147,7 +209,18 @@ impl App {
             }
         };
 
-        let status = cmd.spawn()?.wait()?;
+        let mut child = match cmd.spawn() {
+            Ok(child) => child,
+            Err(err) => {
+                if err.kind() == std::io::ErrorKind::NotFound {
+                    self.push_transient_error(anyhow!("command not found"));
+                    return Ok(());
+                } else {
+                    return Err(err).context("failed to start command");
+                }
+            }
+        };
+        let status = child.wait()?;
 
         if !IN_TEST {
             out.prompt_single_line("\npress enter to continue...")?;
@@ -159,10 +232,10 @@ impl App {
                 Message::Reload(None, ReloadCause::Mutation),
             ]);
         } else {
-            self.push_transient_error(anyhow::Error::msg(format!(
+            self.push_transient_error(anyhow!(
                 "command exited with status {}",
                 format_exit_status(status)
-            )));
+            ));
         }
 
         drop(_suspend_guard);

@@ -1076,7 +1076,7 @@ Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "mes
 ┊
 ┊╭┄g0 [A]
 ┊●   1 f86bb7b (no commit message)
-┊│     f:k A one
+┊│     1:k A one
 ┊●   9477ae7 add A
 ┊│     9:t A A
 ├╯
@@ -1134,9 +1134,9 @@ q:2 file│
 ┊
 ┊╭┄g0 [A]
 ┊●   1#0 f0a3edc (no commit message)
-┊│     f:q M file
+┊│     1#0:q M file
 ┊●   1#1 21b345e (no commit message)
-┊│     2:q A file
+┊│     1#1:q A file
 ┊●   9477ae7 add A
 ┊│     9:t A A
 ├╯
@@ -1161,9 +1161,9 @@ Hint: run `but help` for all commands
 ┊
 ┊╭┄g0 [A]
 ┊●   1#0 f0a3edc (no commit message)
-┊│     f:q M file
+┊│     1#0:q M file
 ┊●   1#1 21b345e (no commit message)
-┊│     2:q A file
+┊│     1#1:q A file
 ┊●   9477ae7 add A
 ┊│     9:t A A
 ├╯
@@ -1221,9 +1221,9 @@ q:2 file│
 ┊
 ┊╭┄g0 [A]
 ┊●   1#0 f0a3edc (no commit message)
-┊│     f:q M file
+┊│     1#0:q M file
 ┊●   1#1 21b345e (no commit message)
-┊│     2:q A file
+┊│     1#1:q A file
 ┊●   9477ae7 add A
 ┊│     9:t A A
 ├╯
@@ -1248,9 +1248,9 @@ Hint: run `but help` for all commands
 ┊
 ┊╭┄g0 [A]
 ┊●   1#0 f0a3edc (no commit message)
-┊│     f:q M file
+┊│     1#0:q M file
 ┊●   1#1 21b345e (no commit message)
-┊│     2:q A file
+┊│     1#1:q A file
 ┊●   9477ae7 add A
 ┊│     9:t A A
 ├╯
@@ -1317,8 +1317,8 @@ Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "mes
 ┊
 ┊╭┄g0 [A]
 ┊●   1 e1c5473 (no commit message)
-┊│     e:m A path/to/first.txt
-┊│     e:r A path/to/second.txt
+┊│     1:m A path/to/first.txt
+┊│     1:r A path/to/second.txt
 ┊●   9477ae7 add A
 ┊│     9:t A A
 ├╯
@@ -1359,9 +1359,9 @@ fn path_prefix_with_mix_of_modifications() {
 ┊
 ┊╭┄g0 [A]
 ┊●   1 d199c17 (no commit message)
-┊│     d:l A dir/to_delete.txt
-┊│     d:n A dir/to_empty.txt
-┊│     d:x A dir/to_modify.txt
+┊│     1:l A dir/to_delete.txt
+┊│     1:n A dir/to_empty.txt
+┊│     1:x A dir/to_modify.txt
 ┊●   9477ae7 add A
 ┊│     9:t A A
 ├╯
@@ -1382,13 +1382,13 @@ Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "mes
 ┊
 ┊╭┄g0 [A]
 ┊●   1#0 d1a6de8 (no commit message)
-┊│     d1a:l D dir/to_delete.txt
-┊│     d1a:n M dir/to_empty.txt
-┊│     d1a:x M dir/to_modify.txt
+┊│     1#0:l D dir/to_delete.txt
+┊│     1#0:n M dir/to_empty.txt
+┊│     1#0:x M dir/to_modify.txt
 ┊●   1#1 d199c17 (no commit message)
-┊│     d19:l A dir/to_delete.txt
-┊│     d19:n A dir/to_empty.txt
-┊│     d19:x A dir/to_modify.txt
+┊│     1#1:l A dir/to_delete.txt
+┊│     1#1:n A dir/to_empty.txt
+┊│     1#1:x A dir/to_modify.txt
 ┊●   9477ae7 add A
 ┊│     9:t A A
 ├╯
@@ -1716,7 +1716,7 @@ q:3 file│
 ┊
 ┊╭┄br [a-branch-1]
 ┊●   1 d215849 Add file
-┊│     d:q A file
+┊│     1:q A file
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M

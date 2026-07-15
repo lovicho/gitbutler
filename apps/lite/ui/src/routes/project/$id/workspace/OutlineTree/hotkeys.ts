@@ -124,13 +124,20 @@ export const useOutlineTreeHotkeys = ({
 
 	const dispatch = useAppDispatch();
 
-	const commitMoveMutation = useCommitMove();
-	const commitDiscardMutation = useCommitDiscard();
-	const commitInsertBlankMutation = useCommitInsertBlank();
-	const commitAmendMutation = useCommitAmend({ projectId });
-	const workspaceBranchAndAncestorsPushMutation = useWorkspaceBranchAndAncestorsPush();
-	const workspaceIntegrateUpstreamMutation = useWorkspaceIntegrateUpstream();
-	const branchCreateMutation = useBranchCreate();
+	const { isPending: isCommitMovePending, mutate: commitMove } = useCommitMove();
+	const { isPending: isCommitDiscardPending, mutate: commitDiscard } = useCommitDiscard();
+	const { isPending: isCommitInsertBlankPending, mutate: commitInsertBlank } =
+		useCommitInsertBlank();
+	const { isPending: isCommitAmendPending, mutate: commitAmend } = useCommitAmend({
+		projectId,
+	});
+	const {
+		isPending: isWorkspaceBranchAndAncestorsPushPending,
+		mutate: workspaceBranchAndAncestorsPush,
+	} = useWorkspaceBranchAndAncestorsPush();
+	const { isPending: isWorkspaceIntegrateUpstreamPending, mutate: workspaceIntegrateUpstream } =
+		useWorkspaceIntegrateUpstream();
+	const { mutate: branchCreate } = useBranchCreate();
 
 	const openBranchPicker = () => {
 		dispatch(projectSlice.actions.openDialog({ projectId, dialog: { _tag: "BranchPicker" } }));
@@ -143,7 +150,7 @@ export const useOutlineTreeHotkeys = ({
 	const amendCommit = () => {
 		if (selection?._tag !== "Commit") return;
 
-		commitAmendMutation.mutate({ commitId: selection.commitId });
+		commitAmend({ commitId: selection.commitId });
 	};
 
 	const setCommitTarget = (relativeTo: RelativeTo) => {
@@ -178,7 +185,7 @@ export const useOutlineTreeHotkeys = ({
 
 		if (!placement) return;
 
-		commitInsertBlankMutation.mutate({
+		commitInsertBlank({
 			projectId,
 			relativeTo: placement.relativeTo,
 			side: placement.side,
@@ -187,7 +194,7 @@ export const useOutlineTreeHotkeys = ({
 	};
 
 	const createDependentBranchAbove = (relativeTo: RelativeTo) => {
-		branchCreateMutation.mutate(
+		branchCreate(
 			{
 				projectId,
 				newRef: null,
@@ -267,7 +274,7 @@ export const useOutlineTreeHotkeys = ({
 		);
 		if (!relativeTo) return;
 
-		commitMoveMutation.mutate({
+		commitMove({
 			projectId,
 			subjectCommitIds: [selection.commitId],
 			relativeTo,
@@ -284,7 +291,7 @@ export const useOutlineTreeHotkeys = ({
 			commit: { stackId: selection.stackId, commitId: selection.commitId },
 		});
 
-		commitDiscardMutation.mutate(
+		commitDiscard(
 			{
 				projectId,
 				subjectCommitId: selection.commitId,
@@ -333,7 +340,7 @@ export const useOutlineTreeHotkeys = ({
 			selectedPushContext.downstackSegments,
 		);
 
-		workspaceBranchAndAncestorsPushMutation.mutate({
+		workspaceBranchAndAncestorsPush({
 			projectId,
 			branch: decodeBytes(selectedPushContext.refName.fullNameBytes),
 			withForce: downstackPushStatus.anyPushRequiresForce,
@@ -345,7 +352,7 @@ export const useOutlineTreeHotkeys = ({
 
 	const updateSelectedStack = () => {
 		if (selectedStackRebaseUpdate) {
-			workspaceIntegrateUpstreamMutation.mutate({
+			workspaceIntegrateUpstream({
 				projectId,
 				updates: [selectedStackRebaseUpdate],
 				dryRun: false,
@@ -371,7 +378,7 @@ export const useOutlineTreeHotkeys = ({
 	const isSelectedChanges = selection?._tag === "UncommittedChanges";
 	const canPushSelectedBranch =
 		!!selectedPushContext &&
-		!workspaceBranchAndAncestorsPushMutation.isPending &&
+		!isWorkspaceBranchAndAncestorsPushPending &&
 		!downstackPushStatusDisabled(
 			downstackPushStatusFromSegments(selectedPushContext.downstackSegments),
 		);
@@ -468,7 +475,7 @@ export const useOutlineTreeHotkeys = ({
 			callback: amendCommit,
 			options: {
 				conflictBehavior: "allow",
-				enabled: defaultOutlineHotkeysEnabled && isSelectedCommit && !commitAmendMutation.isPending,
+				enabled: defaultOutlineHotkeysEnabled && isSelectedCommit && !isCommitAmendPending,
 				target: ref,
 				meta: outlineHotkeys.amendCommit.meta,
 			},
@@ -498,8 +505,7 @@ export const useOutlineTreeHotkeys = ({
 			callback: deleteSelectedCommit,
 			options: {
 				conflictBehavior: "allow",
-				enabled:
-					defaultOutlineHotkeysEnabled && isSelectedCommit && !commitDiscardMutation.isPending,
+				enabled: defaultOutlineHotkeysEnabled && isSelectedCommit && !isCommitDiscardPending,
 				target: ref,
 				meta: outlineHotkeys.deleteCommit.meta,
 			},
@@ -519,7 +525,7 @@ export const useOutlineTreeHotkeys = ({
 			callback: () => moveSelectedCommit(-1),
 			options: {
 				conflictBehavior: "allow",
-				enabled: defaultOutlineHotkeysEnabled && isSelectedCommit && !commitMoveMutation.isPending,
+				enabled: defaultOutlineHotkeysEnabled && isSelectedCommit && !isCommitMovePending,
 				target: ref,
 				meta: outlineHotkeys.moveCommitUp.meta,
 			},
@@ -529,7 +535,7 @@ export const useOutlineTreeHotkeys = ({
 			callback: () => moveSelectedCommit(1),
 			options: {
 				conflictBehavior: "allow",
-				enabled: defaultOutlineHotkeysEnabled && isSelectedCommit && !commitMoveMutation.isPending,
+				enabled: defaultOutlineHotkeysEnabled && isSelectedCommit && !isCommitMovePending,
 				target: ref,
 				meta: outlineHotkeys.moveCommitDown.meta,
 			},
@@ -563,7 +569,7 @@ export const useOutlineTreeHotkeys = ({
 				enabled:
 					defaultOutlineHotkeysEnabled &&
 					!!selectedStackRebaseUpdate &&
-					!workspaceIntegrateUpstreamMutation.isPending,
+					!isWorkspaceIntegrateUpstreamPending,
 				target: ref,
 				meta: outlineHotkeys.updateStack.meta,
 			},
@@ -576,7 +582,7 @@ export const useOutlineTreeHotkeys = ({
 				enabled:
 					defaultOutlineHotkeysEnabled &&
 					(isSelectedBranch || isSelectedCommit) &&
-					!commitInsertBlankMutation.isPending,
+					!isCommitInsertBlankPending,
 				target: ref,
 				meta: outlineHotkeys.insertEmptyCommit.meta,
 			},

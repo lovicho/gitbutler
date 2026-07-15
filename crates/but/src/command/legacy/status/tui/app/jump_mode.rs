@@ -87,7 +87,7 @@ pub fn prefix_match(
     let Some(id) = line.data.cli_id() else {
         return false;
     };
-    if !cursor::is_selectable_in_mode(line, return_mode, show_files_flag) {
+    if !cursor::is_selectable_in_mode(line, return_mode.as_ref(), show_files_flag) {
         return false;
     }
     if query.is_empty() {

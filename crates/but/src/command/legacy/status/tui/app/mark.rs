@@ -14,7 +14,7 @@ use crate::{
         output::StatusOutputLineData,
         tui::{
             app::{App, normal_mode::NormalMode, pick_changes_mode::PickChangesMode},
-            mode::Mode,
+            mode::{DetailsReturnMode, Mode},
         },
     },
     id::{ShortId, UncommittedHunkOrFile},
@@ -653,16 +653,46 @@ impl App {
         Ok(())
     }
 
-    pub fn handle_clear_normal_mode_marks(&mut self) {
-        let Mode::Normal(normal_mode) = self
+    pub fn handle_clear_status_mode_marks(&mut self) {
+        let did_clear_marks = match self
             .mode
             .get_mut_without_updating_backstack_and_i_promise_not_to_change_state()
-        else {
-            return;
+        {
+            Mode::Normal(normal_mode) => {
+                normal_mode.marks.clear();
+                true
+            }
+            Mode::Details(details_mode) => match &mut details_mode.return_mode {
+                DetailsReturnMode::Normal(normal_mode) => {
+                    normal_mode.marks.clear();
+                    true
+                }
+                DetailsReturnMode::PickChanges(pick_changes_mode) => {
+                    pick_changes_mode.marks.clear();
+                    true
+                }
+            },
+            Mode::PickChanges(pick_changes_mode) => {
+                pick_changes_mode.marks.clear();
+                true
+            }
+            Mode::Rub(..)
+            | Mode::InlineReword(..)
+            | Mode::Command(..)
+            | Mode::Commit(..)
+            | Mode::Move(..)
+            | Mode::Stack(..)
+            | Mode::MoveStack(..)
+            | Mode::Jump(..) => false,
         };
 
-        normal_mode.marks.clear();
-        self.backstack.remove_mark();
+        if did_clear_marks {
+            if self.details.num_marks() == 0 {
+                self.backstack.remove_mark();
+            } else {
+                self.backstack.push_mark();
+            }
+        }
     }
 
     pub fn marks_ref(&self) -> MarksRef<'_> {
@@ -764,7 +794,7 @@ where
     toggle_markables(marks, uncommitted_files)
 }
 
-fn toggle_markables<T, S>(
+pub fn toggle_markables<T, S>(
     marks: &mut S,
     markables: impl IntoIterator<Item = T>,
 ) -> Result<(), S::Error>

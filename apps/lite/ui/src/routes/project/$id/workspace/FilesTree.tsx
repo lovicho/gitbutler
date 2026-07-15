@@ -49,7 +49,7 @@ const useFilesTreeHotkeys = ({
 		...getGUISettingsQueryOptions(),
 		select: (cfg) => editors?.find((editor) => editor.id === cfg.editorId),
 	});
-	const openInEditor = useOpenInEditor();
+	const { mutate: openInEditor } = useOpenInEditor();
 
 	const dispatch = useAppDispatch();
 
@@ -93,7 +93,7 @@ const useFilesTreeHotkeys = ({
 			callback: () => {
 				if (!preferredEditor || selectedChangesFile === null) return;
 
-				openInEditor.mutate({
+				openInEditor({
 					projectId,
 					editorId: preferredEditor.id,
 					path: selectedChangesFile,

@@ -51,6 +51,7 @@ pub(crate) mod state {
                     Change::WorktreeChanges {
                         project_id,
                         changes,
+                        changed_paths: _,
                     } => ChangeForFrontend {
                         name: format!("project://{project_id}/worktree_changes"),
                         payload: serde_json::json!(&changes),

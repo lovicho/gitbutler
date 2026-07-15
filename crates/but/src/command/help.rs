@@ -196,6 +196,8 @@ fn print_grouped_with_truncation(
                 SubcommandDiscriminant::Tui => Group::OtherCommands,
 
                 SubcommandDiscriminant::Edit => continue,
+                #[cfg(feature = "but-2")]
+                SubcommandDiscriminant::_Expand => continue,
                 SubcommandDiscriminant::Metrics => continue,
                 SubcommandDiscriminant::Onboarding => continue,
                 SubcommandDiscriminant::External => continue,

@@ -31,16 +31,16 @@ export const StackRow: FC<
 		(state) => projectSlice.selectors.selectOutlineModeState(state, projectId)._tag === "Default",
 	);
 
-	const unapplyStackMutation = useUnapplyStack();
+	const { isPending: isUnapplyStackPending, mutate: unapplyStack } = useUnapplyStack();
 	const unapply = () => {
 		// oxlint-disable-next-line typescript/no-non-null-assertion -- [ref:stack-id-required]
-		unapplyStackMutation.mutate({ projectId, stackId: stack.id! });
+		unapplyStack({ projectId, stackId: stack.id! });
 	};
 
-	const workspaceIntegrateUpstreamMutation = useWorkspaceIntegrateUpstream();
+	const { mutate: workspaceIntegrateUpstream } = useWorkspaceIntegrateUpstream();
 	const updateStack = () => {
 		if (rebaseUpdate) {
-			workspaceIntegrateUpstreamMutation.mutate({
+			workspaceIntegrateUpstream({
 				projectId,
 				updates: [rebaseUpdate],
 				dryRun: false,
@@ -60,7 +60,7 @@ export const StackRow: FC<
 		}),
 		nativeMenuItem({
 			label: "Unapply Stack",
-			enabled: !unapplyStackMutation.isPending,
+			enabled: !isUnapplyStackPending,
 			onSelect: unapply,
 		}),
 	];

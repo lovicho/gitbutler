@@ -130,12 +130,12 @@ export const useResolveDiffSpecs = ({
 
 	const fileParent = operand ? operandFileParent(operand) : null;
 	const commitId = fileParent ? commitIdFromParent(fileParent) : null;
-	const conditionalQueries = useQueries({
+	const commitDetails = useQueries({
 		queries: (commitId !== null ? [commitId] : []).map((commitId) =>
 			commitDetailsWithLineStatsQueryOptions({ projectId, commitId }),
 		),
+		combine: ([result]) => result?.data,
 	});
-	const commitDetails = conditionalQueries[0]?.data;
 
 	if (!operand) return null;
 

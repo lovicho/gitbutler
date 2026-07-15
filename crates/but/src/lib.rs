@@ -400,8 +400,13 @@ async fn match_subcommand(
         cmd => cmd,
     };
 
+    #[cfg(feature = "but-2")]
+    let is_expand = matches!(&cmd, Subcommands::_Expand { .. });
+    #[cfg(not(feature = "but-2"))]
+    let is_expand = false;
     let show_agent_skill_notice = out.format().is_human_text()
         && !out.can_prompt()
+        && !is_expand
         && !matches!(
             &cmd,
             Subcommands::Skill(_)
@@ -465,6 +470,15 @@ async fn match_subcommand(
         }
         Subcommands::Help { topic } => {
             command::help::print(out, topic)?;
+            Ok(())
+        }
+        #[cfg(feature = "but-2")]
+        Subcommands::_Expand { cli_id } => {
+            use crate::utils::OutputChannelExt;
+
+            let ctx = but_ctx::Context::discover(&args.current_dir)?;
+            let outcome = command::expand::handle(&ctx, cli_id).emit_metrics(metrics_ctx)?;
+            out.print_cli_output(outcome)?;
             Ok(())
         }
         Subcommands::Onboarding => command::onboarding::handle(out).map_err(CliError::from),

@@ -86,6 +86,7 @@ impl ActiveProjects {
                     Change::WorktreeChanges {
                         project_id,
                         ref changes,
+                        changed_paths: _,
                     } => {
                         #[cfg(feature = "irc")]
                         {

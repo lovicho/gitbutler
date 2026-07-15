@@ -211,6 +211,8 @@ mod tests {
             ),
             (Agent::Dirac, &[".agents", "skills", "gitbutler"][..]),
             (Agent::Pi, &[".pi", "agent", "skills", "gitbutler"][..]),
+            (Agent::KiroCli, &[".kiro", "skills", "gitbutler"][..]),
+            (Agent::Junie, &[".junie", "skills", "gitbutler"][..]),
         ];
         for (agent, expected) in cases {
             assert_eq!(
@@ -220,6 +222,20 @@ mod tests {
             );
         }
         assert!(skill_format_for_agent(Agent::Unknown, true).is_none());
+    }
+
+    #[test]
+    fn kiro_and_junie_skill_dirs_are_available_locally() {
+        for (agent, expected) in [
+            (Agent::KiroCli, &[".kiro", "skills", "gitbutler"][..]),
+            (Agent::Junie, &[".junie", "skills", "gitbutler"][..]),
+        ] {
+            assert_eq!(
+                skill_format_for_agent(agent, false).map(|format| format.path_components),
+                Some(expected),
+                "local skill dir for {agent:?}"
+            );
+        }
     }
 
     #[test]

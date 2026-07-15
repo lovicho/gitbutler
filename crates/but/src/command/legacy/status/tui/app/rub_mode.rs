@@ -279,7 +279,7 @@ impl App {
             .cursor
             .selected_line(&self.status_lines)
             .is_some_and(|line| {
-                cursor::is_selectable_in_mode(line, &self.mode, self.flags.show_files)
+                cursor::is_selectable_in_mode(line, self.mode.as_ref(), self.flags.show_files)
             })
         {
             return;

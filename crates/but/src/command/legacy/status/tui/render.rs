@@ -732,7 +732,7 @@ fn render_status_list_item(
             .set_style(area_used_by_main_content, Style::default().crossed_out());
     }
 
-    if !is_selectable_in_mode(tui_line, &app.mode, app.flags.show_files) {
+    if !is_selectable_in_mode(tui_line, app.mode.as_ref(), app.flags.show_files) {
         line.frame
             .buffer_mut()
             .set_style(area_used_by_main_content, app.theme.hint);
@@ -1074,11 +1074,13 @@ fn render_debug(app: &App, area: Rect, frame: &mut Frame) {
     let details_selection = String::new();
     let details_worker_busy = format!("Worker busy: {}", app.details.worker_is_busy());
     let details_cache_size = format!("Cache size: {} lines", app.details.cache_size());
+    let details_num_marks = format!("Marks: {}", app.details.num_marks());
     let details_selection = once(ListItem::new("Details").black().on_blue()).chain(
         details_selection
             .lines()
             .chain(details_worker_busy.lines())
             .chain(details_cache_size.lines())
+            .chain(details_num_marks.lines())
             .take(100)
             .map(|line| ListItem::new(line.to_owned())),
     );

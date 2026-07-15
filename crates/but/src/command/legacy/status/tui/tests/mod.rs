@@ -1248,3 +1248,25 @@ fn pressing_l_doesnt_unfocus_the_detail_view() {
         "snapshots/pressing_l_doesnt_unfocus_the_detail_view_001.svg"
     ]);
 }
+
+#[test]
+fn maintains_selection_using_change_id() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    let mut tui = test_tui(env);
+
+    // create a new branch with a commit
+    tui.input('b');
+    tui.input('n');
+
+    // reword the commit
+    tui.input(KeyCode::Enter);
+    tui.input("target");
+    tui.input(KeyCode::Enter)
+        .assert_current_line_eq(str![["┊●   1 f370b92 target (no changes)"]]);
+
+    // undo the reword, this shouldn't change the selection
+    tui.input('u')
+        .assert_current_line_eq(str![["┊●   1 0b42c46 (no commit message) (no changes)"]]);
+}

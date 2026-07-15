@@ -161,18 +161,19 @@ const AbsorbOperationControls: FC<{
 	mode: AbsorbMode;
 }> = ({ headInfoIndex, projectId, mode }) => {
 	const dispatch = useAppDispatch();
-	const absorptionPlan = useQuery(
-		absorptionPlanQueryOptions({ projectId, target: mode.sourceTarget }),
-	);
-	const canAbsorb =
-		!absorptionPlan.isPending && !!absorptionPlan.data && absorptionPlan.data.length > 0;
-	const absorbMutation = useAbsorb({ projectId });
+	const {
+		data: absorptionPlan,
+		isError: isAbsorptionPlanError,
+		isPending: isAbsorptionPlanPending,
+	} = useQuery(absorptionPlanQueryOptions({ projectId, target: mode.sourceTarget }));
+	const canAbsorb = !isAbsorptionPlanPending && !!absorptionPlan && absorptionPlan.length > 0;
+	const { mutate: absorb } = useAbsorb({ projectId });
 
 	const run = () => {
 		dispatch(projectSlice.actions.exitMode({ projectId }));
 		focusSelectionScope("outline");
 
-		absorbMutation.mutate(absorptionPlan.data);
+		absorb(absorptionPlan);
 	};
 
 	const cancel = () => {
@@ -183,14 +184,14 @@ const AbsorbOperationControls: FC<{
 	return (
 		<Container>
 			<ControlsRow>
-				{absorptionPlan.isPending ? (
+				{isAbsorptionPlanPending ? (
 					<Icon name="spinner" aria-label="Loading absorb plan" />
-				) : absorptionPlan.isError ? (
+				) : isAbsorptionPlanError ? (
 					<Label>Failed to load absorb plan</Label>
 				) : (
 					<Label>
 						Absorb {operandLabel({ headInfoIndex, operand: mode.source })} into{" "}
-						{absorptionPlan.data.length} commits
+						{absorptionPlan.length} commits
 					</Label>
 				)}
 				<Controls onCancel={cancel} confirm={{ canRun: canAbsorb, onRun: run }} />

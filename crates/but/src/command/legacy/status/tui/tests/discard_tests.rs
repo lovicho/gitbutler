@@ -324,7 +324,7 @@ fn discard_individual_committed_files_from_local_file_list() {
         "snapshots/discard_individual_committed_files_from_local_file_list_002.svg"
     ]);
     tui.input('y')
-        .assert_current_line_eq(str!["┊│     5:o A three"])
+        .assert_current_line_eq(str!["┊│     1:o A three"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/discard_individual_committed_files_from_local_file_list_003.svg"
         ])
@@ -334,7 +334,7 @@ fn discard_individual_committed_files_from_local_file_list() {
         "snapshots/discard_individual_committed_files_from_local_file_list_004.svg"
     ]);
     tui.input('y')
-        .assert_current_line_eq(str!["┊│     c:t A two"])
+        .assert_current_line_eq(str!["┊│     1:t A two"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/discard_individual_committed_files_from_local_file_list_005.svg"
         ])
@@ -421,7 +421,7 @@ fn discard_marked_committed_files_from_local_file_list() {
         "snapshots/discard_marked_committed_files_from_local_file_list_003.svg"
     ]);
     tui.input('y')
-        .assert_current_line_eq(str!["┊│     c:t A two"])
+        .assert_current_line_eq(str!["┊│     1:t A two"])
         .assert_backstack_eq([BackstackEntry::ShowFileList])
         .assert_rendered_term_svg_eq(file![
             "snapshots/discard_marked_committed_files_from_local_file_list_004.svg"

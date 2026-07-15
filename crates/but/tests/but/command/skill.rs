@@ -75,39 +75,41 @@ Error: No supported agent was detected. In non-interactive mode, specify --path 
 
 #[test]
 fn skill_install_bare_defaults_to_detected_agents_global_dir() {
-    let env = Sandbox::empty();
-
     // A detected agent running the bare command without a terminal gets its
     // own global skill directory instead of the interactive wizard - this is
     // the command the not-installed status notice suggests.
-    let output = env
-        .but("skill install")
-        .env("AI_AGENT", "codex")
-        .assert()
-        .success()
-        .get_output()
-        .stdout
-        .clone();
+    for (agent, agent_dir) in [("codex", ".codex"), ("kiro", ".kiro"), ("junie", ".junie")] {
+        let env = Sandbox::empty();
+        let output = env
+            .but("skill install")
+            .env("AI_AGENT", agent)
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
 
-    let skill_md = env
-        .home_dir()
-        .join(".codex")
-        .join("skills")
-        .join("gitbutler")
-        .join("SKILL.md");
-    assert!(
-        skill_md.is_file(),
-        "the skill lands in the agent's global directory under the sandboxed home"
-    );
+        let skill_md = env
+            .home_dir()
+            .join(relative_agent_skill_path(agent_dir))
+            .join("SKILL.md");
+        assert!(
+            skill_md.is_file(),
+            "the {agent} skill lands in its global directory under the sandboxed home"
+        );
 
-    // A skill installed mid-session is invisible to the agent's harness until
-    // the next session, so the agent is pointed at the file directly.
-    let stdout = String::from_utf8_lossy(&output);
-    assert!(!stdout.contains("AGENT ACTION REQUIRED"));
-    assert!(
-        stdout.contains("To use it in this session, read "),
-        "an agent caller is told to read the skill now, got: {stdout}"
-    );
+        // A skill installed mid-session is invisible to the agent's harness until
+        // the next session, so the agent is pointed at the file directly.
+        let stdout = String::from_utf8_lossy(&output);
+        assert!(
+            !stdout.contains("AGENT ACTION REQUIRED"),
+            "{agent} installation should finish without another action request"
+        );
+        assert!(
+            stdout.contains("To use it in this session, read "),
+            "an agent caller is told to read the skill now, got: {stdout}"
+        );
+    }
 }
 
 #[test]

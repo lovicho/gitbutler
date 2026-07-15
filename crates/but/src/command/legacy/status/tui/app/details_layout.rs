@@ -12,6 +12,8 @@ impl App {
                 return;
             }
 
+            self.details.on_unfocus(&mut self.backstack);
+
             self.restore_mode_before_details(messages);
 
             if !self.maybe_move_cursor_into_file_list() {
@@ -74,6 +76,28 @@ impl App {
             return;
         }
 
+        if full_screen
+            && self.is_details_visible
+            && matches!(
+                &*self.mode,
+                Mode::Details(DetailsMode {
+                    full_screen: false,
+                    ..
+                })
+            )
+        {
+            messages.push(Message::Details(DetailsMessage::SelectFirstSection));
+            self.mode.update(&mut self.backstack, |backstack, mode| {
+                // This is only a layout change, so the existing undo order must be preserved.
+                let _ = backstack;
+                let Mode::Details(details_mode) = mode else {
+                    unreachable!("details mode was checked above")
+                };
+                details_mode.full_screen = true;
+            });
+            return;
+        }
+
         if self.is_details_visible {
             messages.push(Message::Details(DetailsMessage::SelectFirstSection));
         } else {
@@ -124,6 +148,7 @@ impl App {
             }
             Mode::Details(DetailsMode { full_screen, .. }) => {
                 if *full_screen {
+                    self.details.on_unfocus(&mut self.backstack);
                     self.restore_mode_before_details(messages);
                 } else {
                     messages.push(Message::DetailsLayout(DetailsLayoutMessage::Focus {

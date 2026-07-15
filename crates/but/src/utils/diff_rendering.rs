@@ -234,6 +234,12 @@ pub enum DetailsLine {
     },
     Code(DetailsCodeLine),
     SectionSeparator,
+    HunkHeader {
+        id: SectionId,
+        cli_id: Option<Arc<CliId>>,
+        width: usize,
+        line: Vec<Span<'static>>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -889,7 +895,7 @@ fn render_hunk_path_header(
         ShortIdOrTreeStatus::TreeStatus(status) => change_status(status, theme),
     });
     let path = path.to_string();
-    let path_line = Line::from_iter(
+    let path_line = Vec::from_iter(
         [Span::raw(" ")]
             .into_iter()
             .chain(
@@ -897,9 +903,22 @@ fn render_hunk_path_header(
                     .into_iter()
                     .flat_map(|status| [status, Span::raw(" ")]),
             )
-            .chain([Span::raw(path)]),
+            .chain([
+                Span::raw(path),
+                Span::raw(" "),
+                Span::styled("│", theme.border),
+            ]),
     );
-    bordered_line_top_right_bottom(id, cli_id, path_line, out, theme)?;
+
+    let width_including_padding = 1 + path_line.iter().map(|span| span.width()).sum::<usize>() - 2;
+
+    out.write(DetailsLine::HunkHeader {
+        id,
+        cli_id,
+        width: width_including_padding,
+        line: path_line,
+    })?;
+
     Ok(())
 }
 
@@ -910,38 +929,6 @@ fn change_status(status: &TreeStatus, theme: &'static Theme) -> Span<'static> {
         TreeStatus::Modification { .. } => Span::styled("modified", theme.modification),
         TreeStatus::Rename { .. } => Span::styled("renamed", theme.renaming),
     }
-}
-
-fn bordered_line_top_right_bottom(
-    id: SectionId,
-    cli_id: Option<Arc<CliId>>,
-    mut text: Line<'static>,
-    out: &mut dyn DiffLineWriter,
-    theme: &'static Theme,
-) -> anyhow::Result<()> {
-    let width_including_padding = text.width() + 1;
-
-    out.write_hunk_header(
-        id,
-        cli_id.as_ref().map(Arc::clone),
-        Line::from_iter(repeat_n("─", width_including_padding).chain(once("╮")))
-            .style(theme.border),
-    )?;
-
-    text.spans
-        .extend([Span::raw(" "), Span::styled("│", theme.border)]);
-    out.write_hunk_header(id, cli_id.as_ref().map(Arc::clone), text)?;
-
-    out.write_hunk_header(
-        id,
-        cli_id.as_ref().map(Arc::clone),
-        Line::from_iter(repeat_n("─", width_including_padding).chain(once("╯")))
-            .style(theme.border),
-    )?;
-
-    out.write_hunk_header(id, cli_id.as_ref().map(Arc::clone), " ".into())?;
-
-    Ok(())
 }
 
 fn render_unified_patch(

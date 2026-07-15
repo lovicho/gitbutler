@@ -35,7 +35,7 @@ impl CliOutputHuman for DiffOutcome<'_> {
         let syntax_theme = theme.load_syntax_highlighting_theme()?;
 
         let strings = Strings::default();
-        let writer = DiffWriter { out };
+        let writer = DiffWriter { out, theme };
         let mut writer =
             WithSyntaxHighlighting::new(writer, strings.clone(), &syntax_set, &syntax_theme);
         let mut id_gen = IdGen::new(strings);
@@ -119,17 +119,13 @@ impl CliOutput for DiffOutcome<'_> {
 
 struct DiffWriter<'a> {
     out: &'a mut dyn WriteWithUtils,
+    theme: &'static Theme,
 }
 
 impl DiffLineWriter for DiffWriter<'_> {
     fn write(&mut self, line: DetailsLine) -> anyhow::Result<()> {
         match line {
-            DetailsLine::Text {
-                id: _,
-                cli_id: _,
-                line,
-                skip_when_copying_hunk: _,
-            } => {
+            DetailsLine::Text { line, .. } => {
                 let line_style = line.style;
                 for span in line.spans {
                     let rendered = line_style.patch(span.style).paint(&span.content);
@@ -155,6 +151,25 @@ impl DiffLineWriter for DiffWriter<'_> {
             }
             DetailsLine::SectionSeparator => {
                 writeln!(self.out)?;
+            }
+            DetailsLine::HunkHeader { width, line, .. } => {
+                for _ in 0..width {
+                    write!(self.out, "{}", self.theme.border.paint("─"))?;
+                }
+                writeln!(self.out, "{}", self.theme.border.paint("╮"))?;
+
+                for span in line {
+                    let rendered = span.style.paint(&span.content);
+                    write!(self.out, "{rendered}")?;
+                }
+                writeln!(self.out)?;
+
+                for _ in 0..width {
+                    write!(self.out, "{}", self.theme.border.paint("─"))?;
+                }
+                writeln!(self.out, "{}", self.theme.border.paint("╯"))?;
+
+                writeln!(self.out, " ")?;
             }
         }
 

@@ -31,10 +31,10 @@ type Props = {
 export const Settings: FC<Props> = ({ open, onOpenChange }) => {
 	const { data: editors } = useSuspenseQuery(listEditorsQueryOptions);
 	const { data: settings } = useSuspenseQuery(getGUISettingsQueryOptions());
-	const saveGUISettings = useSaveGUISettings();
+	const { mutate: saveGUISettings } = useSaveGUISettings();
 
 	const setTheme = (variant: keyof ThemesType, themeName: string): void => {
-		saveGUISettings.mutate({
+		saveGUISettings({
 			syntaxHighlighting: {
 				light: variant === "light" ? themeName : settings.syntaxHighlighting?.light,
 				dark: variant === "dark" ? themeName : settings.syntaxHighlighting?.dark,
@@ -68,7 +68,7 @@ export const Settings: FC<Props> = ({ open, onOpenChange }) => {
 									id="editor"
 									value={settings.editorId ?? ""}
 									onChange={(evt) =>
-										saveGUISettings.mutate({
+										saveGUISettings({
 											editorId: evt.currentTarget.value,
 										})
 									}
@@ -134,13 +134,13 @@ export const Settings: FC<Props> = ({ open, onOpenChange }) => {
 									type="text"
 									defaultValue={settings.diffFontFamily ?? defaultSettings.diffFontFamily}
 									onBlur={(evt) =>
-										saveGUISettings.mutate({
+										saveGUISettings({
 											diffFontFamily: evt.currentTarget.value,
 										})
 									}
 									onKeyDown={(evt) =>
 										evt.key === "Escape" &&
-										saveGUISettings.mutate({
+										saveGUISettings({
 											diffFontFamily: evt.currentTarget.value,
 										})
 									}
@@ -159,13 +159,13 @@ export const Settings: FC<Props> = ({ open, onOpenChange }) => {
 									max={32}
 									defaultValue={settings.diffFontSize ?? defaultSettings.diffFontSize}
 									onBlur={(evt) =>
-										saveGUISettings.mutate({
+										saveGUISettings({
 											diffFontSize: clamp(Number(evt.currentTarget.value), 1, 32),
 										})
 									}
 									onKeyDown={(evt) =>
 										evt.key === "Escape" &&
-										saveGUISettings.mutate({
+										saveGUISettings({
 											diffFontSize: clamp(Number(evt.currentTarget.value), 1, 32),
 										})
 									}
@@ -184,13 +184,13 @@ export const Settings: FC<Props> = ({ open, onOpenChange }) => {
 									max={8}
 									defaultValue={settings.diffTabSize ?? defaultSettings.diffTabSize}
 									onBlur={(evt) =>
-										saveGUISettings.mutate({
+										saveGUISettings({
 											diffTabSize: clamp(Number(evt.currentTarget.value), 1, 8),
 										})
 									}
 									onKeyDown={(evt) =>
 										evt.key === "Escape" &&
-										saveGUISettings.mutate({
+										saveGUISettings({
 											diffTabSize: clamp(Number(evt.currentTarget.value), 1, 8),
 										})
 									}
