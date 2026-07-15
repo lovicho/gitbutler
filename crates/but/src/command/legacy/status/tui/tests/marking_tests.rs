@@ -115,7 +115,7 @@ fn marks_still_show_in_split_details() {
     // mark some things
     tui.input('j');
     tui.input(' ')
-        .assert_rendered_contains("┊✔︎     k A one")
+        .assert_rendered_contains("┊✔︎  k    A one")
         .assert_rendered_contains("┊   twop A two")
         .assert_backstack_eq([BackstackEntry::Mark])
         .assert_rendered_term_svg_eq(file!["snapshots/marks_still_show_in_split_details_001.svg"]);
@@ -123,7 +123,7 @@ fn marks_still_show_in_split_details() {
     // open details view and still see the marks
     tui.input('d')
         .assert_rendered_contains("+content of two")
-        .assert_rendered_contains("┊✔︎     k A one")
+        .assert_rendered_contains("┊✔︎  k    A one")
         .assert_rendered_contains("┊   twop A two")
         .assert_backstack_eq([BackstackEntry::OpenSplitDetailsView, BackstackEntry::Mark])
         .assert_rendered_term_svg_eq(file!["snapshots/marks_still_show_in_split_details_002.svg"]);
@@ -135,7 +135,7 @@ fn marks_still_show_in_split_details() {
     tui.input('l')
         .assert_rendered_contains("details")
         .assert_rendered_contains("+content of two")
-        .assert_rendered_contains("┊✔︎     k A one")
+        .assert_rendered_contains("┊✔︎  k    A one")
         .assert_rendered_contains("┊   twop A two")
         .assert_backstack_eq([
             BackstackEntry::LeaveNormalMode,
@@ -148,7 +148,7 @@ fn marks_still_show_in_split_details() {
     tui.input('h')
         .assert_rendered_contains("normal")
         .assert_rendered_contains("+content of two")
-        .assert_rendered_contains("┊✔︎     k A one")
+        .assert_rendered_contains("┊✔︎  k    A one")
         .assert_rendered_contains("┊   twop A two")
         .assert_backstack_eq([BackstackEntry::OpenSplitDetailsView, BackstackEntry::Mark])
         .assert_rendered_term_svg_eq(file!["snapshots/marks_still_show_in_split_details_005.svg"]);

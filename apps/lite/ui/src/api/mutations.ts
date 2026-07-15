@@ -1,5 +1,5 @@
 import { decodeBytes, encodeBytes } from "#ui/api/bytes.ts";
-import { getHeadInfoIndex, renameBranchInHeadInfo } from "#ui/api/ref-info.ts";
+import { renameBranchInHeadInfo } from "#ui/api/ref-info.ts";
 import {
 	changesInWorktreeQueryOptions,
 	getReviewMergeStatusQueryOptions,
@@ -56,7 +56,6 @@ export const syncCoreCaches = (
 		projectSlice.actions.updateRewrittenCommitReferences({
 			projectId,
 			replacedCommits: workspace.replacedCommits,
-			headInfo: workspace.headInfo,
 		}),
 	);
 };
@@ -525,17 +524,12 @@ export const useCommitInsertBlank = () => {
 		onSuccess: async (response, input, _context, mutation) => {
 			syncCoreCaches(mutation.client, dispatch, input.projectId, response);
 
-			const stackId = getHeadInfoIndex(response.workspace.headInfo).commitContextById(
-				response.newCommit,
-			)?.stack.id;
-			if (stackId != null) {
-				dispatch(
-					projectSlice.actions.selectOutline({
-						projectId: input.projectId,
-						selection: commitOperand({ stackId, commitId: response.newCommit }),
-					}),
-				);
-			}
+			dispatch(
+				projectSlice.actions.selectOutline({
+					projectId: input.projectId,
+					selection: commitOperand({ commitId: response.newCommit }),
+				}),
+			);
 		},
 		onError: (error) => {
 			// oxlint-disable-next-line no-console
@@ -814,12 +808,10 @@ export const useUnapplyStack = () => {
 
 export const useUpdateBranchName = ({
 	projectId,
-	stackId,
 	branchRef,
 	oldBranch,
 }: {
 	projectId: string;
-	stackId: string;
 	branchRef: Array<number>;
 	oldBranch: BranchOperand;
 }) => {
@@ -830,7 +822,6 @@ export const useUpdateBranchName = ({
 		mutationFn: window.lite.updateBranchName,
 		onSuccess: async (newRef, _input, _context, mutation) => {
 			const newBranch: BranchOperand = {
-				stackId,
 				branchRef: newRef.fullNameBytes,
 			};
 
@@ -839,7 +830,6 @@ export const useUpdateBranchName = ({
 
 				return renameBranchInHeadInfo({
 					headInfo,
-					stackId,
 					branchRef,
 					newName: newRef.displayName,
 					newBranchRef: newRef.fullNameBytes,

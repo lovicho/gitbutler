@@ -25,20 +25,16 @@
 
 .title {
 	display: grid;
-	grid-template-rows:
-		/* Match regular button height. */
-		28px
-		auto;
+	/* Match regular button height. */
+	grid-template-rows: 28px;
+	grid-template-columns: auto 1fr;
 	column-gap: 8px;
 	align-items: center;
+}
 
-	& > i {
-		grid-row: 1 / 2;
-	}
-
-	& > h3 {
-		grid-row: 1 / -1;
-	}
+.titleContent {
+	display: flex;
+	align-items: center;
 }
 
 .prActions {

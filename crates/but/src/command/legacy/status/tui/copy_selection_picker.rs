@@ -1,11 +1,10 @@
-use std::{borrow::Cow, collections::BTreeSet};
+use std::{borrow::Cow, collections::BTreeSet, sync::Arc};
 
 use anyhow::Context as _;
 use bstr::{BString, ByteSlice as _};
-use but_core::{CommitOwned, TreeChange, diff::CommitDetails};
+use but_core::{CommitOwned, TreeChange, commit::Headers, diff::CommitDetails};
 use but_ctx::Context;
 use but_hunk_assignment::HunkAssignment;
-use gitbutler_commit::commit_ext::CommitExt;
 use gix::{prelude::ObjectIdExt as _, refs::FullName};
 use nonempty::NonEmpty;
 use ratatui::style::Style;
@@ -16,6 +15,7 @@ use crate::{
     },
     id::{ShortId, UncommittedHunkOrFile},
     theme::Theme,
+    utils::DebugAsType,
 };
 
 pub fn commit_picker(
@@ -86,15 +86,13 @@ fn picker(
     theme: &'static Theme,
 ) -> FuzzyPicker<CopySelectionItem> {
     FuzzyPicker::new(items, theme, |item, ctx, messages| {
-        arboard::Clipboard::new()
-            .context("failed to initialize clipboard")?
-            .set_text(item.what_to_copy(ctx)?)
-            .context("failed to copy to system clipboard")?;
-
-        messages.push(Message::ShowToast {
-            kind: ToastKind::Info,
-            text: format!("Copied {}", lowercase_first_letter(item.as_str())).into(),
-        });
+        messages.extend([
+            Message::CopyToClipboard(item.what_to_copy(ctx)?),
+            Message::ShowToast {
+                kind: ToastKind::Info,
+                text: format!("Copied {}", lowercase_first_letter(item.as_str())).into(),
+            },
+        ]);
 
         Ok(())
     })
@@ -149,7 +147,10 @@ impl CopySelectionItem {
             CopySelectionItem::CommitSha(commit_id) => Ok(commit_id.to_string()),
             CopySelectionItem::ChangeId(commit_id) => {
                 let commit = repo.find_commit(*commit_id)?;
-                let change_id = commit.change_id().context("commit has no change id")?;
+                let commit = commit.decode()?;
+                let change_id = Headers::try_from_commit_headers(|| commit.extra_headers())
+                    .and_then(|headers| headers.change_id)
+                    .context("commit has no change id")?;
                 Ok(change_id.to_string())
             }
             CopySelectionItem::ShortCommitSha(commit_id) => {
@@ -351,4 +352,55 @@ fn tree_changes_to_diff(
             diff.push_str(&line?.to_str_lossy());
             Ok(diff)
         })
+}
+
+#[derive(Clone, Debug)]
+pub struct Clipboard(DebugAsType<Arc<dyn ClipboardImpl + Send>>);
+
+impl Clipboard {
+    pub fn live() -> Self {
+        struct Live;
+
+        impl ClipboardImpl for Live {
+            fn set_text(&self, text: Cow<'_, str>) -> anyhow::Result<()> {
+                arboard::Clipboard::new()
+                    .and_then(|mut clipboard| clipboard.set_text(text))
+                    .context("failed to copy to system clipboard")?;
+                Ok(())
+            }
+        }
+
+        Self::new(Live)
+    }
+
+    #[cfg(test)]
+    pub fn test() -> (Self, Arc<std::sync::Mutex<String>>) {
+        struct Test(Arc<std::sync::Mutex<String>>);
+
+        let shared = <Arc<std::sync::Mutex<String>>>::default();
+
+        impl ClipboardImpl for Test {
+            fn set_text(&self, text: Cow<'_, str>) -> anyhow::Result<()> {
+                *self.0.lock().unwrap() = text.to_string();
+                Ok(())
+            }
+        }
+
+        (Self::new(Test(Arc::clone(&shared))), shared)
+    }
+
+    fn new<C>(clipboard_impl: C) -> Self
+    where
+        C: ClipboardImpl + Send + 'static,
+    {
+        Self(DebugAsType(Arc::new(clipboard_impl)))
+    }
+
+    pub fn set_text<'a>(&self, text: impl Into<Cow<'a, str>>) -> anyhow::Result<()> {
+        self.0.set_text(text.into())
+    }
+}
+
+trait ClipboardImpl {
+    fn set_text(&self, text: Cow<'_, str>) -> anyhow::Result<()>;
 }

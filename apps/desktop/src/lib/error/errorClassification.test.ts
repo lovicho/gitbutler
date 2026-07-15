@@ -121,8 +121,10 @@ describe("classify", () => {
 
 	describe("title resolution", () => {
 		test("uses the error's own name when present (IPC commands)", () => {
-			const error = new IpcError({ message: "boom" }, "push_stack");
-			expect(classify(error, "Caller title").title).toBe("API error: (push_stack)");
+			const error = new IpcError({ message: "boom" }, "workspace_branch_and_ancestors_push");
+			expect(classify(error, "Caller title").title).toBe(
+				"API error: (workspace_branch_and_ancestors_push)",
+			);
 		});
 
 		test("falls back to the caller title when the error has no name", () => {

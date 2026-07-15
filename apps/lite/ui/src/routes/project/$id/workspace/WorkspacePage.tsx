@@ -154,11 +154,9 @@ const outlineNavigationItems = ({
 	headInfo: RefInfo | undefined;
 	uncommittedFilePaths: Array<string>;
 }): Array<Operand> => {
-	const segmentItems = (stackId: string, segment: Segment): Array<Operand> => [
-		...(segment.refName
-			? [branchOperand({ stackId, branchRef: segment.refName.fullNameBytes })]
-			: []),
-		...segment.commits.map((commit) => commitOperand({ stackId, commitId: commit.id })),
+	const segmentItems = (segment: Segment): Array<Operand> => [
+		...(segment.refName ? [branchOperand({ branchRef: segment.refName.fullNameBytes })] : []),
+		...segment.commits.map((commit) => commitOperand({ commitId: commit.id })),
 	];
 
 	return [
@@ -167,11 +165,9 @@ const outlineNavigationItems = ({
 			fileOperand({ parent: uncommittedChangesFileParent, path }),
 		),
 
-		...(headInfo?.stacks.toReversed() ?? []).flatMap((stack) => {
-			// oxlint-disable-next-line typescript/no-non-null-assertion -- [ref:stack-id-required]
-			const stackId = stack.id!;
-			return stack.segments.flatMap((segment) => segmentItems(stackId, segment));
-		}),
+		...(headInfo?.stacks.toReversed() ?? []).flatMap((stack) =>
+			stack.segments.flatMap(segmentItems),
+		),
 	];
 };
 
@@ -204,19 +200,19 @@ const useOutlineNavigationIndex = ({
 			Absorb: (activeMode) =>
 				items.filter(
 					(operand) =>
+						operandEquals(operand, activeMode.source) ||
 						operandContains(operand, activeMode.source) ||
 						(operand._tag === "Commit" && absorptionTargetCommitIds.has(operand.commitId)),
 				),
 			Transfer: (activeMode) =>
 				items.filter(
 					(operand) =>
+						operandEquals(operand, activeMode.value.source) ||
 						operandContains(operand, activeMode.value.source) ||
 						hasAnyOperation(activeMode.value.source, operand),
 				),
-			RenameBranch: (x) =>
-				items.filter((operand) => operandEquals(operand, branchOperand(x.operand))),
-			RewordCommit: (x) =>
-				items.filter((operand) => operandEquals(operand, commitOperand(x.operand))),
+			RenameBranch: (x) => [branchOperand(x.operand)],
+			RewordCommit: (x) => [commitOperand(x.operand)],
 		}),
 	);
 	const indexByKey = buildIndexByKey(filteredItems, operandIdentityKey);

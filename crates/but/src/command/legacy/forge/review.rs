@@ -636,14 +636,12 @@ async fn publish_reviews_for_branch_and_dependents(
         }
     }
 
-    let result = but_api::legacy::stack::push_stack(
+    let branch = gix::refs::Category::LocalBranch.to_full_name(branch_name)?;
+    let result = but_api::legacy::workspace::workspace_branch_and_ancestors_push(
         ctx,
-        stack_entry
-            .id
-            .context("BUG: Stack entry is missing ID for push")?,
         with_force,
         skip_force_push_protection,
-        branch_name.to_string(),
+        branch.as_ref(),
         run_hooks,
         vec![],
     )?;

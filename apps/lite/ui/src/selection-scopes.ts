@@ -219,6 +219,7 @@ export const useNavigationIndexHotkeys = <T>({
 			callback: selectFirstItem,
 			options: {
 				conflictBehavior: "allow",
+				ignoreInputs: true,
 				target: ref,
 			},
 		},
@@ -235,6 +236,7 @@ export const useNavigationIndexHotkeys = <T>({
 			callback: selectLastItem,
 			options: {
 				conflictBehavior: "allow",
+				ignoreInputs: true,
 				target: ref,
 			},
 		},

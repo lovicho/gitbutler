@@ -957,16 +957,16 @@ fn discards_normal_mode_marks_when_marking_details() {
 
     let mut tui = test_tui(env);
 
-    tui.input('j').assert_rendered_contains("┊      k A one");
+    tui.input('j').assert_rendered_contains("┊   k    A one");
     tui.input(' ')
         .assert_backstack_eq([BackstackEntry::Mark])
-        .assert_rendered_contains("┊✔︎     k A one");
+        .assert_rendered_contains("┊✔︎  k    A one");
 
     tui.input('d');
 
     // focusing the details should preserve the marks
     tui.input('l')
-        .assert_rendered_contains("┊✔︎     k A one")
+        .assert_rendered_contains("┊✔︎  k    A one")
         .assert_backstack_eq([
             BackstackEntry::LeaveNormalMode,
             BackstackEntry::OpenSplitDetailsView,
@@ -979,7 +979,7 @@ fn discards_normal_mode_marks_when_marking_details() {
     // but marking from the details view clears the normal mode marks
     tui.input('j');
     tui.input(' ')
-        .assert_rendered_contains("┊      k A one")
+        .assert_rendered_contains("┊   k    A one")
         .assert_backstack_eq([
             BackstackEntry::Mark,
             BackstackEntry::LeaveNormalMode,
@@ -1004,7 +1004,7 @@ fn discards_normal_mode_marks_when_marking_full_screen_details() {
     tui.input('j');
     tui.input(' ')
         .assert_backstack_eq([BackstackEntry::Mark])
-        .assert_rendered_contains("┊✔︎     k A one");
+        .assert_rendered_contains("┊✔︎  k    A one");
 
     tui.input((KeyModifiers::SHIFT, 'D'));
     tui.render_with_messages(None, Vec::new())
@@ -1026,7 +1026,7 @@ fn discards_normal_mode_marks_when_marking_full_screen_details() {
         ]);
 
     tui.input((KeyModifiers::SHIFT, 'D'))
-        .assert_rendered_contains("┊      k A one")
+        .assert_rendered_contains("┊   k    A one")
         .assert_backstack_eq([])
         .assert_rendered_term_svg_eq(file![
             "snapshots/discards_normal_mode_marks_when_marking_full_screen_details_002.svg"
@@ -1053,10 +1053,10 @@ fn discards_pick_changes_marks_when_marking_details() {
     tui.reload();
     tui.input(' ')
         .assert_backstack_eq([BackstackEntry::Mark])
-        .assert_rendered_contains("┊✔︎     k A one");
+        .assert_rendered_contains("┊✔︎  k    A one");
 
     tui.input('l')
-        .assert_rendered_contains("┊✔︎     k A one")
+        .assert_rendered_contains("┊✔︎  k    A one")
         .assert_backstack_eq([
             BackstackEntry::LeaveNormalMode,
             BackstackEntry::OpenSplitDetailsView,
@@ -1071,7 +1071,7 @@ fn discards_pick_changes_marks_when_marking_details() {
             BackstackEntry::LeaveNormalMode,
             BackstackEntry::OpenSplitDetailsView,
         ])
-        .assert_rendered_contains("┊      k A one")
+        .assert_rendered_contains("┊   k    A one")
         .assert_rendered_term_svg_eq(file![
             "snapshots/discards_pick_changes_marks_when_marking_details_001.svg"
         ]);
@@ -1156,4 +1156,17 @@ fn dims_unselectable_lines_while_in_details_mode() {
     tui.input('l').assert_rendered_term_svg_eq(file![
         "snapshots/dims_unselectable_lines_while_in_details_mode_001.svg"
     ]);
+}
+
+#[test]
+fn doesnt_show_synthetic_change_id() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    let mut tui = test_tui(env);
+
+    tui.input('j');
+    tui.input('j');
+    tui.input('d')
+        .assert_rendered_term_svg_eq(file!["snapshots/doesnt_show_synthetic_change_id_001.svg"]);
 }

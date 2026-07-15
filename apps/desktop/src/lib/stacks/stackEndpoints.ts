@@ -313,28 +313,6 @@ export function buildStackEndpoints(build: BackendEndpointBuilder) {
 				...providesItem(ReduxTag.BranchDetails, branchName),
 			],
 		}),
-		pushStack: build.mutation<
-			BranchPushResult,
-			{
-				projectId: string;
-				stackId: string;
-				withForce: boolean;
-				skipForcePushProtection: boolean;
-				branch: string;
-				runHooks: boolean;
-				pushOpts: GerritPushFlag[];
-			}
-		>({
-			extraOptions: {
-				command: "push_stack",
-				actionName: "Push",
-			},
-			query: (args) => args,
-			invalidatesTags: (_result, _error, args) => [
-				invalidatesItem(ReduxTag.StackDetails, args.stackId), // Is this still needed?
-				invalidatesList(ReduxTag.BranchListing),
-			],
-		}),
 		pushWorkspaceBranchAndAncestors: build.mutation<
 			BranchPushResult,
 			{

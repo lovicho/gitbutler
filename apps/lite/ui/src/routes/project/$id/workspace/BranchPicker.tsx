@@ -20,29 +20,24 @@ type Props = {
 
 const segmentToBranchPickerOption = ({
 	segment,
-	stackId,
 }: {
 	segment: Segment;
-	stackId: string;
 }): BranchPickerOption | null => {
 	const refName = segment.refName;
 	if (!refName) return null;
 
 	return {
-		id: JSON.stringify([stackId, refName.fullNameBytes]),
+		id: refName.fullNameBytes.join(","),
 		label: refName.displayName,
-		branch: { stackId, branchRef: refName.fullNameBytes },
+		branch: { branchRef: refName.fullNameBytes },
 	};
 };
 
-const stackToBranchPickerOptions = (stack: Stack): Array<BranchPickerOption> => {
-	// oxlint-disable-next-line typescript/no-non-null-assertion -- [ref:stack-id-required]
-	const stackId = stack.id!;
-	return stack.segments.flatMap((segment): Array<BranchPickerOption> => {
-		const option = segmentToBranchPickerOption({ segment, stackId });
+const stackToBranchPickerOptions = (stack: Stack): Array<BranchPickerOption> =>
+	stack.segments.flatMap((segment): Array<BranchPickerOption> => {
+		const option = segmentToBranchPickerOption({ segment });
 		return option ? [option] : [];
 	});
-};
 
 export const BranchPicker: FC<Props> = ({ open, onOpenChange, onSelectBranch }) => {
 	const { id: projectId } = useParams({ from: "/project/$id/workspace" });

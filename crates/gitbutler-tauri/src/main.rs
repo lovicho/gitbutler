@@ -372,7 +372,6 @@ fn main() -> anyhow::Result<()> {
                 legacy::stack::tauri_remove_branch::remove_branch,
                 legacy::stack::tauri_update_branch_name::update_branch_name,
                 legacy::stack::tauri_update_branch_pr_number::update_branch_pr_number,
-                legacy::stack::tauri_push_stack::push_stack,
                 legacy::secret::tauri_secret_get_global::secret_get_global,
                 legacy::secret::tauri_secret_set_global::secret_set_global,
                 legacy::secret::tauri_secret_delete_global::secret_delete_global,

@@ -32,6 +32,7 @@ use crate::{
         },
         backstack::Backstack,
         confirm::Confirm,
+        copy_selection_picker::Clipboard,
         count_allocations,
         details::worker::Worker,
         highlight::{self, Highlights},
@@ -91,6 +92,7 @@ pub struct Details {
     worker: Worker,
     to_be_discarded: Vec<SectionId>,
     marks: SingleSourceMarks<SectionId>,
+    clipboard: Clipboard,
 }
 
 #[derive(Debug, Default)]
@@ -114,7 +116,11 @@ enum RenderThreadMessage {
 }
 
 impl Details {
-    pub fn new(theme: &'static Theme, out_of_band_messages_tx: Sender<Message>) -> Self {
+    pub fn new(
+        theme: &'static Theme,
+        out_of_band_messages_tx: Sender<Message>,
+        clipboard: Clipboard,
+    ) -> Self {
         Self {
             theme,
             selection: Default::default(),
@@ -134,6 +140,7 @@ impl Details {
             worker: Worker::new(),
             to_be_discarded: Default::default(),
             marks: Default::default(),
+            clipboard,
         }
     }
 
@@ -1150,9 +1157,7 @@ impl Details {
         let lines = &self.lines[section.first_line..=section.last_line];
         let hunk_text = format_lines_in_section(lines);
 
-        arboard::Clipboard::new()
-            .and_then(|mut clipboard| clipboard.set_text(hunk_text))
-            .context("failed to copy to system clipboard")?;
+        self.clipboard.set_text(hunk_text)?;
 
         self.highlights.insert(section.id);
 

@@ -50,7 +50,6 @@ Matches: 0
 "#]]);
 }
 
-#[cfg(feature = "legacy")]
 #[test]
 fn resolves_duplicated_change_ids() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
@@ -79,7 +78,6 @@ commit: 1 71c4380695ab83fc7ff085860bb656ab27ed524e
 "#]]);
 }
 
-#[cfg(feature = "legacy")]
 #[test]
 fn resolves_distinct_change_id_prefixes() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
@@ -105,7 +103,70 @@ commit: 132 ea3b1e3ff9f628d463fc5d66a20a9d523fb9a95b
 "#]]);
 }
 
-#[cfg(feature = "legacy")]
+/// It's important for usability that change IDs on remote commits do not interfere with change IDs
+/// on local commits. At the time of writing this test we don't include change IDs for remote
+/// commits in ID resolution, but if we do in the future we should take care to put them in a
+/// separate namespace from local commits.
+#[test]
+fn changing_pushed_commit_does_not_cause_change_id_ambiguity() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    set_change_id(&env, "123");
+    env.file("file", "some content");
+    env.but("_commit2 -m first").assert().success();
+
+    env.file("file", "some other content");
+    env.but("_commit2 -m second").assert().success();
+
+    env.invoke_git("update-ref refs/remotes/origin/a-branch-1 refs/heads/a-branch-1");
+    env.invoke_git("config branch.a-branch-1.remote origin");
+    env.invoke_git("config branch.a-branch-1.merge refs/heads/a-branch-1");
+
+    // Undo to before the second commit
+    env.but("undo").assert().success();
+    env.but("discard zz").assert().success();
+
+    // now reword the first to properly diverge
+    env.but("reword 123 -m 'rewritten'").assert().success();
+
+    env.but("status")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted] (no changes)
+┊
+┊╭┄br [a-branch-1]
+┊┊
+┊╭┄┄(upstream: on origin/a-branch-1)
+┊●   a5caff1 second
+┊-
+┊◐   123 96b6213 rewritten
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+    assert_eq!(
+        env.invoke_git("rev-list --count refs/remotes/origin/a-branch-1 ^refs/heads/a-branch-1"),
+        "2",
+        "remote should have two divergent commits with the local commit's change ID"
+    );
+
+    // This should still unambiguously refer to the one local commit with that change ID
+    env.but("_expand 123")
+        .assert()
+        .success()
+        .stdout_eq(str![[r#"
+Matches: 1
+
+commit: 123 96b6213[..]
+
+"#]]);
+}
+
 fn set_change_id(env: &Sandbox, change_id: &str) {
     env.invoke_git(&format!(
         "config --local gitbutler.testing.changeId {change_id}"

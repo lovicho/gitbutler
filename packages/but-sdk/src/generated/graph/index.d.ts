@@ -439,8 +439,6 @@ export declare function peelRestoreSnapshot(projectId: string, sha: string): Pro
 
 export declare function publishReview(projectId: string, params: CreateForgeReviewParams): Promise<ForgeReview>
 
-export declare function pushStack(projectId: string, stackId: string, withForce: boolean, skipForcePushProtection: boolean, branch: string, runHooks: boolean, pushOpts: Array<PushFlag>): Promise<PushResult>
-
 /**
  * Remove a branch from a stack.
  *

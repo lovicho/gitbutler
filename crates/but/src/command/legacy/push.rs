@@ -1,7 +1,7 @@
 use std::fmt::Write;
 
 use anyhow::Context as _;
-use but_core::{RepositoryExt, ref_metadata::StackId, sync::RepoShared};
+use but_core::{RepositoryExt, extract_remote_name_and_short_name, sync::RepoShared};
 use but_ctx::Context;
 use gitbutler_git::PushResult;
 use serde::Serialize;
@@ -202,7 +202,7 @@ fn handle_dry_run(
     let stacks = crate::legacy::workspace::applied_stacks_with_expensive_commit_info(ctx)?;
 
     // Limit the shared lock to target resolution before continuing with dry-run analysis.
-    let remote = {
+    let fallback_remote = {
         let guard = ctx.shared_worktree_access();
         workspace_target::ResolvedTarget::resolve_with_perm(ctx, guard.read_permission())?
             .push_remote_name()
@@ -221,7 +221,21 @@ fn handle_dry_run(
             if stack_entry.id.is_some()
                 && let Some(branch_detail) = stack_entry.branch(branch_name)
             {
-                let remote_ref = dry_run_remote_ref(&branch_detail.name, &remote)?;
+                let remote_ref = match repo
+                    .branch_remote_tracking_ref_name(
+                        branch_detail.reference.as_ref(),
+                        gix::remote::Direction::Fetch,
+                    )
+                    .transpose()?
+                {
+                    Some(remote_ref) => remote_ref.into_owned(),
+                    None => dry_run_remote_ref(&branch_detail.name, &fallback_remote)?,
+                };
+                let (remote, _) =
+                    extract_remote_name_and_short_name(remote_ref.as_ref(), &remote_names)
+                        .with_context(|| {
+                            format!("Failed to determine remote for dry-run ref `{remote_ref}`")
+                        })?;
 
                 // Collect commit information
                 let commits: Vec<DryRunCommit> = branch_detail
@@ -274,7 +288,7 @@ fn handle_dry_run(
                     branch_name: branch_name.clone(),
                     stack_name: stack_name.clone(),
                     unpushed_commits: *unpushed_count,
-                    remote: remote.clone(),
+                    remote,
                     remote_ref,
                     commits,
                     upstream_commits,
@@ -567,7 +581,7 @@ fn push_single_branch(
     out: &mut OutputChannel,
 ) -> anyhow::Result<()> {
     let t = theme::get();
-    let result = push_single_branch_impl(ctx, perm, branch_name, args, gerrit_mode)?;
+    let result = push_single_branch_impl(ctx, branch_name, args, gerrit_mode)?;
 
     if let Some(out) = out.for_json() {
         out.write_value(&result)?;
@@ -612,7 +626,6 @@ fn push_single_branch(
 // Shared implementation for pushing a single branch
 fn push_single_branch_impl(
     ctx: &mut Context,
-    perm: &RepoShared,
     branch_name: &str,
     args: &Command,
     gerrit_mode: bool,
@@ -620,25 +633,18 @@ fn push_single_branch_impl(
     // Check for conflicted commits before pushing
     check_for_conflicted_commits(ctx, branch_name)?;
 
-    // Find stack_id from branch name
-    let stack_id = find_stack_id_by_branch_name(ctx, branch_name)?;
-
     // Convert CLI args to gerrit flags with validation
     let gerrit_flags = get_gerrit_flags(args, branch_name, gerrit_mode)?;
 
-    // Call push_stack
-    let result: PushResult = but_api::legacy::stack::push_stack_with_perm(
+    let branch = gix::refs::Category::LocalBranch.to_full_name(branch_name)?;
+    but_api::legacy::workspace::workspace_branch_and_ancestors_push(
         ctx,
-        stack_id,
         args.with_force,
         args.skip_force_push_protection,
-        branch_name.to_string(),
+        branch.as_ref(),
         !args.no_hooks,
         gerrit_flags,
-        perm,
-    )?;
-
-    Ok(result)
+    )
 }
 
 /// Returns `true` if at least one branch was pushed successfully.
@@ -695,7 +701,7 @@ fn push_all_branches(
             t.important.paint(&branch_name)
         )?;
 
-        match push_single_branch_impl(ctx, perm, &branch_name, args, gerrit_mode) {
+        match push_single_branch_impl(ctx, &branch_name, args, gerrit_mode) {
             Ok(result) => {
                 total_commits_pushed += unpushed_count;
                 writeln!(
@@ -1109,32 +1115,6 @@ fn gerrit_review_ref(
             .unwrap_or_else(|| target_ref_name.shorten().to_string());
 
     Ok(format!("refs/for/{target_branch}"))
-}
-
-fn find_stack_id_by_branch_name(ctx: &Context, branch_name: &str) -> anyhow::Result<StackId> {
-    let stacks = crate::legacy::workspace::applied_stacks(ctx)?;
-
-    // Find which stack this branch belongs to
-    for stack_entry in &stacks {
-        if stack_entry.contains_branch(branch_name)
-            && let Some(id) = stack_entry.id
-        {
-            return Ok(id);
-        }
-    }
-
-    // This should rarely happen now since we validate branch existence earlier,
-    // but provide a helpful error just in case
-    let available_branches: Vec<String> = stacks
-        .iter()
-        .flat_map(|stack| stack.branch_names().map(ToOwned::to_owned))
-        .collect();
-
-    Err(anyhow::anyhow!(
-        "Branch '{}' not found in any stack. Available branches:\n{}",
-        branch_name,
-        format_branch_suggestions(&available_branches)
-    ))
 }
 
 /// Update PR/MR target branches to match the current stack structure.

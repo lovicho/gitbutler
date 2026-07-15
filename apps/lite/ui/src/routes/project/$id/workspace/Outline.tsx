@@ -90,12 +90,7 @@ export const Outline: FC<
 			},
 			{
 				onSuccess: (response) => {
-					const newBranchStack = getHeadInfoIndex(
-						response.workspace.headInfo,
-					).branchContextByRefBytes(response.newRef.fullNameBytes)?.stack;
-
-					if (newBranchStack && newBranchStack.id !== null)
-						selectBranch({ stackId: newBranchStack.id, branchRef: response.newRef.fullNameBytes });
+					selectBranch({ branchRef: response.newRef.fullNameBytes });
 				},
 			},
 		);

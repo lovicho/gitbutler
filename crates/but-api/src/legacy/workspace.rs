@@ -381,7 +381,7 @@ pub fn target_commits(
 }
 
 /// Push a branch and any parent references that lie within the current workspace projection.
-#[but_api(napi, crate::legacy::stack::json::PushResult)]
+#[but_api(napi, json::PushResult)]
 #[instrument(err(Debug))]
 pub fn workspace_branch_and_ancestors_push(
     ctx: &mut Context,
@@ -429,4 +429,38 @@ pub fn workspace_branch_and_ancestors_push(
     )?;
 
     Ok(result)
+}
+
+pub mod json {
+    use serde::Serialize;
+
+    /// JSON-friendly version of [`gitbutler_git::PushResult`].
+    #[derive(Debug, Serialize)]
+    #[cfg_attr(feature = "export-schema", derive(schemars::JsonSchema))]
+    #[serde(rename_all = "camelCase")]
+    pub struct PushResult {
+        /// The name of the remote to which the branches were pushed.
+        pub remote: String,
+        /// The list of pushed branches and their corresponding remote refnames.
+        pub branch_to_remote: Vec<(String, String)>,
+        /// The list of branches with their before/after commit SHAs.
+        /// Format: (branch_name, before_sha, after_sha)
+        pub branch_sha_updates: Vec<(String, String, String)>,
+    }
+    #[cfg(feature = "export-schema")]
+    but_schemars::register_sdk_type!(PushResult);
+
+    impl From<gitbutler_git::PushResult> for PushResult {
+        fn from(value: gitbutler_git::PushResult) -> Self {
+            Self {
+                remote: value.remote,
+                branch_to_remote: value
+                    .branch_to_remote
+                    .into_iter()
+                    .map(|(name, refname)| (name, refname.to_string()))
+                    .collect(),
+                branch_sha_updates: value.branch_sha_updates,
+            }
+        }
+    }
 }

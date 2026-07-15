@@ -120,7 +120,7 @@ export function normalizedErrorToException(error: {
 	fingerprint?: readonly string[];
 }): Error {
 	const err = new Error(error.message);
-	// Prefer the backend-provided name (e.g. "API error: (push_stack)") over
+	// Prefer the backend-provided name (e.g. "API error: (workspace_branch_and_ancestors_push)") over
 	// the default "Error" so Sentry's title grouping matches the PostHog
 	// taxonomy we already filter by.
 	err.name = error.name || "Error";

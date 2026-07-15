@@ -7,8 +7,11 @@ import {
 	useUpdateBranchName,
 	useWorkspaceBranchAndAncestorsPush,
 } from "#ui/api/mutations.ts";
-import { forgeInfoOptions, listCIChecksQueryOptions } from "#ui/api/queries.ts";
-import { getHeadInfoIndex } from "#ui/api/ref-info.ts";
+import {
+	forgeInfoOptions,
+	listCIChecksQueryOptions,
+	listReviewsQueryOptions,
+} from "#ui/api/queries.ts";
 import { decodeBytes } from "#ui/api/bytes.ts";
 import { Button, Toast, Tooltip } from "@base-ui/react";
 import { Toolbar } from "@base-ui/react/toolbar";
@@ -114,7 +117,6 @@ export const BranchRow: FC<
 		downstackPushStatus: DownstackPushStatus;
 		pushStatus: PushStatus;
 		graphStatus: GraphSegmentStatus;
-		pullRequest: number | null;
 		bottomRelativeTo: RelativeTo | null;
 		isTopSegment: boolean;
 	} & ComponentProps<"div">
@@ -128,12 +130,15 @@ export const BranchRow: FC<
 	downstackPushStatus,
 	pushStatus,
 	graphStatus,
-	pullRequest,
 	bottomRelativeTo,
 	isTopSegment,
 	...restProps
 }) => {
 	const { data: forgeInfo } = useQuery(forgeInfoOptions(projectId));
+	const { data: reviews } = useQuery(
+		listReviewsQueryOptions({ projectId, cacheConfig: "noCache" }),
+	);
+	const pullRequest = reviews?.reviewsBySourceBranch.get(refName.displayName)?.number ?? null;
 	const mforgeUrl = pullRequest !== null ? forgeInfo && prForgeUrl(pullRequest, forgeInfo) : null;
 
 	const { data: ciChecks } = useQuery({
@@ -149,7 +154,6 @@ export const BranchRow: FC<
 
 	const dispatch = useAppDispatch();
 	const branchOperandV: BranchOperand = {
-		stackId,
 		branchRef: refName.fullNameBytes,
 	};
 	const operand = branchOperand(branchOperandV);
@@ -171,7 +175,6 @@ export const BranchRow: FC<
 
 	const { mutateAsync: updateBranchName } = useUpdateBranchName({
 		projectId,
-		stackId,
 		branchRef: refName.fullNameBytes,
 		oldBranch: branchOperandV,
 	});
@@ -272,21 +275,14 @@ export const BranchRow: FC<
 			},
 			{
 				onSuccess: (response) => {
-					const newBranchStack = getHeadInfoIndex(
-						response.workspace.headInfo,
-					).branchContextByRefBytes(response.newRef.fullNameBytes)?.stack;
-
-					if (newBranchStack && newBranchStack.id !== null) {
-						dispatch(
-							projectSlice.actions.selectOutline({
-								projectId,
-								selection: branchOperand({
-									stackId: newBranchStack.id,
-									branchRef: response.newRef.fullNameBytes,
-								}),
+					dispatch(
+						projectSlice.actions.selectOutline({
+							projectId,
+							selection: branchOperand({
+								branchRef: response.newRef.fullNameBytes,
 							}),
-						);
-					}
+						}),
+					);
 				},
 			},
 		);

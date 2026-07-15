@@ -390,8 +390,6 @@ impl<'a> Node<'a> for &'a WorkspaceCommitWithId {
 pub struct RemoteCommitWithId {
     /// The short ID.
     pub short_id: ShortId,
-    /// The change ID.
-    pub change_id: Option<ChangeIdWithShortId>,
     /// The original remote commit.
     pub inner: StackCommit,
 }
@@ -419,7 +417,7 @@ impl<'a> Node<'a> for &'a RemoteCommitWithId {
         Ok(Some(CliId::Commit {
             commit_id: self.commit_id(),
             id: self.short_id.clone(),
-            change_id: self.change_id.as_ref().map(|id| id.change_id.clone()),
+            change_id: None,
         }))
     }
 }
@@ -646,15 +644,10 @@ impl IdMap {
             .iter_mut()
             .flat_map(|stack| stack.segments.iter_mut())
             .flat_map(|segment| {
-                let ws_commits = segment
+                segment
                     .workspace_commits
                     .iter_mut()
-                    .filter_map(|c| c.change_id.as_mut());
-                let remote_commits = segment
-                    .remote_commits
-                    .iter_mut()
-                    .filter_map(|c| c.change_id.as_mut());
-                ws_commits.chain(remote_commits)
+                    .filter_map(|c| c.change_id.as_mut())
             })
         {
             reverse_hex_short_ids.push((change_id.change_id.clone(), Some(&mut change_id.short_id)))
@@ -844,12 +837,7 @@ impl IdMap {
             .stacks
             .iter()
             .flat_map(|stack| &stack.segments)
-            .flat_map(|segment| {
-                segment
-                    .commits
-                    .iter()
-                    .chain(segment.commits_on_remote.iter())
-            })
+            .flat_map(|segment| segment.commits.iter())
             .map(|c| c.id);
 
         let commit_id_to_change_id = commit_ids
@@ -1020,7 +1008,11 @@ impl IdMap {
                 for remote_commit_with_id in segment_with_id.remote_commits.iter() {
                     if element_matches_commit(
                         remote_commit_with_id.commit_id(),
-                        remote_commit_with_id.change_id.as_ref(),
+                        // We currently do not allow change ID matching against remote commits to
+                        // prevent unnecessary ambiguity with local commits. If we do want this
+                        // feature in the future, we should probably put remote commit change IDs in
+                        // a separate namespace by prefixing something to them.
+                        None,
                     ) {
                         matches.push(Box::new(remote_commit_with_id))
                     }

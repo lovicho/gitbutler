@@ -1052,7 +1052,7 @@ fn committing_specific_cli_ids() {
         .success()
         .stdout_eq(snapbox::str![[r#"
 ╭┄zz [uncommitted]
-┊      k A one
+┊   k    A one
 ┊   twop A two
 ┊
 ┊╭┄g0 [A]
@@ -1559,7 +1559,7 @@ fn committing_below_an_empty_branch() {
         .success()
         .stdout_eq(snapbox::str![[r#"
 ╭┄zz [uncommitted]
-┊      k A one
+┊   k    A one
 ┊   twop A two
 ┊
 ┊╭┄to [top] (no commits)

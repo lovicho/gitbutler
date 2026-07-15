@@ -89,10 +89,14 @@ export const useOutlineTreeHotkeys = ({
 		(state) => projectSlice.selectors.selectOutlineModeState(state, projectId)._tag === "Default",
 	);
 
-	const selectedStack =
-		selection && "stackId" in selection
-			? headInfoIndex?.stackContextById(selection.stackId)?.stack
-			: undefined;
+	const selectionStack = Match.value(selection).pipe(
+		Match.tags({
+			Stack: (stack) => headInfoIndex?.stackContextById(stack.stackId)?.stack,
+			Branch: (branch) => headInfoIndex?.branchContextByRefBytes(branch.branchRef)?.stack,
+			Commit: (commit) => headInfoIndex?.commitContextById(commit.commitId)?.stack,
+		}),
+		Match.orElse(() => undefined),
+	);
 	const selectedBranchSegment =
 		selection?._tag === "Branch"
 			? headInfoIndex?.branchContextByRefBytes(selection.branchRef)?.segment
@@ -208,21 +212,14 @@ export const useOutlineTreeHotkeys = ({
 			},
 			{
 				onSuccess: (response) => {
-					const newBranchStack = getHeadInfoIndex(
-						response.workspace.headInfo,
-					).branchContextByRefBytes(response.newRef.fullNameBytes)?.stack;
-
-					if (newBranchStack && newBranchStack.id !== null) {
-						dispatch(
-							projectSlice.actions.selectOutline({
-								projectId,
-								selection: branchOperand({
-									stackId: newBranchStack.id,
-									branchRef: response.newRef.fullNameBytes,
-								}),
+					dispatch(
+						projectSlice.actions.selectOutline({
+							projectId,
+							selection: branchOperand({
+								branchRef: response.newRef.fullNameBytes,
 							}),
-						);
-					}
+						}),
+					);
 				},
 			},
 		);
@@ -288,7 +285,7 @@ export const useOutlineTreeHotkeys = ({
 
 		const selectionAfterDiscard = selectAfterDiscardedCommit({
 			navigationIndex,
-			commit: { stackId: selection.stackId, commitId: selection.commitId },
+			commit: { commitId: selection.commitId },
 		});
 
 		commitDiscard(
@@ -305,7 +302,6 @@ export const useOutlineTreeHotkeys = ({
 							selection: rewrittenCommitSelection({
 								selection: selectionAfterDiscard,
 								replacedCommits: response.workspace.replacedCommits,
-								headInfo: response.workspace.headInfo,
 							}),
 						}),
 					);
@@ -322,13 +318,13 @@ export const useOutlineTreeHotkeys = ({
 				: undefined;
 
 	const selectedPushContext =
-		selectedStack && selectedSegmentIndex !== undefined
+		selectionStack && selectedSegmentIndex !== undefined
 			? pushContextForSegment({
-					segments: selectedStack.segments,
+					segments: selectionStack.segments,
 					segmentIndex: selectedSegmentIndex,
 				})
 			: null;
-	const selectedStackRelativeTo = selectedStack ? stackBottomRelativeTo(selectedStack) : null;
+	const selectedStackRelativeTo = selectionStack ? stackBottomRelativeTo(selectionStack) : null;
 	const selectedStackRebaseUpdate: BottomUpdate | null = selectedStackRelativeTo
 		? { kind: "rebase", selector: selectedStackRelativeTo }
 		: null;

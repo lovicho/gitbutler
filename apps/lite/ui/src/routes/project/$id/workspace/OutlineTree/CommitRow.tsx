@@ -8,7 +8,6 @@ import {
 	useCommitUncommit,
 } from "#ui/api/mutations.ts";
 import { forgeInfoOptions } from "#ui/api/queries.ts";
-import { getHeadInfoIndex } from "#ui/api/ref-info.ts";
 import { classes } from "#ui/components/classes.ts";
 import { GraphSegment } from "#ui/components/GraphSegment.tsx";
 import { Icon } from "#ui/components/Icon.tsx";
@@ -57,11 +56,10 @@ export const CommitRow: FC<
 	{
 		commit: Commit;
 		projectId: string;
-		stackId: string;
 		isCommitTarget: boolean;
 		dryRunCommit: Commit | null;
 	} & ComponentProps<"div">
-> = ({ commit, projectId, stackId, isCommitTarget, dryRunCommit, ...restProps }) => {
+> = ({ commit, projectId, isCommitTarget, dryRunCommit, ...restProps }) => {
 	const { data: forgeInfo } = useQuery(forgeInfoOptions(projectId));
 	const mforgeUrl = forgeInfo && commitForgeUrl(commit, forgeInfo);
 
@@ -75,7 +73,6 @@ export const CommitRow: FC<
 	const dispatch = useAppDispatch();
 	const navigationIndex = assert(use(NavigationIndexContext));
 	const commitOperandV: CommitOperand = {
-		stackId,
 		commitId: commit.id,
 	};
 	const operand = commitOperand(commitOperandV);
@@ -132,21 +129,14 @@ export const CommitRow: FC<
 			},
 			{
 				onSuccess: (response) => {
-					const newBranchStack = getHeadInfoIndex(
-						response.workspace.headInfo,
-					).branchContextByRefBytes(response.newRef.fullNameBytes)?.stack;
-
-					if (newBranchStack && newBranchStack.id !== null) {
-						dispatch(
-							projectSlice.actions.selectOutline({
-								projectId,
-								selection: branchOperand({
-									stackId: newBranchStack.id,
-									branchRef: response.newRef.fullNameBytes,
-								}),
+					dispatch(
+						projectSlice.actions.selectOutline({
+							projectId,
+							selection: branchOperand({
+								branchRef: response.newRef.fullNameBytes,
 							}),
-						);
-					}
+						}),
+					);
 				},
 			},
 		);
@@ -172,7 +162,6 @@ export const CommitRow: FC<
 							selection: rewrittenCommitSelection({
 								selection: selectionAfterDiscard,
 								replacedCommits: response.workspace.replacedCommits,
-								headInfo: response.workspace.headInfo,
 							}),
 						}),
 					);

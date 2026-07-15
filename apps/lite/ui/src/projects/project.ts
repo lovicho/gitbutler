@@ -25,7 +25,7 @@ import {
 	type TransferMode,
 } from "#ui/outline/mode.ts";
 import { navigationIndexIncludes, type NavigationIndex } from "#ui/workspace/navigation-index.ts";
-import type { AbsorptionTarget, RefInfo, RelativeTo } from "@gitbutler/but-sdk";
+import type { AbsorptionTarget, RelativeTo } from "@gitbutler/but-sdk";
 import { Match } from "effect";
 
 export type Dialog =
@@ -313,13 +313,12 @@ export const projectReducers = {
 	},
 	updateRewrittenCommitReferences: (
 		state: ProjectState,
-		{ replacedCommits, headInfo }: { replacedCommits: Record<string, string>; headInfo: RefInfo },
+		{ replacedCommits }: { replacedCommits: Record<string, string> },
 	) => {
 		const workspaceState = state.workspace;
 		const commit = rewrittenCommitSelection({
 			selection: workspaceState.selection.outline,
 			replacedCommits,
-			headInfo,
 		});
 		if (commit) workspaceState.selection.outline = commit;
 
@@ -341,7 +340,6 @@ export const projectReducers = {
 			const commit = rewrittenCommitOperand({
 				commit: workspaceState.mode.operand,
 				replacedCommits,
-				headInfo,
 			});
 			if (commit) workspaceState.mode = rewordCommitOutlineMode({ operand: commit });
 		}

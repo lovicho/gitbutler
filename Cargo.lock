@@ -3863,7 +3863,6 @@ dependencies = [
  "but-core",
  "but-ctx",
  "but-error",
- "but-gerrit",
  "but-graph",
  "but-meta",
  "but-oxidize",

@@ -4,7 +4,6 @@ use std::{
     sync::{Arc, mpsc::Receiver},
 };
 
-use anyhow::Context as _;
 use bstr::ByteSlice;
 use but_ctx::Context;
 use crossterm::event::Event;
@@ -19,7 +18,7 @@ use crate::{
         FilesStatusFlag, StatusFlags, StatusOutputLine, TuiLaunchOptions, TuiOutcome,
         TuiRunOptions,
         output::StatusOutputLineData,
-        tui::{app::mark::SingleSourceMarks, details::Details},
+        tui::{app::mark::SingleSourceMarks, copy_selection_picker::Clipboard, details::Details},
     },
     id::UncommittedHunkOrFile,
     theme::Theme,
@@ -107,6 +106,7 @@ pub struct App {
     pub backstack: Backstack,
     pub file_browser: Option<FileBrowser>,
     pub head_sha: String,
+    pub clipboard: Clipboard,
 }
 
 impl App {
@@ -118,6 +118,7 @@ impl App {
         show_file_browser: bool,
         mut incoming_out_of_band_messages: Vec<Receiver<Message>>,
         head_sha: String,
+        clipboard: Clipboard,
     ) -> Self {
         let cursor = if let Some(object_id) = launch_options.select_commit {
             Cursor::select_commit(object_id, &status_lines)
@@ -131,7 +132,7 @@ impl App {
         let (details_tx, details_rx) = std::sync::mpsc::channel::<Message>();
         incoming_out_of_band_messages.push(details_rx);
 
-        let details = Details::new(theme, details_tx);
+        let details = Details::new(theme, details_tx, clipboard.clone());
         let is_details_visible = launch_options.show_diff;
 
         let app_key_binds = AppKeyBinds {
@@ -174,6 +175,7 @@ impl App {
             has_focus: true,
             file_browser,
             head_sha,
+            clipboard,
         }
     }
 
@@ -375,6 +377,9 @@ impl App {
             }
             Message::CopySelectionPicker => {
                 self.handle_copy_selection_picker()?;
+            }
+            Message::CopyToClipboard(text) => {
+                self.clipboard.set_text(text)?;
             }
             Message::ShowToast { kind, text } => {
                 self.toasts.insert(kind, text);
@@ -1150,7 +1155,11 @@ impl App {
 
         let what_to_copy = match &**cli_id {
             CliId::Branch { name, .. } => Cow::Borrowed(&**name),
-            CliId::Commit { commit_id, .. } => Cow::Owned(commit_id.to_hex_with_len(7).to_string()),
+            CliId::Commit {
+                commit_id,
+                change_id,
+                ..
+            } => Cow::Owned(commit_identifier_to_copy(*commit_id, change_id.as_ref())),
             CliId::CommittedFile { path, .. } => path.to_str_lossy(),
             CliId::UncommittedHunkOrFile(uncommitted) => {
                 Cow::Borrowed(&*uncommitted.hunk_assignments.first().path)
@@ -1160,9 +1169,7 @@ impl App {
             }
         };
 
-        arboard::Clipboard::new()
-            .and_then(|mut clipboard| clipboard.set_text(what_to_copy))
-            .context("failed to copy to system clipboard")?;
+        self.clipboard.set_text(what_to_copy)?;
 
         self.highlight
             .insert(Arc::unwrap_or_clone(Arc::clone(cli_id)));
@@ -1457,6 +1464,16 @@ pub fn format_error_for_tui(err: &anyhow::Error) -> String {
     output
 }
 
+fn commit_identifier_to_copy(
+    commit_id: gix::ObjectId,
+    change_id: Option<&but_core::ChangeId>,
+) -> String {
+    change_id.map_or_else(
+        || commit_id.to_hex_with_len(7).to_string(),
+        |change_id| change_id.to_string().chars().take(8).collect(),
+    )
+}
+
 #[derive(Debug, Clone)]
 pub enum GotoBranchItem {
     Branch(FullName),
@@ -1482,5 +1499,35 @@ impl FuzzyPickerItem for GotoBranchItem {
             Self::Branch(..) => theme.local_branch,
             Self::Uncommitted => theme.info,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::commit_identifier_to_copy;
+
+    #[test]
+    fn commit_copy_identifier_prefers_eight_characters_of_the_change_id() {
+        let commit_id = gix::ObjectId::from_hex(b"1111111111111111111111111111111111111111")
+            .expect("test commit ID is valid");
+        let change_id = but_core::ChangeId::from_number_for_testing(12345678901234567890);
+
+        assert_eq!(
+            commit_identifier_to_copy(commit_id, Some(&change_id)),
+            "12345678",
+            "the first eight change ID characters should be copied"
+        );
+    }
+
+    #[test]
+    fn commit_copy_identifier_falls_back_to_the_short_commit_id() {
+        let commit_id = gix::ObjectId::from_hex(b"1111111222222222222222222222222222222222")
+            .expect("test commit ID is valid");
+
+        assert_eq!(
+            commit_identifier_to_copy(commit_id, None),
+            "1111111",
+            "commits without change IDs should retain the existing fallback"
+        );
     }
 }

@@ -96,6 +96,7 @@ export const CommandPalette: FC<Props> = ({ open, onOpenChange }) => {
 			getItemKey={(x) => x.id}
 			getItemLabel={(x) => x.name}
 			getItemType={(x) => <Kbd hotkey={x.hotkey} />}
+			itemToStringValue={(x) => `${x.group}: ${x.name}`}
 			items={items}
 			open={open}
 			onOpenChange={onOpenChange}

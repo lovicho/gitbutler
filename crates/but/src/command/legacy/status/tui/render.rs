@@ -597,7 +597,15 @@ fn render_status_list_item(
                 message,
                 suffix,
             }) => {
-                if !change_id.is_empty()
+                if line_has_copied_highlight && !change_id.is_empty() {
+                    line.extend(change_id.iter().cloned().map(|span| {
+                        if span.content.trim().is_empty() {
+                            span
+                        } else {
+                            with_highlight(span)
+                        }
+                    }));
+                } else if !change_id.is_empty()
                     && let Mode::Jump(jump_mode) = &*app.mode
                 {
                     line.extend(style_jump_mode_matches(
@@ -609,7 +617,7 @@ fn render_status_list_item(
                     line.extend(change_id.iter().cloned());
                 }
 
-                if line_has_copied_highlight {
+                if line_has_copied_highlight && change_id.is_empty() {
                     line.extend(sha.iter().cloned().map(with_highlight));
                 } else if change_id.is_empty()
                     && let Mode::Jump(jump_mode) = &*app.mode

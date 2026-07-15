@@ -24,9 +24,25 @@ fn repo_with_unpushed_branch() -> anyhow::Result<Sandbox> {
     Ok(env)
 }
 
+fn configure_other_tracking_remote(env: &Sandbox) -> std::path::PathBuf {
+    let remote_base = env.invoke_git("rev-parse refs/heads/branchB^");
+    let other = env.app_data_dir().join("other.git");
+    env.invoke_bash(format!(
+        "rm -rf {other} && git clone -q --bare . {other} && \
+         git remote add other {other} && \
+         git config branch.branchB.remote other && \
+         git config branch.branchB.merge refs/heads/branchB && \
+         git --git-dir={other} update-ref refs/heads/branchB {remote_base} && \
+         git update-ref refs/remotes/other/branchB {remote_base}",
+        other = other.display(),
+    ));
+    other
+}
+
 #[test]
 fn push_dry_run_json_reports_remote_and_remote_ref() -> anyhow::Result<()> {
     let env = repo_with_unpushed_branch()?;
+    configure_other_tracking_remote(&env);
 
     let output = env
         .but("push --dry-run --format json branchB")
@@ -48,7 +64,7 @@ fn push_dry_run_json_reports_remote_and_remote_ref() -> anyhow::Result<()> {
     let branch = &branches[0];
 
     assert_eq!(branch["branchName"], "branchB");
-    assert_eq!(branch["remote"], "origin");
+    assert_eq!(branch["remote"], "other");
     let remote_ref = if let Some(remote_ref) = branch["remoteRef"].as_str() {
         remote_ref.to_owned()
     } else {
@@ -64,7 +80,7 @@ fn push_dry_run_json_reports_remote_and_remote_ref() -> anyhow::Result<()> {
             .collect();
         String::from_utf8(bytes)?
     };
-    assert_eq!(remote_ref, "refs/remotes/origin/branchB");
+    assert_eq!(remote_ref, "refs/remotes/other/branchB");
 
     Ok(())
 }
@@ -89,6 +105,26 @@ fn push_dry_run_agent_reports_human_summary() -> anyhow::Result<()> {
         output.stderr.is_empty(),
         "agent dry-run push should not print progress, got: {}",
         String::from_utf8_lossy(&output.stderr)
+    );
+
+    Ok(())
+}
+
+#[test]
+fn push_uses_tracking_remote_when_branch_tracks_another_remote() -> anyhow::Result<()> {
+    let env = repo_with_unpushed_branch()?;
+    let local_tip = env.invoke_git("rev-parse refs/heads/branchB");
+    let other = configure_other_tracking_remote(&env);
+
+    env.but("push branchB").assert().success();
+
+    assert_eq!(
+        env.invoke_git(&format!(
+            "--git-dir={} rev-parse refs/heads/branchB",
+            other.display()
+        )),
+        local_tip,
+        "push should update the branch's tracking remote"
     );
 
     Ok(())

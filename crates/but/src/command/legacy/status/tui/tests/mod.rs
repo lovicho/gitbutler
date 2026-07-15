@@ -15,6 +15,7 @@ mod branch_picker_tests;
 mod branch_tests;
 mod command_tests;
 mod commit_tests;
+mod copy_tests;
 mod details_tests;
 mod discard_tests;
 mod jump_tests;

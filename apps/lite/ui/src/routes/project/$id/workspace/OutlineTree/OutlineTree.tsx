@@ -288,7 +288,7 @@ const BranchSegment: FC<{
 	downstackPushStatus,
 	isTopSegment,
 }) => {
-	const operand = branchOperand({ stackId, branchRef: refName.fullNameBytes });
+	const operand = branchOperand({ branchRef: refName.fullNameBytes });
 
 	return (
 		<TreeItem
@@ -315,19 +315,13 @@ const BranchSegment: FC<{
 				}
 				pushStatus={segment.pushStatus}
 				graphStatus={segmentPushStatusToGraphSegmentStatus(segment.pushStatus)}
-				pullRequest={segment.metadata?.review.pullRequest ?? null}
 				bottomRelativeTo={segmentBottomRelativeTo(segment)}
 				isTopSegment={isTopSegment}
 			/>
 
 			{/* oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- Tree items need ARIA group semantics. */}
 			<div role="group">
-				<SegmentContent
-					projectId={projectId}
-					segment={segment}
-					stackId={stackId}
-					commitTarget={commitTarget}
-				/>
+				<SegmentContent projectId={projectId} segment={segment} commitTarget={commitTarget} />
 			</div>
 		</TreeItem>
 	);
@@ -335,14 +329,13 @@ const BranchSegment: FC<{
 
 const EmptySegmentContent: FC<{
 	segment: Segment;
-	stackId: string;
-}> = ({ segment, stackId }) => {
+}> = ({ segment }) => {
 	const navigationIndex = assert(use(NavigationIndexContext));
 
 	const refName = assert(segment.refName);
 	const inert = !navigationIndexIncludes(
 		navigationIndex,
-		branchOperand({ stackId, branchRef: refName.fullNameBytes }),
+		branchOperand({ branchRef: refName.fullNameBytes }),
 		operandIdentityKey,
 	);
 
@@ -364,11 +357,9 @@ const EmptySegmentContent: FC<{
 const SegmentContent: FC<{
 	projectId: string;
 	segment: Segment;
-	stackId: string;
 	commitTarget: RelativeTo | null;
-}> = ({ projectId, segment, stackId, commitTarget }) => {
-	if (segment.commits.length === 0)
-		return <EmptySegmentContent segment={segment} stackId={stackId} />;
+}> = ({ projectId, segment, commitTarget }) => {
+	if (segment.commits.length === 0) return <EmptySegmentContent segment={segment} />;
 
 	const dryRunWorkspace = use(DryRunWorkspaceContext);
 	const dryRunHeadInfoIndex = dryRunWorkspace ? getHeadInfoIndex(dryRunWorkspace.headInfo) : null;
@@ -376,7 +367,7 @@ const SegmentContent: FC<{
 	return (
 		<div>
 			{segment.commits.map((commit) => {
-				const operand = commitOperand({ stackId, commitId: commit.id });
+				const operand = commitOperand({ commitId: commit.id });
 				const dryRunCommitId = dryRunWorkspace?.replacedCommits[commit.id];
 				const dryRunCommit =
 					dryRunCommitId !== undefined
@@ -397,7 +388,6 @@ const SegmentContent: FC<{
 									<CommitRow
 										commit={commit}
 										projectId={projectId}
-										stackId={stackId}
 										isCommitTarget={
 											commitTarget
 												? relativeToEquals(commitTarget, {
@@ -478,7 +468,6 @@ const StackC: FC<{
 									<SegmentContent
 										projectId={projectId}
 										segment={segment}
-										stackId={stackId}
 										commitTarget={commitTarget}
 									/>
 								)}
@@ -490,8 +479,8 @@ const StackC: FC<{
 									!navigationIndexIncludes(
 										navigationIndex,
 										segment.commits.length === 0
-											? branchOperand({ stackId, branchRef: assert(segment.refName).fullNameBytes })
-											: commitOperand({ stackId, commitId: assert(segment.commits.at(-1)).id }),
+											? branchOperand({ branchRef: assert(segment.refName).fullNameBytes })
+											: commitOperand({ commitId: assert(segment.commits.at(-1)).id }),
 										operandIdentityKey,
 									)
 								}

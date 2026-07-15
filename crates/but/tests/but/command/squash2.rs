@@ -886,8 +886,8 @@ fn amend_uncommitted_files_into_commit() {
         .success()
         .stdout_eq(snapbox::str![[r#"
 ╭┄zz [uncommitted]
-┊      k A one
-┊     or A three
+┊   k    A one
+┊   or   A three
 ┊   twop A two
 ┊
 ┊╭┄br [a-branch-1]
@@ -937,8 +937,8 @@ fn amend_all_uncommitted_changes_into_commit() {
         .success()
         .stdout_eq(snapbox::str![[r#"
 ╭┄zz [uncommitted]
-┊      k A one
-┊     or A three
+┊   k    A one
+┊   or   A three
 ┊   twop A two
 ┊
 ┊╭┄br [a-branch-1]

@@ -69,8 +69,6 @@ export type HunkLineSelection = {
 	hunkHeader: HunkHeader;
 	/** Changed-line groups covered by the single visual range, in hunk order. */
 	lineGroups: Array<HunkLineSelectionGroup>;
-	/** The single CodeView selection range to show for this selection. */
-	range: SelectedLineRange;
 };
 
 const lineGroupsFromChangeContent = (
@@ -97,7 +95,7 @@ const lineGroupsFromChangeContent = (
 		: []),
 ];
 
-const rangeFromLineGroups = (
+export const rangeFromLineGroups = (
 	lineGroups: Array<HunkLineSelectionGroup>,
 ): SelectedLineRange | null => {
 	const first = lineGroups[0];
@@ -120,13 +118,11 @@ export const contiguousSelectionsFromHunk = (hunk: Hunk): Array<HunkLineSelectio
 		if (content.type !== "change") return [];
 
 		const lineGroups = lineGroupsFromChangeContent(hunk, content);
-		const range = rangeFromLineGroups(lineGroups);
-		if (!range) return [];
+		if (lineGroups.length === 0) return [];
 
 		return {
 			hunkHeader: hunkHeaderFromHunk(hunk),
 			lineGroups,
-			range,
 		};
 	});
 

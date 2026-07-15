@@ -382,9 +382,6 @@ fn build_status_context<'a>(
                     local_commits_by_id.insert(local_commit.id, local_commit);
                 }
                 for remote_commit in commits_on_remote {
-                    if let Some(change_id) = &remote_commit.change_id {
-                        commit_id_to_change_id.insert(remote_commit.id, change_id.clone());
-                    }
                     remote_commits_by_id.insert(remote_commit.id, remote_commit);
                 }
                 push_statuses_by_segment_id.insert(segment.id, push_status);
@@ -1126,8 +1123,7 @@ fn print_assignments(
 
         let first_assignment = &fa.assignments[0];
         let cli_id = &first_assignment.cli_id;
-        let pad = max_id_width.saturating_sub(cli_id.len());
-        let id_padding = " ".repeat(pad);
+        let id_padding = " ".repeat(max_id_width.saturating_sub(cli_id.len()) + 1);
 
         let file_cli_id = lookup_cli_id_for_short_id(
             &status_ctx.id_map,
@@ -1139,9 +1135,8 @@ fn print_assignments(
 
         let file_line = FileLineContent {
             id: Vec::from([
-                Span::raw(id_padding.clone()),
                 Span::styled(cli_id.to_string(), t.cli_id),
-                Span::raw(" "),
+                Span::raw(id_padding),
             ]),
             status: Vec::from([Span::raw(status.to_string()), Span::raw(" ")]),
             path: Vec::from([path]),
@@ -1358,10 +1353,7 @@ fn print_group(
                     status_ctx,
                     stack_with_id.id,
                     commit.short_id.clone(),
-                    commit
-                        .change_id
-                        .as_ref()
-                        .map(|change_id| change_id.short_id.clone()),
+                    None,
                     inner,
                     CommitChanges::Remote(&details.diff_with_first_parent),
                     CommitClassification::Upstream,
@@ -1638,6 +1630,12 @@ fn print_commit(
     if status_ctx.flags.show_files.show_files_for(commit.id) {
         match commit_changes {
             CommitChanges::Workspace(tree_changes) => {
+                let max_id_width = tree_changes
+                    .iter()
+                    .map(|change| change.short_id.len())
+                    .max()
+                    .unwrap_or(0);
+
                 for TreeChangeWithId { short_id, inner } in tree_changes {
                     let file_cli_id = CliId::CommittedFile {
                         commit_id: commit.id,
@@ -1651,7 +1649,9 @@ fn print_commit(
                         FileLineContent {
                             id: Vec::from([
                                 Span::styled(short_id.to_owned(), t.cli_id),
-                                Span::raw(" "),
+                                Span::raw(
+                                    " ".repeat(max_id_width.saturating_sub(short_id.len()) + 1),
+                                ),
                             ]),
                             status: Vec::from([status]),
                             path: Vec::from([path]),

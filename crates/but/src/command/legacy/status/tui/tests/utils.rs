@@ -1,4 +1,4 @@
-use std::{convert::Infallible, path::PathBuf, time::Duration};
+use std::{convert::Infallible, path::PathBuf, sync::Arc, time::Duration};
 
 use but_testsupport::Sandbox;
 use crossterm::event::*;
@@ -17,7 +17,7 @@ use crate::{
         build_status_context, build_status_output,
         tui::{
             App, BackstackEntry, EventPolling, Message, ReloadCause, TuiInputOutputChannel,
-            render_loop_once,
+            copy_selection_picker::Clipboard, render_loop_once,
         },
     },
     tui::TerminalGuard,
@@ -38,6 +38,7 @@ pub struct TestTui {
     width: u16,
     height: u16,
     svg_snapshot_comparison: Option<SvgSnapshotComparison>,
+    clipboard_text: Arc<std::sync::Mutex<String>>,
 }
 
 enum SvgSnapshotComparison {
@@ -121,6 +122,8 @@ pub fn test_tui_with_options(env: Sandbox, options: TestTuiOptions) -> TestTui {
     let incoming_out_of_band_messages = Vec::new();
     let head_sha = super::super::operations::head_sha(&mut ctx).expect("failed to read HEAD");
 
+    let (clipboard, clipboard_text) = Clipboard::test();
+
     let app = App::new(
         lines,
         flags,
@@ -129,6 +132,7 @@ pub fn test_tui_with_options(env: Sandbox, options: TestTuiOptions) -> TestTui {
         show_file_browser,
         incoming_out_of_band_messages,
         head_sha,
+        clipboard,
     );
     let terminal =
         Terminal::new(TestBackend::new(width, height)).expect("failed to create test terminal");
@@ -142,6 +146,7 @@ pub fn test_tui_with_options(env: Sandbox, options: TestTuiOptions) -> TestTui {
         width,
         height,
         svg_snapshot_comparison: None,
+        clipboard_text,
     }
 }
 
@@ -464,6 +469,14 @@ impl TestTuiInputThenRenderResult<'_> {
         if expected != actual {
             panic!("wrong backstack\n  expected: {expected:?}\n  actual: {actual:?}");
         }
+        self
+    }
+
+    #[track_caller]
+    pub fn assert_copied_text_eq(self, expected: impl AsRef<str>) -> Self {
+        let actual = self.0.clipboard_text.lock().unwrap();
+        assert_eq!(actual.as_str(), expected.as_ref());
+        drop(actual);
         self
     }
 }

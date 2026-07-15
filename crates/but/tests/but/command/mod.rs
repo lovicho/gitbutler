@@ -23,7 +23,7 @@ mod diff;
 mod diff2;
 #[cfg(feature = "legacy")]
 mod discard;
-#[cfg(feature = "but-2")]
+#[cfg(all(feature = "legacy", feature = "but-2"))]
 mod expand;
 #[cfg(unix)]
 mod external;

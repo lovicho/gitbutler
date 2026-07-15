@@ -98,6 +98,7 @@ import {
 import {
 	contiguousSelectionByLine,
 	contiguousSelectionsFromHunk,
+	rangeFromLineGroups,
 	synthesizeFilePatch,
 } from "#ui/hunk.ts";
 import { buildIndexByKey, NavigationIndex } from "#ui/workspace/navigation-index.ts";
@@ -272,6 +273,9 @@ const getDiffView = ({
 		if (mdiff?.type === "Patch") {
 			for (const hunk of item.fileDiff.hunks) {
 				for (const selection of contiguousSelectionsFromHunk(hunk)) {
+					const range = rangeFromLineGroups(selection.lineGroups);
+					if (!range) continue;
+
 					const hunkOperand: HunkOperand = {
 						parent: file,
 						...selection,
@@ -286,7 +290,7 @@ const getDiffView = ({
 						operand: hunkOperand,
 						selectedLines: {
 							id: item.id,
-							range: hunkOperand.range,
+							range,
 						},
 					};
 					diffViewFile.hunks.push(diffViewHunk);
@@ -721,7 +725,7 @@ const Title: FC<{
 					{({ data: commitDetails }) => (
 						<div className={styles.title}>
 							<Icon name="commit" />
-							<h3 className={classes("text-15", "text-semibold")}>
+							<h3 className={classes(styles.titleContent, "text-15", "text-semibold")}>
 								{commitTitle(commitDetails.commit.message) ?? "(no message)"}
 								{commitDetails.commit.hasConflicts && " ⚠️"}
 								{commitBody(commitDetails.commit.message) !== undefined && (
@@ -741,7 +745,7 @@ const Title: FC<{
 											)}
 											onClick={() => onBodyCollapsedChange(!bodyCollapsed)}
 										>
-											<Icon name="kebab" />
+											<Icon name="kebab" className={styles.commitBodyToggleIcon} />
 										</Tooltip.Trigger>
 										<Tooltip.Portal>
 											<Tooltip.Positioner sideOffset={4}>
@@ -983,10 +987,10 @@ const Diff: FC<{
 	);
 	const fileParent = Match.value(outlineSelection).pipe(
 		Match.tags({
-			Branch: ({ branchRef, stackId }) => branchFileParent({ branchRef, stackId }),
+			Branch: ({ branchRef }) => branchFileParent({ branchRef }),
 			UncommittedChanges: () => uncommittedChangesFileParent,
 			File: ({ parent }) => parent,
-			Commit: ({ commitId, stackId }) => commitFileParent({ commitId, stackId }),
+			Commit: ({ commitId }) => commitFileParent({ commitId }),
 		}),
 		Match.orElseAbsurd,
 	);

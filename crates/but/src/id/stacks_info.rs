@@ -39,10 +39,6 @@ fn stacks_info_without_short_ids(
                 .into_iter()
                 .map(|commit| RemoteCommitWithId {
                     short_id: ShortId::default(),
-                    change_id: commit_id_to_change_id
-                        .get(&commit.id)
-                        .cloned()
-                        .map(Into::into),
                     inner: commit,
                 })
                 .collect::<Vec<_>>();

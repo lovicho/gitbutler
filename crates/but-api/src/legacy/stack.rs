@@ -2,16 +2,11 @@ use std::borrow::Cow;
 
 use anyhow::{Context as _, Result, anyhow};
 use but_api_macros::but_api;
-use but_core::{
-    DryRun, branch,
-    ref_metadata::StackId,
-    sync::{RepoExclusive, RepoShared},
-};
+use but_core::{DryRun, branch, ref_metadata::StackId, sync::RepoExclusive};
 use but_ctx::Context;
 use but_oplog::legacy::{OperationKind, SnapshotDetails, Trailer};
 use but_workspace::ui::ref_info::BranchReference;
 use gitbutler_branch_actions::stack::CreateSeriesRequest;
-use gitbutler_git::PushResult;
 use gitbutler_oplog::SnapshotExt;
 use gix::refs::Category;
 use tracing::instrument;
@@ -351,83 +346,4 @@ pub fn update_branch_pr_number(
         pr_number,
     )?;
     Ok(())
-}
-
-pub mod json {
-    use serde::Serialize;
-
-    /// JSON-friendly version of [`gitbutler_git::PushResult`].
-    #[derive(Debug, Serialize)]
-    #[cfg_attr(feature = "export-schema", derive(schemars::JsonSchema))]
-    #[serde(rename_all = "camelCase")]
-    pub struct PushResult {
-        /// The name of the remote to which the branches were pushed.
-        pub remote: String,
-        /// The list of pushed branches and their corresponding remote refnames.
-        pub branch_to_remote: Vec<(String, String)>,
-        /// The list of branches with their before/after commit SHAs.
-        /// Format: (branch_name, before_sha, after_sha)
-        pub branch_sha_updates: Vec<(String, String, String)>,
-    }
-    #[cfg(feature = "export-schema")]
-    but_schemars::register_sdk_type!(PushResult);
-
-    impl From<gitbutler_git::PushResult> for PushResult {
-        fn from(value: gitbutler_git::PushResult) -> Self {
-            Self {
-                remote: value.remote,
-                branch_to_remote: value
-                    .branch_to_remote
-                    .into_iter()
-                    .map(|(name, refname)| (name, refname.to_string()))
-                    .collect(),
-                branch_sha_updates: value.branch_sha_updates,
-            }
-        }
-    }
-}
-
-#[but_api(napi, json::PushResult)]
-#[instrument(err(Debug))]
-pub fn push_stack(
-    ctx: &mut Context,
-    stack_id: StackId,
-    with_force: bool,
-    skip_force_push_protection: bool,
-    branch: String,
-    run_hooks: bool,
-    push_opts: Vec<but_gerrit::PushFlag>,
-) -> Result<PushResult> {
-    gitbutler_branch_actions::stack::push_stack(
-        ctx,
-        stack_id,
-        with_force,
-        skip_force_push_protection,
-        branch,
-        run_hooks,
-        push_opts,
-    )
-}
-
-#[expect(clippy::too_many_arguments)]
-pub fn push_stack_with_perm(
-    ctx: &mut Context,
-    stack_id: StackId,
-    with_force: bool,
-    skip_force_push_protection: bool,
-    branch: String,
-    run_hooks: bool,
-    push_opts: Vec<but_gerrit::PushFlag>,
-    perm: &RepoShared,
-) -> Result<PushResult> {
-    gitbutler_branch_actions::stack::push_stack_with_perm(
-        ctx,
-        stack_id,
-        with_force,
-        skip_force_push_protection,
-        branch,
-        run_hooks,
-        push_opts,
-        perm,
-    )
 }

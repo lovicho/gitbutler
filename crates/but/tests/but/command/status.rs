@@ -1317,3 +1317,91 @@ Hint: run `but help` for all commands
 
 "#]]);
 }
+
+#[test]
+fn file_ids_are_nicely_aligned() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    for n in 0..10 {
+        env.file(format!("file-{n}.txt"), "file #{n} content");
+    }
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted]
+┊   r  A file-0.txt
+┊   k  A file-1.txt
+┊   t  A file-2.txt
+┊   v  A file-3.txt
+┊   wx A file-4.txt
+┊   wv A file-5.txt
+┊   wk A file-6.txt
+┊   x  A file-7.txt
+┊   m  A file-8.txt
+┊   zx A file-9.txt
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but branch new` to create a new branch to work on
+
+"#]]);
+
+    env.but("commit -m 'add files'").assert().success();
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted] (no changes)
+┊
+┊╭┄br [a-branch-1]
+┊●   1 5877ef4 add files
+┊│     1:r  A file-0.txt
+┊│     1:k  A file-1.txt
+┊│     1:t  A file-2.txt
+┊│     1:v  A file-3.txt
+┊│     1:wx A file-4.txt
+┊│     1:wv A file-5.txt
+┊│     1:wk A file-6.txt
+┊│     1:x  A file-7.txt
+┊│     1:m  A file-8.txt
+┊│     1:z  A file-9.txt
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    // ensure verbose output is also nicely aligned
+    env.but("status -vf")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted] (no changes)
+┊
+┊╭┄br [a-branch-1]
+┊● 1 5877ef4 author 2000-01-01 00:00:00 +0000
+┊│     add files
+┊│     1:r  A file-0.txt
+┊│     1:k  A file-1.txt
+┊│     1:t  A file-2.txt
+┊│     1:v  A file-3.txt
+┊│     1:wx A file-4.txt
+┊│     1:wv A file-5.txt
+┊│     1:wk A file-6.txt
+┊│     1:x  A file-7.txt
+┊│     1:m  A file-8.txt
+┊│     1:z  A file-9.txt
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}

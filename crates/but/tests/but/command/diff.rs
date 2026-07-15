@@ -613,8 +613,8 @@ fn json_commit_target_tree_change_statuses() -> anyhow::Result<()> {
 ┊●   1#0 dafe86a status-target
 ┊│     1#0:nx A added.txt
 ┊│     1#0:nm D deleted.txt
-┊│     1#0:u M modified.txt
-┊│     1#0:o R renamed-after.txt
+┊│     1#0:u  M modified.txt
+┊│     1#0:o  R renamed-after.txt
 ┊●   1#1 db7d00b status-base
 ┊│     1#1:n A deleted.txt
 ┊│     1#1:u A modified.txt

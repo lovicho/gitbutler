@@ -136,8 +136,6 @@ The graph editor is not merely “a rebase command.” It is the in-memory graph
 
 Push should be graph-based, not stack-based.
 
-Current legacy push code still has stack-shaped boundaries, such as `gitbutler_branch_actions::push_stack`. Avoid copying that shape into new code unless maintaining the legacy boundary.
-
 For new push/dependency logic, ask graph questions:
 
 - given this selected ref, which dependent refs/commits are below it?

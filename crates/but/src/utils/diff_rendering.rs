@@ -442,17 +442,19 @@ pub fn render_commit(
                 Span::styled(commit.to_hex().to_string(), theme.commit_id),
             ]),
         )?;
-        out.write_selectable_text(
-            header_id,
-            None,
-            Line::from_iter([
-                Span::raw(format!("{:<11}", "Change ID:")),
-                Span::styled(
-                    commit_details.commit.change_id().to_string(),
-                    theme.change_id,
-                ),
-            ]),
-        )?;
+        if let Some(change_id) =
+            but_core::commit::Headers::try_from_commit(&commit_details.commit.inner)
+                .and_then(|headers| headers.change_id)
+        {
+            out.write_selectable_text(
+                header_id,
+                None,
+                Line::from_iter([
+                    Span::raw(format!("{:<11}", "Change ID:")),
+                    Span::styled(change_id.to_string(), theme.change_id),
+                ]),
+            )?;
+        }
         out.write_selectable_text(
             header_id,
             None,
