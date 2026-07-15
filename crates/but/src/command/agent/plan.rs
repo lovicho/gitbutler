@@ -75,7 +75,7 @@ impl AgentTarget {
             detect_agent::Agent::GitHubCopilot => Some(Self::GitHubCopilot),
             detect_agent::Agent::OpenCode => Some(Self::OpenCode),
             detect_agent::Agent::Poolside => Some(Self::Poolside),
-            detect_agent::Agent::Devin => Some(Self::AgentSkills),
+            detect_agent::Agent::Devin | detect_agent::Agent::Dirac => Some(Self::AgentSkills),
             detect_agent::Agent::GeminiCli
             | detect_agent::Agent::Augment
             | detect_agent::Agent::Antigravity

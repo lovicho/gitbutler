@@ -209,6 +209,7 @@ mod tests {
                 Agent::Devin,
                 &[".config", "devin", "skills", "gitbutler"][..],
             ),
+            (Agent::Dirac, &[".agents", "skills", "gitbutler"][..]),
             (Agent::Pi, &[".pi", "agent", "skills", "gitbutler"][..]),
         ];
         for (agent, expected) in cases {

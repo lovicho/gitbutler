@@ -16,6 +16,7 @@ pub enum Agent {
     CursorCli,
     Codex,
     Devin,
+    Dirac,
     GeminiCli,
     GitHubCopilot,
     OpenCode,
@@ -46,6 +47,7 @@ impl Agent {
             Self::CursorCli => "cursor-cli",
             Self::Codex => "codex",
             Self::Devin => "devin",
+            Self::Dirac => "dirac",
             Self::GeminiCli => "gemini-cli",
             Self::GitHubCopilot => "github-copilot",
             Self::OpenCode => "opencode",
@@ -134,10 +136,15 @@ fn detect_with(lookup: impl Fn(&str) -> Option<OsString>) -> Option<Agent> {
         return Some(Agent::Replit);
     }
     // Agents that set neither `AI_AGENT` nor `AGENT`, only a private marker.
-    // These markers are per-mode: Cline sets `CLINE_ACTIVE` from its VS Code
-    // extension (not its CLI); Roo Code sets `ROO_CLI_RUNTIME` from its headless
-    // CLI and `ROO_ACTIVE` from its extension. Presence is enough to identify
-    // the agent when it is set.
+    // These markers are per-mode: Dirac and Cline set `DIRAC_ACTIVE` and
+    // `CLINE_ACTIVE` from their VS Code extensions; Roo Code sets
+    // `ROO_CLI_RUNTIME` from its headless CLI and `ROO_ACTIVE` from its
+    // extension. Presence is enough to identify the agent when it is set.
+    // Dirac's standalone CLI does not currently set an agent marker, so it
+    // cannot be distinguished automatically from a human shell.
+    if is_set("DIRAC_ACTIVE") {
+        return Some(Agent::Dirac);
+    }
     if is_set("CLINE_ACTIVE") {
         return Some(Agent::Cline);
     }
@@ -222,6 +229,7 @@ fn match_agent_name(val: &str) -> Option<Agent> {
         "cursor-cli" => Agent::CursorCli,
         "codex" => Agent::Codex,
         "devin" => Agent::Devin,
+        "dirac" => Agent::Dirac,
         "gemini" | "gemini-cli" => Agent::GeminiCli,
         "copilot" | "github-copilot" | "github-copilot-cli" | "github-copilot-vscode-agent" => {
             Agent::GitHubCopilot
@@ -409,6 +417,14 @@ mod tests {
         assert_eq!(
             detect_with(env_from(&[("REPL_ID", "abc")])),
             Some(Agent::Replit),
+        );
+    }
+
+    #[test]
+    fn detect_dirac_vscode_terminal() {
+        assert_eq!(
+            detect_with(env_from(&[("DIRAC_ACTIVE", "true")])),
+            Some(Agent::Dirac),
         );
     }
 
@@ -644,6 +660,7 @@ mod tests {
             Agent::CursorCli,
             Agent::Codex,
             Agent::Devin,
+            Agent::Dirac,
             Agent::GeminiCli,
             Agent::GitHubCopilot,
             Agent::OpenCode,

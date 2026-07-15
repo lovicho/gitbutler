@@ -15,6 +15,14 @@ fn devin_uses_shared_agent_skills_target() {
 }
 
 #[test]
+fn dirac_uses_shared_agent_skills_target() {
+    assert_eq!(
+        AgentTarget::from_detected(detect_agent::Agent::Dirac),
+        Some(AgentTarget::AgentSkills)
+    );
+}
+
+#[test]
 fn generated_default_policy_includes_baseline_and_default_preferences() {
     let policy = render_managed_policy_block(&WizardAnswers::default());
 

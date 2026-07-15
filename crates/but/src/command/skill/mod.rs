@@ -263,7 +263,7 @@ fn skill_format_for_agent(agent: Agent, global: bool) -> Option<&'static SkillFo
         Agent::Replit | Agent::Amp => "Universal Agents",
         Agent::Crush => "Crush",
         Agent::Goose => "Goose",
-        Agent::Cline => "Agent Skills",
+        Agent::Cline | Agent::Dirac => "Agent Skills",
         Agent::RooCode => "Roo Code",
         Agent::Trae => "Trae",
         Agent::TabnineCli => "Tabnine CLI",
