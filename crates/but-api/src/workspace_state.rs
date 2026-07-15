@@ -1,10 +1,54 @@
 use super::WorkspaceState;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use but_core::{DryRun, RefMetadata};
 use but_rebase::graph_rebase::{MaterializeOutcome, SuccessfulRebase};
 
 impl WorkspaceState {
+    /// Map each projected local reference to whether its commits contain conflicts.
+    #[cfg(not(feature = "graph-workspace"))]
+    pub fn conflicts_by_reference(&self) -> HashMap<Vec<u8>, bool> {
+        self.head_info
+            .stacks
+            .iter()
+            .flat_map(|stack| &stack.segments)
+            .filter_map(|segment| {
+                let ref_info = segment.ref_info.as_ref()?;
+                Some((
+                    ref_info.ref_name.as_bstr().to_vec(),
+                    segment.commits.iter().any(|commit| commit.has_conflicts),
+                ))
+            })
+            .collect()
+    }
+
+    /// Map each projected local reference to whether its commits contain conflicts.
+    #[cfg(feature = "graph-workspace")]
+    pub fn conflicts_by_reference(&self) -> HashMap<Vec<u8>, bool> {
+        use but_workspace::ui::workspace::DetailedGraphRowData;
+
+        self.graph_workspace
+            .stacks
+            .iter()
+            .flat_map(|stack| {
+                stack.reference_segments.iter().filter_map(|segment| {
+                    let DetailedGraphRowData::Reference(reference) =
+                        &stack.rows.get(segment.reference_idx)?.data
+                    else {
+                        return None;
+                    };
+                    let has_conflicts = segment.row_idxs.iter().any(|&row_idx| {
+                        matches!(
+                            stack.rows.get(row_idx).map(|row| &row.data),
+                            Some(DetailedGraphRowData::Commit(commit)) if commit.has_conflicts
+                        )
+                    });
+                    Some((reference.ref_name.full_name_bytes.to_vec(), has_conflicts))
+                })
+            })
+            .collect()
+    }
+
     /// Whether any commit in the projected workspace is in a conflicted state.
     #[cfg(not(feature = "graph-workspace"))]
     pub fn is_conflicted(&self) -> bool {

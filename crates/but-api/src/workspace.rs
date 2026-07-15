@@ -10,8 +10,11 @@ use but_core::{
 };
 use but_forge::ForgeReview;
 use but_oplog::legacy::{OperationKind, SnapshotDetails};
+use but_rebase::graph_rebase::mutate::RelativeTo;
 use but_serde::BStringForFrontend;
-use but_workspace::{IntegrateUpstreamOutcome, ReviewIntegrationHint};
+use but_workspace::{
+    BottomUpdate, BottomUpdateKind, IntegrateUpstreamOutcome, ReviewIntegrationHint,
+};
 use tracing::{instrument, warn};
 
 /// Return the current detailed graph workspace for the frontend.
@@ -150,6 +153,25 @@ pub mod json {
             })
         }
     }
+}
+
+/// Build one rebase update for the bottom of every visible workspace stack.
+pub fn rebase_stack_bottoms(head_info: &but_workspace::RefInfo) -> Vec<BottomUpdate> {
+    head_info
+        .stacks
+        .iter()
+        .filter_map(|stack| {
+            let segment = stack.segments.last()?;
+            let selector = match segment.commits.last() {
+                Some(commit) => RelativeTo::Commit(commit.id),
+                None => RelativeTo::Reference(segment.ref_info.as_ref()?.ref_name.clone()),
+            };
+            Some(BottomUpdate {
+                kind: BottomUpdateKind::Rebase,
+                selector,
+            })
+        })
+        .collect()
 }
 
 fn target_branch_name(

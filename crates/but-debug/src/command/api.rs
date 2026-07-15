@@ -1,16 +1,12 @@
 //! Direct `but-api` debug commands.
 
-use std::{io, str::FromStr};
+use std::io;
 
 use anyhow::{Context as _, Result, bail};
 use but_core::ref_metadata::StackId;
-use gitbutler_reference::Refname;
 use gix::bstr::ByteSlice;
-use gix::reference::Category;
 
-use crate::args::{
-    ApiApplyArgs, ApiArgs, ApiSubcommands, ApiUnapplyStackArgs, Args, DebugWorkspaceArgs,
-};
+use crate::args::{ApiArgs, ApiSubcommands, ApiUnapplyStackArgs, Args, DebugWorkspaceArgs};
 
 /// Execute the `api` subcommand.
 pub(crate) fn run(
@@ -20,27 +16,8 @@ pub(crate) fn run(
     err: &mut dyn io::Write,
 ) -> Result<()> {
     match &api_args.cmd {
-        ApiSubcommands::Apply(apply_args) => apply(args, apply_args, out, err),
         ApiSubcommands::UnapplyStack(unapply_args) => unapply_stack(args, unapply_args, out, err),
     }
-}
-
-fn apply(
-    args: &Args,
-    apply_args: &ApiApplyArgs,
-    out: &mut dyn io::Write,
-    err: &mut dyn io::Write,
-) -> Result<()> {
-    let mut ctx = discover_context(args)?;
-    let branch = branch_refname(&apply_args.branch)?;
-    let outcome = but_api::legacy::virtual_branches::create_virtual_branch_from_branch(
-        &mut ctx,
-        branch,
-        apply_args.pr_number,
-    )?;
-    writeln!(out, "{outcome:#?}")?;
-    emit_after(&ctx, &apply_args.debug, err)?;
-    Ok(())
 }
 
 fn unapply_stack(
@@ -64,18 +41,6 @@ fn discover_context(args: &Args) -> Result<but_ctx::Context> {
             args.current_dir.display()
         )
     })
-}
-
-fn branch_refname(branch: &str) -> Result<Refname> {
-    let full_name = if branch.starts_with("refs/") {
-        branch.to_owned()
-    } else {
-        Category::LocalBranch
-            .to_full_name(branch)
-            .map_err(anyhow::Error::from)?
-            .to_string()
-    };
-    Refname::from_str(&full_name).map_err(anyhow::Error::from)
 }
 
 fn emit_after(

@@ -11,6 +11,7 @@ use std::os::unix::ffi::OsStrExt as _;
 use bstr::ByteSlice as _;
 use but_core::{GitConfigSettings, RepositoryExt as _};
 use gitbutler_branch::BranchCreateRequest;
+use gitbutler_branch_actions::BranchManagerExt;
 use gitbutler_oplog::entry::{OperationKind, SnapshotDetails};
 use gitbutler_oplog::{OplogExt, RestoreKind};
 use gitbutler_stack::VirtualBranchesHandle;
@@ -39,8 +40,7 @@ fn workdir_vbranch_restore() -> anyhow::Result<()> {
             make_lines(line_count),
         )?;
         let mut guard = ctx.exclusive_worktree_access();
-        let stack_entry = gitbutler_branch_actions::create_virtual_branch(
-            ctx,
+        let stack_entry = ctx.branch_manager().create_virtual_branch(
             &BranchCreateRequest {
                 name: Some(round.to_string()),
                 ..Default::default()
@@ -56,11 +56,9 @@ fn workdir_vbranch_restore() -> anyhow::Result<()> {
         );
     }
     let mut guard = ctx.exclusive_worktree_access();
-    let _empty = gitbutler_branch_actions::create_virtual_branch(
-        ctx,
-        &Default::default(),
-        guard.write_permission(),
-    )?;
+    let _empty = ctx
+        .branch_manager()
+        .create_virtual_branch(&Default::default(), guard.write_permission())?;
     drop(guard);
 
     let snapshots = ctx
@@ -317,11 +315,9 @@ fn basic_oplog() -> anyhow::Result<()> {
     drop(guard);
 
     let mut guard = ctx.exclusive_worktree_access();
-    let stack_entry = gitbutler_branch_actions::create_virtual_branch(
-        ctx,
-        &BranchCreateRequest::default(),
-        guard.write_permission(),
-    )?;
+    let stack_entry = ctx
+        .branch_manager()
+        .create_virtual_branch(&BranchCreateRequest::default(), guard.write_permission())?;
     drop(guard);
 
     // create commit
@@ -350,11 +346,9 @@ fn basic_oplog() -> anyhow::Result<()> {
 
     // create state with conflict state
     let mut guard = ctx.exclusive_worktree_access();
-    let _empty_branch_id = gitbutler_branch_actions::create_virtual_branch(
-        ctx,
-        &BranchCreateRequest::default(),
-        guard.write_permission(),
-    )?;
+    let _empty_branch_id = ctx
+        .branch_manager()
+        .create_virtual_branch(&BranchCreateRequest::default(), guard.write_permission())?;
     drop(guard);
 
     std::fs::remove_file(&base_merge_parent_path)?;
@@ -526,11 +520,9 @@ fn restores_gitbutler_workspace() -> anyhow::Result<()> {
         0
     );
     let mut guard = ctx.exclusive_worktree_access();
-    let stack_entry = gitbutler_branch_actions::create_virtual_branch(
-        ctx,
-        &BranchCreateRequest::default(),
-        guard.write_permission(),
-    )?;
+    let stack_entry = ctx
+        .branch_manager()
+        .create_virtual_branch(&BranchCreateRequest::default(), guard.write_permission())?;
     drop(guard);
     assert_eq!(
         VirtualBranchesHandle::new(ctx.project_data_dir())
@@ -638,8 +630,7 @@ fn restore_snapshot_with_empty_branch_in_workspace() -> anyhow::Result<()> {
 
     // Create a branch *with* a commit so the snapshot has something to reconstitute.
     let mut guard = ctx.exclusive_worktree_access();
-    let stack_entry = gitbutler_branch_actions::create_virtual_branch(
-        ctx,
+    let stack_entry = ctx.branch_manager().create_virtual_branch(
         &BranchCreateRequest {
             name: Some("has-commits".into()),
             ..Default::default()
@@ -653,8 +644,7 @@ fn restore_snapshot_with_empty_branch_in_workspace() -> anyhow::Result<()> {
 
     // Now create a second branch that stays empty (zero commits).
     let mut guard = ctx.exclusive_worktree_access();
-    let _empty_branch = gitbutler_branch_actions::create_virtual_branch(
-        ctx,
+    let _empty_branch = ctx.branch_manager().create_virtual_branch(
         &BranchCreateRequest {
             name: Some("empty-branch".into()),
             ..Default::default()
@@ -772,11 +762,9 @@ fn first_snapshot_diff_works() -> anyhow::Result<()> {
     drop(guard);
 
     let mut guard = ctx.exclusive_worktree_access();
-    let stack_entry = gitbutler_branch_actions::create_virtual_branch(
-        ctx,
-        &BranchCreateRequest::default(),
-        guard.write_permission(),
-    )?;
+    let stack_entry = ctx
+        .branch_manager()
+        .create_virtual_branch(&BranchCreateRequest::default(), guard.write_permission())?;
     drop(guard);
 
     // create first commit to create the very first snapshot

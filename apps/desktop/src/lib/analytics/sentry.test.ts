@@ -57,11 +57,11 @@ describe("applyIpcFingerprint", () => {
 	test("two messages that differ only by path land in the same bucket", () => {
 		const errA = new IpcError(
 			{ message: 'Worktree changes would be overwritten by checkout: "dir/file-a.ts"' },
-			"create_virtual_branch_from_branch",
+			"apply",
 		);
 		const errB = new IpcError(
 			{ message: 'Worktree changes would be overwritten by checkout: "pkg/sub/file-b.go"' },
-			"create_virtual_branch_from_branch",
+			"apply",
 		);
 		const a = emptyEvent();
 		const b = emptyEvent();
@@ -71,7 +71,7 @@ describe("applyIpcFingerprint", () => {
 	});
 
 	test("distinct root causes from one command stay in distinct buckets", () => {
-		const cmd = "create_virtual_branch_from_branch";
+		const cmd = "apply";
 		const reflog = new IpcError({ message: "The reflog could not be created or updated" }, cmd);
 		const worktree = new IpcError(
 			{ message: 'Worktree changes would be overwritten by checkout: "file.txt"' },
@@ -92,19 +92,11 @@ describe("applyIpcFingerprint", () => {
 		// still detect that fingerprint even though the value is no longer
 		// an `IpcError` instance.
 		const rebuilt = Object.assign(new Error("Worktree changes would be overwritten"), {
-			fingerprint: [
-				"ipc",
-				"create_virtual_branch_from_branch",
-				"Worktree changes would be overwritten",
-			],
+			fingerprint: ["ipc", "apply", "Worktree changes would be overwritten"],
 		});
 		const event = emptyEvent();
 		applyIpcFingerprint(event, { originalException: rebuilt } as EventHint);
-		expect(event.fingerprint).toEqual([
-			"ipc",
-			"create_virtual_branch_from_branch",
-			"Worktree changes would be overwritten",
-		]);
+		expect(event.fingerprint).toEqual(["ipc", "apply", "Worktree changes would be overwritten"]);
 	});
 
 	test("ignores a `fingerprint` field that isn't a string array", () => {

@@ -329,10 +329,8 @@ pub(crate) fn target_to_base_branch(
         .context(Code::DefaultTargetNotFound)?;
     let target_ref_commit_id = target_ref.id().detach();
 
-    // The old integrate_upstream function cares about whether the target sha
-    // is ahead of the target ref.
-    //
-    // The old function provided some options for how to resolve this.
+    // Upstream integration needs to know whether the stored target is ahead of
+    // the target ref so the UI can block integration until divergence is resolved.
     let target_sha_not_ref = first_parent_commit_ids_until(repo, target_sha, target_ref_commit_id)
         .context("failed to get fork point")?;
     let target_sha_ahead_of_ref = !target_sha_not_ref.is_empty();

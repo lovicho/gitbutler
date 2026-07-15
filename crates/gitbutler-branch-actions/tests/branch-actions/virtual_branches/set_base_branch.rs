@@ -1,4 +1,5 @@
 use super::*;
+use gitbutler_branch_actions::BranchManagerExt;
 
 #[test]
 fn success() {
@@ -137,12 +138,10 @@ mod go_back_to_workspace {
         drop(guard);
 
         let mut guard = ctx.exclusive_worktree_access();
-        let stack_entry = gitbutler_branch_actions::create_virtual_branch(
-            ctx,
-            &BranchCreateRequest::default(),
-            guard.write_permission(),
-        )
-        .unwrap();
+        let stack_entry = ctx
+            .branch_manager()
+            .create_virtual_branch(&BranchCreateRequest::default(), guard.write_permission())
+            .unwrap();
         drop(guard);
 
         std::fs::write(repo.path().join("another file.txt"), "content").unwrap();
@@ -341,13 +340,24 @@ mod behind_count {
 
         // Apply C (forks from M2, 1 behind).
         let mut guard = ctx.exclusive_worktree_access();
-        gitbutler_branch_actions::create_virtual_branch_from_branch_with_perm(
-            ctx,
-            &"refs/heads/C".parse().unwrap(),
-            None,
-            guard.write_permission(),
+        let mut meta = ctx.meta().unwrap();
+        let (repo, mut workspace, _) = ctx
+            .workspace_mut_and_db_with_perm(guard.write_permission())
+            .unwrap();
+        let outcome = but_workspace::branch::apply(
+            "refs/heads/C".try_into().unwrap(),
+            workspace.clone(),
+            &repo,
+            &mut meta,
+            but_workspace::branch::apply::Options::default(),
         )
         .unwrap();
+        assert!(
+            outcome.status.persisted_mutation(),
+            "branch C must be applied for the multi-stack behind-count scenario"
+        );
+        *workspace = outcome.workspace;
+        drop(workspace);
         drop(guard);
 
         // Stack A is farthest behind (3 commits behind origin/master).

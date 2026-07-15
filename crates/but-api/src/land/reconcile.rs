@@ -1,7 +1,7 @@
 //! Reconciling the rest of the workspace after the target moved.
 //!
 //! This is the graph-shaped successor to the CLI's stack-based reconcile. Rather than asking the
-//! legacy `upstream_integration_statuses` for `(StackId, status)` tuples and building
+//! legacy stack-status pipeline for `(StackId, status)` tuples and building
 //! `Vec<Resolution { stack_id, .. }>`, it enumerates each applied stack's bottom from the graph
 //! workspace ([`but_workspace::RefInfo`]) and marks it for `Rebase`. The integration algorithm in
 //! [`but_workspace::integrate_upstream`] then does the classification itself: stacks whose commits
@@ -15,8 +15,7 @@
 use std::collections::BTreeMap;
 
 use but_core::DryRun;
-use but_rebase::graph_rebase::mutate::RelativeTo;
-use but_workspace::{BottomUpdate, BottomUpdateKind};
+use but_workspace::BottomUpdate;
 
 use crate::WorkspaceState;
 
@@ -107,24 +106,5 @@ fn bottom_updates(
         },
     )?;
 
-    Ok(head_info
-        .stacks
-        .iter()
-        .filter_map(bottom_update_for_stack)
-        .collect())
-}
-
-/// The bottom update for one stack: rebase its bottom segment onto the target. The selector points
-/// at the bottom-most commit when the bottom segment has commits, otherwise at the segment's
-/// reference (an empty bottom branch).
-fn bottom_update_for_stack(stack: &but_workspace::branch::Stack) -> Option<BottomUpdate> {
-    let segment = stack.segments.last()?;
-    let selector = match segment.commits.last() {
-        Some(commit) => RelativeTo::Commit(commit.id),
-        None => RelativeTo::Reference(segment.ref_info.as_ref()?.ref_name.clone()),
-    };
-    Some(BottomUpdate {
-        kind: BottomUpdateKind::Rebase,
-        selector,
-    })
+    Ok(crate::workspace::rebase_stack_bottoms(&head_info))
 }

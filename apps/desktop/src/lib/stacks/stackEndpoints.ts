@@ -16,12 +16,7 @@ import {
 	ReduxTag,
 } from "$lib/state/tags";
 import { createEntityAdapter, type EntityState } from "@reduxjs/toolkit";
-import type {
-	Stack,
-	CreateRefRequest,
-	CreateBranchFromBranchOutcome,
-	GerritPushFlag,
-} from "$lib/stacks/stack";
+import type { Stack, CreateRefRequest, GerritPushFlag } from "$lib/stacks/stack";
 import type { BackendEndpointBuilder } from "$lib/state/backendApi";
 import type {
 	AbsorptionTarget,
@@ -81,10 +76,6 @@ export type CreateCommitRequest = {
 };
 
 export type CreateCommitRequestWorktreeChanges = DiffSpec;
-
-export type SeriesIntegrationStrategy = {
-	type: "merge" | "rebase";
-};
 
 export interface BranchPushResult {
 	/**
@@ -251,7 +242,6 @@ export function buildStackEndpoints(build: BackendEndpointBuilder) {
 					invalidatesList(ReduxTag.BranchChanges),
 					invalidatesList(ReduxTag.BranchListing),
 					invalidatesType(ReduxTag.BaseBranchData),
-					invalidatesList(ReduxTag.UpstreamIntegrationStatus),
 				];
 			},
 		}),
@@ -264,7 +254,6 @@ export function buildStackEndpoints(build: BackendEndpointBuilder) {
 			invalidatesTags: (result, _error) => [
 				invalidatesItem(ReduxTag.StackDetails, result?.id || "undefined"),
 				invalidatesList(ReduxTag.Stacks),
-				invalidatesList(ReduxTag.UpstreamIntegrationStatus),
 				invalidatesList(ReduxTag.BranchListing),
 			],
 		}),
@@ -390,7 +379,6 @@ export function buildStackEndpoints(build: BackendEndpointBuilder) {
 			transformResponse: normalizeCreateCommitOutcome,
 			invalidatesTags: [
 				invalidatesList(ReduxTag.WorktreeChanges),
-				invalidatesList(ReduxTag.UpstreamIntegrationStatus),
 				invalidatesList(ReduxTag.IntegrationSteps),
 				invalidatesList(ReduxTag.HeadSha),
 			],
@@ -845,27 +833,6 @@ export function buildStackEndpoints(build: BackendEndpointBuilder) {
 				...(args.sourceStackId ? [invalidatesItem(ReduxTag.StackDetails, args.sourceStackId)] : []),
 			],
 		}),
-		integrateUpstreamCommits: build.mutation<
-			void,
-			{
-				projectId: string;
-				stackId: string;
-				seriesName: string;
-				integrationStrategy: SeriesIntegrationStrategy | undefined;
-			}
-		>({
-			extraOptions: {
-				command: "integrate_upstream_commits",
-				actionName: "Integrate Upstream Commits",
-			},
-			query: (args) => args,
-			invalidatesTags: (_result, _error, args) => [
-				invalidatesList(ReduxTag.HeadSha),
-				invalidatesList(ReduxTag.WorktreeChanges),
-				invalidatesItem(ReduxTag.StackDetails, args.stackId),
-				invalidatesItem(ReduxTag.BranchChanges, args.seriesName),
-			],
-		}),
 		landBranch: build.mutation<
 			BranchLandResult,
 			{ projectId: string; branch: string; noFf: boolean }
@@ -883,7 +850,6 @@ export function buildStackEndpoints(build: BackendEndpointBuilder) {
 				invalidatesList(ReduxTag.BranchChanges),
 				invalidatesList(ReduxTag.BranchListing),
 				invalidatesType(ReduxTag.BaseBranchData),
-				invalidatesList(ReduxTag.UpstreamIntegrationStatus),
 			],
 		}),
 		getInitialBranchIntegration: build.query<
@@ -927,7 +893,6 @@ export function buildStackEndpoints(build: BackendEndpointBuilder) {
 							invalidatesList(ReduxTag.Stacks),
 							invalidatesList(ReduxTag.StackDetails),
 							invalidatesList(ReduxTag.BranchListing),
-							invalidatesList(ReduxTag.UpstreamIntegrationStatus),
 							invalidatesItem(ReduxTag.IntegrationSteps, args.branchRef),
 						],
 		}),
@@ -944,7 +909,6 @@ export function buildStackEndpoints(build: BackendEndpointBuilder) {
 				invalidatesList(ReduxTag.Stacks),
 				invalidatesList(ReduxTag.StackDetails),
 				invalidatesList(ReduxTag.BranchListing),
-				invalidatesList(ReduxTag.UpstreamIntegrationStatus),
 			],
 		}),
 		reviewApply: build.mutation<ApplyOutcome, { projectId: string; reviewId: number }>({
@@ -960,20 +924,8 @@ export function buildStackEndpoints(build: BackendEndpointBuilder) {
 				invalidatesList(ReduxTag.Stacks),
 				invalidatesList(ReduxTag.StackDetails),
 				invalidatesList(ReduxTag.BranchListing),
-				invalidatesList(ReduxTag.UpstreamIntegrationStatus),
 				invalidatesList(ReduxTag.PullRequests),
 			],
-		}),
-		createVirtualBranchFromBranch: build.mutation<
-			CreateBranchFromBranchOutcome,
-			{ projectId: string; branch: string; prNumber?: number }
-		>({
-			extraOptions: {
-				command: "create_virtual_branch_from_branch",
-				actionName: "Create Virtual Branch From Branch",
-			},
-			query: (args) => args,
-			invalidatesTags: [invalidatesList(ReduxTag.HeadSha), invalidatesList(ReduxTag.BranchListing)],
 		}),
 		deleteLocalBranch: build.mutation<
 			void,

@@ -9,15 +9,7 @@ import { createEntityAdapter, type EntityState } from "@reduxjs/toolkit";
 import type { ForgeProvider, RemoteBranchInfo } from "$lib/baseBranch/baseBranch";
 import type { BackendEndpointBuilder } from "$lib/state/backendApi";
 import type { BaseBranch } from "@gitbutler/but-sdk";
-import type {
-	BaseBranchResolution,
-	BaseBranchResolutionApproach,
-	BranchListing,
-	BranchListingDetails,
-	IntegrationOutcome,
-	Resolution,
-	StackStatuses,
-} from "@gitbutler/but-sdk";
+import type { BranchListing, BranchListingDetails } from "@gitbutler/but-sdk";
 
 export function buildBranchEndpoints(build: BackendEndpointBuilder) {
 	return {
@@ -38,11 +30,7 @@ export function buildBranchEndpoints(build: BackendEndpointBuilder) {
 				projectId,
 				action: action ?? "auto",
 			}),
-			invalidatesTags: [
-				invalidatesList(ReduxTag.Stacks),
-				invalidatesList(ReduxTag.StackDetails),
-				invalidatesList(ReduxTag.UpstreamIntegrationStatus),
-			],
+			invalidatesTags: [invalidatesList(ReduxTag.Stacks), invalidatesList(ReduxTag.StackDetails)],
 		}),
 		setTarget: build.mutation<
 			BaseBranch,
@@ -118,46 +106,6 @@ export function buildBranchEndpoints(build: BackendEndpointBuilder) {
 			query: ({ projectId, branchName }) => ({ projectId, branchNames: [branchName] }),
 			transformResponse: (response: BranchListingDetails[]) => response.at(0)!,
 			providesTags: [providesList(ReduxTag.BranchListing)],
-		}),
-
-		// ── Upstream Integration ─────────────────────────────────────
-		upstreamIntegrationStatuses: build.query<
-			StackStatuses,
-			{ projectId: string; targetCommitOid?: string }
-		>({
-			extraOptions: { command: "upstream_integration_statuses" },
-			query: (args) => args,
-			providesTags: [providesList(ReduxTag.UpstreamIntegrationStatus)],
-		}),
-		integrateUpstream: build.mutation<
-			IntegrationOutcome,
-			{
-				projectId: string;
-				resolutions: Resolution[];
-				baseBranchResolution?: BaseBranchResolution;
-			}
-		>({
-			extraOptions: {
-				command: "integrate_upstream",
-				actionName: "Integrate Upstream",
-			},
-			query: (args) => args,
-			invalidatesTags: [
-				invalidatesList(ReduxTag.UpstreamIntegrationStatus),
-				invalidatesList(ReduxTag.HeadSha),
-				invalidatesList(ReduxTag.BranchListing),
-			],
-		}),
-		resolveUpstreamIntegration: build.mutation<
-			string,
-			{ projectId: string; resolutionApproach: BaseBranchResolutionApproach }
-		>({
-			extraOptions: {
-				command: `resolve_upstream_integration`,
-				actionName: "Resolve Integrate Upstream",
-			},
-			query: (args) => args,
-			invalidatesTags: [invalidatesList(ReduxTag.UpstreamIntegrationStatus)],
 		}),
 	};
 }

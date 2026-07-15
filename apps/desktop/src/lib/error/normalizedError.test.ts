@@ -23,7 +23,7 @@ describe("IpcError.fingerprint", () => {
 				message:
 					'The reflog could not be created or updated\n\nCaused by:\n    1: Could not open reflog file at "/Users/u/repo/.git"',
 			},
-			"create_virtual_branch_from_branch",
+			"apply",
 		);
 		expect(err.fingerprint[2]).toBe("The reflog could not be created or updated");
 	});
@@ -34,14 +34,14 @@ describe("IpcError.fingerprint", () => {
 				message:
 					"Unexpectedly failed to find anchor for refs/heads/branch-one to make it a dependent branch",
 			},
-			"create_virtual_branch_from_branch",
+			"apply",
 		);
 		const ref2 = new IpcError(
 			{
 				message:
 					"Unexpectedly failed to find anchor for refs/heads/branch-two/sub to make it a dependent branch",
 			},
-			"create_virtual_branch_from_branch",
+			"apply",
 		);
 		expect(ref1.fingerprint).toEqual(ref2.fingerprint);
 		expect(ref1.fingerprint[2]).toContain("refs/<ref>");
@@ -50,11 +50,11 @@ describe("IpcError.fingerprint", () => {
 	test("strips relative paths inside checkout-conflict messages", () => {
 		const a = new IpcError(
 			{ message: 'Worktree changes would be overwritten by checkout: "dir/file-a.ts"' },
-			"create_virtual_branch_from_branch",
+			"apply",
 		);
 		const b = new IpcError(
 			{ message: 'Worktree changes would be overwritten by checkout: "pkg/sub/file-b.go"' },
-			"create_virtual_branch_from_branch",
+			"apply",
 		);
 		expect(a.fingerprint).toEqual(b.fingerprint);
 	});
@@ -124,7 +124,7 @@ describe("IpcError.fingerprint", () => {
 	});
 
 	test("does not over-collapse: distinct root causes from the same endpoint stay distinct", () => {
-		const command = "create_virtual_branch_from_branch";
+		const command = "apply";
 		const reflog = new IpcError({ message: "The reflog could not be created or updated" }, command);
 		const worktree = new IpcError(
 			{ message: 'Worktree changes would be overwritten by checkout: "file.txt"' },

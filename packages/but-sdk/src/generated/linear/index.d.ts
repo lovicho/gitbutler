@@ -820,19 +820,6 @@ export type BaseBranch = {
   shortName: string;
 };
 
-export type BaseBranchResolution = {
-  targetCommitOid: string;
-  approach: BaseBranchResolutionApproach;
-};
-
-export type BaseBranchResolutionApproach = {
-  type: "rebase";
-} | {
-  type: "merge";
-} | {
-  type: "hardReset";
-};
-
 export type BitbucketAccountIdentifier = {
   type: "apiToken";
   info: {
@@ -1116,20 +1103,6 @@ export type BranchRenameResult = {
   workspace: WorkspaceState;
   /** The full name of the renamed reference. */
   newRef: BranchReference;
-};
-
-export type BranchStatus = {
-  type: "safelyUpdatable";
-} | {
-  type: "integrated";
-} | {
-  type: "conflicted";
-  subject: {
-    /** If the branch can be rebased onto the target without conflicts */
-    rebasable: boolean;
-  };
-} | {
-  type: "empty";
 };
 
 export type CacheConfig = "cacheOnly" | "noCache" | {
@@ -2047,11 +2020,6 @@ export type IntegrationDivergenceTargetRelation = {
   kind: "historicallyIntegrated";
 };
 
-export type IntegrationOutcome = {
-  /** The list of branches that have been deleted as a result of the upstream integration */
-  deletedBranches: Array<string>;
-};
-
 /** JSON transport type describing an interactive branch integration plan. */
 export type InteractiveIntegration = {
   /** Merge base between the upstream and the local reference. */
@@ -2175,11 +2143,6 @@ export type MoveBranchResult = {
 export type MoveChangesResult = {
   /** Workspace state after moving changes. */
   workspace: WorkspaceState;
-};
-
-export type NameAndStatus = {
-  name: string;
-  status: BranchStatus;
 };
 
 /** A column in a detailed graph node row. */
@@ -2400,22 +2363,6 @@ export type RepoPermissions = {
   push: boolean;
   triage: boolean;
   pull: boolean;
-};
-
-export type Resolution = {
-  stackId: string;
-  approach: ResolutionApproach;
-  deleteIntegratedBranches: boolean;
-};
-
-export type ResolutionApproach = {
-  type: "rebase";
-} | {
-  type: "merge";
-} | {
-  type: "unapply";
-} | {
-  type: "delete";
 };
 
 /** How one conflicted file was resolved, for display to the user. */
@@ -2673,21 +2620,6 @@ export type StackReference = {
   pullRequests: Record<string, number>;
 };
 
-export type StackStatus = {
-  treeStatus: UpstreamTreeStatus;
-  branchStatuses: Array<NameAndStatus>;
-};
-
-export type StackStatuses = {
-  type: "upToDate";
-} | {
-  type: "updatesRequired";
-  subject: {
-    worktreeConflicts: Array<string>;
-    statuses: Array<[string | null, StackStatus]>;
-  };
-};
-
 /** Information about the target reference, the one we want to integrate with. */
 export type Target = {
   /** The remote tracking branch of the target to integrate with, like `refs/remotes/origin/main`. */
@@ -2877,14 +2809,6 @@ export type UpstreamCommit = {
   author: Author;
   /** The GitButler change-id associated with this commit, if available. */
   changeId: string | null;
-};
-
-export type UpstreamTreeStatus = {
-  type: "safelyUpdatable";
-} | {
-  type: "conflicted";
-} | {
-  type: "empty";
 };
 
 /** Git files activity. Supplies the head sha */

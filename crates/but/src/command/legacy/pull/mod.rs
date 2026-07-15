@@ -1,22 +1,17 @@
 mod json;
 
-use std::{collections::HashMap, fmt::Write};
+use std::fmt::Write;
 
 use bstr::ByteSlice;
-use but_api::workspace::WorkspaceIntegrateUpstreamOutcome;
-use but_api::workspace::json::{BottomUpdate, BottomUpdateKind};
 use but_core::{DryRun, RepositoryExt};
 use but_ctx::Context;
-use but_workspace::{
-    RefInfo,
-    branch::Stack,
-    ref_info::{LocalCommitRelation, Segment},
-    ui::PushStatus,
-};
 use json::{BaseBranchInfo, BranchStatusInfo, PullCheckOutput, UpstreamCommit, UpstreamInfo};
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    command::legacy::upstream::{
+        self, BranchStatus as PullBranchStatus, BranchStatusInfo as PullBranchStatusInfo,
+    },
     theme::{self, Paint},
     utils::{OutputChannel, shorten_hex_object_id},
 };
@@ -91,13 +86,16 @@ async fn handle_check(ctx: &Context, out: &mut OutputChannel) -> anyhow::Result<
 
     let should_check_integration = if base_branch.behind == 0 {
         let current_head_info = but_api::legacy::workspace::head_info(ctx)?;
-        head_info_has_cleanup_candidate(&current_head_info)
+        upstream::has_cleanup_candidate(&current_head_info)
     } else {
         true
     };
     let (has_worktree_conflicts, statuses) = if should_check_integration {
-        let (_current_head_info, _updates, preview, statuses) = dry_run_upstream_integration(ctx)?;
-        (!preview.worktree_conflicts.is_empty(), statuses)
+        let preview = upstream::dry_run_integration(ctx)?;
+        (
+            !preview.outcome.worktree_conflicts.is_empty(),
+            preview.statuses,
+        )
     } else {
         (false, Vec::new())
     };
@@ -201,17 +199,15 @@ async fn handle_check(ctx: &Context, out: &mut OutputChannel) -> anyhow::Result<
             }
             if !statuses.is_empty() {
                 writeln!(out, "\n{}", t.important.paint("Branch Status"))?;
-                for status in statuses {
-                    for bs in status.branch_statuses {
-                        let status_text = match bs.status {
-                            PullBranchStatus::Clear => t.success.paint("[ok]"),
-                            PullBranchStatus::Integrated => t.info.paint("[integrated]"),
-                            PullBranchStatus::Conflicted => {
-                                t.attention.paint("[conflict - rebasable]")
-                            }
-                        };
-                        writeln!(out, "  {} {}", status_text, bs.name)?;
-                    }
+                for branch_status in statuses {
+                    let status_text = match branch_status.status {
+                        PullBranchStatus::Clear | PullBranchStatus::Empty => {
+                            t.success.paint("[ok]")
+                        }
+                        PullBranchStatus::Integrated => t.info.paint("[integrated]"),
+                        PullBranchStatus::Conflicted => t.attention.paint("[conflict - rebasable]"),
+                    };
+                    writeln!(out, "  {} {}", status_text, branch_status.name)?;
                 }
             }
             writeln!(
@@ -319,7 +315,7 @@ async fn handle_pull(ctx: &Context, out: &mut OutputChannel) -> anyhow::Result<(
 
     let should_check_integration = if base_branch.behind == 0 {
         let current_head_info = but_api::legacy::workspace::head_info(ctx)?;
-        head_info_has_cleanup_candidate(&current_head_info)
+        upstream::has_cleanup_candidate(&current_head_info)
     } else {
         true
     };
@@ -335,7 +331,11 @@ async fn handle_pull(ctx: &Context, out: &mut OutputChannel) -> anyhow::Result<(
     }
 
     // Step 2: Dry-run integration and derive statuses from the preview, like the desktop app.
-    let (current_head_info, updates, preview, statuses) = dry_run_upstream_integration(ctx)?;
+    let upstream::IntegrationPreview {
+        current: current_head_info,
+        outcome: preview,
+        statuses,
+    } = upstream::dry_run_integration(ctx)?;
 
     if base_branch.behind == 0 && !statuses_need_update(&statuses) {
         pull_result.status = "up_to_date".to_string();
@@ -348,7 +348,7 @@ async fn handle_pull(ctx: &Context, out: &mut OutputChannel) -> anyhow::Result<(
         return Ok(());
     }
 
-    let resolutions = if !preview.worktree_conflicts.is_empty() {
+    let statuses_to_apply = if !preview.worktree_conflicts.is_empty() {
         pull_result.status = "worktree_conflicts".to_string();
         if let Some(out) = out.for_human() {
             writeln!(
@@ -377,32 +377,30 @@ async fn handle_pull(ctx: &Context, out: &mut OutputChannel) -> anyhow::Result<(
 
         let mut branches_to_update = 0;
         let mut integrated_branches = vec![];
-        for status in &statuses {
-            for branch_status in &status.branch_statuses {
-                branches_to_update += 1;
+        for branch_status in &statuses {
+            branches_to_update += 1;
 
-                let branch_info = BranchUpdateInfo {
-                    name: branch_status.name.clone(),
-                    status: branch_status.status.as_str().to_string(),
-                    commit_count: 0, // TODO: Get actual commit count
-                    conflicts: vec![],
-                };
+            let branch_info = BranchUpdateInfo {
+                name: branch_status.name.clone(),
+                status: branch_status.status.as_str().to_string(),
+                commit_count: 0, // TODO: Get actual commit count
+                conflicts: vec![],
+            };
 
-                match branch_status.status {
-                    PullBranchStatus::Integrated => {
-                        integrated_branches.push(branch_status.name.clone());
-                        pull_result.summary.branches_integrated += 1;
-                    }
-                    PullBranchStatus::Conflicted => {
-                        pull_result.summary.branches_conflicted += 1;
-                    }
-                    PullBranchStatus::Clear => {
-                        pull_result.summary.branches_updated += 1;
-                    }
+            match branch_status.status {
+                PullBranchStatus::Integrated => {
+                    integrated_branches.push(branch_status.name.clone());
+                    pull_result.summary.branches_integrated += 1;
                 }
-
-                pull_result.branches_to_update.push(branch_info);
+                PullBranchStatus::Conflicted => {
+                    pull_result.summary.branches_conflicted += 1;
+                }
+                PullBranchStatus::Clear | PullBranchStatus::Empty => {
+                    pull_result.summary.branches_updated += 1;
+                }
             }
+
+            pull_result.branches_to_update.push(branch_info);
         }
 
         if let Some(out) = out.for_human()
@@ -416,24 +414,29 @@ async fn handle_pull(ctx: &Context, out: &mut OutputChannel) -> anyhow::Result<(
             )?;
         }
 
-        pull_result.integrated_branches = integrated_branches.clone();
+        pull_result.integrated_branches = integrated_branches;
 
-        Some((updates, statuses))
+        Some(statuses)
     };
 
     // Step 3: Actually perform the integration
-    if let Some((updates, statuses)) = resolutions {
+    if let Some(statuses) = statuses_to_apply {
         let integration_result = {
+            let updates = but_api::workspace::rebase_stack_bottoms(&current_head_info);
             let mut ctx = ctx.to_sync().into_thread_local();
-            but_api::workspace::workspace_integrate_upstream(&mut ctx, updates, DryRun::No)
+            let mut guard = ctx.exclusive_worktree_access();
+            but_api::workspace::workspace_integrate_upstream_with_perm(
+                &mut ctx,
+                updates,
+                DryRun::No,
+                guard.write_permission(),
+            )
         };
 
         match integration_result {
             Ok(outcome) => {
-                let post_statuses = derive_upstream_integration_statuses(
-                    &current_head_info,
-                    &outcome.workspace_state,
-                );
+                let post_statuses =
+                    upstream::classify(&current_head_info, &outcome.workspace_state);
                 // Report detailed results for each resolution
                 let mut successful_rebases: Vec<String> = Vec::new();
                 let mut conflicted_rebases: Vec<String> = Vec::new();
@@ -446,12 +449,9 @@ async fn handle_pull(ctx: &Context, out: &mut OutputChannel) -> anyhow::Result<(
 
                 // Check if there are any conflicted files
                 let has_conflicts = !conflicted_rebases.is_empty()
-                    || post_statuses.iter().any(|status| {
-                        status
-                            .branch_statuses
-                            .iter()
-                            .any(|bs| matches!(bs.status, PullBranchStatus::Conflicted))
-                    });
+                    || post_statuses
+                        .iter()
+                        .any(|status| matches!(status.status, PullBranchStatus::Conflicted));
 
                 // Update final status
                 pull_result.status = if has_conflicts {
@@ -586,288 +586,61 @@ async fn handle_pull(ctx: &Context, out: &mut OutputChannel) -> anyhow::Result<(
     Ok(())
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum PullBranchStatus {
-    Clear,
-    Integrated,
-    Conflicted,
-}
-
-impl PullBranchStatus {
-    fn as_str(self) -> &'static str {
-        match self {
-            PullBranchStatus::Clear => "updatable",
-            PullBranchStatus::Integrated => "integrated",
-            PullBranchStatus::Conflicted => "conflicted_rebasable",
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-struct PullBranchStatusInfo {
-    name: String,
-    status: PullBranchStatus,
-}
-
-#[derive(Debug, Clone)]
-struct PullStackStatusInfo {
-    branch_statuses: Vec<PullBranchStatusInfo>,
-}
-
-/// Preview upstream integration through the workspace API without materializing it.
-///
-/// This keeps `but pull --check` and `but pull` on the same branch selectors and
-/// status derivation path as the desktop app.
-fn dry_run_upstream_integration(
-    ctx: &Context,
-) -> anyhow::Result<(
-    RefInfo,
-    Vec<BottomUpdate>,
-    WorkspaceIntegrateUpstreamOutcome,
-    Vec<PullStackStatusInfo>,
-)> {
-    let current_head_info = but_api::legacy::workspace::head_info(ctx)?;
-    let updates = build_upstream_integration_updates(&current_head_info)?;
-    let preview = {
-        let mut ctx = ctx.to_sync().into_thread_local();
-        but_api::workspace::workspace_integrate_upstream(&mut ctx, updates.clone(), DryRun::Yes)?
-    };
-    let statuses =
-        derive_upstream_integration_statuses(&current_head_info, &preview.workspace_state);
-    Ok((current_head_info, updates, preview, statuses))
-}
-
-fn check_branch_statuses(statuses: &[PullStackStatusInfo]) -> Vec<BranchStatusInfo> {
+fn check_branch_statuses(statuses: &[PullBranchStatusInfo]) -> Vec<BranchStatusInfo> {
     statuses
         .iter()
-        .flat_map(|stack_status| {
-            stack_status.branch_statuses.iter().map(|branch_status| {
-                let (status, rebasable) = match branch_status.status {
-                    PullBranchStatus::Clear => ("updatable", None),
-                    PullBranchStatus::Integrated => ("integrated", None),
-                    PullBranchStatus::Conflicted => ("conflicted", Some(true)),
-                };
-                BranchStatusInfo {
-                    name: branch_status.name.clone(),
-                    status: status.to_string(),
-                    rebasable,
-                }
-            })
+        .map(|branch_status| {
+            let (status, rebasable) = match branch_status.status {
+                PullBranchStatus::Clear | PullBranchStatus::Empty => ("updatable", None),
+                PullBranchStatus::Integrated => ("integrated", None),
+                PullBranchStatus::Conflicted => ("conflicted", Some(true)),
+            };
+            BranchStatusInfo {
+                name: branch_status.name.clone(),
+                status: status.to_string(),
+                rebasable,
+            }
         })
         .collect()
 }
 
 fn collect_materialized_rebase_results(
-    pre_integration_statuses: &[PullStackStatusInfo],
-    post_integration_statuses: &[PullStackStatusInfo],
+    pre_integration_statuses: &[PullBranchStatusInfo],
+    post_integration_statuses: &[PullBranchStatusInfo],
     successful_rebases: &mut Vec<String>,
     conflicted_rebases: &mut Vec<String>,
 ) {
-    for stack_status in pre_integration_statuses {
-        for branch_status in &stack_status.branch_statuses {
-            if matches!(branch_status.status, PullBranchStatus::Integrated) {
-                continue;
-            }
+    for branch_status in pre_integration_statuses {
+        if matches!(branch_status.status, PullBranchStatus::Integrated) {
+            continue;
+        }
 
-            match post_branch_status(post_integration_statuses, branch_status.name.as_str()) {
-                Some(PullBranchStatus::Conflicted) => {
-                    conflicted_rebases.push(branch_status.name.clone());
-                }
-                Some(PullBranchStatus::Clear | PullBranchStatus::Integrated) | None => {
-                    successful_rebases.push(branch_status.name.clone());
-                }
+        match post_branch_status(post_integration_statuses, branch_status.name.as_str()) {
+            Some(PullBranchStatus::Conflicted) => {
+                conflicted_rebases.push(branch_status.name.clone());
+            }
+            Some(
+                PullBranchStatus::Clear | PullBranchStatus::Integrated | PullBranchStatus::Empty,
+            )
+            | None => {
+                successful_rebases.push(branch_status.name.clone());
             }
         }
     }
 }
 
 fn post_branch_status(
-    post_integration_statuses: &[PullStackStatusInfo],
+    post_integration_statuses: &[PullBranchStatusInfo],
     branch_name: &str,
 ) -> Option<PullBranchStatus> {
     post_integration_statuses
         .iter()
-        .flat_map(|stack_status| &stack_status.branch_statuses)
         .find(|branch_status| branch_status.name == branch_name)
         .map(|branch_status| branch_status.status)
 }
 
-fn statuses_need_update(statuses: &[PullStackStatusInfo]) -> bool {
-    statuses.iter().any(|stack_status| {
-        stack_status
-            .branch_statuses
-            .iter()
-            .any(|branch_status| branch_status.status != PullBranchStatus::Clear)
-    })
-}
-
-fn head_info_has_cleanup_candidate(head_info: &RefInfo) -> bool {
-    head_info
-        .stacks
+fn statuses_need_update(statuses: &[PullBranchStatusInfo]) -> bool {
+    statuses
         .iter()
-        .flat_map(|stack| &stack.segments)
-        .any(|segment| {
-            matches!(segment.push_status, PushStatus::Integrated)
-                || segment
-                    .commits
-                    .iter()
-                    .any(|commit| matches!(commit.relation, LocalCommitRelation::Integrated(_)))
-                || (segment.commits.is_empty() && segment.remote_tracking_ref_name.is_some())
-        })
-}
-
-/// Build the stack-bottom update requests that the upstream integration API expects.
-///
-/// The desktop client derives the same list from the current workspace preview before
-/// calling `workspace_integrate_upstream`; keeping the CLI on the same selector shape
-/// makes the dry run and materialization paths classify the same branches.
-fn build_upstream_integration_updates(head_info: &RefInfo) -> anyhow::Result<Vec<BottomUpdate>> {
-    let mut updates = Vec::new();
-    for stack in &head_info.stacks {
-        if let Some(update) = bottom_update_for_stack(stack)? {
-            updates.push(update);
-        }
-    }
-    Ok(updates)
-}
-
-/// Select the bottom-most commit, or the empty bottom branch reference, for a stack.
-///
-/// Upstream integration rebases from the stack bottom. Empty branches have no commit to
-/// select, so they are represented by their branch reference instead.
-fn bottom_update_for_stack(stack: &Stack) -> anyhow::Result<Option<BottomUpdate>> {
-    let Some(segment) = stack.segments.last() else {
-        return Ok(None);
-    };
-    let selector = if let Some(commit) = segment.commits.last() {
-        but_api::commit::json::RelativeTo::Commit(commit.id)
-    } else {
-        let Some(ref_info) = segment.ref_info.as_ref() else {
-            return Ok(None);
-        };
-        but_api::commit::json::RelativeTo::ReferenceBytes(ref_info.ref_name.clone())
-    };
-
-    Ok(Some(BottomUpdate {
-        kind: BottomUpdateKind::Rebase,
-        selector,
-    }))
-}
-
-/// Whether each preview reference (keyed by its full ref name) survived the
-/// integration and, if so, whether any of its commits are conflicted.
-type PreviewReferenceConflicts = HashMap<Vec<u8>, bool>;
-
-/// Compare the current workspace to the dry-run or post-integration workspace.
-///
-/// Missing preview references are treated as integrated, while surviving references with
-/// conflicted commits are reported as conflicted. This mirrors the desktop status
-/// derivation without depending on the UI projection types.
-fn derive_upstream_integration_statuses(
-    current: &RefInfo,
-    preview: &but_api::WorkspaceState,
-) -> Vec<PullStackStatusInfo> {
-    let preview_conflicts = preview_reference_conflicts(preview);
-
-    current
-        .stacks
-        .iter()
-        .map(|stack| {
-            let branch_statuses = stack
-                .segments
-                .iter()
-                .map(|segment| derive_branch_status(segment, &preview_conflicts))
-                .collect::<Vec<_>>();
-
-            PullStackStatusInfo { branch_statuses }
-        })
-        .collect()
-}
-
-/// Index the preview references by their full ref name, recording whether each one still
-/// carries conflicted commits after the integration.
-///
-/// This reads the classic `RefInfo` projection returned when the `graph-workspace` feature
-/// is disabled.
-#[cfg(not(feature = "graph-workspace"))]
-fn preview_reference_conflicts(preview: &but_api::WorkspaceState) -> PreviewReferenceConflicts {
-    let mut conflicts = HashMap::new();
-    for stack in &preview.head_info.stacks {
-        for segment in &stack.segments {
-            if let Some(ref_info) = &segment.ref_info {
-                let has_conflicts = segment.commits.iter().any(|commit| commit.has_conflicts);
-                conflicts.insert(ref_info.ref_name.as_bstr().to_vec(), has_conflicts);
-            }
-        }
-    }
-    conflicts
-}
-
-/// Index the preview references by their full ref name, recording whether each one still
-/// carries conflicted commits after the integration.
-///
-/// This reads the detailed graph projection returned when the `graph-workspace` feature is
-/// enabled. Each reference segment owns the commit rows down to the next reference, mirroring
-/// the per-segment commits of the classic `RefInfo` projection.
-#[cfg(feature = "graph-workspace")]
-fn preview_reference_conflicts(preview: &but_api::WorkspaceState) -> PreviewReferenceConflicts {
-    use but_workspace::ui::workspace::DetailedGraphRowData;
-
-    let mut conflicts = HashMap::new();
-    for stack in &preview.graph_workspace.stacks {
-        for segment in &stack.reference_segments {
-            let Some(DetailedGraphRowData::Reference(reference)) =
-                stack.rows.get(segment.reference_idx).map(|row| &row.data)
-            else {
-                continue;
-            };
-            let has_conflicts = segment.row_idxs.iter().any(|&row_idx| {
-                matches!(
-                    stack.rows.get(row_idx).map(|row| &row.data),
-                    Some(DetailedGraphRowData::Commit(commit)) if commit.has_conflicts
-                )
-            });
-            conflicts.insert(reference.ref_name.full_name_bytes.to_vec(), has_conflicts);
-        }
-    }
-    conflicts
-}
-
-/// Derive the pull status for a single current segment from its preview counterpart.
-fn derive_branch_status(
-    segment: &Segment,
-    preview_conflicts: &PreviewReferenceConflicts,
-) -> PullBranchStatusInfo {
-    let name = branch_display_name(segment);
-    let Some(ref_info) = &segment.ref_info else {
-        return PullBranchStatusInfo {
-            name,
-            status: PullBranchStatus::Clear,
-        };
-    };
-
-    let Some(&has_conflicts) = preview_conflicts.get(ref_info.ref_name.as_bstr().as_bytes()) else {
-        return PullBranchStatusInfo {
-            name,
-            status: PullBranchStatus::Integrated,
-        };
-    };
-
-    PullBranchStatusInfo {
-        name,
-        status: if has_conflicts {
-            PullBranchStatus::Conflicted
-        } else {
-            PullBranchStatus::Clear
-        },
-    }
-}
-
-/// Return a human-readable branch name for CLI output.
-fn branch_display_name(segment: &Segment) -> String {
-    segment
-        .ref_info
-        .as_ref()
-        .map(|ref_info| ref_info.ref_name.shorten().to_string())
-        .unwrap_or_else(|| "Unnamed segment".to_string())
+        .any(|branch_status| branch_status.status.needs_update())
 }

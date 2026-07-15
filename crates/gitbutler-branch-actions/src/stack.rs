@@ -24,39 +24,6 @@ pub fn get_stack(ctx: &Context, stack_id: StackId) -> Result<Stack> {
     ctx.virtual_branches().get_stack(stack_id)
 }
 
-/// Adds a new "series/branch" to the Stack.
-/// This is in fact just creating a new  GitButler patch reference (head) and associates it with the stack.
-/// The name cannot be the same as existing git references or existing patch references.
-/// The target must reference a commit (or change) that is part of the stack.
-/// The branch name must be a valid reference name (i.e. can not contain spaces, special characters etc.)
-///
-/// When creating heads, it is possible to have multiple heads that point to the same patch/commit.
-/// If this is the case, the order can be disambiguated by specifying the `preceding_head`.
-/// If there are multiple heads pointing to the same patch and `preceding_head` is not specified,
-/// that means the new head will be first in order for that patch.
-/// The argument `preceding_head` is only used if there are multiple heads that point to the same patch, otherwise it is ignored.
-pub fn create_branch(ctx: &mut Context, stack_id: StackId, req: CreateSeriesRequest) -> Result<()> {
-    let mut guard = ctx.exclusive_worktree_access();
-    ctx.verify(guard.write_permission())?;
-    let _ = ctx.snapshot_create_dependent_branch(&req.name, guard.write_permission());
-    ensure_open_workspace_mode(ctx, guard.read_permission())
-        .context("Requires an open workspace mode")?;
-    let mut stack = ctx.virtual_branches().get_stack(stack_id)?;
-    let normalized_head_name = normalize_branch_name(&req.name)?;
-    let repo = ctx.repo.get()?;
-    // If target_patch is None, create a new head that points to the top of the stack (most recent patch)
-    if let Some(target_patch) = req.target_patch {
-        let target_oid = gix::ObjectId::from_hex(target_patch.as_bytes())?;
-        stack.add_series(
-            ctx,
-            StackBranch::new(target_oid, normalized_head_name, &repo)?,
-            req.preceding_head,
-        )
-    } else {
-        stack.add_series_top_of_stack(ctx, normalized_head_name)
-    }
-}
-
 /// Request to create a new series in a stack
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct CreateSeriesRequest {
@@ -70,7 +37,6 @@ pub struct CreateSeriesRequest {
 }
 
 /// Updates the name an existing branch and resets the pr_number to None.
-/// Same invariants as `create_branch` apply.
 ///
 /// Returns the new normalized name of the branch.
 pub fn update_branch_name(

@@ -1,14 +1,8 @@
-import { showToast, showWarning } from "$lib/notifications/toasts";
+import { showWarning } from "$lib/notifications/toasts";
 import { TestId } from "@gitbutler/ui";
 import type { BranchIconName } from "$lib/branches/branchIcon";
 import type { DropResult } from "$lib/dragging/dropResult";
 import type { ApplyOutcome, PushStatus, Segment, Stack as RefInfoStack } from "@gitbutler/but-sdk";
-
-export type CreateBranchFromBranchOutcome = {
-	stackId: string;
-	unappliedStacks: string[];
-	unappliedStacksShortNames: string[];
-};
 
 function stackCount(numStacks: number): string {
 	if (numStacks === 1) {
@@ -36,17 +30,6 @@ function prettyNamedListIfPossible(expectedNames: number, names: string[]): stri
 	const last = names[names.length - 1];
 
 	return `${allButLast.map((n) => `stack ${n}`).join(", ")}, and stack ${last}`;
-}
-
-export function handleCreateBranchFromBranchOutcome(outcome: CreateBranchFromBranchOutcome) {
-	if (outcome.unappliedStacks.length > 0) {
-		showToast({
-			testId: TestId.StacksUnappliedToast,
-			title: `Heads up: We had to unapply ${stackCount(outcome.unappliedStacks.length)} to apply this one`,
-			message: `There were some conflicts detected when applying this branch into your workspace, so we automatically unapplied ${prettyNamedListIfPossible(outcome.unappliedStacks.length, outcome.unappliedStacksShortNames)}.
-You can always re-apply them later from the branches page.`,
-		});
-	}
 }
 
 export function handleApplyOutcome(outcome: ApplyOutcome) {

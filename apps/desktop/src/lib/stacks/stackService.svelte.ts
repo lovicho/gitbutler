@@ -728,10 +728,6 @@ export class StackService {
 		return this.backendApi.endpoints.tearOffBranch.mutate;
 	}
 
-	get integrateUpstreamCommits() {
-		return this.backendApi.endpoints.integrateUpstreamCommits.useMutation();
-	}
-
 	initialBranchIntegration(
 		projectId: string,
 		branchRef: string,
@@ -779,10 +775,6 @@ export class StackService {
 
 	get reviewApply() {
 		return this.backendApi.endpoints.reviewApply.mutate;
-	}
-
-	get createVirtualBranchFromBranch() {
-		return this.backendApi.endpoints.createVirtualBranchFromBranch.mutate;
 	}
 
 	get deleteLocalBranch() {

@@ -49,9 +49,13 @@ pub fn handle(ctx: &mut Context, out: &mut OutputChannel, id: &str) -> Result<()
                 CliId::UncommittedHunkOrFile(uncommitted) => {
                     builder.push_hunk_assignments(uncommitted.hunk_assignments)?;
                 }
-                CliId::PathPrefix { .. } => todo!(),
+                CliId::PathPrefix {
+                    id,
+                    hunk_assignments,
+                } => {
+                    builder.push_changes_from_path_prefix(&id, &hunk_assignments)?;
+                }
                 CliId::Uncommitted { .. } => {
-                    // Discard all uncommitted changes.
                     builder.push_hunk_assignments(worktree_changes.assignments.clone())?;
                 }
                 CliId::Branch { .. } => {

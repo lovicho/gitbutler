@@ -688,22 +688,6 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
             but_post(legacy::virtual_branches::delete_local_branch_cmd),
         )
         .route(
-            "/create_virtual_branch_from_branch",
-            but_post(legacy::virtual_branches::create_virtual_branch_from_branch_cmd),
-        )
-        .route(
-            "/integrate_upstream_commits",
-            but_post(legacy::virtual_branches::integrate_upstream_commits_cmd),
-        )
-        .route(
-            "/get_initial_integration_steps_for_branch",
-            but_post(legacy::virtual_branches::get_initial_integration_steps_for_branch_cmd),
-        )
-        .route(
-            "/integrate_branch_with_steps",
-            but_post(legacy::virtual_branches::integrate_branch_with_steps_cmd),
-        )
-        .route(
             "/get_base_branch_data",
             but_post(legacy::virtual_branches::get_base_branch_data_cmd),
         )
@@ -1199,39 +1183,6 @@ async fn handle_command(
         }
         "branch_rename" => deserialize_json(request.params)
             .and_then(|params| but_api::branch::branch_rename_cmd(params).map(|r| json!(r))),
-        // Async virtual branches commands (not yet migrated due to different pattern)
-        "upstream_integration_statuses" => {
-            let params = deserialize_json(request.params);
-            match params {
-                Ok(params) => {
-                    let result =
-                        legacy::virtual_branches::upstream_integration_statuses_cmd(params);
-                    result.map(|r| json!(r))
-                }
-                Err(e) => Err(e),
-            }
-        }
-        "integrate_upstream" => {
-            let params = deserialize_json(request.params);
-            match params {
-                Ok(params) => {
-                    let result = legacy::virtual_branches::integrate_upstream_cmd(params).await;
-                    result.map(|r| json!(r))
-                }
-                Err(e) => Err(e),
-            }
-        }
-        "resolve_upstream_integration" => {
-            let params = deserialize_json(request.params);
-            match params {
-                Ok(params) => {
-                    let result =
-                        legacy::virtual_branches::resolve_upstream_integration_cmd(params).await;
-                    result.map(|r| json!(r))
-                }
-                Err(e) => Err(e),
-            }
-        }
         // GitHub commands (async, not yet migrated)
         "init_github_device_oauth" => {
             let result = github::init_github_device_oauth().await;

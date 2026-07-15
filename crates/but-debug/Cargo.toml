@@ -21,8 +21,6 @@ but-ctx.workspace = true
 but-graph.workspace = true
 but-workspace.workspace = true
 
-gitbutler-reference.workspace = true
-
 anyhow.workspace = true
 clap = { workspace = true, features = [
     "env",

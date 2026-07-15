@@ -17,7 +17,6 @@ use but_workspace::{
     ref_info::{Commit, LocalCommit, LocalCommitRelation, Segment},
     ui::PushStatus,
 };
-use gitbutler_branch_actions::upstream_integration::BranchStatus as UpstreamBranchStatus;
 use gitbutler_operating_modes::OperatingMode;
 use gix::date::time::CustomFormat;
 use ratatui::{style::Modifier, text::Span};
@@ -32,6 +31,7 @@ use crate::{
             BranchLineContent, CommitLineContent, FileLineContent, StatusOutput, StatusOutputLine,
             UncommittedLineContent,
         },
+        upstream::{self, BranchStatus as UpstreamBranchStatus},
         workspace_target,
     },
     id::{SegmentWithId, ShortId, StackWithId, TreeChangeWithId},
@@ -536,7 +536,11 @@ fn build_status_context<'a>(
     };
 
     // Compute upstream integration statuses for explicit upstream diagnostics.
-    let branch_merge_statuses: BTreeMap<String, UpstreamBranchStatus> = if flags.show_upstream {
+    let branch_merge_statuses: BTreeMap<String, UpstreamBranchStatus> = if flags.show_upstream
+        && base_branch
+            .as_ref()
+            .is_some_and(|base_branch| base_branch.behind > 0)
+    {
         compute_branch_merge_statuses(ctx, perm)?
     } else {
         BTreeMap::new()
@@ -1250,13 +1254,13 @@ fn print_group(
                 None
             } else {
                 branch_merge_status.map(|status| match status {
-                    UpstreamBranchStatus::SafelyUpdatable => {
+                    UpstreamBranchStatus::Clear => {
                         Span::styled(" [✓ upstream merges cleanly]", t.success)
                     }
                     UpstreamBranchStatus::Integrated => {
                         Span::styled(" (merged upstream)", t.remote_branch)
                     }
-                    UpstreamBranchStatus::Conflicted { .. } => {
+                    UpstreamBranchStatus::Conflicted => {
                         Span::styled(" [⚠ upstream conflicts]", t.error)
                     }
                     UpstreamBranchStatus::Empty => Span::styled(" ○ empty", t.hint),
@@ -2027,29 +2031,15 @@ impl CliDisplay for but_update::AvailableUpdate {
 }
 
 fn compute_branch_merge_statuses(
-    ctx: &Context,
+    ctx: &mut Context,
     perm: &mut RepoExclusive,
 ) -> anyhow::Result<BTreeMap<String, UpstreamBranchStatus>> {
-    use gitbutler_branch_actions::upstream_integration::StackStatuses;
-
-    // Get upstream integration statuses using the public API
-    let statuses = but_api::legacy::virtual_branches::upstream_integration_statuses_with_perm(
-        ctx.to_sync(),
-        None,
-        perm,
-    )?;
-
-    let mut result = BTreeMap::new();
-
-    if let StackStatuses::UpdatesRequired { statuses, .. } = statuses {
-        for (_stack_id, stack_status) in statuses {
-            for branch_status in stack_status.branch_statuses {
-                result.insert(branch_status.name.clone(), branch_status.status);
-            }
-        }
-    }
-
-    Ok(result)
+    let preview = upstream::dry_run_integration_with_perm(ctx, perm)?;
+    Ok(preview
+        .statuses
+        .into_iter()
+        .map(|branch| (branch.name, branch.status))
+        .collect())
 }
 
 #[cfg(test)]

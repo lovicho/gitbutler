@@ -41,6 +41,54 @@ fn discard_removes_selected_change() -> anyhow::Result<()> {
 }
 
 #[test]
+fn discard_by_path_prefix_removes_only_matching_files() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    env.file("path/to/first.txt", "first\n");
+    env.file("path/to/second.txt", "second\n");
+    env.file("path/other/third.txt", "third\n");
+
+    env.but("status")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted]
+┊   u A path/other/third.txt
+┊   m A path/to/first.txt
+┊   r A path/to/second.txt
+┊
+┊╭┄g0 [A]
+┊●   9477ae7 add A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
+
+"#]]);
+
+    env.but("discard path/to/").assert().success();
+
+    env.but("status")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted]
+┊   u A path/other/third.txt
+┊
+┊╭┄g0 [A]
+┊●   9477ae7 add A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
+
+"#]]);
+}
+
+#[test]
 fn concurrent_discard_to_independent_files_succeeds() -> anyhow::Result<()> {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
     env.setup_metadata(&["A"]);

@@ -542,20 +542,12 @@ fn convert_branch_to_json(
             .branch_merge_statuses
             .get(&name.to_string())
             .map(|status| match status {
-                gitbutler_branch_actions::upstream_integration::BranchStatus::SafelyUpdatable => {
-                    MergeStatus::Clean
+                super::UpstreamBranchStatus::Clear => MergeStatus::Clean,
+                super::UpstreamBranchStatus::Integrated => MergeStatus::Integrated,
+                super::UpstreamBranchStatus::Conflicted => {
+                    MergeStatus::Conflicted { rebasable: false }
                 }
-                gitbutler_branch_actions::upstream_integration::BranchStatus::Integrated => {
-                    MergeStatus::Integrated
-                }
-                gitbutler_branch_actions::upstream_integration::BranchStatus::Conflicted {
-                    rebasable,
-                } => MergeStatus::Conflicted {
-                    rebasable: *rebasable,
-                },
-                gitbutler_branch_actions::upstream_integration::BranchStatus::Empty => {
-                    MergeStatus::Empty
-                }
+                super::UpstreamBranchStatus::Empty => MergeStatus::Empty,
             })
     });
 

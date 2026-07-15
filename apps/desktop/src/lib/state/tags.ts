@@ -22,7 +22,6 @@ export enum ReduxTag {
 	RepoInfo = "RepoInfo",
 	BaseBranchData = "BaseBranchData",
 	ForgeProvider = "ForgeProvider",
-	UpstreamIntegrationStatus = "UpstreamIntegrationStatus",
 	BranchListing = "BranchListing",
 	BranchDetails = "BranchDetails",
 	SnapshotDiff = "SnapshotDiff",

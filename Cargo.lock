@@ -1186,7 +1186,6 @@ dependencies = [
  "but-testsupport",
  "but-workspace",
  "clap",
- "gitbutler-reference",
  "gix",
  "open",
  "prodash",
@@ -3864,10 +3863,8 @@ dependencies = [
  "but-core",
  "but-ctx",
  "but-error",
- "but-forge",
  "but-gerrit",
  "but-graph",
- "but-hunk-assignment",
  "but-meta",
  "but-oxidize",
  "but-project-handle",
@@ -3877,7 +3874,6 @@ dependencies = [
  "but-settings",
  "but-testsupport",
  "but-workspace",
- "chrono",
  "ctor 0.6.3",
  "git2",
  "gitbutler-branch",
@@ -3902,7 +3898,6 @@ dependencies = [
  "tempfile",
  "tracing",
  "url",
- "uuid",
 ]
 
 [[package]]

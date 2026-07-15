@@ -150,7 +150,6 @@ describe("buildStackEndpoints", () => {
 
 		expect(endpoints.commitCreate.invalidatesTags).toEqual([
 			invalidatesList(ReduxTag.WorktreeChanges),
-			invalidatesList(ReduxTag.UpstreamIntegrationStatus),
 			invalidatesList(ReduxTag.IntegrationSteps),
 			invalidatesList(ReduxTag.HeadSha),
 		]);
@@ -273,7 +272,6 @@ describe("buildStackEndpoints", () => {
 			invalidatesList(ReduxTag.Stacks),
 			invalidatesList(ReduxTag.StackDetails),
 			invalidatesList(ReduxTag.BranchListing),
-			invalidatesList(ReduxTag.UpstreamIntegrationStatus),
 			invalidatesItem(ReduxTag.IntegrationSteps, "refs/heads/feature"),
 		]);
 	});
@@ -303,7 +301,6 @@ describe("buildStackEndpoints", () => {
 			invalidatesList(ReduxTag.Stacks),
 			invalidatesList(ReduxTag.StackDetails),
 			invalidatesList(ReduxTag.BranchListing),
-			invalidatesList(ReduxTag.UpstreamIntegrationStatus),
 		]);
 	});
 
@@ -332,7 +329,6 @@ describe("buildStackEndpoints", () => {
 			invalidatesList(ReduxTag.Stacks),
 			invalidatesList(ReduxTag.StackDetails),
 			invalidatesList(ReduxTag.BranchListing),
-			invalidatesList(ReduxTag.UpstreamIntegrationStatus),
 			invalidatesList(ReduxTag.PullRequests),
 		]);
 	});
@@ -376,7 +372,6 @@ describe("buildStackEndpoints", () => {
 			invalidatesList(ReduxTag.BranchChanges),
 			invalidatesList(ReduxTag.BranchListing),
 			invalidatesType(ReduxTag.BaseBranchData),
-			invalidatesList(ReduxTag.UpstreamIntegrationStatus),
 		]);
 	});
 
@@ -411,7 +406,6 @@ describe("buildStackEndpoints", () => {
 			invalidatesList(ReduxTag.BranchChanges),
 			invalidatesList(ReduxTag.BranchListing),
 			invalidatesType(ReduxTag.BaseBranchData),
-			invalidatesList(ReduxTag.UpstreamIntegrationStatus),
 		]);
 	});
 });

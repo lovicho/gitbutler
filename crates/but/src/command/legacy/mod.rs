@@ -37,6 +37,7 @@ pub mod squash2;
 pub mod status;
 pub mod teardown;
 pub mod unapply;
+pub(crate) mod upstream;
 pub(crate) mod workspace_target;
 pub mod worktree;
 

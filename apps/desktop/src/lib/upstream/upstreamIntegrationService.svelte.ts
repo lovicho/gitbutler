@@ -38,14 +38,6 @@ export class UpstreamIntegrationService {
 		};
 	}
 
-	resolveUpstreamIntegration() {
-		return this.backendApi.endpoints.resolveUpstreamIntegration.useMutation();
-	}
-
-	get resolveUpstreamIntegrationMutation() {
-		return this.backendApi.endpoints.resolveUpstreamIntegration.mutate;
-	}
-
 	integrateUpstream() {
 		return this.backendApi.endpoints.workspaceIntegrateUpstream.useMutation();
 	}

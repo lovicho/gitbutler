@@ -56,24 +56,9 @@ pub struct ApiArgs {
 /// The `but-api` entry points exposed by `but-debug`.
 #[derive(Debug, clap::Subcommand)]
 pub enum ApiSubcommands {
-    /// Apply a branch through `but_api::legacy::virtual_branches::create_virtual_branch_from_branch`.
-    Apply(ApiApplyArgs),
     /// Unapply a stack through `but_api::legacy::virtual_branches::unapply_stack`.
     #[command(name = "unapply-stack", visible_alias = "unapply")]
     UnapplyStack(ApiUnapplyStackArgs),
-}
-
-/// Arguments for `but-debug api apply`.
-#[derive(Debug, clap::Args)]
-pub struct ApiApplyArgs {
-    /// Shared workspace debug output options.
-    #[command(flatten)]
-    pub debug: DebugWorkspaceArgs,
-    /// Optional pull request number to store on the applied branch.
-    #[arg(long)]
-    pub pr_number: Option<usize>,
-    /// Branch or full ref name to apply.
-    pub branch: String,
 }
 
 /// Arguments for `but-debug api unapply-stack`.

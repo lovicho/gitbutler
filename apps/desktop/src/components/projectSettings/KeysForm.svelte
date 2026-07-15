@@ -1,11 +1,10 @@
 <script lang="ts">
 	import CredentialCheck from "$components/projectSettings/CredentialCheck.svelte";
-	import ProjectNameLabel from "$components/shared/ProjectNameLabel.svelte";
 	import ReduxResult from "$components/shared/ReduxResult.svelte";
-	import SettingsSection from "$components/shared/SettingsSection.svelte";
 	import { BASE_BRANCH_SERVICE } from "$lib/baseBranch/baseBranchService.svelte";
 	import { PROJECTS_SERVICE } from "$lib/project/projectsService";
 	import { inject } from "@gitbutler/core/context";
+	import { CardGroup } from "@gitbutler/ui";
 
 	interface Props {
 		// Used by credential checker before target branch set
@@ -16,13 +15,7 @@
 		disabled?: boolean;
 	}
 
-	const {
-		projectId,
-		remoteName = "",
-		branchName = "",
-		showProjectName = false,
-		disabled = false,
-	}: Props = $props();
+	const { projectId, remoteName = "", branchName = "", disabled = false }: Props = $props();
 
 	const baseBranchService = inject(BASE_BRANCH_SERVICE);
 	const baseBranchQuery = $derived(baseBranchService.baseBranch(projectId));
@@ -31,17 +24,14 @@
 	const projectQuery = $derived(projectsService.getProject(projectId));
 </script>
 
-<div>
-	<ReduxResult {projectId} result={projectQuery.result}>
-		{#snippet children(project)}
-			<SettingsSection>
-				{#snippet top()}
-					{#if showProjectName}<ProjectNameLabel projectName={project.title} />{/if}
-				{/snippet}
+<ReduxResult {projectId} result={projectQuery.result}>
+	{#snippet children(project)}
+		<CardGroup>
+			<CardGroup.Item>
 				{#snippet title()}
 					Git authentication
 				{/snippet}
-				{#snippet description()}
+				{#snippet caption()}
 					GitButler authenticates with your Git remote provider through the Git executable available
 					on your PATH.
 				{/snippet}
@@ -51,7 +41,7 @@
 					remoteName={remoteName || baseBranch?.remoteName}
 					branchName={branchName || baseBranch?.shortName}
 				/>
-			</SettingsSection>
-		{/snippet}
-	</ReduxResult>
-</div>
+			</CardGroup.Item>
+		</CardGroup>
+	{/snippet}
+</ReduxResult>
