@@ -239,8 +239,4 @@
 		width: 28px;
 		height: 28px;
 	}
-
-	.gitlab-integration-settings__text {
-		color: var(--text-2);
-	}
 </style>

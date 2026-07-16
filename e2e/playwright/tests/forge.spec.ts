@@ -24,7 +24,8 @@ const BRANCH = "branch1";
  * review (number 42). The whole forge surface is mocked, so no live
  * forge is involved; the stack/branch itself is real (created via
  * but-server). PR association flows:
- * list_reviews → PrNumberSync persists the number → get_review.
+ * The backend forge cache provides the branch association; browser routes still
+ * mock review details/checks after the badge asks for the review number.
  *
  * `forgeInfo` selects which forge the renderer thinks it's talking to,
  * which drives capability gating and label text.
@@ -41,6 +42,7 @@ async function openWorkspaceWithMockedPr(
 	await applyUpstream(gitbutler as never, BRANCH);
 
 	const review = forgeReview(PR_NUMBER, BRANCH);
+	await cacheReview(gitbutler, review);
 	await mockForge(page, {
 		forge_info: opts.forgeInfo,
 		list_reviews: [review],
@@ -83,6 +85,7 @@ test("CI badge does not error for a PR from a fork", async ({ page, gitbutler })
 		repoOwner: "contributor",
 		headRepoIsFork: true,
 	});
+	await cacheReview(gitbutler, review);
 	await mockForge(page, {
 		forge_info: githubForgeInfo(),
 		list_reviews: [review],
@@ -127,6 +130,7 @@ async function openGithubPrWithChecksRoute(
 	await applyUpstream(gitbutler as never, BRANCH);
 
 	const review = forgeReview(PR_NUMBER, BRANCH, reviewOverrides);
+	await cacheReview(gitbutler, review);
 	await mockForge(page, {
 		forge_info: githubForgeInfo(),
 		list_reviews: [review],
@@ -296,6 +300,7 @@ async function openReviewBranchView(
 
 	await gitbutler.runScript("project-with-remote-branches.sh");
 	await applyUpstream(gitbutler as never, BRANCH);
+	await cacheReview(gitbutler, review);
 	await openWorkspace(page);
 
 	await page.getByTestId("branch-header").filter({ hasText: BRANCH }).first().click();
@@ -326,6 +331,18 @@ test("merge button is disabled when the MR is not mergeable", async ({ page, git
 	});
 	await expect(mergeButton).toBeDisabled();
 });
+
+async function cacheReview(
+	gitbutler: { runScript: (s: string, a?: string[]) => Promise<void> },
+	review: ForgeReview,
+) {
+	await gitbutler.runScript("cache-forge-review.sh", [
+		"local-clone",
+		`${review.number}`,
+		review.sourceBranch,
+		review.targetBranch,
+	]);
+}
 
 test("merge button is disabled when the PR targets a stacked branch, not the base", async ({
 	page,

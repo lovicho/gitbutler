@@ -340,7 +340,7 @@ mod file {
                             // Thus, all we have to do is to check out the submodule.
                             // TODO(gix): find a way to deal with nested submodules - they should also be checked out which
                             //            isn't done by `gitoxide`, but probably should be an option there.
-                            checkout_repo_worktree(&wt_root, repo)?;
+                            checkout_repo_worktree(&wt_root, &file_path, repo)?;
                         }
                     }
                     std::fs::create_dir(&file_path).or_else(|err| {
@@ -416,6 +416,7 @@ mod file {
 
     fn checkout_repo_worktree(
         parent_worktree_dir: &Path,
+        checkout_destination: &Path,
         mut repo: gix::Repository,
     ) -> anyhow::Result<()> {
         // No need to cache anything, it's just single-use for the most part.
@@ -437,9 +438,8 @@ mod file {
         opts.destination_is_initially_empty = true;
         opts.keep_going = true;
 
-        let checkout_destination = repo.workdir().context("non-bare repository")?.to_owned();
         if !checkout_destination.exists() {
-            std::fs::create_dir(&checkout_destination)?;
+            std::fs::create_dir(checkout_destination)?;
         }
         let sm_repo_dir = gix::path::relativize_with_prefix(
             repo.path().strip_prefix(parent_worktree_dir)?,
@@ -448,7 +448,7 @@ mod file {
         .into_owned();
         let out = gix::worktree::state::checkout(
             &mut index,
-            checkout_destination.clone(),
+            checkout_destination.to_owned(),
             repo,
             &gix::progress::Discard,
             &gix::progress::Discard,

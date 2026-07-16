@@ -33,6 +33,65 @@ pub fn ref_info(
 }
 
 #[test]
+fn direct_workspace_ref_has_no_ancestor_workspace_commit() -> anyhow::Result<()> {
+    let (_tmp, repo, meta) = writable_scenario("remote-advanced-ff")?;
+    let workspace_tip = repo.head_id()?;
+    repo.reference(
+        "refs/heads/direct-workspace",
+        workspace_tip,
+        gix::refs::transaction::PreviousValue::MustNotExist,
+        "test direct workspace ref",
+    )?;
+
+    let info = ref_info(
+        repo.find_reference("refs/heads/direct-workspace")?,
+        &meta,
+        standard_options(),
+    )?;
+
+    assert!(
+        info.ancestor_workspace_commit.is_none(),
+        "a ref pointing directly at the managed workspace commit has no outside commits"
+    );
+    Ok(())
+}
+
+#[test]
+fn advanced_direct_workspace_ref_has_no_ancestor_workspace_commit() -> anyhow::Result<()> {
+    let (_tmp, repo, meta) = writable_scenario("remote-advanced-ff")?;
+    let workspace_tip = repo.head_id()?;
+    let advanced_tip = repo
+        .write_object(gix::objs::Commit {
+            parents: [workspace_tip.detach()].into(),
+            message: "commit outside the workspace".into(),
+            ..repo.head_commit()?.decode()?.to_owned()?
+        })?
+        .detach();
+    repo.reference(
+        "refs/heads/direct-workspace",
+        advanced_tip,
+        gix::refs::transaction::PreviousValue::MustNotExist,
+        "test advanced direct workspace ref",
+    )?;
+
+    let info = ref_info(
+        repo.find_reference("refs/heads/direct-workspace")?,
+        &meta,
+        standard_options(),
+    )?;
+
+    assert!(
+        !info.is_managed_ref,
+        "a direct branch without workspace metadata is ad hoc"
+    );
+    assert!(
+        info.ancestor_workspace_commit.is_none(),
+        "an ad-hoc ref does not interpret managed workspace commits in its ancestry"
+    );
+    Ok(())
+}
+
+#[test]
 fn gerrit_mode_uses_metadata_for_commit_review_urls_and_push_status() -> anyhow::Result<()> {
     let (repo, mut meta) = read_only_in_memory_scenario("remote-advanced-ff")?;
     add_stack(&mut meta, 1, "A", StackState::InWorkspace);
@@ -4374,6 +4433,20 @@ pub(crate) mod utils {
         named_read_only_in_memory_scenario("with-remotes-and-workspace", name)
     }
 
+    pub fn writable_scenario(
+        name: &str,
+    ) -> anyhow::Result<(TempDir, gix::Repository, VirtualBranchesTomlMetadata)> {
+        let tmp = but_testsupport::gix_testtools::scripted_fixture_writable(
+            "scenario/with-remotes-and-workspace.sh",
+        )
+        .map_err(anyhow::Error::from_boxed)?;
+        let repo = but_testsupport::open_repo(&tmp.path().join(name))?;
+        let mut meta =
+            VirtualBranchesTomlMetadata::from_path(repo.path().join("virtual-branches.toml"))?;
+        set_default_target(&repo, &mut meta)?;
+        Ok((tmp, repo, meta))
+    }
+
     pub fn named_read_only_in_memory_scenario(
         script: &str,
         name: &str,
@@ -4383,6 +4456,14 @@ pub(crate) mod utils {
     )> {
         let (repo, mut meta) =
             crate::ref_info::utils::named_read_only_in_memory_scenario(script, name)?;
+        set_default_target(&repo, &mut meta)?;
+        Ok((repo, meta))
+    }
+
+    fn set_default_target(
+        repo: &gix::Repository,
+        meta: &mut VirtualBranchesTomlMetadata,
+    ) -> anyhow::Result<()> {
         let vb = meta.data_mut();
         vb.default_target = Some(Target {
             // For simplicity, we stick to the defaults.
@@ -4397,7 +4478,7 @@ pub(crate) mod utils {
                 .unwrap_or_else(|| gix::hash::Kind::Sha1.null()),
             push_remote_name: None,
         });
-        Ok((repo, meta))
+        Ok(())
     }
 
     pub fn named_writable_scenario_with_description(
@@ -4566,8 +4647,8 @@ pub(crate) mod utils {
         stack_id
     }
 }
-use utils::add_stack;
 pub use utils::read_only_in_memory_scenario;
+use utils::{add_stack, writable_scenario};
 
 use crate::ref_info::{
     utils::standard_options,

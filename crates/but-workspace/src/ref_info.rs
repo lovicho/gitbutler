@@ -517,7 +517,15 @@ pub(crate) fn find_ancestor_workspace_commit(
         }
         false
     });
-    sidx_and_cidx.map(|(sidx, cidx)| AncestorWorkspaceCommit {
+    ancestor_workspace_commit_if_outside(commits_outside, sidx_and_cidx)
+}
+
+fn ancestor_workspace_commit_if_outside(
+    commits_outside: Vec<crate::ref_info::Commit>,
+    sidx_and_cidx: Option<(SegmentIndex, usize)>,
+) -> Option<AncestorWorkspaceCommit> {
+    let (sidx, cidx) = sidx_and_cidx?;
+    (!commits_outside.is_empty()).then_some(AncestorWorkspaceCommit {
         commits_outside,
         segment_with_managed_commit: sidx,
         commit_index_of_managed_commit: cidx,

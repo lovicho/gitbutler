@@ -2,13 +2,15 @@ import {
 	branchHeader,
 	createDependentBranch,
 	expectCurrentBranchChip,
+	openSingleBranchWorkspace,
 	setupSingleBranchProject,
 	SINGLE_BRANCH_NAME,
 } from "./helpers.ts";
-import { assertBranch } from "../../src/branch.ts";
+import { assertBranch, assertCommitSubjects, branchTip } from "../../src/branch.ts";
 import { test } from "../../src/test.ts";
 import { dragAndDropByLocator, getByTestId } from "../../src/util.ts";
 import { expect, type Page } from "@playwright/test";
+import type { GitButler } from "../../src/setup.ts";
 
 test.use({
 	gitbutlerOptions: {
@@ -82,6 +84,112 @@ test("moving an empty branch above the checked-out branch checks out the new tip
 	await expectCurrentBranchChip(page, "empty-a");
 	await assertBranch("empty-a", localClone);
 });
+
+test("can move a middle non-empty branch above the checked-out branch", async ({
+	page,
+	gitbutler,
+}) => {
+	const localClone = await setupThreeBranchStackProject(gitbutler, page);
+
+	await expect(getByTestId(page, "branch-card")).toHaveCount(3);
+	await expectCurrentBranchChip(page, "C");
+	await expectBranchHeaderOrder(page, ["C", "B", "A"]);
+
+	await dragBranchToInsertionDropzone(page, "B", 0);
+
+	await expectBranchHeaderOrder(page, ["B", "C", "A"]);
+	await expectCurrentBranchChip(page, "B");
+	await assertBranch("B", localClone);
+	await assertCommitSubjects(["B: first commit", "C: first commit", "A: first commit"], localClone);
+});
+
+test("can move a bottom non-empty branch above the checked-out branch", async ({
+	page,
+	gitbutler,
+}) => {
+	const localClone = await setupThreeBranchStackProject(gitbutler, page);
+
+	await expect(getByTestId(page, "branch-card")).toHaveCount(3);
+	await expectCurrentBranchChip(page, "C");
+	await expectBranchHeaderOrder(page, ["C", "B", "A"]);
+
+	await dragBranchToInsertionDropzone(page, "A", 0);
+
+	await expectBranchHeaderOrder(page, ["A", "C", "B"]);
+	await expectCurrentBranchChip(page, "A");
+	await assertBranch("A", localClone);
+	await assertCommitSubjects(["A: first commit", "C: first commit", "B: first commit"], localClone);
+});
+
+test("can move the checked-out top branch down within its stack", async ({ page, gitbutler }) => {
+	const localClone = await setupThreeBranchStackProject(gitbutler, page);
+
+	await expect(getByTestId(page, "branch-card")).toHaveCount(3);
+	await expectCurrentBranchChip(page, "C");
+	await expectBranchHeaderOrder(page, ["C", "B", "A"]);
+
+	await dragBranchToInsertionDropzone(page, "C", 1);
+
+	await expectBranchHeaderOrder(page, ["B", "C", "A"]);
+	await expectCurrentBranchChip(page, "B");
+	await assertBranch("B", localClone);
+	await assertCommitSubjects(["B: first commit", "C: first commit", "A: first commit"], localClone);
+});
+
+test("can move a bottom non-empty branch above the checked-out middle branch", async ({
+	page,
+	gitbutler,
+}) => {
+	const localClone = await setupThreeBranchStackProject(gitbutler, page, "B");
+	const cTipBefore = branchTip("C", localClone);
+
+	await expect(getByTestId(page, "branch-card")).toHaveCount(2);
+	await expectCurrentBranchChip(page, "B");
+	await expectBranchHeaderOrder(page, ["B", "A"]);
+
+	await dragBranchToInsertionDropzone(page, "A", 0);
+
+	await expectBranchHeaderOrder(page, ["A", "B"]);
+	await expectCurrentBranchChip(page, "A");
+	await assertBranch("A", localClone);
+	expect(branchTip("C", localClone)).toBe(cTipBefore);
+	await assertCommitSubjects(["A: first commit", "B: first commit"], localClone);
+});
+
+async function setupThreeBranchStackProject(
+	gitbutler: GitButler,
+	page: Page,
+	headBranch = "C",
+): Promise<string> {
+	await gitbutler.runScript("project-in-single-branch-three-branch-stack.sh", [headBranch]);
+	const localClone = gitbutler.pathInWorkdir("local-clone");
+	await openSingleBranchWorkspace(page);
+	return localClone;
+}
+
+async function dragBranchToInsertionDropzone(
+	page: Page,
+	branchName: string,
+	dropzoneIndex: number,
+): Promise<void> {
+	const source = branchHeader(page, branchName);
+	await source.hover();
+	const box = await source.boundingBox();
+	if (!box) throw new Error(`Branch header ${branchName} has no bounding box`);
+
+	await page.mouse.down();
+	await page.mouse.move(box.x + 16, box.y + 16);
+	await page.evaluate(
+		async () => await new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
+	);
+
+	const target = page.getByTestId("BranchListInsertionDropzone").nth(dropzoneIndex);
+	await target.hover({ force: true, position: { x: 120, y: 6 } });
+	await page.evaluate(
+		async () => await new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
+	);
+	await page.mouse.up();
+}
 
 async function expectBranchHeaderOrder(page: Page, expectedBranchNames: string[]): Promise<void> {
 	await expect

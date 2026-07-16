@@ -41,7 +41,7 @@ pub(crate) fn commit_amend_only_impl(
     perm: &mut RepoExclusive,
 ) -> anyhow::Result<CommitCreateResult> {
     let mut meta = ctx.meta()?;
-    let (repo, mut ws, _) = ctx.workspace_mut_and_db_with_perm(perm)?;
+    let (repo, mut ws, db) = ctx.workspace_mut_and_db_with_perm(perm)?;
     let editor = Editor::create(&mut ws, &mut meta, &repo)?;
 
     let but_workspace::commit::CommitAmendOutcome {
@@ -53,7 +53,7 @@ pub(crate) fn commit_amend_only_impl(
     let new_commit = commit_selector
         .map(|commit_selector| rebase.lookup_pick(commit_selector))
         .transpose()?;
-    let workspace = WorkspaceState::from_successful_rebase(rebase, &repo, dry_run)?;
+    let workspace = WorkspaceState::from_successful_rebase_with_db(rebase, &repo, dry_run, &db)?;
 
     Ok(CommitCreateResult {
         new_commit,

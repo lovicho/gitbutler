@@ -489,9 +489,22 @@ mod config_target {
     }
 
     #[test]
-    fn push_remote_requires_target_branch() {
+    fn parses_standalone_push_remote() {
+        let args = Args::try_parse_from(["but", "config", "push-remote", "origin"])
+            .expect("parse standalone push remote");
+
+        assert!(matches!(
+            args.cmd,
+            Some(Subcommands::Config(ConfigPlatform {
+                cmd: Some(ConfigCmd::PushRemote { remote: Some(remote) }),
+            })) if remote == "origin"
+        ));
+    }
+
+    #[test]
+    fn target_push_remote_still_requires_target_branch() {
         let err = Args::try_parse_from(["but", "config", "target", "--push-remote", "origin"])
-            .expect_err("push remote requires a target branch");
+            .expect_err("target push remote requires a target branch");
 
         assert_eq!(err.kind(), clap::error::ErrorKind::MissingRequiredArgument);
     }

@@ -1286,12 +1286,14 @@ fn set_workspace_metadata(
 /// (no `gitbutler/workspace` commit) and the tip-to-base order of same-commit empty branches lives
 /// in the `branch_order` metadata table rather than in `Workspace` metadata.
 mod single_branch_mode {
+    use std::collections::HashMap;
+
     use but_core::RefMetadata;
     use but_core::ref_metadata::StackId;
     use but_graph::init::Options;
     use but_meta::BranchOrderMetadata;
     use but_rebase::graph_rebase::Editor;
-    use but_testsupport::graph_workspace;
+    use but_testsupport::{graph_workspace, invoke_bash};
     use but_workspace::branch::create_reference::{Anchor, Position};
 
     use crate::ref_info::with_workspace_commit::utils::named_writable_scenario;
@@ -1306,6 +1308,38 @@ mod single_branch_mode {
         BranchOrderMetadata::from_paths(repo.path().join("virtual-branches.toml"), repo.path())
     }
 
+    fn project_meta(meta: &impl RefMetadata) -> but_core::ref_metadata::ProjectMeta {
+        meta.workspace(
+            but_core::WORKSPACE_REF_NAME
+                .try_into()
+                .expect("valid workspace ref"),
+        )
+        .map(|workspace| workspace.project_meta())
+        .unwrap_or_default()
+    }
+
+    fn ad_hoc_workspace_with_three_non_empty_branches(
+        head: &str,
+    ) -> anyhow::Result<(
+        tempfile::TempDir,
+        gix::Repository,
+        BranchOrderMetadata,
+        but_core::ref_metadata::ProjectMeta,
+    )> {
+        let (tmp, repo, legacy_meta) = named_writable_scenario("single-branch-three-branch-stack")?;
+        if head != "C" {
+            invoke_bash(&format!("git checkout {head}\n"), &repo);
+        }
+        let mut meta = branch_order_meta(&repo)?;
+        meta.set_branch_stack_order(&[
+            r("refs/heads/C").to_owned(),
+            r("refs/heads/B").to_owned(),
+            r("refs/heads/A").to_owned(),
+            r("refs/heads/main").to_owned(),
+        ])?;
+        Ok((tmp, repo, meta, project_meta(&legacy_meta)))
+    }
+
     /// `move_branch` returns the reordered chain instead of persisting it (so callers can skip
     /// persistence for dry runs); persist it here to mimic a real, non-dry-run caller.
     fn persist_order(
@@ -1316,6 +1350,92 @@ mod single_branch_mode {
             meta.set_branch_stack_order(order)?;
         }
         Ok(())
+    }
+
+    fn move_branch_and_apply(
+        repo: &gix::Repository,
+        meta: &mut BranchOrderMetadata,
+        project_meta: but_core::ref_metadata::ProjectMeta,
+        subject: &gix::refs::FullNameRef,
+        target: &gix::refs::FullNameRef,
+    ) -> anyhow::Result<Option<Vec<gix::refs::FullName>>> {
+        let mut ws = but_graph::Graph::from_head(repo, meta, project_meta, Options::limited())?
+            .into_workspace()?;
+        let editor = Editor::create(&mut ws, meta, repo)?;
+        let but_workspace::branch::move_branch::Outcome {
+            rebase,
+            ws_meta,
+            new_tip,
+            branch_stack_order,
+            ..
+        } = but_workspace::branch::move_branch(editor, subject, target)?;
+        assert!(
+            ws_meta.is_none(),
+            "ad-hoc reorder lives in branch_order, not workspace metadata"
+        );
+        rebase.materialize()?;
+        persist_order(meta, &branch_stack_order)?;
+        if let Some(new_tip) = new_tip {
+            invoke_bash(&format!("git checkout {}\n", new_tip.shorten()), repo);
+        }
+        Ok(branch_stack_order)
+    }
+
+    fn assert_head(repo: &gix::Repository, branch_name: &str) {
+        let actual = repo
+            .head_name()
+            .expect("HEAD can be read")
+            .expect("HEAD points to a branch")
+            .to_string();
+        assert_eq!(actual, format!("refs/heads/{branch_name}"));
+    }
+
+    fn branch_tip(repo: &gix::Repository, branch_name: &str) -> gix::ObjectId {
+        repo.rev_parse_single(branch_name)
+            .expect("branch exists")
+            .detach()
+    }
+
+    fn normalized_graph_snapshot(repo: &gix::Repository) -> anyhow::Result<String> {
+        let rendered = but_testsupport::visualize_commit_graph_all(repo)?;
+        let mut labels = HashMap::new();
+        Ok(normalize_graph(&rendered, &mut labels)
+            .lines()
+            .map(str::trim_end)
+            .collect::<Vec<_>>()
+            .join("\n"))
+    }
+
+    fn normalize_graph(graph: &str, labels: &mut HashMap<String, String>) -> String {
+        let mut out = String::new();
+        let mut token = String::new();
+        for ch in graph.chars() {
+            if ch.is_ascii_hexdigit() {
+                token.push(ch);
+            } else {
+                push_normalized_token(&mut out, &mut token, labels);
+                out.push(ch);
+            }
+        }
+        push_normalized_token(&mut out, &mut token, labels);
+        out
+    }
+
+    fn push_normalized_token(
+        out: &mut String,
+        token: &mut String,
+        labels: &mut HashMap<String, String>,
+    ) {
+        if (7..=40).contains(&token.len()) && token.chars().all(|ch| ch.is_ascii_hexdigit()) {
+            let next = labels.len() + 1;
+            let label = labels
+                .entry(std::mem::take(token))
+                .or_insert_with(|| format!("[C{next}]"));
+            out.push_str(label);
+        } else {
+            out.push_str(token);
+            token.clear();
+        }
     }
 
     /// Build a single-branch (ad-hoc) workspace on `main` (3 commits) with two empty dependent
@@ -1525,38 +1645,218 @@ mod single_branch_mode {
         Ok(())
     }
 
-    /// Moving a *non-empty* branch in single-branch mode is not supported yet: the base-most branch
-    /// of a single-branch stack owns the commits, so moving it would change commit ownership and
-    /// needs a real rebase rather than a pure metadata reorder.
     #[test]
-    fn moving_non_empty_branch_is_unsupported() -> anyhow::Result<()> {
-        let (_tmp, repo, mut meta, project_meta) = ad_hoc_workspace_with_two_empty_branches()?;
-        let main_ref = r("refs/heads/main");
-        let order_before = meta.branch_stack_order(main_ref)?;
+    fn move_middle_non_empty_branch_to_top_checks_out_subject() -> anyhow::Result<()> {
+        let (_tmp, repo, mut meta, project_meta) =
+            ad_hoc_workspace_with_three_non_empty_branches("C")?;
 
-        let mut ws = but_graph::Graph::from_head(&repo, &meta, project_meta, Options::limited())?
-            .into_workspace()?;
+        snapbox::assert_data_eq!(
+            normalized_graph_snapshot(&repo)?,
+            snapbox::str![[r#"
+* [C1] (HEAD -> C) add c
+* [C2] (B) add b
+* [C3] (A) add a
+* [C4] (main) add main"#]]
+        );
 
-        // `base` owns the stack's commits, so trying to move it must be rejected.
-        let editor = Editor::create(&mut ws, &mut meta, &repo)?;
-        let err = match but_workspace::branch::move_branch(
-            editor,
-            r("refs/heads/base"),
-            r("refs/heads/empty-top"),
-        ) {
-            // `Outcome` holds the metadata backend (not `Debug`), so unwrap the error by hand.
-            Ok(_) => panic!("moving a non-empty branch in single-branch mode should be rejected"),
-            Err(err) => err,
-        };
+        let branch_stack_order = move_branch_and_apply(
+            &repo,
+            &mut meta,
+            project_meta,
+            r("refs/heads/B"),
+            r("refs/heads/C"),
+        )?;
 
+        assert_head(&repo, "B");
         assert_eq!(
-            err.to_string(),
-            "Moving a non-empty branch in single-branch mode is not yet supported"
+            branch_stack_order,
+            Some(vec![
+                r("refs/heads/B").to_owned(),
+                r("refs/heads/C").to_owned(),
+                r("refs/heads/A").to_owned(),
+                r("refs/heads/main").to_owned(),
+            ])
+        );
+        snapbox::assert_data_eq!(
+            normalized_graph_snapshot(&repo)?,
+            snapbox::str![[r#"
+* [C1] (HEAD -> B) add b
+* [C2] (C) add c
+* [C3] (A) add a
+* [C4] (main) add main
+"#]]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn move_bottom_non_empty_branch_to_top_checks_out_subject() -> anyhow::Result<()> {
+        let (_tmp, repo, mut meta, project_meta) =
+            ad_hoc_workspace_with_three_non_empty_branches("C")?;
+
+        snapbox::assert_data_eq!(
+            normalized_graph_snapshot(&repo)?,
+            snapbox::str![[r#"
+* [C1] (HEAD -> C) add c
+* [C2] (B) add b
+* [C3] (A) add a
+* [C4] (main) add main"#]]
+        );
+
+        let branch_stack_order = move_branch_and_apply(
+            &repo,
+            &mut meta,
+            project_meta,
+            r("refs/heads/A"),
+            r("refs/heads/C"),
+        )?;
+
+        assert_head(&repo, "A");
+        assert_eq!(
+            branch_stack_order,
+            Some(vec![
+                r("refs/heads/A").to_owned(),
+                r("refs/heads/C").to_owned(),
+                r("refs/heads/B").to_owned(),
+                r("refs/heads/main").to_owned(),
+            ])
+        );
+        snapbox::assert_data_eq!(
+            normalized_graph_snapshot(&repo)?,
+            snapbox::str![[r#"
+* [C1] (HEAD -> A) add a
+* [C2] (C) add c
+* [C3] (B) add b
+* [C4] (main) add main
+"#]]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn move_top_non_empty_branch_down_checks_out_new_top() -> anyhow::Result<()> {
+        let (_tmp, repo, mut meta, project_meta) =
+            ad_hoc_workspace_with_three_non_empty_branches("C")?;
+
+        let branch_stack_order = move_branch_and_apply(
+            &repo,
+            &mut meta,
+            project_meta,
+            r("refs/heads/C"),
+            r("refs/heads/A"),
+        )?;
+
+        assert_head(&repo, "B");
+        assert_eq!(
+            branch_stack_order,
+            Some(vec![
+                r("refs/heads/B").to_owned(),
+                r("refs/heads/C").to_owned(),
+                r("refs/heads/A").to_owned(),
+                r("refs/heads/main").to_owned(),
+            ]),
+            "moving the checked-out tip down should make the branch above it the new tip"
+        );
+        // The same commits are reordered to match the branch order, with the new tip checked out.
+        snapbox::assert_data_eq!(
+            normalized_graph_snapshot(&repo)?,
+            snapbox::str![[r#"
+* [C1] (HEAD -> B) add b
+* [C2] (C) add c
+* [C3] (A) add a
+* [C4] (main) add main
+"#]]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn move_top_non_empty_branch_above_current_parent_is_a_noop() -> anyhow::Result<()> {
+        let (_tmp, repo, mut meta, project_meta) =
+            ad_hoc_workspace_with_three_non_empty_branches("C")?;
+        let tips_before = ["A", "B", "C"].map(|branch| branch_tip(&repo, branch));
+
+        let branch_stack_order = move_branch_and_apply(
+            &repo,
+            &mut meta,
+            project_meta,
+            r("refs/heads/C"),
+            r("refs/heads/B"),
+        )?;
+
+        assert_head(&repo, "C");
+        assert_eq!(
+            branch_stack_order,
+            Some(vec![
+                r("refs/heads/C").to_owned(),
+                r("refs/heads/B").to_owned(),
+                r("refs/heads/A").to_owned(),
+                r("refs/heads/main").to_owned(),
+            ]),
+            "placing the tip above its current parent should preserve branch order"
         );
         assert_eq!(
-            meta.branch_stack_order(main_ref)?,
-            order_before,
-            "the ad-hoc branch order must be untouched after the rejected move"
+            ["A", "B", "C"].map(|branch| branch_tip(&repo, branch)),
+            tips_before,
+            "a no-op move should not rewrite commits"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn move_bottom_branch_above_checked_out_middle_leaves_top_branch_untouched()
+    -> anyhow::Result<()> {
+        let (_tmp, repo, mut meta, project_meta) =
+            ad_hoc_workspace_with_three_non_empty_branches("B")?;
+        let c_tip_before = branch_tip(&repo, "C");
+
+        snapbox::assert_data_eq!(
+            normalized_graph_snapshot(&repo)?,
+            snapbox::str![[r#"
+* [C1] (C) add c
+* [C2] (HEAD -> B) add b
+* [C3] (A) add a
+* [C4] (main) add main"#]]
+        );
+
+        let branch_stack_order = move_branch_and_apply(
+            &repo,
+            &mut meta,
+            project_meta,
+            r("refs/heads/A"),
+            r("refs/heads/B"),
+        )?;
+
+        assert_head(&repo, "A");
+        assert_eq!(
+            branch_tip(&repo, "C"),
+            c_tip_before,
+            "C should stay untouched when it is above the checked-out entrypoint"
+        );
+        assert_eq!(
+            branch_stack_order,
+            Some(vec![
+                r("refs/heads/C").to_owned(),
+                r("refs/heads/A").to_owned(),
+                r("refs/heads/B").to_owned(),
+                r("refs/heads/main").to_owned(),
+            ])
+        );
+        snapbox::assert_data_eq!(
+            normalized_graph_snapshot(&repo)?,
+            snapbox::str![[r#"
+* [C1] (HEAD -> A) add a
+* [C2] (B) add b
+| * [C3] (C) add c
+| * [C4] add b
+| * [C5] add a
+|/
+* [C6] (main) add main
+"#]]
         );
 
         Ok(())

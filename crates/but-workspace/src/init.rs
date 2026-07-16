@@ -127,3 +127,28 @@ pub fn set_target_ref_and_init_project(
     })?;
     Ok(())
 }
+
+/// Set the remote used to publish branches without changing the default target.
+///
+/// The remote and existing target are validated before project metadata is persisted. The caller
+/// is expected to hold exclusive repository access and invalidate cached workspace projections
+/// afterwards.
+pub fn set_push_remote(
+    repo: &gix::Repository,
+    meta: &mut impl RefMetadata,
+    push_remote: String,
+) -> Result<()> {
+    let mut project_meta = but_core::ref_metadata::repair_target_metadata_for_migration(
+        &ProjectMeta::resolve(repo, &*meta)?,
+        repo,
+    );
+    project_meta
+        .target_ref_or_err()
+        .context("cannot set push remote without a default target")?;
+    repo.find_remote(push_remote.as_str())
+        .with_context(|| format!("failed to find remote {push_remote}"))?;
+
+    project_meta.push_remote = Some(push_remote);
+    project_meta.persist(repo, meta)?;
+    Ok(())
+}

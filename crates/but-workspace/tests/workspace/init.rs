@@ -34,6 +34,14 @@ fn set_target_ref(
     )
 }
 
+fn set_push_remote(
+    repo: &gix::Repository,
+    meta: &mut VirtualBranchesTomlMetadata,
+    push_remote: &str,
+) -> anyhow::Result<()> {
+    but_workspace::init::set_push_remote(repo, meta, push_remote.to_owned())
+}
+
 fn stored_meta(repo: &gix::Repository, meta: &VirtualBranchesTomlMetadata) -> ProjectMeta {
     ProjectMeta::resolve(repo, meta).expect("project metadata is readable")
 }
@@ -229,6 +237,20 @@ fn push_remote_is_set_and_preserved_when_omitted() {
     );
 }
 
+#[test]
+fn push_remote_changes_without_changing_target() {
+    let (repo, mut meta, _tmp) = scenario();
+    set_target_ref(&repo, &mut meta, "refs/remotes/origin/main", None).unwrap();
+    let before = stored_meta(&repo, &meta);
+
+    set_push_remote(&repo, &mut meta, "fork").unwrap();
+
+    let after = stored_meta(&repo, &meta);
+    assert_eq!(after.target_ref, before.target_ref);
+    assert_eq!(after.target_commit_id, before.target_commit_id);
+    assert_eq!(after.push_remote.as_deref(), Some("fork"));
+}
+
 mod error {
     use super::*;
 
@@ -262,6 +284,33 @@ mod error {
                 .unwrap_err()
                 .to_string(),
             "failed to find remote nope"
+        );
+    }
+
+    #[test]
+    fn standalone_unknown_push_remote_does_not_change_metadata() {
+        let (repo, mut meta, _tmp) = scenario();
+        set_target_ref(&repo, &mut meta, "refs/remotes/origin/main", Some("fork")).unwrap();
+        let before = stored_meta(&repo, &meta);
+
+        assert_eq!(
+            set_push_remote(&repo, &mut meta, "nope")
+                .unwrap_err()
+                .to_string(),
+            "failed to find remote nope"
+        );
+        assert_eq!(stored_meta(&repo, &meta), before);
+    }
+
+    #[test]
+    fn standalone_push_remote_requires_target() {
+        let (repo, mut meta, _tmp) = scenario();
+
+        assert_eq!(
+            set_push_remote(&repo, &mut meta, "fork")
+                .unwrap_err()
+                .to_string(),
+            "cannot set push remote without a default target"
         );
     }
 

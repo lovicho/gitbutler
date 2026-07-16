@@ -25,6 +25,13 @@ export class BranchDropData {
 	}
 }
 
+export function acceptsSameStackBranchDrop(
+	data: BranchDropData,
+	targetBranchName: string,
+): boolean {
+	return data.branchName !== targetBranchName;
+}
+
 export class MoveBranchDzHandler implements DropzoneHandler {
 	private readonly stackService = inject(STACK_SERVICE);
 
@@ -49,10 +56,7 @@ export class MoveBranchDzHandler implements DropzoneHandler {
 		if (data.stackId !== this.stackId) {
 			return data.numberOfCommits > 0;
 		}
-		// Reordering within the same stack is a pure metadata operation only for empty branches
-		// (e.g. single-branch mode, where all branches share one stack). Don't accept a drop onto
-		// the branch's own position, which would be a no-op self-move.
-		return data.numberOfCommits === 0 && data.branchName !== this.branchName;
+		return acceptsSameStackBranchDrop(data, this.branchName);
 	}
 	async ondrop(data: BranchDropData): Promise<DropResult | void> {
 		const sourceStackDeleted = data.numberOfBranchesInStack === 1;

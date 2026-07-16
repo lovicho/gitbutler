@@ -34,7 +34,7 @@ use crate::{
         upstream::{self, BranchStatus as UpstreamBranchStatus},
         workspace_target,
     },
-    id::{SegmentWithId, ShortId, StackWithId, TreeChangeWithId},
+    id::{ChangeIdWithShortId, SegmentWithId, ShortId, StackWithId, TreeChangeWithId},
     tui::text::truncate_text,
     utils::{
         InputOutputChannel, OutputChannel, WriteWithUtils, shorten_hex_object_id,
@@ -198,6 +198,7 @@ struct StatusContext<'a> {
     branch_merge_statuses: BTreeMap<String, UpstreamBranchStatus>,
     has_branches: bool,
     is_agent_invocation: bool,
+    render_mode: StatusRenderMode,
     is_paged: bool,
     should_truncate_for_terminal: bool,
     id_map: IdMap,
@@ -444,6 +445,7 @@ fn build_status_context<'a>(
         &cache_config,
         &stack_details,
         &push_statuses_by_segment_id,
+        &review_map,
     )?;
 
     // Calculate common_merge_base data and upstream state in a scope
@@ -565,6 +567,7 @@ fn build_status_context<'a>(
         has_branches,
         is_agent_invocation: matches!(format, OutputFormat::Agent)
             || crate::utils::detect_agent::detect().is_some(),
+        render_mode,
         is_paged,
         should_truncate_for_terminal,
         id_map,
@@ -685,6 +688,15 @@ fn print_hint(
         )]))?;
     }
 
+    if status_ctx.is_agent_invocation {
+        let id_hint = if status_ctx.flags.verbose {
+            "Hint: the first token on each line is the ID to use in commands. The sha in parentheses is informational and changes on every amend."
+        } else {
+            "Hint: the first token on each line is the ID to use in commands."
+        };
+        output.hint(Vec::from([Span::styled(id_hint, crate::theme::get().hint)]))?;
+    }
+
     let hint_text = if not_on_workspace {
         "Hint: run `but setup` to switch back to GitButler managed mode."
     } else if has_merged_upstream_branch {
@@ -782,9 +794,7 @@ fn branch_is_merged_upstream(
 
     segment
         .branch_name()
-        .and_then(|branch_name| {
-            review::from_branch_details(&status_ctx.review_map, branch_name, segment.pr_number())
-        })
+        .and_then(|branch_name| review::from_branch_details(&status_ctx.review_map, branch_name))
         .is_some_and(|review| review.is_merged_at_commit(&head_commit_id))
 }
 
@@ -1027,6 +1037,7 @@ fn ci_map(
     cache_config: &but_forge::CacheConfig,
     stack_details: &[StackEntry],
     push_statuses_by_segment_id: &HashMap<SegmentIndex, PushStatus>,
+    review_map: &HashMap<String, Vec<but_forge::ForgeReview>>,
 ) -> Result<BTreeMap<String, Vec<but_forge::CiCheck>>, anyhow::Error> {
     let mut ci_map = BTreeMap::new();
     for (_, (stack_with_id, _)) in stack_details {
@@ -1036,16 +1047,22 @@ fn ci_map(
                 if push_status.is_none() {
                     eprintln!("warning: head_info does not contain segment that graph has");
                 }
-                if segment.pr_number().is_some()
-                    && !matches!(push_status, Some(PushStatus::Integrated))
+                // Fetch CI only for branches that actually have a review on the
+                // forge, derived from the cached review list keyed by branch name
+                // rather than a stored PR number on branch metadata.
+                if !matches!(push_status, Some(PushStatus::Integrated))
                     && let Some(branch_name) = segment.branch_name()
-                    && let Ok(checks) = but_api::legacy::forge::list_ci_checks(
+                    && let Ok(branch_name) = branch_name.to_str()
+                    && review_map
+                        .get(branch_name)
+                        .is_some_and(|reviews| !reviews.is_empty())
+                    && let Ok(checks) = but_api::legacy::forge::list_ci_checks_for_ref(
                         ctx,
-                        branch_name.to_string(),
+                        branch_name,
                         Some(cache_config.clone()),
                     )
                 {
-                    ci_map.insert(branch_name.to_string(), checks);
+                    ci_map.insert(branch_name.to_owned(), checks);
                 }
             }
         }
@@ -1203,11 +1220,7 @@ fn print_group(
             let review_spans: Vec<Span<'static>> = segment
                 .branch_name()
                 .and_then(|branch_name| {
-                    review::from_branch_details(
-                        &status_ctx.review_map,
-                        branch_name,
-                        segment.pr_number(),
-                    )
+                    review::from_branch_details(&status_ctx.review_map, branch_name)
                 })
                 .map(|r| {
                     [Span::raw(" ")]
@@ -1383,10 +1396,7 @@ fn print_group(
                     status_ctx,
                     stack_with_id.id,
                     commit.short_id.clone(),
-                    commit
-                        .change_id
-                        .as_ref()
-                        .map(|change_id| change_id.short_id.clone()),
+                    commit.change_id.as_ref(),
                     &inner.inner,
                     CommitChanges::Workspace(&commit.tree_changes_using_repo(&repo)?),
                     classification,
@@ -1514,7 +1524,7 @@ fn print_commit(
     status_ctx: &StatusContext<'_>,
     stack_id: Option<StackId>,
     short_id: ShortId,
-    short_change_id: Option<ShortId>,
+    change_id: Option<&ChangeIdWithShortId>,
     commit: &but_workspace::ref_info::Commit,
     commit_changes: CommitChanges,
     classification: CommitClassification,
@@ -1532,10 +1542,17 @@ fn print_commit(
 
     let upstream_commit = matches!(commit_changes, CommitChanges::Remote(_));
 
+    // One-shot output pads file ID prefixes to match the change ID shown on
+    // the commit line; the TUI keeps the minimal IDs.
+    let padded_file_id_prefix = match status_ctx.render_mode {
+        StatusRenderMode::Oneshot => change_id.map(ChangeIdWithShortId::padded_short_id),
+        StatusRenderMode::Tui(_) => None,
+    };
+
     let (details_line, _) = display_cli_commit_details(
         repo,
         short_id.clone(),
-        short_change_id,
+        change_id,
         commit,
         match commit_changes {
             CommitChanges::Workspace(tree_changes) => !tree_changes.is_empty(),
@@ -1632,7 +1649,9 @@ fn print_commit(
             CommitChanges::Workspace(tree_changes) => {
                 let max_id_width = tree_changes
                     .iter()
-                    .map(|change| change.short_id.len())
+                    .map(|change| {
+                        displayed_file_id(padded_file_id_prefix.as_deref(), &change.short_id).len()
+                    })
                     .max()
                     .unwrap_or(0);
 
@@ -1643,14 +1662,15 @@ fn print_commit(
                         id: short_id.to_owned(),
                     };
 
+                    let display_id = displayed_file_id(padded_file_id_prefix.as_deref(), short_id);
                     let (status, path) = tree_change_display_cli(inner);
                     output.file(
                         Vec::from([Span::raw("┊"), Span::raw("│"), Span::raw("     ")]),
                         FileLineContent {
                             id: Vec::from([
-                                Span::styled(short_id.to_owned(), t.cli_id),
+                                Span::styled(display_id.clone(), t.cli_id),
                                 Span::raw(
-                                    " ".repeat(max_id_width.saturating_sub(short_id.len()) + 1),
+                                    " ".repeat(max_id_width.saturating_sub(display_id.len()) + 1),
                                 ),
                             ]),
                             status: Vec::from([status]),
@@ -1687,6 +1707,15 @@ trait CliDisplay {
     ) -> impl IntoIterator<Item = Span<'static>>;
 }
 
+/// The committed-file ID as displayed: its commit prefix replaced with the
+/// padded change ID shown on the commit line, when one applies.
+fn displayed_file_id(padded_prefix: Option<&str>, short_id: &str) -> String {
+    match (padded_prefix, short_id.split_once(':')) {
+        (Some(prefix), Some((_, rest))) => format!("{prefix}:{rest}"),
+        _ => short_id.to_owned(),
+    }
+}
+
 fn tree_change_display_cli(change: &but_core::TreeChange) -> (Span<'static>, Span<'static>) {
     let path = path_with_color(&change.status, change.path.to_string());
     let status_letter = status_letter(&change.status);
@@ -1707,7 +1736,7 @@ impl CliDisplay for but_core::TreeChange {
 fn display_cli_commit_details(
     repo: &gix::Repository,
     short_id: ShortId,
-    short_change_id: Option<ShortId>,
+    change_id: Option<&ChangeIdWithShortId>,
     commit: &but_workspace::ref_info::Commit,
     has_changes: bool,
     verbose: bool,
@@ -1728,16 +1757,12 @@ fn display_cli_commit_details(
     };
     let start_id = Span::styled(short_id.to_string(), t.cli_id);
 
-    let change_id_spans = if let Some(short_change_id) = short_change_id {
-        let change_id_str = commit.change_id().to_string();
-        let hint_end = 3.min(change_id_str.len());
-        let hint = change_id_str
-            .get(short_change_id.len()..hint_end)
-            .unwrap_or("")
-            .to_string();
+    let change_id_spans = if let Some(change_id) = change_id {
+        let padded = change_id.padded_short_id();
+        let (id, hint) = padded.split_at(change_id.short_id.len());
         vec![
-            Span::styled(short_change_id.to_string(), t.change_id),
-            Span::styled(hint, t.hint),
+            Span::styled(id.to_string(), t.change_id),
+            Span::styled(hint.to_string(), t.hint),
         ]
     } else {
         vec![]
@@ -1760,20 +1785,31 @@ fn display_cli_commit_details(
         let created_at = commit.author.time;
         let formatted_time = created_at.format_or_unix(CLI_DATE);
 
-        let mut change_id_spans = change_id_spans;
-        if !change_id_spans.is_empty() {
-            change_id_spans.push(Span::raw(" "));
-        }
+        // When a change ID is shown it is the primary identifier; the sha is
+        // demoted to a labelled note after the timestamp so the two cannot be
+        // mistaken for one another.
+        let (sha, sha_note) = if change_id_spans.is_empty() {
+            (Vec::from_iter([start_id, end_id]), None)
+        } else {
+            (
+                Vec::new(),
+                Some(Span::styled(
+                    format!(" (sha {}{})", start_id.content, end_id.content),
+                    t.hint,
+                )),
+            )
+        };
 
         (
             CommitLineContent {
                 change_id: change_id_spans,
-                sha: Vec::from_iter([start_id, end_id]),
+                sha,
                 author: Vec::from_iter([Span::raw(" "), Span::raw(commit.author.name.to_string())]),
                 message: Vec::new(),
                 suffix: Vec::from_iter(
                     [Span::raw(" "), Span::styled(formatted_time, t.hint)]
                         .into_iter()
+                        .chain(sha_note)
                         .chain(maybe_with_leading_space(no_changes, conflicted)),
                 ),
             },

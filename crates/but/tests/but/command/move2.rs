@@ -976,7 +976,7 @@ Moved 1 changes from 9ac4652 to new commit 8e35f84 below commit fe12bcd
 ┊╭┄g0 [A]
 ┊●   ywx add second (no changes)
 ┊●   zll add first
-┊│     zl:l A first
+┊│     zll:l A first
 ┊●   1 (no commit message)
 ┊│     1:w A second
 ├╯
@@ -1030,7 +1030,7 @@ Moved 1 changes from fe12bcd to new commit c019027 above commit 9ac4652
 ┊●   1 (no commit message)
 ┊│     1:l A first
 ┊●   ywx add second
-┊│     y:w A second
+┊│     ywx:w A second
 ┊●   d8dfd0f add first (no changes)
 ├╯
 ┊
@@ -1082,7 +1082,7 @@ Moved 1 changes from 9ac4652 to new commit 8e35f84 on new branch 'a-branch-1' be
 ┊╭┄g0 [A]
 ┊●   ywx add second (no changes)
 ┊●   zll add first
-┊│     zl:l A first
+┊│     zll:l A first
 ┊│
 ┊├┄br [a-branch-1]
 ┊●   1 (no commit message)
@@ -1140,7 +1140,7 @@ Moved 1 changes from fe12bcd to new commit c019027 on new branch 'a-branch-1' ab
 ┊│
 ┊├┄g0 [A]
 ┊●   ywx add second
-┊│     y:w A second
+┊│     ywx:w A second
 ┊●   d8dfd0f add first (no changes)
 ├╯
 ┊

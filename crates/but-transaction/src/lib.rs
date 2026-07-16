@@ -1143,7 +1143,9 @@ fn workspace_state_from_rebase<M: RefMetadata>(
     dry_run: DryRun,
 ) -> anyhow::Result<WorkspaceState> {
     if dry_run.into() {
-        return WorkspaceState::from_successful_rebase(rebase, repo, dry_run);
+        return WorkspaceState::from_successful_rebase_without_pr_associations(
+            rebase, repo, dry_run,
+        );
     }
 
     let materialized = rebase.materialize()?;
@@ -1185,7 +1187,12 @@ fn workspace_state_from_rebase<M: RefMetadata>(
         materialized.meta.remove(ref_name.as_ref())?;
     }
 
-    WorkspaceState::from_materialized_rebase(materialized, repo)
+    WorkspaceState::from_workspace_without_pr_associations(
+        materialized.workspace,
+        materialized.meta,
+        repo,
+        materialized.history.commit_mappings(),
+    )
 }
 
 /// Intermediate outcome after creating a commit.

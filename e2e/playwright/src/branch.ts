@@ -139,6 +139,10 @@ export function commitSubjects(pathToRepo: string, count: number): string[] {
 		.filter(Boolean);
 }
 
+export function branchTip(branchName: string, pathToRepo: string): string {
+	return git(pathToRepo, ["rev-parse", branchName]);
+}
+
 function git(pathToRepo: string, args: string[]): string {
 	return execFileSync("git", args, {
 		cwd: pathToRepo,

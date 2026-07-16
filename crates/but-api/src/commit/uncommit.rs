@@ -206,11 +206,19 @@ pub fn commit_uncommit_only_with_perm(
 
     if dry_run == DryRun::No {
         tx.commit()?;
+    } else {
+        drop(tx);
     }
 
     Ok(UncommitResult {
         uncommitted_ids: subject_commit_ids,
-        workspace: WorkspaceState::from_workspace(workspace, meta, repo, replaced_commits)?,
+        workspace: WorkspaceState::from_workspace_with_db(
+            workspace,
+            meta,
+            repo,
+            replaced_commits,
+            &db,
+        )?,
     })
 }
 
@@ -333,10 +341,18 @@ pub fn commit_uncommit_changes_only_with_perm(
 
     if dry_run == DryRun::No {
         tx.commit()?;
+    } else {
+        drop(tx);
     }
 
     Ok(MoveChangesResult {
-        workspace: WorkspaceState::from_workspace(workspace, meta, repo, replaced_commits)?,
+        workspace: WorkspaceState::from_workspace_with_db(
+            workspace,
+            meta,
+            repo,
+            replaced_commits,
+            &db,
+        )?,
     })
 }
 
@@ -539,10 +555,18 @@ pub fn commit_uncommit_changes_from_commits_only_with_perm(
 
     if dry_run == DryRun::No {
         tx.commit()?;
+    } else {
+        drop(tx);
     }
 
     Ok(UncommitChangesFromCommitsResult {
-        workspace: WorkspaceState::from_workspace(workspace, meta, repo, replaced_commits)?,
+        workspace: WorkspaceState::from_workspace_with_db(
+            workspace,
+            meta,
+            repo,
+            replaced_commits,
+            &db,
+        )?,
         failures,
     })
 }

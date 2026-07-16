@@ -473,6 +473,14 @@ export declare function reviewApply(projectId: string, reviewId: number): Promis
  */
 export declare function reviewTemplate(projectId: string): Promise<ReviewTemplateInfo | null>
 
+/**
+ * Set the remote used to publish branches without changing the default target.
+ *
+ * This acquires exclusive repository access, updates project metadata through
+ * [`but_workspace::init::set_push_remote()`], and invalidates the cached workspace projection.
+ */
+export declare function setPushRemote(projectId: string, pushRemote: string): Promise<void>
+
 /** Enable or disable a review's auto-merge. */
 export declare function setReviewAutoMerge(projectId: string, reviewId: number, enable: boolean): Promise<void>
 

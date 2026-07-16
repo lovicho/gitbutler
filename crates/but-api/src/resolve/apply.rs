@@ -204,7 +204,7 @@ pub(crate) fn apply(
     perm: &mut RepoExclusive,
 ) -> anyhow::Result<(gix::ObjectId, WorkspaceState)> {
     let mut meta = ctx.meta()?;
-    let (repo, mut ws, _) = ctx.workspace_mut_and_db_with_perm(perm)?;
+    let (repo, mut ws, db) = ctx.workspace_mut_and_db_with_perm(perm)?;
 
     let mut tree_editor = repo.edit_tree(request.merged_tree_id)?;
     for (file, resolution) in request.files.iter().zip(validated) {
@@ -229,7 +229,7 @@ pub(crate) fn apply(
 
     let rebase = editor.rebase()?;
     let new_commit = rebase.lookup_pick(target_selector)?;
-    let workspace = WorkspaceState::from_successful_rebase(rebase, &repo, dry_run)?;
+    let workspace = WorkspaceState::from_successful_rebase_with_db(rebase, &repo, dry_run, &db)?;
 
     Ok((new_commit, workspace))
 }

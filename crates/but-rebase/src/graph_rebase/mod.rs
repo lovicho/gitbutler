@@ -313,6 +313,28 @@ impl<'ws, 'meta, M: RefMetadata> SuccessfulRebase<'ws, 'meta, M> {
         (&self.repo, self.meta)
     }
 
+    /// Return the commit targeted by `ref_name` in the post-rebase step graph.
+    pub fn reference_target(&self, ref_name: &gix::refs::FullNameRef) -> Result<gix::ObjectId> {
+        let reference = self
+            .graph
+            .node_indices()
+            .find(|node| {
+                matches!(
+                    &self.graph[*node],
+                    Step::Reference { refname, .. } if refname.as_ref() == ref_name
+                )
+            })
+            .with_context(|| format!("Could not find reference '{ref_name}' in rebase result"))?;
+        let parent = collect_ordered_parents(&self.graph, reference)
+            .into_iter()
+            .next()
+            .context("Reference has no target commit in rebase result")?;
+        match self.graph[parent] {
+            Step::Pick(Pick { id, .. }) => Ok(id),
+            _ => bail!("Reference target in rebase result is not a commit"),
+        }
+    }
+
     /// Returns a preview of what the but-graph will look like after
     /// materialization.
     ///
@@ -320,6 +342,20 @@ impl<'ws, 'meta, M: RefMetadata> SuccessfulRebase<'ws, 'meta, M> {
     /// in-memory repository owned by this [`SuccessfulRebase`] (`self.repo`),
     /// since they might exist only in memory.
     pub fn overlayed_graph(&self) -> Result<but_graph::Graph> {
+        self.overlayed_graph_with_workspace_overrides(None, None)
+    }
+
+    /// Return the post-rebase graph with optional ad-hoc workspace projection overrides.
+    ///
+    /// This is useful for dry-run operations whose graph rewrite is accompanied by metadata or
+    /// checkout changes that are deliberately not persisted. The override entrypoint must name the
+    /// commit and local reference that would be checked out, while `branch_stack_order` supplies the
+    /// tip-to-base order that would be written to ref metadata.
+    pub fn overlayed_graph_with_workspace_overrides(
+        &self,
+        entrypoint: Option<(gix::ObjectId, gix::refs::FullName)>,
+        branch_stack_order: Option<&[gix::refs::FullName]>,
+    ) -> Result<but_graph::Graph> {
         let dropped_refs = self.ref_edits.iter().filter_map(|edit| match &edit.change {
             gix::refs::transaction::Change::Delete { .. } => Some(edit.name.clone()),
             _ => None,
@@ -364,10 +400,17 @@ impl<'ws, 'meta, M: RefMetadata> SuccessfulRebase<'ws, 'meta, M> {
             bail!("BUG: Tried to construct rebase engine graph overlay with no entrypoints");
         };
 
-        let overlay = Overlay::default()
+        let (entrypoint_id, entrypoint_refname) = entrypoint
+            .map_or((entrypoint_id, entrypoint_refname), |(id, ref_name)| {
+                (id, Some(ref_name))
+            });
+        let mut overlay = Overlay::default()
             .with_references(updated_refs)
             .with_dropped_references(dropped_refs)
             .with_entrypoint(entrypoint_id, entrypoint_refname);
+        if let Some(branch_stack_order) = branch_stack_order {
+            overlay = overlay.with_branch_stack_order_override(branch_stack_order.iter().cloned());
+        }
         self.workspace
             .graph
             .redo_traversal_with_overlay(&self.repo, self.meta, overlay)

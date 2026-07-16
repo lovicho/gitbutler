@@ -172,7 +172,7 @@ fn can_repeat_message() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊● 1 b141567 author 2000-01-01 00:00:00 +0000
+┊● 1 author 2000-01-01 00:00:00 +0000 (sha b141567)
 ┊│     add file.txt  with more  text lines
 ┊● 9477ae7 author 2000-01-01 00:00:00 +0000
 ┊│     add A 

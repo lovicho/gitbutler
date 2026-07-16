@@ -27,7 +27,7 @@ pub fn get_disconnect_parameters<'ws, 'meta, M: RefMetadata>(
     editor: &Editor<'ws, 'meta, M>,
     source_stack: &Stack,
     subject_segment: &StackSegment,
-    workspace_head: gix::ObjectId,
+    workspace_head: Option<gix::ObjectId>,
 ) -> anyhow::Result<DisconnectParameters> {
     let index_of_segment = source_stack
         .segments
@@ -77,12 +77,19 @@ pub fn get_disconnect_parameters<'ws, 'meta, M: RefMetadata>(
     };
 
     if index_of_segment == 0 {
-        // This is the top-most segment in the stack, so the parent is the workspace commit.
-        let workspace_head_selector = editor
-            .select_commit(workspace_head)
-            .context("Failed to find workspace head in graph.")?;
-        let selectors = SomeSelectors::new(vec![workspace_head_selector])?;
-        let children_to_disconnect = SelectorSet::Some(selectors);
+        // Managed workspaces have a workspace commit above the top-most segment. Ad-hoc
+        // workspaces do not have such a child, so there is no child edge to disconnect there.
+        let children_to_disconnect = workspace_head
+            .map(|workspace_head| -> anyhow::Result<SelectorSet> {
+                let workspace_head_selector = editor
+                    .select_commit(workspace_head)
+                    .context("Failed to find workspace head in graph.")?;
+                Ok(SelectorSet::Some(SomeSelectors::new(vec![
+                    workspace_head_selector,
+                ])?))
+            })
+            .transpose()?
+            .unwrap_or(SelectorSet::None);
 
         return Ok(DisconnectParameters {
             delimiter,

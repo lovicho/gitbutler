@@ -265,6 +265,24 @@ pub struct ChangeIdWithShortId {
     pub short_id: ShortId,
 }
 
+/// The minimum number of change ID characters displayed for a commit, so that
+/// short IDs remain visually distinctive.
+pub(crate) const MIN_DISPLAYED_CHANGE_ID_CHARS: usize = 3;
+
+impl ChangeIdWithShortId {
+    /// The short ID padded with further change ID characters to
+    /// [`MIN_DISPLAYED_CHANGE_ID_CHARS`], matching how the change ID is
+    /// displayed on commit lines.
+    pub fn padded_short_id(&self) -> String {
+        let mut id = self.short_id.clone();
+        let full = self.change_id.to_string();
+        if let Some(padding) = full.get(id.len()..MIN_DISPLAYED_CHANGE_ID_CHARS.min(full.len())) {
+            id.push_str(padding);
+        }
+        id
+    }
+}
+
 impl From<ChangeId> for ChangeIdWithShortId {
     fn from(value: ChangeId) -> Self {
         Self {
@@ -454,14 +472,6 @@ impl SegmentWithId {
             && let but_graph::WorktreeKind::LinkedId(id) = &worktree.kind
         {
             Some(id.as_bstr())
-        } else {
-            None
-        }
-    }
-    /// Returns the PR number.
-    pub fn pr_number(&self) -> Option<usize> {
-        if let Some(metadata) = &self.inner.metadata {
-            metadata.review.pull_request
         } else {
             None
         }

@@ -351,6 +351,8 @@ const WorkspacePage: FC = () => {
 		Match.tags({ Absorb: ({ sourceTarget }) => sourceTarget }),
 		Match.orElse(() => null),
 	);
+	const { data: headInfo } = useQuery(headInfoQueryOptions(projectId));
+	const { data: worktreeChanges } = useQuery(changesInWorktreeQueryOptions(projectId));
 	const [absorptionPlanQuery] = useQueries({
 		queries: (absorptionPlanTarget ? [absorptionPlanTarget] : []).map((target) =>
 			absorptionPlanQueryOptions({ projectId, target }),
@@ -359,9 +361,6 @@ const WorkspacePage: FC = () => {
 	const absorptionTargetCommitIds = new Set(
 		absorptionPlanQuery?.data?.map(({ commitId }) => commitId),
 	);
-
-	const { data: headInfo } = useQuery(headInfoQueryOptions(projectId));
-	const { data: worktreeChanges } = useQuery(changesInWorktreeQueryOptions(projectId));
 
 	const outlineNavigationIndex = buildOutlineNavigationIndex({
 		headInfo,

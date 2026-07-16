@@ -177,11 +177,11 @@ fn use_target_message() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄br [a-branch-1]
-┊● 1#0 5ab5165 author 2000-01-01 00:00:00 +0000
+┊● 1#0 author 2000-01-01 00:00:00 +0000 (sha 5ab5165)
 ┊│     add two
 ┊│     1#0:o A three
 ┊│     1#0:t A two
-┊● 1#1 ea345ba author 2000-01-01 00:00:00 +0000
+┊● 1#1 author 2000-01-01 00:00:00 +0000 (sha ea345ba)
 ┊│     add one
 ┊│     1#1:k A one
 ├╯
@@ -208,11 +208,11 @@ fn use_source_message() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄br [a-branch-1]
-┊● 1#0 c441d34 author 2000-01-01 00:00:00 +0000
+┊● 1#0 author 2000-01-01 00:00:00 +0000 (sha c441d34)
 ┊│     add three
 ┊│     1#0:o A three
 ┊│     1#0:t A two
-┊● 1#1 ea345ba author 2000-01-01 00:00:00 +0000
+┊● 1#1 author 2000-01-01 00:00:00 +0000 (sha ea345ba)
 ┊│     add one
 ┊│     1#1:k A one
 ├╯
@@ -243,7 +243,7 @@ Squashed branch 'a-branch-1' to create commit a694042
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄br [a-branch-1]
-┊● 1 a694042 author 2000-01-01 00:00:00 +0000
+┊● 1 author 2000-01-01 00:00:00 +0000 (sha a694042)
 ┊│     squashed a branch
 ┊│     1:k A one
 ┊│     1:o A three
@@ -276,7 +276,7 @@ Squashed branch 'a-branch-1' to create commit 17b59a2
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄br [a-branch-1]
-┊● 1 17b59a2 author 2000-01-01 00:00:00 +0000
+┊● 1 author 2000-01-01 00:00:00 +0000 (sha 17b59a2)
 ┊│     add two
 ┊│     1:k A one
 ┊│     1:o A three
@@ -310,24 +310,24 @@ fn squash_whole_branch_into_commit_on_other_branch() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄fi [add-file-branch]
-┊● 1#0 e528488 author 2000-01-01 00:00:00 +0000
+┊● 1#0 author 2000-01-01 00:00:00 +0000 (sha e528488)
 ┊│     add file
 ┊│     1#0:q A file
 ├╯
 ┊
 ┊╭┄ta [target-branch]
-┊● 1#1 d1d6a19 author 2000-01-01 00:00:00 +0000 (no changes)
+┊● 1#1 author 2000-01-01 00:00:00 +0000 (sha d1d6a19) (no changes)
 ┊│     new commit on new branch
 ├╯
 ┊
 ┊╭┄br [a-branch-1]
-┊● 1#2 f55169f author 2000-01-01 00:00:00 +0000
+┊● 1#2 author 2000-01-01 00:00:00 +0000 (sha f55169f)
 ┊│     add three
 ┊│     1#2:o A three
-┊● 1#3 f63361f author 2000-01-01 00:00:00 +0000
+┊● 1#3 author 2000-01-01 00:00:00 +0000 (sha f63361f)
 ┊│     add two
 ┊│     1#3:t A two
-┊● 1#4 ea345ba author 2000-01-01 00:00:00 +0000
+┊● 1#4 author 2000-01-01 00:00:00 +0000 (sha ea345ba)
 ┊│     add one
 ┊│     1#4:k A one
 ├╯
@@ -353,7 +353,7 @@ Squashed branches 'a-branch-1', 'add-file-branch' to create commit 44aa30a
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄ta [target-branch]
-┊● 1 44aa30a author 2000-01-01 00:00:00 +0000
+┊● 1 author 2000-01-01 00:00:00 +0000 (sha 44aa30a)
 ┊│     new commit on new branch
 ┊│     1:q A file
 ┊│     1:k A one
@@ -391,26 +391,26 @@ fn squash_multiple_branches_into_commit_on_one_of_the_branch_sources() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄fi [add-file-branch]
-┊● 1#0 e528488 author 2000-01-01 00:00:00 +0000
+┊● 1#0 author 2000-01-01 00:00:00 +0000 (sha e528488)
 ┊│     add file
 ┊│     1#0:q A file
 ├╯
 ┊
 ┊╭┄ta [target-branch]
-┊● 1#1 a489b93 author 2000-01-01 00:00:00 +0000 (no changes)
+┊● 1#1 author 2000-01-01 00:00:00 +0000 (sha a489b93) (no changes)
 ┊│     random commit on target-branch
-┊● 1#2 561a8d8 author 2000-01-01 00:00:00 +0000 (no changes)
+┊● 1#2 author 2000-01-01 00:00:00 +0000 (sha 561a8d8) (no changes)
 ┊│     target commit
 ├╯
 ┊
 ┊╭┄br [a-branch-1]
-┊● 1#3 f55169f author 2000-01-01 00:00:00 +0000
+┊● 1#3 author 2000-01-01 00:00:00 +0000 (sha f55169f)
 ┊│     add three
 ┊│     1#3:o A three
-┊● 1#4 f63361f author 2000-01-01 00:00:00 +0000
+┊● 1#4 author 2000-01-01 00:00:00 +0000 (sha f63361f)
 ┊│     add two
 ┊│     1#4:t A two
-┊● 1#5 ea345ba author 2000-01-01 00:00:00 +0000
+┊● 1#5 author 2000-01-01 00:00:00 +0000 (sha ea345ba)
 ┊│     add one
 ┊│     1#5:k A one
 ├╯
@@ -436,7 +436,7 @@ Squashed branches 'target-branch', 'a-branch-1', 'add-file-branch' to create com
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄ta [target-branch]
-┊● 1 0653794 author 2000-01-01 00:00:00 +0000
+┊● 1 author 2000-01-01 00:00:00 +0000 (sha 0653794)
 ┊│     target commit
 ┊│     1:q A file
 ┊│     1:k A one
@@ -478,7 +478,7 @@ Squashed branch 'a-branch-1' to create commit 7b3d915
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄br [a-branch-1]
-┊● 1 7b3d915 author 2000-01-01 00:00:00 +0000
+┊● 1 author 2000-01-01 00:00:00 +0000 (sha 7b3d915)
 ┊│     message from editor
 ┊│     1:k A one
 ┊│     1:o A three
@@ -516,7 +516,7 @@ Squashed branch 'a-branch-1' to create commit abb21d9
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄br [a-branch-1]
-┊● 1 abb21d9 author 2000-01-01 00:00:00 +0000
+┊● 1 author 2000-01-01 00:00:00 +0000 (sha abb21d9)
 ┊│     add one  add three  add two
 ┊│     1:k A one
 ┊│     1:o A three

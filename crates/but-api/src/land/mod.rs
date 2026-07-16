@@ -414,8 +414,14 @@ fn current_workspace_state(ctx: &mut Context) -> anyhow::Result<WorkspaceState> 
     ctx.invalidate_workspace_cache()?;
     let mut meta = ctx.meta()?;
     let guard = ctx.exclusive_worktree_access();
-    let (repo, ws, _db) = ctx.workspace_and_db_with_perm(guard.read_permission())?;
-    WorkspaceState::from_workspace(&ws, &mut meta, &repo, std::collections::BTreeMap::new())
+    let (repo, ws, db) = ctx.workspace_and_db_with_perm(guard.read_permission())?;
+    WorkspaceState::from_workspace_with_db(
+        &ws,
+        &mut meta,
+        &repo,
+        std::collections::BTreeMap::new(),
+        &db,
+    )
 }
 
 /// Peel a ref to its commit id, or `None` if it doesn't exist.

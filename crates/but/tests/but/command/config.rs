@@ -24,6 +24,61 @@ fn target_configures_distinct_push_remote_for_fork() {
 }
 
 #[test]
+fn config_push_remote_sets_push_remote() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.invoke_git("remote add fork .");
+
+    env.but("config push-remote fork")
+        .assert()
+        .success()
+        .stdout_eq(str![[r#"
+✓ Push remote set to 'fork'
+
+"#]]);
+
+    assert_eq!(
+        env.project_meta().push_remote.as_deref(),
+        Some("fork"),
+        "the configured push remote should be persisted in project metadata"
+    );
+}
+
+#[test]
+fn config_push_remote_rejects_unknown_remote_without_changing_metadata() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    let before = env.project_meta();
+
+    env.but("config push-remote missing")
+        .assert()
+        .failure()
+        .stderr_eq(str![[r#"
+Error: failed to find remote missing
+
+Caused by:
+    The remote named "missing" did not exist
+
+"#]]);
+    assert_eq!(
+        env.project_meta(),
+        before,
+        "a rejected remote must not alter project metadata"
+    );
+}
+
+#[test]
+fn config_push_remote_shows_effective_remote() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+
+    env.but("--format shell config push-remote")
+        .assert()
+        .success()
+        .stdout_eq(str![[r#"
+origin
+
+"#]]);
+}
+
+#[test]
 fn ai_openai_defaults_to_global_config() {
     let env = Sandbox::empty();
     env.invoke_bash("git init repo");

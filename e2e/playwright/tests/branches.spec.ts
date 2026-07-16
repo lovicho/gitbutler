@@ -87,7 +87,6 @@ async function openProjectWithFakeGitHub(
 
 async function applyReviewFromBranchesView(page: Page, title: string) {
 	await clickByTestId(page, "navigation-branches-button");
-	await expect(getByTestId(page, "pr-list-card").filter({ hasText: "#42" })).toBeVisible();
 	await getByTestId(page, "pr-list-card").filter({ hasText: title }).click();
 	await clickByTestId(page, "branches-view-apply-from-fork-button");
 	await waitForTestId(page, "workspace-view");
@@ -122,7 +121,8 @@ test.describe("GitHub review apply", () => {
 	}) => {
 		const localClone = gitbutler.pathInWorkdir("local-clone");
 		const forkRepoPath = gitbutler.pathInWorkdir("fork-project-bare");
-		const fakeGitHub = await startFakeGitHubServer({ forkRepoPath });
+		const baseRepoPath = gitbutler.pathInWorkdir("remote-project");
+		const fakeGitHub = await startFakeGitHubServer({ forkRepoPath, baseRepoPath });
 		try {
 			await openProjectWithFakeGitHub(page, gitbutler, fakeGitHub);
 			await applyReviewFromBranchesView(page, "Fork PR");
@@ -148,10 +148,12 @@ test.describe("GitHub review apply", () => {
 	}) => {
 		const localClone = gitbutler.pathInWorkdir("local-clone");
 		const forkRepoPath = gitbutler.pathInWorkdir("fork-project-bare");
-		const fakeGitHub = await startFakeGitHubServer({ forkRepoPath });
+		const baseRepoPath = gitbutler.pathInWorkdir("remote-project");
+		const fakeGitHub = await startFakeGitHubServer({ forkRepoPath, baseRepoPath });
 		try {
 			await gitbutler.runScript("project-with-github-fork-pr.sh", [fakeGitHub.repositoryUrl]);
 			git(localClone, ["remote", "add", "contributor-user", forkRepoPath]);
+			git(localClone, ["fetch", "contributor-user"]);
 			await openWorkspace(page);
 			await storeFakeGitHubEnterprisePat(page, fakeGitHub);
 			await page.reload();
@@ -250,7 +252,8 @@ test.describe("GitHub review apply", () => {
 		test("should apply a GitHub fork PR", async ({ page, gitbutler }) => {
 			const localClone = gitbutler.pathInWorkdir("local-clone");
 			const forkRepoPath = gitbutler.pathInWorkdir("fork-project-bare");
-			const fakeGitHub = await startFakeGitHubServer({ forkRepoPath });
+			const baseRepoPath = gitbutler.pathInWorkdir("remote-project");
+			const fakeGitHub = await startFakeGitHubServer({ forkRepoPath, baseRepoPath });
 			try {
 				await gitbutler.runScript("project-with-github-fork-pr.sh", [fakeGitHub.repositoryUrl]);
 				git(localClone, [

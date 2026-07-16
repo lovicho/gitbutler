@@ -925,19 +925,10 @@ async fn publish_review_for_branch(
         },
     )
     .await
-    .map(|review| {
-        if let Some(stack_id) = stack_id {
-            let review_number = review.number.try_into().ok();
-            but_api::legacy::stack::update_branch_pr_number(
-                ctx,
-                stack_id,
-                branch_name.to_string(),
-                review_number,
-            )
-            .ok();
-        }
-        PublishReviewResult::Published(Box::new(review))
-    })
+    // The PR association is derived from the forge review cache; `publish_review`
+    // optimistically caches the created review, so there is no PR number to
+    // persist onto branch metadata here.
+    .map(|review| PublishReviewResult::Published(Box::new(review)))
 }
 
 /// Get the default commit for the branch, if it has exactly one commit.
@@ -1161,36 +1152,11 @@ fn review_source_branch_matches(review: &but_forge::ForgeReview, branch_name: &s
 pub(crate) fn from_branch_details(
     review_map: &std::collections::HashMap<String, Vec<but_forge::ForgeReview>>,
     branch_name: &BStr,
-    pr_number: Option<usize>,
 ) -> Option<but_forge::ForgeReview> {
     review_map
         .get(&branch_name.to_string())
-        .and_then(|rs| {
-            pr_number
-                .and_then(|pr| rs.iter().find(|r| r.number == pr as i64))
-                .or_else(|| rs.first())
-        })
+        .and_then(|reviews| but_forge::preferred_review(reviews))
         .cloned()
-}
-
-pub fn get_review_numbers(
-    branch_name: &str,
-    associated_review_number: &Option<usize>,
-    branch_review_map: &std::collections::HashMap<String, Vec<but_forge::ForgeReview>>,
-) -> String {
-    if let Some(reviews) = branch_review_map.get(branch_name) {
-        let review_numbers = reviews
-            .iter()
-            .map(|r| format!("{}{}", r.unit_symbol, r.number))
-            .collect::<Vec<String>>()
-            .join(", ");
-
-        format!(" ({review_numbers})")
-    } else if let Some(pr_number) = associated_review_number {
-        format!(" (#{pr_number})")
-    } else {
-        "".to_string()
-    }
 }
 
 /// Given a string selector, resolve the selection of review IDs to manipulate.
@@ -1376,6 +1342,21 @@ mod tests {
 
         assert!(reviews.contains_key("feature"));
         assert!(!reviews.contains_key("contributor:feature"));
+    }
+
+    #[test]
+    fn branch_details_prefers_the_cache_association_winner() {
+        let mut merged = forge_review("feature");
+        merged.number = 9;
+        merged.merged_at = Some("2026-01-01T00:00:00Z".to_string());
+        let mut open = forge_review("feature");
+        open.number = 2;
+        let reviews = review_map_from_reviews(vec![merged, open]);
+
+        assert_eq!(
+            from_branch_details(&reviews, b"feature".as_bstr()).map(|review| review.number),
+            Some(2)
+        );
     }
 
     #[test]

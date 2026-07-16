@@ -3,7 +3,7 @@ use anyhow::{Context as _, Result};
 use bstr::ByteSlice;
 use but_api_macros::but_api;
 use but_core::{
-    RefMetadata as _, RepositoryExt,
+    RepositoryExt,
     git_config::{edit_repo_config, ensure_config_value},
     ref_metadata::ProjectMeta,
 };
@@ -299,13 +299,10 @@ pub fn review_apply(
             })?;
 
     let out = crate::branch::apply_with_perm(ctx, remote_ref.as_ref(), guard.write_permission())?;
-    if out.status.persisted_mutation()
-        && let Some(applied_branch_ref) = out.applied_branches.last()
-    {
-        let mut meta = ctx.meta()?;
-        let mut branch = meta.branch(applied_branch_ref.as_ref())?;
-        branch.review.pull_request = Some(review_id);
-        meta.set_branch(&branch)?;
+    if out.status.persisted_mutation() {
+        // The applied review is already in the forge cache (it was just fetched
+        // to be applied), so its PR association is derived at projection time.
+        // Invalidate the workspace cache so the next projection reflects it.
         ctx.invalidate_workspace_cache()?;
     }
     Ok(out)
@@ -655,6 +652,14 @@ pub fn list_ci_checks(
     reference: String,
     cache_config: Option<but_forge::CacheConfig>,
 ) -> Result<Vec<but_forge::CiCheck>> {
+    list_ci_checks_for_ref(ctx, &reference, cache_config)
+}
+
+pub fn list_ci_checks_for_ref(
+    ctx: &Context,
+    reference: &str,
+    cache_config: Option<but_forge::CacheConfig>,
+) -> Result<Vec<but_forge::CiCheck>> {
     let (storage, forge_repo_info, preferred_forge_user) = {
         let project_meta = ctx.project_meta()?;
         let repo = ctx.repo.get()?;
@@ -672,7 +677,7 @@ pub fn list_ci_checks(
         preferred_forge_user,
         &forge_repo_info.context("No forge could be determined for this repository branch")?,
         &storage,
-        &reference,
+        reference,
         db,
         cache_config,
     )

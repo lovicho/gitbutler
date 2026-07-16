@@ -42,7 +42,6 @@ pub fn get_workspace(
 /// target commit id is only computed when it wasn't set before, and an omitted
 /// `push_remote` keeps the currently configured one. It deliberately records no oplog
 /// snapshot - only project metadata changes, no repository state.
-#[cfg(feature = "legacy")]
 #[but_api(napi)]
 #[instrument(err(Debug))]
 pub fn set_target_ref_and_init_project(
@@ -50,7 +49,7 @@ pub fn set_target_ref_and_init_project(
     target_ref: &gix::refs::FullNameRef,
     push_remote: Option<String>,
 ) -> anyhow::Result<()> {
-    let mut guard = ctx.exclusive_worktree_access();
+    let guard = ctx.exclusive_worktree_access();
     {
         let repo = ctx.repo.get()?;
         let mut meta = ctx.meta()?;
@@ -62,8 +61,39 @@ pub fn set_target_ref_and_init_project(
         )?;
     }
     ctx.invalidate_workspace_cache()?;
-    crate::legacy::meta::reconcile_in_workspace_state_of_vb_toml(ctx, guard.write_permission())
-        .ok();
+    #[cfg(feature = "legacy")]
+    {
+        let mut guard = guard;
+        crate::legacy::meta::reconcile_in_workspace_state_of_vb_toml(ctx, guard.write_permission())
+            .ok();
+    }
+    #[cfg(not(feature = "legacy"))]
+    drop(guard);
+    Ok(())
+}
+
+/// Set the remote used to publish branches without changing the default target.
+///
+/// This acquires exclusive repository access, updates project metadata through
+/// [`but_workspace::init::set_push_remote()`], and invalidates the cached workspace projection.
+#[but_api(napi)]
+#[instrument(err(Debug))]
+pub fn set_push_remote(ctx: &mut but_ctx::Context, push_remote: String) -> anyhow::Result<()> {
+    let guard = ctx.exclusive_worktree_access();
+    {
+        let repo = ctx.repo.get()?;
+        let mut meta = ctx.meta()?;
+        but_workspace::init::set_push_remote(&repo, &mut meta, push_remote)?;
+    }
+    ctx.invalidate_workspace_cache()?;
+    #[cfg(feature = "legacy")]
+    {
+        let mut guard = guard;
+        crate::legacy::meta::reconcile_in_workspace_state_of_vb_toml(ctx, guard.write_permission())
+            .ok();
+    }
+    #[cfg(not(feature = "legacy"))]
+    drop(guard);
     Ok(())
 }
 
@@ -374,7 +404,7 @@ pub fn workspace_integrate_upstream_only_with_perm(
         if dry_run.into() {
             let replaced_commits = rebase.history.commit_mappings();
             let workspace_state =
-                WorkspaceState::from_rebase_preview(&mut rebase, replaced_commits)?;
+                WorkspaceState::from_rebase_preview_with_db(&mut rebase, replaced_commits, &db)?;
             return Ok(WorkspaceIntegrateUpstreamOutcome {
                 workspace_state,
                 worktree_conflicts,
@@ -394,11 +424,12 @@ pub fn workspace_integrate_upstream_only_with_perm(
             materialized.meta.set_workspace(&md)?;
         }
 
-        let workspace_state = WorkspaceState::from_workspace(
+        let workspace_state = WorkspaceState::from_workspace_with_db(
             materialized.workspace,
             materialized.meta,
             &repo,
             materialized.history.commit_mappings(),
+            &db,
         )?;
         (workspace_state, worktree_conflicts)
     };
@@ -464,6 +495,28 @@ mod tests {
         assert!(stored_meta.target_commit_id.is_some());
         assert_eq!(stored_meta.push_remote.as_deref(), Some("origin"));
 
+        Ok(())
+    }
+
+    #[test]
+    fn set_push_remote_preserves_target_metadata() -> anyhow::Result<()> {
+        let (repo, tmp) = repo_with_feature_branch()?;
+        drop(repo);
+        git_at_dir(tmp.path())
+            .args(["config", "remote.fork.url", "../fork"])
+            .run();
+        let repo = open_repo(tmp.path())?;
+        let mut ctx = but_ctx::Context::from_repo_for_testing(repo)?.with_memory_app_cache();
+        let target_ref = gix::refs::FullName::try_from("refs/remotes/origin/main")?;
+        super::set_target_ref_and_init_project(&mut ctx, target_ref.as_ref(), None)?;
+        let before = ctx.project_meta()?;
+
+        super::set_push_remote(&mut ctx, "fork".into())?;
+
+        let after = ctx.project_meta()?;
+        assert_eq!(after.target_ref, before.target_ref);
+        assert_eq!(after.target_commit_id, before.target_commit_id);
+        assert_eq!(after.push_remote.as_deref(), Some("fork"));
         Ok(())
     }
 

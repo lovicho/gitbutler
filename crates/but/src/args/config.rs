@@ -110,6 +110,29 @@ pub enum Subcommands {
         push_remote: Option<String>,
     },
 
+    /// View or set the remote used to push branches.
+    ///
+    /// Without arguments, displays the effective push remote. With a remote name, updates the push
+    /// remote without changing the target branch.
+    ///
+    /// ## Examples
+    ///
+    /// View the current push remote:
+    ///
+    /// ```text
+    /// but config push-remote
+    /// ```
+    ///
+    /// Push branches to a fork remote:
+    ///
+    /// ```text
+    /// but config push-remote origin
+    /// ```
+    PushRemote {
+        /// New remote to use when pushing branches (e.g., "origin").
+        remote: Option<String>,
+    },
+
     /// View or set metrics collection.
     ///
     /// GitButler uses metrics to help us know what is useful and improve it.

@@ -1133,6 +1133,7 @@ pub enum Subcommands {
     ///
     /// ```text
     /// but config target
+    /// but config push-remote
     /// ```
     ///
     /// View/set metrics:

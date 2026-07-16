@@ -150,26 +150,6 @@ fn update_branch_name_success() -> Result<()> {
 }
 
 #[test]
-fn update_branch_name_resets_pr_number() -> Result<()> {
-    let (ctx, _temp_dir) = command_ctx("multiple-commits")?;
-    let mut test_ctx = test_ctx(&ctx)?;
-    let pr_number = 123;
-    test_ctx
-        .stack
-        .set_pr_number(&ctx, "virtual", Some(pr_number))?;
-    assert_eq!(test_ctx.stack.heads[0].pr_number, Some(pr_number));
-    test_ctx
-        .stack
-        .rename_branch(&ctx, "virtual".into(), "new-name".into())?;
-    assert_eq!(test_ctx.stack.heads[0].pr_number, None);
-    assert_eq!(
-        test_ctx.stack,
-        test_ctx.handle.get_stack(test_ctx.stack.id)?
-    );
-    Ok(())
-}
-
-#[test]
 fn update_name_after_push() -> Result<()> {
     let (ctx, _temp_dir) = command_ctx("multiple-commits")?;
     let mut test_ctx = test_ctx(&ctx)?;
@@ -322,38 +302,6 @@ fn set_stack_head() -> Result<()> {
     assert_eq!(
         test_ctx.stack.head_oid(&ctx)?,
         *test_ctx.other_commits.last().unwrap()
-    );
-    Ok(())
-}
-
-#[test]
-fn set_pr_numberentifiers_success() -> Result<()> {
-    let (ctx, _temp_dir) = command_ctx("multiple-commits")?;
-    let mut test_ctx = test_ctx(&ctx)?;
-    let result = test_ctx.stack.set_pr_number(&ctx, "virtual", Some(123));
-    assert!(result.is_ok());
-    assert_eq!(test_ctx.stack.heads[0].pr_number, Some(123));
-    // Assert persisted
-    assert_eq!(
-        test_ctx.stack,
-        test_ctx.handle.get_stack(test_ctx.stack.id)?
-    );
-    Ok(())
-}
-
-#[test]
-fn set_pr_numberentifiers_series_not_found_fails() -> Result<()> {
-    let (ctx, _temp_dir) = command_ctx("multiple-commits")?;
-    let mut test_ctx = test_ctx(&ctx)?;
-    let result = test_ctx
-        .stack
-        .set_pr_number(&ctx, "does-not-exist", Some(123));
-    assert_eq!(
-        result.err().unwrap().to_string(),
-        format!(
-            "Series does-not-exist does not exist on stack {}",
-            test_ctx.stack.name()
-        )
     );
     Ok(())
 }

@@ -93,6 +93,7 @@ pub async fn exec(
             branch,
             push_remote,
         }) => target_config(ctx, out, branch, push_remote).await,
+        Some(Subcommands::PushRemote { remote }) => push_remote_config(ctx, out, remote),
         Some(Subcommands::Forge { cmd }) => forge_config(out, cmd).await,
         Some(Subcommands::Metrics { status }) => metrics_config(out, status).await,
         Some(Subcommands::Ai { local, global, cmd }) => {
@@ -1881,20 +1882,65 @@ async fn target_config(
                 .try_into()
                 .context("Invalid target branch name")?;
             drop((guard, ws));
-            cfg_if! {
-                if #[cfg(feature = "legacy")] {
-                    but_api::workspace::set_target_ref_and_init_project(
-                        ctx,
-                        target_ref.as_ref(),
-                        push_remote,
-                    )?;
-                } else {
-                    anyhow::bail!("Cannot yet set the target branch without legacy functions")
-                }
-            };
+            but_api::workspace::set_target_ref_and_init_project(
+                ctx,
+                target_ref.as_ref(),
+                push_remote,
+            )?;
         }
     }
 
+    Ok(())
+}
+
+/// Handle push remote config subcommand.
+fn push_remote_config(
+    ctx: &mut Context,
+    out: &mut OutputChannel,
+    remote: Option<String>,
+) -> Result<()> {
+    let t = theme::get();
+    match remote {
+        None => {
+            let repo = ctx.repo.get()?;
+            let project_meta = ctx.project_meta()?;
+            let explicitly_configured = project_meta.push_remote.is_some();
+            let push_remote = project_meta.push_remote_name(&repo)?;
+
+            if let Some(out) = out.for_human() {
+                writeln!(out, "\n{}:", t.important.paint("Push Remote"))?;
+                writeln!(out)?;
+                write!(out, "  {}", t.config_value.paint(&push_remote))?;
+                if !explicitly_configured {
+                    write!(out, " {}", t.hint.paint("(inherited from target)"))?;
+                }
+                writeln!(out)?;
+            } else if let Some(out) = out.for_shell() {
+                writeln!(out, "{push_remote}")?;
+            } else if let Some(out) = out.for_json() {
+                out.write_value(serde_json::json!({
+                    "push_remote": push_remote,
+                    "explicit": explicitly_configured,
+                }))?;
+            }
+        }
+        Some(remote) => {
+            but_api::workspace::set_push_remote(ctx, remote.clone())?;
+
+            if let Some(out) = out.for_human() {
+                writeln!(
+                    out,
+                    "{} Push remote set to '{}'",
+                    t.sym().success,
+                    t.config_value.paint(&remote)
+                )?;
+            } else if let Some(out) = out.for_shell() {
+                writeln!(out, "{remote}")?;
+            } else if let Some(out) = out.for_json() {
+                out.write_value(serde_json::json!({ "push_remote": remote }))?;
+            }
+        }
+    }
     Ok(())
 }
 
