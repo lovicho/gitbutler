@@ -7,8 +7,10 @@ import {
 	SINGLE_BRANCH_NAME,
 } from "./helpers.ts";
 import { assertBranch, assertCommitSubjects, branchTip } from "../../src/branch.ts";
+import { updateCommitMessage } from "../../src/commit.ts";
+import { writeToFile } from "../../src/file.ts";
 import { test } from "../../src/test.ts";
-import { dragAndDropByLocator, getByTestId } from "../../src/util.ts";
+import { clickByTestId, commitRow, dragAndDropByLocator, getByTestId } from "../../src/util.ts";
 import { expect, type Page } from "@playwright/test";
 import type { GitButler } from "../../src/setup.ts";
 
@@ -83,6 +85,42 @@ test("moving an empty branch above the checked-out branch checks out the new tip
 	await expectBranchHeaderOrder(page, ["empty-a", "empty-b", SINGLE_BRANCH_NAME]);
 	await expectCurrentBranchChip(page, "empty-a");
 	await assertBranch("empty-a", localClone);
+});
+
+test("keeps empty dependent branches when moving their commit-owning branch to the top", async ({
+	page,
+	gitbutler,
+}) => {
+	const localClone = await setupSingleBranchProject(gitbutler, page);
+	const commitBranch = "commit-branch";
+	const emptyLow = "empty-low";
+	const emptyTop = "empty-top";
+
+	await createDependentBranch(page, commitBranch);
+	const fileName = "commit_branch.txt";
+	writeToFile(gitbutler.pathInWorkdir("local-clone", fileName), "commit branch content\n");
+	await expect(getByTestId(page, "file-list-item").filter({ hasText: fileName })).toBeVisible();
+	await clickByTestId(page, "start-commit-button");
+	const commitTitle = "commit branch: add commit";
+	await updateCommitMessage(page, commitTitle, "");
+	await clickByTestId(page, "commit-drawer-action-button");
+	await expect(commitRow(page, commitTitle)).toBeVisible();
+
+	await createDependentBranch(page, emptyLow);
+	await createDependentBranch(page, emptyTop);
+	await expectBranchHeaderOrder(page, [emptyTop, emptyLow, commitBranch, SINGLE_BRANCH_NAME]);
+	const commitTip = branchTip(commitBranch, localClone);
+	expect(branchTip(emptyTop, localClone)).toBe(commitTip);
+	expect(branchTip(emptyLow, localClone)).toBe(commitTip);
+
+	await dragBranchToInsertionDropzone(page, commitBranch, 0);
+
+	await expectBranchHeaderOrder(page, [commitBranch, emptyTop, emptyLow, SINGLE_BRANCH_NAME]);
+	await expectCurrentBranchChip(page, commitBranch);
+	await assertBranch(commitBranch, localClone);
+	expect(branchTip(commitBranch, localClone)).toBe(commitTip);
+	expect(branchTip(emptyTop, localClone)).toBe(branchTip(SINGLE_BRANCH_NAME, localClone));
+	expect(branchTip(emptyLow, localClone)).toBe(branchTip(SINGLE_BRANCH_NAME, localClone));
 });
 
 test("can move a middle non-empty branch above the checked-out branch", async ({

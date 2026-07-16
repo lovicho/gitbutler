@@ -135,9 +135,10 @@ export const BranchRow: FC<
 	...restProps
 }) => {
 	const { data: forgeInfo } = useQuery(forgeInfoOptions(projectId));
-	const { data: reviews } = useQuery(
-		listReviewsQueryOptions({ projectId, cacheConfig: "noCache" }),
-	);
+	const { data: reviews } = useQuery({
+		...listReviewsQueryOptions({ projectId, cacheConfig: "noCache" }),
+		enabled: !!forgeInfo?.capabilities.prService,
+	});
 	const pullRequest = reviews?.reviewsBySourceBranch.get(refName.displayName)?.number ?? null;
 	const mforgeUrl = pullRequest !== null ? forgeInfo && prForgeUrl(pullRequest, forgeInfo) : null;
 

@@ -1,5 +1,8 @@
 use super::*;
-use std::collections::HashMap;
+use std::{
+    collections::{HashMap, HashSet},
+    ffi::OsStr,
+};
 
 /// Build a lookup function from a set of key-value pairs.
 /// `use<>` tells the compiler the returned closure owns all its data and
@@ -232,6 +235,34 @@ fn detect_dirac_vscode_terminal() {
 #[test]
 fn detect_none_when_clean() {
     assert_eq!(detect_with(|_| None), None);
+}
+
+#[test]
+fn environment_variable_inventory_is_unique() {
+    let unique: HashSet<_> = ENVIRONMENT_VARIABLES.iter().copied().collect();
+    assert_eq!(
+        unique.len(),
+        ENVIRONMENT_VARIABLES.len(),
+        "each agent environment variable should occur once",
+    );
+}
+
+#[test]
+fn test_command_isolation_removes_all_agent_environment_variables() {
+    let mut cmd = std::process::Command::new("but");
+    for var in ENVIRONMENT_VARIABLES {
+        cmd.env(var, "ambient-value");
+    }
+
+    but_testsupport::isolate_env_std_cmd_with_additional_removals(&mut cmd, ENVIRONMENT_VARIABLES);
+
+    for var in ENVIRONMENT_VARIABLES {
+        let update = cmd.get_envs().find(|(name, _)| *name == OsStr::new(var));
+        assert!(
+            matches!(update, Some((_, None))),
+            "{var} should be explicitly removed",
+        );
+    }
 }
 
 #[test]

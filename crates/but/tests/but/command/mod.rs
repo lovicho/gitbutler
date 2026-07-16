@@ -192,7 +192,10 @@ mod util {
         cmd.stdin(std::process::Stdio::null());
         cmd.stdout(std::process::Stdio::piped());
         cmd.stderr(std::process::Stdio::piped());
-        but_testsupport::isolate_env_std_cmd(&mut cmd);
+        but_testsupport::isolate_env_std_cmd_with_additional_removals(
+            &mut cmd,
+            but::AGENT_ENVIRONMENT_VARIABLES,
+        );
         cmd
     }
 

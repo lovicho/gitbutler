@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use but_testsupport::isolate_snapbox_cmd;
+use but_testsupport::isolate_snapbox_cmd_with_additional_removals;
 
 mod ignored_tests_have_linear_ticket;
 pub use ignored_tests_have_linear_ticket::assert_ignored_tests_have_linear_ticket;
@@ -132,7 +132,7 @@ impl Sandbox {
     }
 
     fn with_updated_env(&self, cmd: snapbox::cmd::Command) -> snapbox::cmd::Command {
-        isolate_snapbox_cmd(cmd)
+        isolate_snapbox_cmd_with_additional_removals(cmd, but::AGENT_ENVIRONMENT_VARIABLES)
             .env("E2E_TEST_APP_DATA_DIR", self.app_data_dir())
             .current_dir(self.projects_root())
     }

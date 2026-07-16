@@ -84,22 +84,12 @@ export const getReviewMergeStatusQueryOptions = ({ projectId, reviewId }: GetRev
 		staleTime: ({ state: { data } }) => (data?.isMergeable ? 30_000 : 10_000),
 	});
 
+/** This query should be gated by PR capability lest it fail. */
 export const listReviewsQueryOptions = ({ projectId, ...params }: ListReviewsParams) =>
 	queryOptions({
 		queryKey: ["reviews" satisfies QueryKey, projectId, params],
-		// listReviews will throw if forge can't be determined.
-		queryFn: async () => {
-			try {
-				return await window.lite.listReviews({ projectId, ...params });
-			} catch (e) {
-				// oxlint-disable-next-line no-console
-				console.warn(e);
-				return null;
-			}
-		},
+		queryFn: () => window.lite.listReviews({ projectId, ...params }),
 		select: (reviews) => {
-			if (!reviews) return null;
-
 			const reviewsBySourceBranch = new Map<string, ForgeReview>();
 			for (const review of reviews) reviewsBySourceBranch.set(review.sourceBranch, review);
 			return {
@@ -110,7 +100,6 @@ export const listReviewsQueryOptions = ({ projectId, ...params }: ListReviewsPar
 		staleTime: 60_000,
 	});
 
-/** @public */
 export const listBranchesQueryOptions = ({ projectId, ...params }: ListBranchesParams) =>
 	queryOptions({
 		queryKey: ["branches" satisfies QueryKey, projectId, params],
@@ -127,6 +116,7 @@ export const listEditorsQueryOptions = queryOptions({
 	queryFn: () => window.lite.listEditors(),
 });
 
+/** This query should be gated by checks capability. */
 // There is no watcher event that could invalidate this query.
 export const listCIChecksQueryOptions = ({
 	projectId,

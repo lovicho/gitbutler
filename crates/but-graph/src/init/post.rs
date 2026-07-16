@@ -1490,49 +1490,6 @@ impl Graph {
             if branch.category() != Some(Category::LocalBranch) {
                 continue;
             }
-            if repo
-                .try_find_reference(branch.as_ref())
-                .with_context(|| {
-                    format!(
-                        "failed to find ordered ad-hoc branch '{}'",
-                        branch.shorten()
-                    )
-                })?
-                .is_some()
-            {
-                existing_ordered_refs.push(branch);
-            }
-        }
-        if existing_ordered_refs.len() < 2 {
-            return Ok(());
-        }
-
-        let Some((bottom_ref, _)) = existing_ordered_refs.split_last() else {
-            return Ok(());
-        };
-        let Some(mut bottom_reference) = repo
-            .try_find_reference(bottom_ref.as_ref())
-            .with_context(|| {
-                format!(
-                    "failed to find bottom ordered ad-hoc branch '{}'",
-                    bottom_ref.shorten()
-                )
-            })?
-        else {
-            return Ok(());
-        };
-        let bottom_commit_id = bottom_reference
-            .peel_to_id()
-            .with_context(|| {
-                format!(
-                    "failed to peel bottom ordered ad-hoc branch '{}'",
-                    bottom_ref.shorten()
-                )
-            })?
-            .detach();
-
-        let mut matching_refs = Vec::new();
-        for branch in &existing_ordered_refs {
             let Some(mut reference) =
                 repo.try_find_reference(branch.as_ref()).with_context(|| {
                     format!(
@@ -1543,7 +1500,7 @@ impl Graph {
             else {
                 continue;
             };
-            if reference
+            let commit_id = reference
                 .peel_to_id()
                 .with_context(|| {
                     format!(
@@ -1551,31 +1508,75 @@ impl Graph {
                         branch.shorten()
                     )
                 })?
-                .detach()
-                == bottom_commit_id
+                .detach();
+            existing_ordered_refs.push((branch, commit_id));
+        }
+        if existing_ordered_refs.len() < 2 {
+            return Ok(());
+        }
+
+        // Projection needs the complete persisted order to keep walking across commit-owning
+        // boundaries. Same-tip groups below are only the units that need graph reconstruction.
+        self.ad_hoc_branch_stack_orders.push(
+            existing_ordered_refs
+                .iter()
+                .map(|(branch, _)| branch.clone())
+                .collect(),
+        );
+
+        // A persisted stack can cross commit-owning branch boundaries. Rebuild every contiguous
+        // same-tip run independently so an empty run at the top isn't compared to the older tip
+        // of the stack's bottom branch.
+        let mut same_tip_groups: Vec<(ObjectId, Vec<gix::refs::FullName>)> = Vec::new();
+        for (branch, commit_id) in existing_ordered_refs {
+            if let Some((group_commit_id, branches)) = same_tip_groups.last_mut()
+                && *group_commit_id == commit_id
             {
-                matching_refs.push(branch.clone());
+                branches.push(branch);
+            } else {
+                same_tip_groups.push((commit_id, vec![branch]));
             }
         }
-        if matching_refs.len() < 2 {
-            return Ok(());
+
+        for (commit_id, matching_refs) in same_tip_groups {
+            if matching_refs.len() < 2 {
+                continue;
+            }
+            let bottom_ref = matching_refs
+                .last()
+                .context("BUG: same-tip branch group cannot be empty")?;
+            let containing_commit = self.node_weights().find_map(|segment| {
+                segment
+                    .commit_index_of(commit_id)
+                    .filter(|commit_idx| *commit_idx > 0)
+                    .map(|commit_idx| (segment.id, commit_idx))
+            });
+            let bottom_segment_id = if let Some(segment_id) =
+                ad_hoc_order_bottom_segment_id(self, bottom_ref.as_ref(), commit_id)
+            {
+                segment_id
+            } else if let Some((segment_id, commit_idx)) = containing_commit {
+                self.split_segment(
+                    segment_id,
+                    commit_idx,
+                    Some(bottom_ref.clone()),
+                    None,
+                    meta,
+                    worktree_by_branch,
+                )?
+            } else {
+                continue;
+            };
+
+            rebuild_same_tip_segment_chain_by_branch_order(
+                self,
+                bottom_segment_id,
+                matching_refs,
+                entrypoint_ref.as_ref(),
+                meta,
+                worktree_by_branch,
+            )?;
         }
-        self.ad_hoc_branch_stack_orders.push(matching_refs.clone());
-
-        let bottom_segment_id =
-            ad_hoc_order_bottom_segment_id(self, bottom_ref.as_ref(), bottom_commit_id);
-        let Some(bottom_segment_id) = bottom_segment_id else {
-            return Ok(());
-        };
-
-        rebuild_same_tip_segment_chain_by_branch_order(
-            self,
-            bottom_segment_id,
-            matching_refs,
-            entrypoint_ref.as_ref(),
-            meta,
-            worktree_by_branch,
-        )?;
         Ok(())
     }
 }

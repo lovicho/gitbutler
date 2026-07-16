@@ -128,6 +128,39 @@ test("can create an empty dependent branch above the checked-out branch and comm
 	);
 });
 
+test("keeps a commit-owning dependent branch when adding an empty branch above it", async ({
+	page,
+	gitbutler,
+}) => {
+	const localClone = await setupSingleBranchProject(gitbutler, page);
+	const commitBranch = "dependent-with-commit";
+	const emptyTopBranch = "empty-dependent-top";
+	const baseTip = git(localClone, ["rev-parse", SINGLE_BRANCH_NAME]);
+
+	await createDependentBranch(page, commitBranch);
+
+	const fileName = "dependent_with_commit.txt";
+	writeToFile(gitbutler.pathInWorkdir("local-clone", fileName), "dependent branch content\n");
+	await expect(getByTestId(page, "file-list-item").filter({ hasText: fileName })).toBeVisible();
+	await clickByTestId(page, "start-commit-button");
+
+	const title = "dependent branch: add commit";
+	await updateCommitMessage(page, title, "");
+	await clickByTestId(page, "commit-drawer-action-button");
+	await expect(commitRow(page, title)).toBeVisible();
+	const commitBranchTip = git(localClone, ["rev-parse", commitBranch]);
+	expect(commitBranchTip).not.toBe(baseTip);
+
+	await createDependentBranch(page, emptyTopBranch);
+
+	await expectCurrentBranchChip(page, emptyTopBranch);
+	await assertBranch(emptyTopBranch, localClone);
+	expect(git(localClone, ["rev-parse", emptyTopBranch])).toBe(commitBranchTip);
+	expect(git(localClone, ["rev-parse", commitBranch])).toBe(commitBranchTip);
+	expect(git(localClone, ["rev-parse", SINGLE_BRANCH_NAME])).toBe(baseTip);
+	await expectBranchHeaderOrder(page, [emptyTopBranch, commitBranch, SINGLE_BRANCH_NAME]);
+});
+
 test("can create an empty branch below another empty branch between empty branches", async ({
 	page,
 	gitbutler,

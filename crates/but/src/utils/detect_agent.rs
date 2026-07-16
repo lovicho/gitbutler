@@ -7,6 +7,70 @@
 use std::env;
 use std::ffi::OsString;
 
+#[derive(Clone, Copy)]
+struct Variable(&'static str);
+
+impl Variable {
+    fn name(self) -> &'static str {
+        self.0
+    }
+}
+
+macro_rules! environment_variables {
+    ($($name:ident = $value:literal),+ $(,)?) => {
+        $(const $name: Variable = Variable($value);)+
+
+        /// Every environment variable consulted during agent detection.
+        pub const ENVIRONMENT_VARIABLES: &[&str] = &[$($value),+];
+    };
+}
+
+environment_variables! {
+    AI_AGENT = "AI_AGENT",
+    CLAUDE_CODE_IS_COWORK = "CLAUDE_CODE_IS_COWORK",
+    CLAUDE_CODE = "CLAUDE_CODE",
+    CLAUDECODE = "CLAUDECODE",
+    CURSOR_AGENT = "CURSOR_AGENT",
+    CURSOR_EXTENSION_HOST_ROLE = "CURSOR_EXTENSION_HOST_ROLE",
+    CURSOR_TRACE_ID = "CURSOR_TRACE_ID",
+    CODEX_SANDBOX = "CODEX_SANDBOX",
+    CODEX_CI = "CODEX_CI",
+    CODEX_THREAD_ID = "CODEX_THREAD_ID",
+    CODEX_SHELL = "CODEX_SHELL",
+    AGENT_DISPLAY_OUT = "AGENT_DISPLAY_OUT",
+    AGENT_CONTEXT_OUT = "AGENT_CONTEXT_OUT",
+    QWEN_CODE = "QWEN_CODE",
+    GEMINI_CLI = "GEMINI_CLI",
+    COPILOT_AGENT = "COPILOT_AGENT",
+    JUNIE_DATA = "JUNIE_DATA",
+    JUNIE_SHIM_PATH = "JUNIE_SHIM_PATH",
+    KILO_PID = "KILO_PID",
+    HERMES_SESSION_ID = "HERMES_SESSION_ID",
+    OPENCODE_CLIENT = "OPENCODE_CLIENT",
+    OPENCODE = "OPENCODE",
+    AUGMENT_AGENT = "AUGMENT_AGENT",
+    ANTIGRAVITY_AGENT = "ANTIGRAVITY_AGENT",
+    REPL_ID = "REPL_ID",
+    DIRAC_ACTIVE = "DIRAC_ACTIVE",
+    CLINE_ACTIVE = "CLINE_ACTIVE",
+    ROO_CLI_RUNTIME = "ROO_CLI_RUNTIME",
+    ROO_ACTIVE = "ROO_ACTIVE",
+    TRAE_AI_SHELL_ID = "TRAE_AI_SHELL_ID",
+    TABNINE_CLI = "TABNINE_CLI",
+    PI_CODING_AGENT = "PI_CODING_AGENT",
+    GOOSE_TERMINAL = "GOOSE_TERMINAL",
+    AWS_EXECUTION_ENV = "AWS_EXECUTION_ENV",
+    CODEBUDDY_SESSION_ID = "CODEBUDDY_SESSION_ID",
+    CODEBUDDY_PROJECT_DIR = "CODEBUDDY_PROJECT_DIR",
+    GROK_AGENT = "GROK_AGENT",
+    OPENCLAW_SHELL = "OPENCLAW_SHELL",
+    PS1 = "PS1",
+    PROMPT_COMMAND = "PROMPT_COMMAND",
+    OZ_HARNESS = "OZ_HARNESS",
+    OZ_RUN_ID = "OZ_RUN_ID",
+    AGENT = "AGENT",
+}
+
 /// An AI coding agent that may be driving the CLI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Agent {
@@ -112,11 +176,12 @@ pub fn detect() -> Option<Agent> {
 
 /// Core detection logic, parameterised over an env-var lookup function for testability.
 fn detect_with(lookup: impl Fn(&str) -> Option<OsString>) -> Option<Agent> {
-    let is_set = |var: &str| lookup(var).is_some_and(|v| !v.is_empty());
-    let is_value =
-        |var: &str, expected: &str| lookup(var).is_some_and(|v| v.to_str() == Some(expected));
-    let contains = |var: &str, needle: &str| {
-        lookup(var).is_some_and(|v| v.to_str().is_some_and(|value| value.contains(needle)))
+    let is_set = |var: Variable| lookup(var.name()).is_some_and(|v| !v.is_empty());
+    let is_value = |var: Variable, expected: &str| {
+        lookup(var.name()).is_some_and(|v| v.to_str() == Some(expected))
+    };
+    let contains = |var: Variable, needle: &str| {
+        lookup(var.name()).is_some_and(|v| v.to_str().is_some_and(|value| value.contains(needle)))
     };
 
     // Generic `AI_AGENT` convention (as documented by `@vercel/detect-agent`).
@@ -126,58 +191,54 @@ fn detect_with(lookup: impl Fn(&str) -> Option<OsString>) -> Option<Agent> {
 
     // Tool-specific variables. Order is part of the detection contract: known
     // compatibility markers must follow the more specific agent they can mimic.
-    if is_set("CLAUDE_CODE_IS_COWORK") {
+    if is_set(CLAUDE_CODE_IS_COWORK) {
         return Some(Agent::ClaudeCodeCowork);
     }
-    if is_set("CLAUDE_CODE") || is_set("CLAUDECODE") {
+    if is_set(CLAUDE_CODE) || is_set(CLAUDECODE) {
         return Some(Agent::ClaudeCode);
     }
-    if is_set("CURSOR_AGENT") || is_value("CURSOR_EXTENSION_HOST_ROLE", "agent-exec") {
+    if is_set(CURSOR_AGENT) || is_value(CURSOR_EXTENSION_HOST_ROLE, "agent-exec") {
         return Some(Agent::CursorCli);
     }
-    if is_set("CURSOR_TRACE_ID") {
+    if is_set(CURSOR_TRACE_ID) {
         return Some(Agent::Cursor);
     }
-    if is_set("CODEX_SANDBOX")
-        || is_set("CODEX_CI")
-        || is_set("CODEX_THREAD_ID")
-        || is_set("CODEX_SHELL")
-    {
+    if is_set(CODEX_SANDBOX) || is_set(CODEX_CI) || is_set(CODEX_THREAD_ID) || is_set(CODEX_SHELL) {
         return Some(Agent::Codex);
     }
     // Kiro exposes both FIFO paths only while its agent is driving a command.
-    if is_set("AGENT_DISPLAY_OUT") && is_set("AGENT_CONTEXT_OUT") {
+    if is_set(AGENT_DISPLAY_OUT) && is_set(AGENT_CONTEXT_OUT) {
         return Some(Agent::KiroCli);
     }
-    if is_value("QWEN_CODE", "1") {
+    if is_value(QWEN_CODE, "1") {
         return Some(Agent::QwenCode);
     }
-    if is_set("GEMINI_CLI") {
+    if is_set(GEMINI_CLI) {
         return Some(Agent::GeminiCli);
     }
-    if is_set("COPILOT_AGENT") {
+    if is_set(COPILOT_AGENT) {
         return Some(Agent::GitHubCopilot);
     }
-    if is_set("JUNIE_DATA") || is_set("JUNIE_SHIM_PATH") {
+    if is_set(JUNIE_DATA) || is_set(JUNIE_SHIM_PATH) {
         return Some(Agent::Junie);
     }
     // Kilo is an OpenCode fork, so its specific marker must win.
-    if is_set("KILO_PID") {
+    if is_set(KILO_PID) {
         return Some(Agent::KiloCode);
     }
-    if is_set("HERMES_SESSION_ID") {
+    if is_set(HERMES_SESSION_ID) {
         return Some(Agent::Hermes);
     }
-    if is_set("OPENCODE_CLIENT") || is_set("OPENCODE") {
+    if is_set(OPENCODE_CLIENT) || is_set(OPENCODE) {
         return Some(Agent::OpenCode);
     }
-    if is_set("AUGMENT_AGENT") {
+    if is_set(AUGMENT_AGENT) {
         return Some(Agent::Augment);
     }
-    if is_set("ANTIGRAVITY_AGENT") {
+    if is_set(ANTIGRAVITY_AGENT) {
         return Some(Agent::Antigravity);
     }
-    if is_set("REPL_ID") {
+    if is_set(REPL_ID) {
         return Some(Agent::Replit);
     }
     // Agents that set neither `AI_AGENT` nor `AGENT`, only a private marker.
@@ -187,50 +248,50 @@ fn detect_with(lookup: impl Fn(&str) -> Option<OsString>) -> Option<Agent> {
     // extension. Presence is enough to identify the agent when it is set.
     // Dirac's standalone CLI does not currently set an agent marker, so it
     // cannot be distinguished automatically from a human shell.
-    if is_set("DIRAC_ACTIVE") {
+    if is_set(DIRAC_ACTIVE) {
         return Some(Agent::Dirac);
     }
-    if is_set("CLINE_ACTIVE") {
+    if is_set(CLINE_ACTIVE) {
         return Some(Agent::Cline);
     }
-    if is_set("ROO_CLI_RUNTIME") || is_set("ROO_ACTIVE") {
+    if is_set(ROO_CLI_RUNTIME) || is_set(ROO_ACTIVE) {
         return Some(Agent::RooCode);
     }
-    if is_set("TRAE_AI_SHELL_ID") {
+    if is_set(TRAE_AI_SHELL_ID) {
         return Some(Agent::Trae);
     }
-    if is_set("TABNINE_CLI") {
+    if is_set(TABNINE_CLI) {
         return Some(Agent::TabnineCli);
     }
-    if is_set("PI_CODING_AGENT") {
+    if is_set(PI_CODING_AGENT) {
         return Some(Agent::Pi);
     }
-    if is_value("GOOSE_TERMINAL", "1") {
+    if is_value(GOOSE_TERMINAL, "1") {
         return Some(Agent::Goose);
     }
     // These runtime markers are inherited by nested agents, so a nested agent's
     // own marker above must win over the outer command runner.
-    if contains("AWS_EXECUTION_ENV", "AmazonQ-For-CLI") {
+    if contains(AWS_EXECUTION_ENV, "AmazonQ-For-CLI") {
         return Some(Agent::AmazonQ);
     }
-    if is_set("CODEBUDDY_SESSION_ID") || is_set("CODEBUDDY_PROJECT_DIR") {
+    if is_set(CODEBUDDY_SESSION_ID) || is_set(CODEBUDDY_PROJECT_DIR) {
         return Some(Agent::CodeBuddy);
     }
-    if is_value("GROK_AGENT", "1") {
+    if is_value(GROK_AGENT, "1") {
         return Some(Agent::GrokBuild);
     }
-    if is_value("OPENCLAW_SHELL", "exec") {
+    if is_value(OPENCLAW_SHELL, "exec") {
         return Some(Agent::OpenClaw);
     }
-    if contains("PS1", "###PS1JSON###") || contains("PROMPT_COMMAND", "###PS1JSON###") {
+    if contains(PS1, "###PS1JSON###") || contains(PROMPT_COMMAND, "###PS1JSON###") {
         return Some(Agent::OpenHands);
     }
-    if is_value("OZ_HARNESS", "oz") {
+    if is_value(OZ_HARNESS, "oz") {
         return Some(Agent::Warp);
     }
     // Keep the run ID as a compatibility fallback only when no harness identity
     // is available; it must not override an explicit delegated harness.
-    if !is_set("OZ_HARNESS") && is_set("OZ_RUN_ID") {
+    if !is_set(OZ_HARNESS) && is_set(OZ_RUN_ID) {
         return Some(Agent::Warp);
     }
 
@@ -250,7 +311,7 @@ fn detect_with(lookup: impl Fn(&str) -> Option<OsString>) -> Option<Agent> {
 /// setting `AI_AGENT` is an explicit "an agent is driving this" signal, so we
 /// keep it even when we can't name the agent.
 fn parse_ai_agent_var(lookup: &impl Fn(&str) -> Option<OsString>) -> Option<Agent> {
-    let val = normalize_agent_value(&lookup("AI_AGENT")?.to_string_lossy());
+    let val = normalize_agent_value(&lookup(AI_AGENT.name())?.to_string_lossy());
     if val.is_empty() {
         return None;
     }
@@ -289,7 +350,7 @@ fn match_agent_name_prefix(val: &str) -> Option<Agent> {
 /// values counts as an agent signal — anything else is ignored (returns `None`)
 /// rather than reported as `Agent::Unknown`, to avoid false positives.
 fn parse_agent_var(lookup: &impl Fn(&str) -> Option<OsString>) -> Option<Agent> {
-    match normalize_agent_value(&lookup("AGENT")?.to_string_lossy()).as_str() {
+    match normalize_agent_value(&lookup(AGENT.name())?.to_string_lossy()).as_str() {
         "goose" => Some(Agent::Goose),
         "amp" => Some(Agent::Amp),
         "crush" => Some(Agent::Crush),

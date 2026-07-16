@@ -188,7 +188,7 @@ fn worktree_private_branches(env: &Sandbox) -> anyhow::Result<Vec<String>> {
     let repo = env.open_repo();
     let refs = repo.references()?;
     Ok(refs
-        .prefixed(b"refs/heads/gitbutler/worktree/".as_ref())?
+        .prefixed(&b"refs/heads/gitbutler/worktree/"[..])?
         .filter_map(Result::ok)
         .map(|r| r.name().as_bstr().to_string())
         .collect())

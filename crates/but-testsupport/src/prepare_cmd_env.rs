@@ -2,6 +2,14 @@ use std::{borrow::Cow, ffi::OsStr};
 
 /// Change the `cmd` environment to be very isolated, particularly when Git is involved.
 pub fn isolate_env_std_cmd(cmd: &mut std::process::Command) -> &mut std::process::Command {
+    isolate_env_std_cmd_with_additional_removals(cmd, &[])
+}
+
+/// Isolate `cmd`, also removing client-specific environment variables.
+pub fn isolate_env_std_cmd_with_additional_removals<'a>(
+    cmd: &'a mut std::process::Command,
+    additional_removals: &[&str],
+) -> &'a mut std::process::Command {
     for op in updates() {
         match op {
             EnvOp::Remove(var) => {
@@ -12,17 +20,32 @@ pub fn isolate_env_std_cmd(cmd: &mut std::process::Command) -> &mut std::process
             }
         }
     }
+    for var in additional_removals {
+        cmd.env_remove(var);
+    }
     cmd
 }
 
 /// Change the `cmd` environment to be very isolated, particularly when Git is involved.
 #[cfg(feature = "snapbox")]
-pub fn isolate_snapbox_cmd(mut cmd: snapbox::cmd::Command) -> snapbox::cmd::Command {
+pub fn isolate_snapbox_cmd(cmd: snapbox::cmd::Command) -> snapbox::cmd::Command {
+    isolate_snapbox_cmd_with_additional_removals(cmd, &[])
+}
+
+/// Isolate `cmd`, also removing client-specific environment variables.
+#[cfg(feature = "snapbox")]
+pub fn isolate_snapbox_cmd_with_additional_removals(
+    mut cmd: snapbox::cmd::Command,
+    additional_removals: &[&str],
+) -> snapbox::cmd::Command {
     for op in updates() {
         cmd = match op {
             EnvOp::Remove(var) => cmd.env_remove(var),
             EnvOp::Add { name, value } => cmd.env(name, value),
         };
+    }
+    for var in additional_removals {
+        cmd = cmd.env_remove(var);
     }
     cmd
 }
@@ -58,25 +81,9 @@ fn updates() -> Vec<EnvOp> {
         EnvOp::Remove("VISUAL"),
         EnvOp::Remove("EDITOR"),
         EnvOp::Remove("BUT_THEME"),
-        // Keep ambient agent environments from changing default CLI test output.
-        EnvOp::Remove("AI_AGENT"),
-        EnvOp::Remove("CLAUDE_CODE_IS_COWORK"),
-        EnvOp::Remove("CLAUDE_CODE"),
-        EnvOp::Remove("CLAUDECODE"),
-        EnvOp::Remove("CURSOR_AGENT"),
-        EnvOp::Remove("CURSOR_TRACE_ID"),
-        EnvOp::Remove("CODEX_SANDBOX"),
-        EnvOp::Remove("CODEX_CI"),
-        EnvOp::Remove("CODEX_THREAD_ID"),
-        EnvOp::Remove("CODEX_SHELL"),
-        EnvOp::Remove("GEMINI_CLI"),
         EnvOp::Remove("COPILOT_MODEL"),
         EnvOp::Remove("COPILOT_ALLOW_ALL"),
         EnvOp::Remove("COPILOT_GITHUB_TOKEN"),
-        EnvOp::Remove("OPENCODE_CLIENT"),
-        EnvOp::Remove("AUGMENT_AGENT"),
-        EnvOp::Remove("ANTIGRAVITY_AGENT"),
-        EnvOp::Remove("REPL_ID"),
     ]
     .into_iter()
     .chain(

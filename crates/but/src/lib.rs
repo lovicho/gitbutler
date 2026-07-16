@@ -2002,3 +2002,5 @@ mod legacy;
 mod setup;
 pub mod trace;
 mod utils;
+#[doc(hidden)]
+pub use utils::detect_agent::ENVIRONMENT_VARIABLES as AGENT_ENVIRONMENT_VARIABLES;

@@ -2088,6 +2088,102 @@ fn ad_hoc_order_does_not_force_diverged_refs_into_empty_stack() -> anyhow::Resul
 }
 
 #[test]
+fn ad_hoc_order_preserves_empty_top_above_commit_owning_branch() -> anyhow::Result<()> {
+    let (tmp, repo) = empty_repo()?;
+    let target_tip = commit(&repo, "target")?;
+    let bottom_tip = commit_with_parent(&repo, "bottom", target_tip)?;
+    let commit_branch_tip = commit_with_parent(&repo, "top", bottom_tip)?;
+    create_branches(
+        &repo,
+        commit_branch_tip,
+        ["refs/heads/empty-top", "refs/heads/commit-branch"],
+    )?;
+    create_branches(&repo, bottom_tip, ["refs/heads/bottom"])?;
+    create_branches(&repo, target_tip, ["refs/heads/main"])?;
+    let meta = in_memory_meta(tmp.as_ref())?;
+
+    let graph = graph_with_branch_order(
+        &repo,
+        &*meta,
+        "refs/heads/empty-top",
+        [
+            "refs/heads/empty-top",
+            "refs/heads/commit-branch",
+            "refs/heads/bottom",
+        ],
+    )?
+    .validated()?;
+
+    snapbox::assert_data_eq!(
+        graph_workspace(&graph.into_workspace()?).to_string(),
+        snapbox::str![[r#"
+⌂:3:empty-top <> ✓!
+└── ≡:3:empty-top {1}
+    ├── :3:empty-top
+    ├── :0:commit-branch
+    │   └── ·4782705
+    ├── :1:bottom
+    │   └── ·dbc3a4c
+    └── :2:main[🌳]
+        └── ·67b14ca
+
+"#]]
+    );
+    Ok(())
+}
+
+#[test]
+fn ad_hoc_order_keeps_lower_empty_branches_after_non_empty_move() -> anyhow::Result<()> {
+    let (tmp, repo) = empty_repo()?;
+    let target_tip = commit(&repo, "target")?;
+    let base_tip = commit_with_parent(&repo, "base", target_tip)?;
+    let commit_branch_tip = commit_with_parent(&repo, "commit branch", base_tip)?;
+    create_branches(&repo, commit_branch_tip, ["refs/heads/commit-branch"])?;
+    create_branches(
+        &repo,
+        base_tip,
+        [
+            "refs/heads/empty-top",
+            "refs/heads/empty-low",
+            "refs/heads/base",
+        ],
+    )?;
+    create_branches(&repo, target_tip, ["refs/heads/main"])?;
+    let meta = in_memory_meta(tmp.as_ref())?;
+
+    let graph = graph_with_branch_order(
+        &repo,
+        &*meta,
+        "refs/heads/commit-branch",
+        [
+            "refs/heads/commit-branch",
+            "refs/heads/empty-top",
+            "refs/heads/empty-low",
+            "refs/heads/base",
+        ],
+    )?
+    .validated()?;
+
+    snapbox::assert_data_eq!(
+        graph_workspace(&graph.into_workspace()?).to_string(),
+        snapbox::str![[r#"
+⌂:0:commit-branch <> ✓!
+└── ≡:0:commit-branch {1}
+    ├── :0:commit-branch
+    │   └── ·5380c0a
+    ├── :3:empty-top
+    ├── :4:empty-low
+    ├── :2:base
+    │   └── ·a5cd64d
+    └── :1:main[🌳]
+        └── ·67b14ca
+
+"#]]
+    );
+    Ok(())
+}
+
+#[test]
 fn ad_hoc_order_scopes_empty_segments_to_active_chain() -> anyhow::Result<()> {
     let (tmp, repo) = empty_repo()?;
     let tip = commit(&repo, "same tip")?;

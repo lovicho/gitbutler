@@ -700,6 +700,6 @@ mod graph;
 pub use graph::{graph_tree, graph_workspace, graph_workspace_determinisitcally};
 
 mod prepare_cmd_env;
-pub use prepare_cmd_env::isolate_env_std_cmd;
+pub use prepare_cmd_env::{isolate_env_std_cmd, isolate_env_std_cmd_with_additional_removals};
 #[cfg(feature = "snapbox")]
-pub use prepare_cmd_env::isolate_snapbox_cmd;
+pub use prepare_cmd_env::{isolate_snapbox_cmd, isolate_snapbox_cmd_with_additional_removals};

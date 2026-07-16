@@ -725,8 +725,10 @@ const Title: FC<{
 					{({ data: commitDetails }) => (
 						<div className={styles.title}>
 							<Icon name="commit" />
-							<h3 className={classes(styles.titleContent, "text-15", "text-semibold")}>
-								{commitTitle(commitDetails.commit.message) ?? "(no message)"}
+							<h3 className={classes(styles.titleContentWrapper, "text-15", "text-semibold")}>
+								<span className={styles.titleContent}>
+									{commitTitle(commitDetails.commit.message) ?? "(no message)"}
+								</span>
 								{commitDetails.commit.hasConflicts && " ⚠️"}
 								{commitBody(commitDetails.commit.message) !== undefined && (
 									<Tooltip.Root>
@@ -745,7 +747,7 @@ const Title: FC<{
 											)}
 											onClick={() => onBodyCollapsedChange(!bodyCollapsed)}
 										>
-											<Icon name="kebab" className={styles.commitBodyToggleIcon} />
+											<Icon name="kebab" />
 										</Tooltip.Trigger>
 										<Tooltip.Portal>
 											<Tooltip.Positioner sideOffset={4}>
@@ -1495,6 +1497,7 @@ export const Details: FC<
 	} & ComponentProps<"div">
 > = ({ outlineSelection, ...restProps }) => {
 	const { id: projectId } = useParams({ from: "/project/$id/workspace" });
+	const { data: forgeInfo } = useQuery(forgeInfoOptions(projectId));
 	const { data: headInfo } = useQuery(headInfoQueryOptions(projectId));
 	const headInfoIndex = headInfo ? getHeadInfoIndex(headInfo) : null;
 	const dispatch = useAppDispatch();
@@ -1549,32 +1552,34 @@ export const Details: FC<
 							</Toggle>
 						</ToggleGroup>
 
-						<Suspense>
-							<SuspenseQuery
-								{...listReviewsQueryOptions({
-									projectId,
-									cacheConfig: "noCache",
-								})}
-							>
-								{({ data }) => {
-									const review = data?.reviewsBySourceBranch.get(
-										// https://linear.app/gitbutler/issue/GB-1226/unify-branch-identifiers
-										decodeBytes(outlineSelection.branchRef).replace(/^refs\/heads\//, ""),
-									);
-									if (!review) return null;
+						{!!forgeInfo?.capabilities.prService && (
+							<Suspense>
+								<SuspenseQuery
+									{...listReviewsQueryOptions({
+										projectId,
+										cacheConfig: "noCache",
+									})}
+								>
+									{({ data }) => {
+										const review = data.reviewsBySourceBranch.get(
+											// https://linear.app/gitbutler/issue/GB-1226/unify-branch-identifiers
+											decodeBytes(outlineSelection.branchRef).replace(/^refs\/heads\//, ""),
+										);
+										if (!review) return null;
 
-									return (
-										<div className={styles.tabsRowRight}>
-											<PullRequestPrimaryAction
-												projectId={projectId}
-												reviewId={review.number}
-												isDraft={review.draft}
-											/>
-										</div>
-									);
-								}}
-							</SuspenseQuery>
-						</Suspense>
+										return (
+											<div className={styles.tabsRowRight}>
+												<PullRequestPrimaryAction
+													projectId={projectId}
+													reviewId={review.number}
+													isDraft={review.draft}
+												/>
+											</div>
+										);
+									}}
+								</SuspenseQuery>
+							</Suspense>
+						)}
 					</div>
 				)}
 
@@ -1657,41 +1662,40 @@ export const Details: FC<
 									</SuspenseQuery>
 								);
 							},
-							Branch: ({ branchRef }) =>
-								branchTab === "pr" ? (
-									<SuspenseQuery
-										{...listReviewsQueryOptions({
-											projectId,
-											cacheConfig: "noCache",
-										})}
-									>
-										{({ data }) => {
-											// Use push status of segment, not branch details; something about remote
-											// tracking refs.
-											const branchCtx = headInfoIndex?.branchContextByRefBytes(branchRef);
-											const sourceBranch = branchCtx?.segment.refName?.displayName;
-											const parentSegment = branchCtx?.stack.segments[branchCtx.segmentIndex + 1];
-											const targetBranch =
-												!parentSegment || parentSegment.pushStatus === "integrated"
-													? headInfo?.target?.remoteTrackingRef.displayName
-													: parentSegment.pushStatus === "completelyUnpushed"
-														? undefined
-														: parentSegment.refName?.displayName;
+							Branch: ({ branchRef }) => {
+								// Use push status of segment, not branch details; something about remote
+								// tracking refs.
+								const branchCtx = headInfoIndex?.branchContextByRefBytes(branchRef);
+								const sourceBranch = branchCtx?.segment.refName?.displayName;
+								const parentSegment = branchCtx?.stack.segments[branchCtx.segmentIndex + 1];
+								const targetBranch =
+									!parentSegment || parentSegment.pushStatus === "integrated"
+										? headInfo?.target?.remoteTrackingRef.displayName
+										: parentSegment.pushStatus === "completelyUnpushed"
+											? undefined
+											: parentSegment.refName?.displayName;
 
-											const review =
-												sourceBranch !== undefined
-													? data?.reviewsBySourceBranch.get(sourceBranch)
-													: undefined;
+								return branchTab === "pr" ? (
+									<div className={styles.prTab}>
+										{!forgeInfo?.capabilities.prService ? (
+											<p className="text-13">No valid forge.</p>
+										) : targetBranch === undefined ? (
+											<p className="text-13">No remote target branch.</p>
+										) : sourceBranch === undefined ? (
+											<p className="text-13">No source branch.</p>
+										) : branchCtx?.segment.pushStatus === "completelyUnpushed" ? (
+											<p className="text-13">Branch must be pushed to create PR.</p>
+										) : (
+											<SuspenseQuery
+												{...listReviewsQueryOptions({
+													projectId,
+													cacheConfig: "noCache",
+												})}
+											>
+												{({ data }) => {
+													const review = data.reviewsBySourceBranch.get(sourceBranch);
 
-											return (
-												<div className={styles.prTab}>
-													{targetBranch === undefined ? (
-														<p className="text-13">No remote target branch.</p>
-													) : sourceBranch === undefined ? (
-														<p className="text-13">No source branch.</p>
-													) : branchCtx?.segment.pushStatus === "completelyUnpushed" ? (
-														<p className="text-13">Branch must be pushed to create PR.</p>
-													) : review === undefined ? (
+													return !review ? (
 														<PullRequestForm
 															key={sourceBranch}
 															body={null}
@@ -1713,31 +1717,25 @@ export const Details: FC<
 																title={review.title}
 															/>
 
-															<SuspenseQuery {...forgeInfoOptions(projectId)}>
-																{({ data: forgeInfo }) =>
-																	forgeInfo?.capabilities.checks && (
-																		<SuspenseQuery
-																			{...listCIChecksQueryOptions({
-																				projectId,
-																				reference: sourceBranch,
-																				polling: "priority",
-																			})}
-																		>
-																			{({ data: { data: checks, aggregate } }) =>
-																				aggregate && (
-																					<Checks checks={checks} aggregate={aggregate} />
-																				)
-																			}
-																		</SuspenseQuery>
-																	)
-																}
-															</SuspenseQuery>
+															{forgeInfo.capabilities.checks && (
+																<SuspenseQuery
+																	{...listCIChecksQueryOptions({
+																		projectId,
+																		reference: sourceBranch,
+																		polling: "priority",
+																	})}
+																>
+																	{({ data: { data: checks, aggregate } }) =>
+																		aggregate && <Checks checks={checks} aggregate={aggregate} />
+																	}
+																</SuspenseQuery>
+															)}
 														</>
-													)}
-												</div>
-											);
-										}}
-									</SuspenseQuery>
+													);
+												}}
+											</SuspenseQuery>
+										)}
+									</div>
 								) : (
 									<SuspenseQuery
 										{...branchDiffQueryOptions({ projectId, branch: decodeBytes(branchRef) })}
@@ -1749,7 +1747,8 @@ export const Details: FC<
 											})
 										}
 									</SuspenseQuery>
-								),
+								);
+							},
 						}),
 						Match.orElse(() => null),
 					);
