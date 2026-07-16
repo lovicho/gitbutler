@@ -27,7 +27,7 @@ fn rub_api_uncommitted_to_commit() {
         .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
 
     tui.input('n')
-        .assert_current_line_eq(str!["┊●   1 f184fc7 (no commit message) (no changes)"]);
+        .assert_current_line_eq(str!["┊●   1 (no commit message) (no changes)"]);
 
     tui.input([KeyCode::Up, KeyCode::Up])
         .assert_current_line_eq(str!["┊   v A test.txt"]);
@@ -35,12 +35,11 @@ fn rub_api_uncommitted_to_commit() {
     tui.input('r')
         .assert_current_line_eq(str!["┊   << source >> << noop >> v A test.txt"]);
 
-    tui.input(KeyCode::Down).assert_current_line_eq(str![
-        "┊●   << amend >> 1 f184fc7 (no commit message) (no changes)"
-    ]);
+    tui.input(KeyCode::Down)
+        .assert_current_line_eq(str!["┊●   << amend >> 1 (no commit message) (no changes)"]);
 
     tui.input(KeyCode::Enter)
-        .assert_current_line_eq(str!["┊●   1 6bdd3d2 (no commit message)"])
+        .assert_current_line_eq(str!["┊●   1 (no commit message)"])
         .assert_rendered_term_svg_eq(file!["snapshots/rub_api_uncommitted_to_commit.svg"]);
 }
 

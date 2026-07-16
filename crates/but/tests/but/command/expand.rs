@@ -141,7 +141,7 @@ fn changing_pushed_commit_does_not_cause_change_id_ambiguity() {
 ┊╭┄┄(upstream: on origin/a-branch-1)
 ┊●   a5caff1 second
 ┊-
-┊◐   123 96b6213 rewritten
+┊◐   123 rewritten
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M

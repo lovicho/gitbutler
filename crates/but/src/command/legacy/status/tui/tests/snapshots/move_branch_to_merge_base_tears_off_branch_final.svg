@@ -43,10 +43,8 @@
     <text x="10 18" y="222" style="fill:#CCCCCC;">┊●</text>
     <text x="50" y="222" style="fill:#AA00AA;">x</text>
     <text x="58 66" y="222" style="fill:#CCCCCC;opacity:0.75;">wn</text>
-    <text x="82" y="222" style="fill:#0000AA;font-weight:bold;">2</text>
-    <text x="90 98 106 114 122 130" y="222" style="fill:#CCCCCC;opacity:0.75;">0b5eda</text>
-    <text x="146 154 162" y="222" style="fill:#CCCCCC;">add</text>
-    <text x="178" y="222" style="fill:#CCCCCC;">C</text>
+    <text x="82 90 98" y="222" style="fill:#CCCCCC;">add</text>
+    <text x="114" y="222" style="fill:#CCCCCC;">C</text>
     <text x="10 18" y="240" style="fill:#CCCCCC;">├╯</text>
     <text x="10" y="258" style="fill:#CCCCCC;">┊</text>
     <text x="10" y="276" style="fill:#CCCCCC;">┴</text>

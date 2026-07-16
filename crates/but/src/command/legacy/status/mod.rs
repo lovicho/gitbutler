@@ -1728,22 +1728,20 @@ fn display_cli_commit_details(
     };
     let start_id = Span::styled(short_id.to_string(), t.cli_id);
 
-    let change_id =
-        if let (Some(short_change_id), Some(change_id)) = (short_change_id, &commit.change_id) {
-            let change_id_str = change_id.to_string();
-            let hint_end = 3.min(change_id_str.len());
-            let hint = change_id_str
-                .get(short_change_id.len()..hint_end)
-                .unwrap_or("")
-                .to_string();
-            vec![
-                Span::styled(short_change_id.to_string(), t.change_id),
-                Span::styled(hint, t.hint),
-                Span::raw(" "),
-            ]
-        } else {
-            vec![]
-        };
+    let change_id_spans = if let Some(short_change_id) = short_change_id {
+        let change_id_str = commit.change_id().to_string();
+        let hint_end = 3.min(change_id_str.len());
+        let hint = change_id_str
+            .get(short_change_id.len()..hint_end)
+            .unwrap_or("")
+            .to_string();
+        vec![
+            Span::styled(short_change_id.to_string(), t.change_id),
+            Span::styled(hint, t.hint),
+        ]
+    } else {
+        vec![]
+    };
 
     let no_changes = if has_changes {
         None
@@ -1761,9 +1759,15 @@ fn display_cli_commit_details(
         // No message when verbose since it goes to the next line
         let created_at = commit.author.time;
         let formatted_time = created_at.format_or_unix(CLI_DATE);
+
+        let mut change_id_spans = change_id_spans;
+        if !change_id_spans.is_empty() {
+            change_id_spans.push(Span::raw(" "));
+        }
+
         (
             CommitLineContent {
-                change_id,
+                change_id: change_id_spans,
                 sha: Vec::from_iter([start_id, end_id]),
                 author: Vec::from_iter([Span::raw(" "), Span::raw(commit.author.name.to_string())]),
                 message: Vec::new(),
@@ -1781,8 +1785,12 @@ fn display_cli_commit_details(
         let message = Span::styled(format!("{}", message.content), message.style);
         (
             CommitLineContent {
-                sha: Vec::from([start_id, end_id]),
-                change_id,
+                sha: if change_id_spans.is_empty() {
+                    Vec::from([start_id, end_id])
+                } else {
+                    vec![]
+                },
+                change_id: change_id_spans,
                 author: Vec::new(),
                 message: Vec::from_iter([Span::raw(" "), message]),
                 suffix: maybe_with_leading_space(no_changes, conflicted),

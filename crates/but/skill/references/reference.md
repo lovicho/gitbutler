@@ -173,6 +173,8 @@ but commit empty --after <target>        # Insert empty commit after target
 
 **Important:** Plain `but commit <branch> -m` commits ALL uncommitted changes to the branch. Use `--changes` to commit only specific files or hunks.
 
+`but commit` is not supported from linked worktrees. Use Git directly for the worktree-local commit, and do not run `but setup` there.
+
 **Committing specific files or hunks:** Start with `but diff` for selective dirty commits, then use `--changes` (or `-p`) with comma-separated CLI IDs to commit only those files or hunks:
 - **File IDs** from `but diff` or `but status -fv`: commits entire files
 - **Hunk IDs** from `but diff`: commits individual hunks

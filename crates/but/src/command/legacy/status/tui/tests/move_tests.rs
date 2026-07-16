@@ -49,10 +49,10 @@ fn move_mode_keeps_selected_commit_and_extension_visible_when_scrolled() {
         .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
 
     tui.input('n')
-        .assert_current_line_eq(str!["┊●   1 f184fc7 (no commit message) (no changes)"]);
+        .assert_current_line_eq(str!["┊●   1 (no commit message) (no changes)"]);
 
     tui.input('n')
-        .assert_current_line_eq(str!["┊●   1#0 9638f28 (no commit message) (no changes)"]);
+        .assert_current_line_eq(str!["┊●   1#0 (no commit message) (no changes)"]);
 
     tui.input([KeyCode::Down, KeyCode::Down])
         .assert_current_line_eq(str!["┊●   9477ae7 add A"]);
@@ -80,10 +80,10 @@ fn move_commit_above_other_commit_reorders_tui() {
         .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
 
     tui.input('n')
-        .assert_current_line_eq(str!["┊●   1 f184fc7 (no commit message) (no changes)"]);
+        .assert_current_line_eq(str!["┊●   1 (no commit message) (no changes)"]);
 
     tui.input('n')
-        .assert_current_line_eq(str!["┊●   1#0 9638f28 (no commit message) (no changes)"]);
+        .assert_current_line_eq(str!["┊●   1#0 (no commit message) (no changes)"]);
 
     tui.input([KeyCode::Down, KeyCode::Down])
         .assert_current_line_eq(str!["┊●   9477ae7 add A"]);
@@ -98,7 +98,7 @@ fn move_commit_above_other_commit_reorders_tui() {
         .assert_current_line_eq(str!["┊│   << move commit above >>"]);
 
     tui.input(KeyCode::Enter)
-        .assert_current_line_eq(str!["┊●   tpm 2c72e58 add A"]);
+        .assert_current_line_eq(str!["┊●   tpm add A"]);
 
     tui = tui.recreate();
     tui.reload().assert_rendered_term_svg_eq(file![
@@ -117,16 +117,16 @@ fn move_commit_down_from_source_selects_next_commit() {
         .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
 
     tui.input('n')
-        .assert_current_line_eq(str!["┊●   1 f184fc7 (no commit message) (no changes)"]);
+        .assert_current_line_eq(str!["┊●   1 (no commit message) (no changes)"]);
 
     tui.input('n')
-        .assert_current_line_eq(str!["┊●   1#0 9638f28 (no commit message) (no changes)"]);
+        .assert_current_line_eq(str!["┊●   1#0 (no commit message) (no changes)"]);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊●   1#1 f184fc7 (no commit message) (no changes)"]);
+        .assert_current_line_eq(str!["┊●   1#1 (no commit message) (no changes)"]);
 
     tui.input('m').assert_current_line_eq(str![
-        "┊●   << source >> << noop >> 1#1 f184fc7 (no commit message) (no changes)"
+        "┊●   << source >> << noop >> 1#1 (no commit message) (no changes)"
     ]);
 
     tui.input(KeyCode::Down)

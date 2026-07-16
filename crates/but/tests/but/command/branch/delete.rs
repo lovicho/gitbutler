@@ -72,10 +72,10 @@ Deleted branch A
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [C]
-┊●   wlx ec33a86 add C
+┊●   wlx add C
 ┊│
 ┊├┄h0 [B]
-┊●   wwm 05d3df1 add B
+┊●   wwm add B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -108,7 +108,7 @@ Deleted branch B
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [C]
-┊●   wlx 983f317 add C
+┊●   wlx add C
 ┊│
 ┊├┄h0 [A]
 ┊●   9477ae7 add A

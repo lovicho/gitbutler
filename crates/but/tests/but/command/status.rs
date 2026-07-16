@@ -1305,7 +1305,7 @@ fn status_file_prefixed_with_change_id_when_available_and_commit_id_otherwise() 
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   123 e1db5a8 Commit with change ID
+┊●   123 Commit with change ID
 ┊│     1:p A B
 ┊●   9477ae7 add A
 ┊│     9:t A A
@@ -1358,7 +1358,7 @@ Hint: run `but branch new` to create a new branch to work on
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄br [a-branch-1]
-┊●   1 5877ef4 add files
+┊●   1 add files
 ┊│     1:r  A file-0.txt
 ┊│     1:k  A file-1.txt
 ┊│     1:t  A file-2.txt

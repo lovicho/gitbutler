@@ -250,7 +250,7 @@ fn committed_file_to_uncommitted_area() -> anyhow::Result<()> {
 
 "#]]);
 
-    env.but("rub e8:b.txt zz")
+    env.but("rub 1#0:p zz")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
@@ -732,7 +732,7 @@ fn uncommit_command_with_discard_on_commit() -> anyhow::Result<()> {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   1 fce8ecc create a.txt and b.txt
+┊●   1 create a.txt and b.txt
 ┊│     1:n A a.txt
 ┊│     1:p A b.txt
 ┊●   9477ae7 add A
@@ -816,7 +816,7 @@ fn uncommit_command_with_discard_on_committed_file() -> anyhow::Result<()> {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   1 fce8ecc create a.txt and b.txt
+┊●   1 create a.txt and b.txt
 ┊│     1:n A a.txt
 ┊│     1:p A b.txt
 ┊●   9477ae7 add A
@@ -860,7 +860,7 @@ Hint: run `but help` for all commands
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   1 993513d create a.txt and b.txt
+┊●   1 create a.txt and b.txt
 ┊│     1:n A a.txt
 ┊●   9477ae7 add A
 ┊│     94:t A A
@@ -1601,7 +1601,7 @@ fn rub_commit_without_message_to_commit() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   1 aec35ac add one.txt
+┊●   1 add one.txt
 ┊●   9477ae7 add A
 ├╯
 ┊
@@ -1609,7 +1609,7 @@ fn rub_commit_without_message_to_commit() {
 
 "#]]);
 
-    env.but("commit empty --after aec35ac").assert().success();
+    env.but("commit empty --after 1").assert().success();
 
     env.but("status --no-hint")
         .assert()
@@ -1618,8 +1618,8 @@ fn rub_commit_without_message_to_commit() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   1#0 5e5c05a (no commit message) (no changes)
-┊●   1#1 aec35ac add one.txt
+┊●   1#0 (no commit message) (no changes)
+┊●   1#1 add one.txt
 ┊●   9477ae7 add A
 ├╯
 ┊
@@ -1627,7 +1627,7 @@ fn rub_commit_without_message_to_commit() {
 
 "#]]);
 
-    env.but("rub 5e5c05a aec35ac").assert().success();
+    env.but("rub 1#0 1#1").assert().success();
 
     env.but("status --no-hint")
         .assert()
@@ -1636,7 +1636,7 @@ fn rub_commit_without_message_to_commit() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   1 aec35ac add one.txt
+┊●   1 add one.txt
 ┊●   9477ae7 add A
 ├╯
 ┊
@@ -1652,9 +1652,9 @@ fn rub_commit_to_commit_without_message() -> anyhow::Result<()> {
 
     env.file("one.txt", "one.txt contents");
     env.but("commit -m 'add one.txt'").assert().success();
-    env.but("commit empty --after aec35ac").assert().success();
+    env.but("commit empty --after 1").assert().success();
 
-    env.but("rub aec35ac 5e5c05a").assert().success();
+    env.but("rub 1#1 1#0").assert().success();
 
     let status = status_json(&env)?;
     let branch = status["stacks"]
@@ -2234,7 +2234,7 @@ fn rubbing_modified_and_renamed_file() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄br [a-branch-1]
-┊●   1 e3f869d add files
+┊●   1 add files
 ┊│     1:q A file
 ┊│     1:k A file-2
 ├╯
@@ -2257,7 +2257,7 @@ Hint: run `but help` for all commands
 ┊   k D file-2
 ┊
 ┊╭┄br [a-branch-1]
-┊●   1 e3f869d add files
+┊●   1 add files
 ┊│     1:q A file
 ┊│     1:k A file-2
 ├╯
@@ -2268,7 +2268,7 @@ Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "mes
 
 "#]]);
 
-    env.but("rub zz e3f869d").assert().success();
+    env.but("rub zz 1").assert().success();
 
     env.but("status -f")
         .assert()
@@ -2277,7 +2277,7 @@ Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "mes
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄br [a-branch-1]
-┊●   1 3a32c97 add files
+┊●   1 add files
 ┊│     1:q A file
 ├╯
 ┊
@@ -2305,7 +2305,7 @@ fn committing_modified_and_renamed_file() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄br [a-branch-1]
-┊●   1 e3f869d add files
+┊●   1 add files
 ┊│     1:q A file
 ┊│     1:k A file-2
 ├╯
@@ -2328,7 +2328,7 @@ Hint: run `but help` for all commands
 ┊   k D file-2
 ┊
 ┊╭┄br [a-branch-1]
-┊●   1 e3f869d add files
+┊●   1 add files
 ┊│     1:q A file
 ┊│     1:k A file-2
 ├╯
@@ -2348,10 +2348,10 @@ Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "mes
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄br [a-branch-1]
-┊●   1#0 e419886 change file
+┊●   1#0 change file
 ┊│     1#0:q M file
 ┊│     1#0:k D file-2
-┊●   1#1 e3f869d add files
+┊●   1#1 add files
 ┊│     1#1:q A file
 ┊│     1#1:k A file-2
 ├╯

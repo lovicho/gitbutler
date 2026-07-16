@@ -975,6 +975,15 @@ async fn match_subcommand(
         }
         #[cfg(feature = "legacy")]
         Subcommands::Commit(commit_args) => {
+            if let Ok(repo) = gix::discover(&args.current_dir)
+                && repo.worktree().is_some_and(|worktree| !worktree.is_main())
+            {
+                return Err(anyhow::anyhow!(
+                    "`but commit` is not supported from linked worktrees. Use Git directly for this worktree."
+                )
+                .into());
+            }
+
             let status_after = args.status_after;
             let mut ctx = setup::init_ctx(
                 &args,

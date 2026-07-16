@@ -10,7 +10,7 @@ fn can_undo_but_uncommit_commit_add() {
     env.but("commit -m 'Add file'").assert().success();
 
     run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but("uncommit 6a30821").assert().success();
+        env.but("uncommit 1").assert().success();
     });
 }
 
@@ -29,7 +29,7 @@ fn can_undo_but_uncommit_commit_modify() {
     env.but("commit -m 'Change file'").assert().success();
 
     run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but("uncommit c0aac71").assert().success();
+        env.but("uncommit 1#0").assert().success();
     });
 }
 
@@ -47,7 +47,7 @@ fn can_undo_but_uncommit_commit_delete() {
     env.but("commit -m 'Remove file'").assert().success();
 
     run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but("uncommit 1f27386").assert().success();
+        env.but("uncommit 1#0").assert().success();
     });
 }
 
@@ -61,7 +61,7 @@ fn can_undo_but_uncommit_file_add() {
     env.but("commit -m 'Add file'").assert().success();
 
     run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but("uncommit 6a:xk").assert().success();
+        env.but("uncommit 1:xk").assert().success();
     });
 }
 
@@ -78,7 +78,7 @@ fn can_undo_but_uncommit_file_modify() {
     env.but("commit -m 'Modify file'").assert().success();
 
     run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but("uncommit 31:xk").assert().success();
+        env.but("uncommit 1#0:xk").assert().success();
     });
 }
 
@@ -95,6 +95,6 @@ fn can_undo_but_uncommit_file_delete() {
     env.but("commit -m 'Remove file'").assert().success();
 
     run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but("uncommit 1f:xk").assert().success();
+        env.but("uncommit 1#0:xk").assert().success();
     });
 }

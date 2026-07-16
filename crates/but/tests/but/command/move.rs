@@ -114,9 +114,9 @@ fn move_multiple_commits_before_another_commit() -> anyhow::Result<()> {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   1#0 23e1bf8 create e.txt and f.txt
-┊●   1#1 de41286 create c.txt and d.txt
-┊●   1#2 fce8ecc create a.txt and b.txt
+┊●   1#0 create e.txt and f.txt
+┊●   1#1 create c.txt and d.txt
+┊●   1#2 create a.txt and b.txt
 ┊●   9477ae7 add A
 ├╯
 ┊
@@ -158,9 +158,9 @@ Moved 2 commits → before fce8ecc
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   1#0 0e08d58 create a.txt and b.txt
-┊●   1#1 7887784 create e.txt and f.txt
-┊●   1#2 078d9e6 create c.txt and d.txt
+┊●   1#0 create a.txt and b.txt
+┊●   1#1 create e.txt and f.txt
+┊●   1#2 create c.txt and d.txt
 ┊●   9477ae7 add A
 ├╯
 ┊
@@ -192,9 +192,9 @@ fn move_multiple_commits_after_another_commit() -> anyhow::Result<()> {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   1#0 23e1bf8 create e.txt and f.txt
-┊●   1#1 de41286 create c.txt and d.txt
-┊●   1#2 fce8ecc create a.txt and b.txt
+┊●   1#0 create e.txt and f.txt
+┊●   1#1 create c.txt and d.txt
+┊●   1#2 create a.txt and b.txt
 ┊●   9477ae7 add A
 ├╯
 ┊
@@ -236,9 +236,9 @@ Moved 2 commits → after 23e1bf8
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   1#0 05b04e5 create c.txt and d.txt
-┊●   1#1 9f54aec create a.txt and b.txt
-┊●   1#2 d7e5fc7 create e.txt and f.txt
+┊●   1#0 create c.txt and d.txt
+┊●   1#1 create a.txt and b.txt
+┊●   1#2 create e.txt and f.txt
 ┊●   9477ae7 add A
 ├╯
 ┊
@@ -376,10 +376,10 @@ Moved 4 commits → before [..]
 ┊
 ┊╭┄h0 [B]
 ┊●   [..] B: another 10 lines at the bottom
-┊●   zmt c4ee0c5 C: add another 10 lines to new file
-┊●   xkt 4b3d452 C: add 10 lines to new file
-┊●   sxz 90250eb C: new file with 10 lines
-┊●   psr 29bc6a0 A: 10 lines on top
+┊●   zmt C: add another 10 lines to new file
+┊●   xkt C: add 10 lines to new file
+┊●   sxz C: new file with 10 lines
+┊●   psr A: 10 lines on top
 ┊●   62e05ba B: 10 lines at the bottom
 ├╯
 ┊
@@ -519,10 +519,10 @@ Moved 4 commits → after a748762
 ├╯
 ┊
 ┊╭┄h0 [B]
-┊●   zmt 79860aa C: add another 10 lines to new file
-┊●   xkt cb938a1 C: add 10 lines to new file
-┊●   sxz 87f25cc C: new file with 10 lines
-┊●   psr d2689e7 A: 10 lines on top
+┊●   zmt C: add another 10 lines to new file
+┊●   xkt C: add 10 lines to new file
+┊●   sxz C: new file with 10 lines
+┊●   psr A: 10 lines on top
 ┊●   a748762 B: another 10 lines at the bottom
 ┊●   62e05ba B: 10 lines at the bottom
 ├╯
@@ -827,7 +827,7 @@ Moved branch A on top of C.
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   tpm 89a57fc add A
+┊●   tpm add A
 ┊│
 ┊├┄h0 [C]
 ┊●   3842fc0 add C
@@ -991,7 +991,7 @@ Moved branch A on top of C.
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   tpm 89a57fc add A
+┊●   tpm add A
 ┊│
 ┊├┄h0 [C]
 ┊●   3842fc0 add C
@@ -1081,7 +1081,7 @@ Unstacked branch C.
 ├╯
 ┊
 ┊╭┄i0 [C]
-┊●   xwn 661a9b6 add C
+┊●   xwn add C
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M

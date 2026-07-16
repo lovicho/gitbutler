@@ -37,8 +37,8 @@ Moved fe12bcd above commit 9ac4652
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   zll c6224e6 add first
-┊●   ywx ce8b324 add second
+┊●   zll add first
+┊●   ywx add second
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -85,8 +85,8 @@ Moved 9ac4652 below commit fe12bcd
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   zll c6224e6 add first
-┊●   ywx ce8b324 add second
+┊●   zll add first
+┊●   ywx add second
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -147,13 +147,13 @@ Moved 2a98cfc, 769f4a8 [..]
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   usn 86218a9 add A13
-┊●   opy 4ba5683 add A12
-┊●   opk 33c2cee add A11
-┊●   vmw 894e57b add A8
-┊●   tpw 1c425d1 add A7
-┊●   vvl 73d652c add A10
-┊●   mzz a6a6cd1 add A9
+┊●   usn add A13
+┊●   opy add A12
+┊●   opk add A11
+┊●   vmw add A8
+┊●   tpw add A7
+┊●   vvl add A10
+┊●   mzz add A9
 ┊●   d60e311 add A6
 ┊●   c67c49e add A5
 ┊●   23c280d add A4
@@ -228,19 +228,19 @@ Moved 2a98cfc, 0748e42, c67c49e [..]
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   usn 6f23074 add A13
-┊●   opy ae30331 add A12
-┊●   opk ad601eb add A11
-┊●   vvl bfcf0d6 add A10
-┊●   mzz a5511fb add A9
-┊●   tpw 79d9420 add A7
-┊●   pyq 651dbaf add A5
-┊●   zpl 33e2190 add A1
-┊●   vmw ddfd694 add A8
-┊●   lyq 88fbf4b add A6
-┊●   mvv 4868a7b add A4
-┊●   tvm c05b7a8 add A3
-┊●   sxq b7e9e54 add A2
+┊●   usn add A13
+┊●   opy add A12
+┊●   opk add A11
+┊●   vvl add A10
+┊●   mzz add A9
+┊●   tpw add A7
+┊●   pyq add A5
+┊●   zpl add A1
+┊●   vmw add A8
+┊●   lyq add A6
+┊●   mvv add A4
+┊●   tvm add A3
+┊●   sxq add A2
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -290,10 +290,10 @@ Moved fe12bcd to new branch 'a-branch-1' above branch 'A'
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄br [a-branch-1]
-┊●   zll c6224e6 add first
+┊●   zll add first
 ┊│
 ┊├┄g0 [A]
-┊●   ywx ce8b324 add second
+┊●   ywx add second
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -390,10 +390,10 @@ Moved 9ac4652 to new branch 'a-branch-1' below branch 'A'
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   zll c6224e6 add first
+┊●   zll add first
 ┊│
 ┊├┄br [a-branch-1]
-┊●   ywx ce8b324 add second
+┊●   ywx add second
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -770,7 +770,7 @@ Moved 9477ae7 to the tip of branch 'B'
 ├╯
 ┊
 ┊╭┄h0 [B]
-┊●   tpm 22c3ce2 add A
+┊●   tpm add A
 ┊●   d3e2ba3 add B
 ├╯
 ┊
@@ -870,7 +870,7 @@ Moved 9ac4652 to new branch 'new-branch'
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄ne [new-branch]
-┊●   ywx ce8b324 add second
+┊●   ywx add second
 ├╯
 ┊
 ┊╭┄g0 [A]
@@ -921,7 +921,7 @@ Moved 9ac4652 to new branch 'a-branch-1'
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄br [a-branch-1]
-┊●   ywx ce8b324 add second
+┊●   ywx add second
 ├╯
 ┊
 ┊╭┄g0 [A]
@@ -974,10 +974,10 @@ Moved 1 changes from 9ac4652 to new commit 8e35f84 below commit fe12bcd
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   ywx 01a55b8 add second (no changes)
-┊●   zll 12b9152 add first
+┊●   ywx add second (no changes)
+┊●   zll add first
 ┊│     zl:l A first
-┊●   1 8e35f84 (no commit message)
+┊●   1 (no commit message)
 ┊│     1:w A second
 ├╯
 ┊
@@ -1027,9 +1027,9 @@ Moved 1 changes from fe12bcd to new commit c019027 above commit 9ac4652
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   1 c019027 (no commit message)
+┊●   1 (no commit message)
 ┊│     1:l A first
-┊●   ywx 38b1f1a add second
+┊●   ywx add second
 ┊│     y:w A second
 ┊●   d8dfd0f add first (no changes)
 ├╯
@@ -1080,12 +1080,12 @@ Moved 1 changes from 9ac4652 to new commit 8e35f84 on new branch 'a-branch-1' be
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   ywx 01a55b8 add second (no changes)
-┊●   zll 12b9152 add first
+┊●   ywx add second (no changes)
+┊●   zll add first
 ┊│     zl:l A first
 ┊│
 ┊├┄br [a-branch-1]
-┊●   1 8e35f84 (no commit message)
+┊●   1 (no commit message)
 ┊│     1:w A second
 ├╯
 ┊
@@ -1135,11 +1135,11 @@ Moved 1 changes from fe12bcd to new commit c019027 on new branch 'a-branch-1' ab
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄br [a-branch-1]
-┊●   1 c019027 (no commit message)
+┊●   1 (no commit message)
 ┊│     1:l A first
 ┊│
 ┊├┄g0 [A]
-┊●   ywx 38b1f1a add second
+┊●   ywx add second
 ┊│     y:w A second
 ┊●   d8dfd0f add first (no changes)
 ├╯
@@ -1193,7 +1193,7 @@ Moved 1 changes from d3e2ba3 to new commit be174de to the tip of branch 'A'
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   1 be174de (no commit message)
+┊●   1 (no commit message)
 ┊│     1:p A B
 ┊●   9477ae7 add A
 ┊│     9:t A A
@@ -1249,7 +1249,7 @@ Moved 1 changes from 9ac4652 to new commit 8e35f84 on new branch 'new-branch'
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄ne [new-branch]
-┊●   1 8e35f84 (no commit message)
+┊●   1 (no commit message)
 ┊│     1:w A second
 ├╯
 ┊
@@ -1305,7 +1305,7 @@ Moved 1 changes from 9ac4652 to new commit 8e35f84 on new branch 'a-branch-1'
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄br [a-branch-1]
-┊●   1 8e35f84 (no commit message)
+┊●   1 (no commit message)
 ┊│     1:w A second
 ├╯
 ┊
@@ -1347,11 +1347,11 @@ fn move_file_should_be_order_independent() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄br [a-branch-1]
-┊●   1#0 e3d3e3a Prepare for moves!
+┊●   1#0 Prepare for moves!
 ┊│     1#0:u R moved
 ┊│     1#0:p A new/file
 ┊│     1#0:t A unrelated
-┊●   1#1 24ac1e5 Add new file
+┊●   1#1 Add new file
 ┊│     1#1:n A new
 ├╯
 ┊
@@ -1376,12 +1376,12 @@ Moved 2 changes from e3d3e3a to new commit 99ef17e above commit e3d3e3a
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄br [a-branch-1]
-┊●   1#0 99ef17e (no commit message)
+┊●   1#0 (no commit message)
 ┊│     1#0:u R moved
 ┊│     1#0:p A new/file
-┊●   1#1 f94e59f Prepare for moves!
+┊●   1#1 Prepare for moves!
 ┊│     1#1:t A unrelated
-┊●   1#2 24ac1e5 Add new file
+┊●   1#2 Add new file
 ┊│     1#2:n A new
 ├╯
 ┊
@@ -1408,12 +1408,12 @@ Moved 2 changes from e3d3e3a to new commit 99ef17e above commit e3d3e3a
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄br [a-branch-1]
-┊●   1#0 99ef17e (no commit message)
+┊●   1#0 (no commit message)
 ┊│     1#0:u R moved
 ┊│     1#0:p A new/file
-┊●   1#1 f94e59f Prepare for moves!
+┊●   1#1 Prepare for moves!
 ┊│     1#1:t A unrelated
-┊●   1#2 24ac1e5 Add new file
+┊●   1#2 Add new file
 ┊│     1#2:n A new
 ├╯
 ┊
@@ -1506,10 +1506,10 @@ Stacked branch 'B' on top of branch 'C'
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [B]
-┊●   wwm 223f14d add B
+┊●   wwm add B
 ┊│
 ┊├┄h0 [C]
-┊●   wlx 983f317 add C
+┊●   wlx add C
 ┊│
 ┊├┄i0 [A]
 ┊●   9477ae7 add A
@@ -1623,7 +1623,7 @@ Stacked branch 'B' on top of branch 'A'
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [B]
-┊●   lrm e776549 add B
+┊●   lrm add B
 ┊│
 ┊├┄h0 [A]
 ┊●   9477ae7 add A
@@ -1792,7 +1792,7 @@ Unstacked branch 'C'
 ├╯
 ┊
 ┊╭┄i0 [C]
-┊●   wlx db21ee2 add C
+┊●   wlx add C
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1846,11 +1846,11 @@ Unstacked branch 'B'
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [B]
-┊●   wwm 05d3df1 add B
+┊●   wwm add B
 ├╯
 ┊
 ┊╭┄h0 [C]
-┊●   wlx 983f317 add C
+┊●   wlx add C
 ┊│
 ┊├┄i0 [A]
 ┊●   9477ae7 add A
@@ -1911,10 +1911,10 @@ Unstacked branch 'A'
 ├╯
 ┊
 ┊╭┄h0 [C]
-┊●   wlx ec33a86 add C
+┊●   wlx add C
 ┊│
 ┊├┄i0 [B]
-┊●   wwm 05d3df1 add B
+┊●   wwm add B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -2025,10 +2025,10 @@ Unstacked branch 'A'
 ├╯
 ┊
 ┊╭┄h0 [C]
-┊●   wlx ec33a86 add C
+┊●   wlx add C
 ┊│
 ┊├┄i0 [B]
-┊●   wwm 05d3df1 add B
+┊●   wwm add B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M

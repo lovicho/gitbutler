@@ -19,18 +19,14 @@
     <text x="10 18" y="78" style="fill:#CCCCCC;">┊●</text>
     <text x="50" y="78" style="fill:#AA00AA;">t</text>
     <text x="58 66" y="78" style="fill:#CCCCCC;opacity:0.75;">pm</text>
-    <text x="82" y="78" style="fill:#0000AA;font-weight:bold;">c</text>
-    <text x="90 98 106 114 122 130" y="78" style="fill:#CCCCCC;opacity:0.75;">1d8a48</text>
-    <text x="146 154 162" y="78" style="fill:#CCCCCC;">add</text>
-    <text x="178" y="78" style="fill:#CCCCCC;">A</text>
+    <text x="82 90 98" y="78" style="fill:#CCCCCC;">add</text>
+    <text x="114" y="78" style="fill:#CCCCCC;">A</text>
     <text x="10 18" y="96" style="fill:#FFFFFF;font-weight:bold;">┊●</text>
     <text x="50" y="96" style="fill:#AA00AA;font-weight:bold;">1</text>
-    <text x="66" y="96" style="fill:#0000AA;font-weight:bold;">5</text>
-    <text x="74 82 90 98 106 114" y="96" style="fill:#FFFFFF;font-weight:bold;opacity:0.75;">84b4d0</text>
-    <text x="130 138 146 154 162 170" y="96" style="fill:#FFFFFF;font-weight:bold;">commit</text>
-    <text x="186 194 202 210" y="96" style="fill:#FFFFFF;font-weight:bold;">from</text>
-    <text x="226 234 242" y="96" style="fill:#FFFFFF;font-weight:bold;">tui</text>
-    <text x="258 266 274 282" y="96" style="fill:#FFFFFF;font-weight:bold;">test</text>
+    <text x="66 74 82 90 98 106" y="96" style="fill:#FFFFFF;font-weight:bold;">commit</text>
+    <text x="122 130 138 146" y="96" style="fill:#FFFFFF;font-weight:bold;">from</text>
+    <text x="162 170 178" y="96" style="fill:#FFFFFF;font-weight:bold;">tui</text>
+    <text x="194 202 210 218" y="96" style="fill:#FFFFFF;font-weight:bold;">test</text>
     <text x="10 18" y="114" style="fill:#CCCCCC;">├╯</text>
     <text x="10" y="132" style="fill:#CCCCCC;">┊</text>
     <text x="10" y="150" style="fill:#CCCCCC;">┴</text>

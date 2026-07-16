@@ -566,11 +566,11 @@ fn creating_empty_commits() {
 
     tui.input('n')
         .assert_rendered_term_svg_eq(file!["snapshots/creating_empty_commits_002.svg"])
-        .assert_current_line_eq(str!["┊●   1 f184fc7 (no commit message) (no changes)"]);
+        .assert_current_line_eq(str!["┊●   1 (no commit message) (no changes)"]);
 
     tui.input('n')
         .assert_rendered_term_svg_eq(file!["snapshots/creating_empty_commits_003.svg"])
-        .assert_current_line_eq(str!["┊●   1#0 9638f28 (no commit message) (no changes)"]);
+        .assert_current_line_eq(str!["┊●   1#0 (no commit message) (no changes)"]);
 }
 
 #[test]
@@ -589,7 +589,7 @@ fn inline_reword() {
 
     tui.input('n')
         .assert_rendered_term_svg_eq(file!["snapshots/inline_reword_002.svg"])
-        .assert_current_line_eq(str!["┊●   1 f184fc7 (no commit message) (no changes)"]);
+        .assert_current_line_eq(str!["┊●   1 (no commit message) (no changes)"]);
 
     tui.input(KeyCode::Enter)
         .assert_rendered_term_svg_eq(file!["snapshots/inline_reword_003.svg"]);
@@ -599,7 +599,7 @@ fn inline_reword() {
 
     tui.input(KeyCode::Enter)
         .assert_rendered_term_svg_eq(file!["snapshots/inline_reword_005.svg"])
-        .assert_current_line_eq(str!["┊●   1 cb96911 foo (no changes)"]);
+        .assert_current_line_eq(str!["┊●   1 foo (no changes)"]);
 }
 
 #[test]
@@ -826,7 +826,7 @@ fn rubbing() {
         .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
 
     tui.input('n')
-        .assert_current_line_eq(str!["┊●   1 f184fc7 (no commit message) (no changes)"]);
+        .assert_current_line_eq(str!["┊●   1 (no commit message) (no changes)"]);
 
     tui.input([KeyCode::Up, KeyCode::Up])
         .assert_current_line_eq(str!["┊   v A test.txt"]);
@@ -834,9 +834,8 @@ fn rubbing() {
     tui.input('r')
         .assert_current_line_eq(str!["┊   << source >> << noop >> v A test.txt"]);
 
-    tui.input(KeyCode::Down).assert_current_line_eq(str![
-        "┊●   << amend >> 1 f184fc7 (no commit message) (no changes)"
-    ]);
+    tui.input(KeyCode::Down)
+        .assert_current_line_eq(str!["┊●   << amend >> 1 (no commit message) (no changes)"]);
 
     tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊●   << amend >> 9477ae7 add A"]);
@@ -926,12 +925,12 @@ fn commit_file_toggle_on_commit_without_files_is_noop() {
     with_var("GIT_AUTHOR_DATE", Some("2000-01-01T00:00:00Z"), || {
         with_var("GIT_COMMITTER_DATE", Some("2000-01-01T00:00:00Z"), || {
             tui.input('n')
-                .assert_current_line_eq(str!["┊●   1 f184fc7 (no commit message) (no changes)"]);
+                .assert_current_line_eq(str!["┊●   1 (no commit message) (no changes)"]);
         });
     });
 
     tui.input('f')
-        .assert_current_line_eq(str!["┊●   1 f184fc7 (no commit message) (no changes)"]);
+        .assert_current_line_eq(str!["┊●   1 (no commit message) (no changes)"]);
 
     tui.input([KeyCode::Down, KeyCode::Down, KeyCode::Down])
         .assert_current_line_eq(str!["┴ 0dc3733 (common base) 2000-01-02 add M"])
@@ -1177,7 +1176,7 @@ fn consistent_commit_shas_in_tests() {
 
     tui.input('b');
     tui.input('n')
-        .assert_current_line_eq(str!["┊●   1 0b42c46 (no commit message) (no changes)"]);
+        .assert_current_line_eq(str!["┊●   1 (no commit message) (no changes)"]);
 }
 
 #[test]
@@ -1196,12 +1195,12 @@ fn jumping_up_down() {
     }
 
     tui.reload()
-        .assert_current_line_eq("┊●   1#0 0856e2b commit #12 (no changes)");
+        .assert_current_line_eq("┊●   1#0 commit #12 (no changes)");
 
     tui.input((KeyModifiers::CONTROL, 'd'))
-        .assert_current_line_eq("┊●   1#10 f2262ae commit #2 (no changes)");
+        .assert_current_line_eq("┊●   1#10 commit #2 (no changes)");
     tui.input((KeyModifiers::CONTROL, 'u'))
-        .assert_current_line_eq("┊●   1#0 0856e2b commit #12 (no changes)");
+        .assert_current_line_eq("┊●   1#0 commit #12 (no changes)");
 }
 
 #[test]
@@ -1226,7 +1225,7 @@ fn jumping_up_down_non_normal_mode() {
     tui.input('r');
 
     tui.input((KeyModifiers::CONTROL, 'd'))
-        .assert_current_line_eq("┊●   << amend >> 1#9 9a7be93 commit #3 (no changes)");
+        .assert_current_line_eq("┊●   << amend >> 1#9 commit #3 (no changes)");
     tui.input((KeyModifiers::CONTROL, 'u'))
         .assert_current_line_eq("╭┄<< source >> << noop >> zz [uncommitted]");
 }
@@ -1265,9 +1264,9 @@ fn maintains_selection_using_change_id() {
     tui.input(KeyCode::Enter);
     tui.input("target");
     tui.input(KeyCode::Enter)
-        .assert_current_line_eq(str![["┊●   1 f370b92 target (no changes)"]]);
+        .assert_current_line_eq(str!["┊●   1 target (no changes)"]);
 
     // undo the reword, this shouldn't change the selection
     tui.input('u')
-        .assert_current_line_eq(str![["┊●   1 0b42c46 (no commit message) (no changes)"]]);
+        .assert_current_line_eq(str!["┊●   1 (no commit message) (no changes)"]);
 }

@@ -329,7 +329,7 @@ fn json_target_committed_file() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   1 3f40d29 committed-file-target
+┊●   1 committed-file-target
 ┊│     1:k A committed-other.txt
 ┊│     1:w A committed-target.txt
 ┊●   9477ae7 add A
@@ -610,12 +610,12 @@ fn json_commit_target_tree_change_statuses() -> anyhow::Result<()> {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   1#0 dafe86a status-target
+┊●   1#0 status-target
 ┊│     1#0:nx A added.txt
 ┊│     1#0:nm D deleted.txt
 ┊│     1#0:u  M modified.txt
 ┊│     1#0:o  R renamed-after.txt
-┊●   1#1 db7d00b status-base
+┊●   1#1 status-base
 ┊│     1#1:n A deleted.txt
 ┊│     1#1:u A modified.txt
 ┊│     1#1:z A renamed-before.txt
@@ -634,9 +634,9 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    let commit_id = "da";
+    let change_id = "1#0";
 
-    env.but(format!("diff --format json {commit_id}"))
+    env.but(format!("diff --format json {change_id}"))
         .allow_json()
         .assert()
         .success()

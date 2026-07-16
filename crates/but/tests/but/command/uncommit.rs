@@ -79,9 +79,9 @@ fn uncommit_different_files_from_different_commits_same_branch() -> anyhow::Resu
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   1#0 3d21fdd add c2
+┊●   1#0 add c2
 ┊│     1#0:w A c2.txt
-┊●   1#1 28b88fc add c1
+┊●   1#1 add c1
 ┊│     1#1:l A c1.txt
 ┊●   9477ae7 add A
 ┊│     9:t A A
@@ -136,8 +136,8 @@ Uncommitted changes
 ┊   w A c2.txt
 ┊
 ┊╭┄g0 [A]
-┊●   1#0 01fc011 add c2 (no changes)
-┊●   1#1 5682e2a add c1 (no changes)
+┊●   1#0 add c2 (no changes)
+┊●   1#1 add c1 (no changes)
 ┊●   9477ae7 add A
 ┊│     9:t A A
 ├╯
@@ -185,7 +185,7 @@ fn uncommit_different_files_from_the_same_commit() -> anyhow::Result<()> {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   1 191c6ed add c1 and c2
+┊●   1 add c1 and c2
 ┊│     1:l A c1.txt
 ┊│     1:w A c2.txt
 ┊●   9477ae7 add A
@@ -239,7 +239,7 @@ Uncommitted changes
 ┊   w A c2.txt
 ┊
 ┊╭┄g0 [A]
-┊●   1 3d256e6 add c1 and c2 (no changes)
+┊●   1 add c1 and c2 (no changes)
 ┊●   9477ae7 add A
 ┊│     9:t A A
 ├╯
@@ -289,11 +289,11 @@ fn uncommit_same_file_from_different_commits_same_branch() -> anyhow::Result<()>
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   1#0 485d867 write v3
+┊●   1#0 write v3
 ┊│     1#0:s M f.txt
-┊●   1#1 adeaad7 write v2
+┊●   1#1 write v2
 ┊│     1#1:s M f.txt
-┊●   1#2 825d09f write v1
+┊●   1#2 write v1
 ┊│     1#2:s A f.txt
 ┊●   9477ae7 add A
 ┊│     9:t A A
@@ -349,9 +349,9 @@ Uncommitted changes
 ┊   s A f.txt
 ┊
 ┊╭┄g0 [A]
-┊●   1#0 ddf33f2 write v3 (no changes)
-┊●   1#1 3212a72 write v2 (no changes)
-┊●   1#2 637ac90 write v1 (no changes)
+┊●   1#0 write v3 (no changes)
+┊●   1#1 write v2 (no changes)
+┊●   1#2 write v1 (no changes)
 ┊●   9477ae7 add A
 ┊│     9:t A A
 ├╯
@@ -399,14 +399,14 @@ fn uncommit_different_files_from_different_commits_different_branches() -> anyho
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   1#0 1675e0b add fa
+┊●   1#0 add fa
 ┊│     1#0:s A fa.txt
 ┊●   9477ae7 add A
 ┊│     9:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
-┊●   1#1 30b330c add fb
+┊●   1#1 add fb
 ┊│     1#1:q A fb.txt
 ┊●   d3e2ba3 add B
 ┊│     d:p A B
@@ -451,13 +451,13 @@ Uncommitted changes
 ┊   q A fb.txt
 ┊
 ┊╭┄g0 [A]
-┊●   1#0 3bbaec6 add fa (no changes)
+┊●   1#0 add fa (no changes)
 ┊●   9477ae7 add A
 ┊│     9:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
-┊●   1#1 0596eed add fb (no changes)
+┊●   1#1 add fb (no changes)
 ┊●   d3e2ba3 add B
 ┊│     d:p A B
 ├╯

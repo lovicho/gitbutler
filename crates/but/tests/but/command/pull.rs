@@ -38,7 +38,7 @@ Hint: run `but help` for all commands
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [B]
-┊◐   lrm 5542cc3 add B
+┊◐   lrm add B
 ├╯
 ┊
 ┴ 26ecc90 (common base) 2000-01-02 add upstream
@@ -111,7 +111,7 @@ Hint: branches marked `(merged upstream)` have landed; run `but pull` to remove 
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊◐   ozt 3a110f4 add A
+┊◐   ozt add A
 ├╯
 ┊
 ┴ d4cb681 (common base) 2000-01-02 add upstream
@@ -287,7 +287,7 @@ Hint: run `but help` for all commands
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊◐   nyo 6e0f28b A-change (no changes) {conflicted}
+┊◐   nyo A-change (no changes) {conflicted}
 ├╯
 ┊
 ┴ bdfcf28 (common base) 2000-01-02 main-change
@@ -436,7 +436,7 @@ Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "mes
 ┊   o M shared.txt
 ┊
 ┊╭┄g0 [A]
-┊◐   vun 705b03e local change (no changes) {conflicted}
+┊◐   vun local change (no changes) {conflicted}
 ├╯
 ┊
 ┴ 7f73771 (common base) 2000-01-02 upstream change
@@ -500,7 +500,7 @@ Hint: run `but help` for all commands
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊◐   vun 705b03e local change (no changes) {conflicted}
+┊◐   vun local change (no changes) {conflicted}
 ├╯
 ┊
 ┴ 7f73771 (common base) 2000-01-02 upstream change
@@ -565,10 +565,10 @@ To undo this operation:
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊◐   rvk 4a2dd6a top change
+┊◐   rvk top change
 ┊│
 ┊├┄h0 [B]
-┊◐   rou d5fa75c bottom change (no changes) {conflicted}
+┊◐   rou bottom change (no changes) {conflicted}
 ├╯
 ┊
 ┴ 7f73771 (common base) 2000-01-02 upstream change
@@ -633,10 +633,10 @@ To undo this operation:
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊◐   wmr 09bcfd9 top change (no changes) {conflicted}
+┊◐   wmr top change (no changes) {conflicted}
 ┊│
 ┊├┄h0 [B]
-┊◐   trk 7ac1f5a bottom change (no changes) {conflicted}
+┊◐   trk bottom change (no changes) {conflicted}
 ├╯
 ┊
 ┴ e4933d8 (common base) 2000-01-02 upstream change
