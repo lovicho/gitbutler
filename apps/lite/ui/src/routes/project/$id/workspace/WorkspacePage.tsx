@@ -16,7 +16,7 @@ import { PickerDialog } from "#ui/components/PickerDialog.tsx";
 import { globalHotkeys, workspaceHotkeys } from "#ui/hotkeys.ts";
 import { writeLastOpenedProject } from "#ui/project.ts";
 import { useAppDispatch, useAppSelector } from "#ui/store.ts";
-import { ProjectForFrontend, RefInfo, Segment } from "@gitbutler/but-sdk";
+import { ProjectForFrontend, RefInfo } from "@gitbutler/but-sdk";
 import { useHotkey, useHotkeys } from "@tanstack/react-hotkeys";
 import {
 	QueryErrorResetBoundary,
@@ -52,6 +52,7 @@ import { buildIndexByKey, type NavigationIndex } from "#ui/workspace/navigation-
 import { OperationControls } from "#ui/routes/project/$id/workspace/OperationControls.tsx";
 import { WorkspacePageErrorBoundary } from "./WorkspacePageErrorBoundary.tsx";
 import { Settings } from "./Settings.tsx";
+import type { OutlineMode } from "#ui/outline/mode.ts";
 
 // This must be unique as to not collide with other IDs, and stable because it's
 // stored in local storage.
@@ -147,74 +148,60 @@ const useWorkspaceHotkeys = (projectId: string) => {
 	]);
 };
 
-const outlineNavigationItems = ({
-	headInfo,
-	uncommittedFilePaths,
-}: {
-	headInfo: RefInfo | undefined;
-	uncommittedFilePaths: Array<string>;
-}): Array<Operand> => {
-	const segmentItems = (segment: Segment): Array<Operand> => [
-		...(segment.refName ? [branchOperand({ branchRef: segment.refName.fullNameBytes })] : []),
-		...segment.commits.map((commit) => commitOperand({ commitId: commit.id })),
-	];
-
-	return [
-		uncommittedChangesOperand,
-		...uncommittedFilePaths.map((path) =>
-			fileOperand({ parent: uncommittedChangesFileParent, path }),
-		),
-
-		...(headInfo?.stacks.toReversed() ?? []).flatMap((stack) =>
-			stack.segments.flatMap(segmentItems),
-		),
-	];
-};
-
 const hasAnyOperation = (source: Operand, target: Operand) => {
 	const operations = getOperations(source, target);
 	return !!operations.into || !!operations.above || !!operations.below;
 };
 
-const useOutlineNavigationIndex = ({
-	projectId,
+const buildOutlineNavigationIndex = ({
+	headInfo,
+	uncommittedFilePaths,
+	outlineMode,
 	absorptionTargetCommitIds,
 }: {
-	projectId: string;
+	headInfo: RefInfo | undefined;
+	uncommittedFilePaths: Array<string> | undefined;
+	outlineMode: OutlineMode;
 	absorptionTargetCommitIds: ReadonlySet<string>;
 }): NavigationIndex<Operand> => {
-	const { data: headInfo } = useQuery(headInfoQueryOptions(projectId));
-	const { data: worktreeChanges } = useQuery(changesInWorktreeQueryOptions(projectId));
+	const allItems = () => [
+		uncommittedChangesOperand,
+		...(uncommittedFilePaths?.map((path) =>
+			fileOperand({ parent: uncommittedChangesFileParent, path }),
+		) ?? []),
 
-	const outlineMode = useAppSelector((state) =>
-		projectSlice.selectors.selectOutlineModeState(state, projectId),
-	);
+		...(headInfo?.stacks.toReversed() ?? []).flatMap((stack) =>
+			stack.segments.flatMap(
+				(segment): Array<Operand> => [
+					...(segment.refName ? [branchOperand({ branchRef: segment.refName.fullNameBytes })] : []),
+					...segment.commits.map((commit) => commitOperand({ commitId: commit.id })),
+				],
+			),
+		),
+	];
 
-	const items = outlineNavigationItems({
-		headInfo,
-		uncommittedFilePaths: worktreeChanges?.changes.map((change) => change.path) ?? [],
-	});
 	const filteredItems = Match.value(outlineMode).pipe(
 		Match.tagsExhaustive({
-			Default: () => items,
+			Default: () => allItems(),
 			Absorb: (activeMode) =>
-				items.filter(
+				allItems().filter(
 					(operand) =>
 						operandEquals(operand, activeMode.source) ||
 						operandContains(operand, activeMode.source) ||
 						(operand._tag === "Commit" && absorptionTargetCommitIds.has(operand.commitId)),
 				),
-			Transfer: (activeMode) =>
-				items.filter(
+			Transfer: ({ value: activeMode }) =>
+				allItems().filter(
 					(operand) =>
-						operandEquals(operand, activeMode.value.source) ||
-						operandContains(operand, activeMode.value.source) ||
-						hasAnyOperation(activeMode.value.source, operand),
+						operandEquals(operand, activeMode.source) ||
+						operandContains(operand, activeMode.source) ||
+						hasAnyOperation(activeMode.source, operand),
 				),
 			RenameBranch: (x) => [branchOperand(x.operand)],
 			RewordCommit: (x) => [commitOperand(x.operand)],
 		}),
 	);
+
 	const indexByKey = buildIndexByKey(filteredItems, operandIdentityKey);
 
 	return { items: filteredItems, indexByKey };
@@ -373,8 +360,13 @@ const WorkspacePage: FC = () => {
 		absorptionPlanQuery?.data?.map(({ commitId }) => commitId),
 	);
 
-	const outlineNavigationIndex = useOutlineNavigationIndex({
-		projectId,
+	const { data: headInfo } = useQuery(headInfoQueryOptions(projectId));
+	const { data: worktreeChanges } = useQuery(changesInWorktreeQueryOptions(projectId));
+
+	const outlineNavigationIndex = buildOutlineNavigationIndex({
+		headInfo,
+		uncommittedFilePaths: worktreeChanges?.changes.map((change) => change.path),
+		outlineMode,
 		absorptionTargetCommitIds,
 	});
 

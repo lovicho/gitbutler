@@ -14,8 +14,11 @@ import type { ForgeUser } from "@gitbutler/but-sdk";
 
 export const PROJECTS_SERVICE = new InjectionToken<ProjectsService>("ProjectsService");
 
+const MAX_RECENT_PROJECTS = 5;
+
 export class ProjectsService {
 	private persistedId = persisted<string | undefined>(undefined, "lastProject");
+	readonly recentProjectIds = persisted<string[]>([], "recentlyOpenedProjects");
 
 	constructor(
 		private backendApi: BackendApi,
@@ -70,6 +73,7 @@ export class ProjectsService {
 		if (this.getLastOpenedProject() === projectId) {
 			this.unsetLastOpenedProject();
 		}
+		this.recentProjectIds.set(get(this.recentProjectIds).filter((id) => id !== projectId));
 		return response;
 	}
 
@@ -202,6 +206,11 @@ export class ProjectsService {
 
 	setLastOpenedProject(projectId: string) {
 		this.persistedId.set(projectId);
+		const recentIds = get(this.recentProjectIds);
+		// Keep the order stable for projects already in the recents list.
+		if (!recentIds.includes(projectId)) {
+			this.recentProjectIds.set([projectId, ...recentIds].slice(0, MAX_RECENT_PROJECTS));
+		}
 	}
 
 	unsetLastOpenedProject() {

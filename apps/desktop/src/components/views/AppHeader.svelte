@@ -72,12 +72,36 @@
 
 	const projects = $derived(projectsService.projects());
 
-	const mappedProjects = $derived(
-		projects.response?.map((project) => ({
-			value: project.id,
-			label: project.title,
-		})) || [],
-	);
+	const recentProjectIds = projectsService.recentProjectIds;
+
+	// Below this number of projects a flat list is easier to scan than groups.
+	const MIN_PROJECTS_FOR_GROUPING = 8;
+
+	const mappedProjects = $derived.by(() => {
+		const allProjects = projects.response ?? [];
+		const recentIds = $recentProjectIds;
+
+		const recent = recentIds
+			.map((id) => allProjects.find((project) => project.id === id))
+			.filter((project) => project !== undefined);
+		const others = allProjects.filter((project) => !recentIds.includes(project.id));
+
+		// No point in grouping small lists or if one of the groups is empty.
+		if (
+			allProjects.length < MIN_PROJECTS_FOR_GROUPING ||
+			recent.length === 0 ||
+			others.length === 0
+		) {
+			return allProjects.map((project) => ({ value: project.id, label: project.title }));
+		}
+
+		return [
+			{ header: "Recent" },
+			...recent.map((project) => ({ value: project.id, label: project.title })),
+			{ header: "Other projects" },
+			...others.map((project) => ({ value: project.id, label: project.title })),
+		];
+	});
 
 	let newProjectLoading = $state(false);
 	let projectSelectorOpen = $state(false);

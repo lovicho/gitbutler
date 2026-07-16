@@ -1,21 +1,17 @@
 use std::{
     collections::{HashMap, HashSet},
     path::Path,
-    str::FromStr,
 };
 
 use anyhow::{Context as _, Result, anyhow, bail};
-use but_core::Reference;
 pub(crate) use but_core::ref_metadata::StackId;
 use but_ctx::Context;
 use but_error::bail_precondition;
 use but_meta::virtual_branches_legacy_types;
 use but_rebase::ReferenceSpec;
 use gitbutler_reference::{Refname, RemoteRefname, VirtualRefname, normalize_branch_name};
-use gitbutler_repo::first_parent_commit_ids_until;
 use gix::validate::reference::name_partial;
 use itertools::Itertools;
-use serde::{Deserialize, Serialize};
 
 #[expect(
     deprecated,
@@ -23,15 +19,11 @@ use serde::{Deserialize, Serialize};
 )]
 use crate::{
     StackBranch, VirtualBranchesHandle,
-    heads::{add_head, get_head, remove_head},
     stack_branch::remote_reference,
     target::{default_target_base_oid, default_target_push_remote_name},
 };
 
-// this is the struct for the virtual branch data that is stored in our data
-// store. it is more or less equivalent to a git branch reference, but it is not
-// stored or accessible from the git repository itself. it is stored in our
-// session storage under the branches/ directory.
+/// Legacy stack state persisted in virtual-branches metadata.
 #[derive(Debug, PartialEq, Clone)]
 pub struct Stack {
     pub id: StackId,
@@ -46,8 +38,7 @@ pub struct Stack {
     /// This is the new metric for determining whether the branch is in the workspace, which means it's applied
     /// and its effects are available to the user.
     pub in_workspace: bool,
-    /// Represents the Stack state of pseudo-references ("heads").
-    /// Do **NOT** edit this directly, instead use the `Stack` trait in gitbutler_stack.
+    /// Patch references ordered from oldest to newest.
     pub heads: Vec<StackBranch>,
 }
 
@@ -115,23 +106,6 @@ impl From<Stack> for virtual_branches_legacy_types::Stack {
     }
 }
 
-/// A (series) Stack represents multiple "branches" that are dependent on each other in series.
-///
-/// An initialized Stack must:
-/// - have at least one head (branch)
-/// - include only references that are part of the stack
-/// - always have its commits under a reference i.e. no orphaned commits
-///
-/// This operates via a list of PatchReferences (heads) that are an attribute of gitbutler_branch::Branch.
-/// In this context a (virtual) "Branch" is a stack of PatchReferences, each pointing to a commit (or change) within the stack.
-///
-/// This trait provides a defined interface for interacting with a Stack, the field `heads` on `Branch` should never be modified directly
-/// outside the trait implementation.
-///
-/// The heads must always be sorted in accordance with the order of the patches in the stack.
-/// The first patches are in the beginning of the list and the most recent patches are at the end of the list (top of the stack)
-/// Similarly, heads that point to earlier commits are first in the order, and the last head always points to the most recent patch.
-/// If there are multiple heads that point to the same patch, the `add` and `update` operations can specify the intended order.
 #[expect(
     deprecated,
     reason = "VirtualBranchesHandle should be replaced with ctx.workspace_* helpers"
@@ -146,19 +120,6 @@ impl Stack {
             .unwrap_or_default()
     }
 
-    pub fn new_with_just_heads(heads: Vec<StackBranch>, order: usize, in_workspace: bool) -> Self {
-        Stack {
-            id: StackId::generate(),
-            order,
-            in_workspace,
-            heads,
-
-            // Don't keep redundant information
-            source_refname: None,
-            upstream: None,
-        }
-    }
-
     pub fn refname(&self) -> anyhow::Result<VirtualRefname> {
         self.try_into()
     }
@@ -170,14 +131,6 @@ impl Stack {
         } else {
             default_target_base_oid(ctx)
         }
-    }
-
-    pub fn tree(&self, ctx: &Context) -> Result<gix::ObjectId> {
-        let repo = ctx.repo.get()?;
-        repo.find_commit(self.head_oid(ctx)?)?
-            .tree()
-            .map(|tree| tree.id)
-            .map_err(Into::into)
     }
 
     /// This is the name of the top-most branch, provided by the API for convenience
@@ -239,34 +192,6 @@ impl Stack {
         })
     }
 
-    /// Returns the commits between the stack head (including) and the merge base (not including) for the stack.
-    /// The commits are ordered from most recent to oldest.
-    ///
-    /// E.g. `[ 3, 2, 1 ]` where `3` is the branch head, and `1` is the oldest commit with the merge base as it's parent
-    ///
-    /// # Errors
-    /// - If a merge base cannot be found
-    /// - If logging between the head and merge base fails
-    pub fn commits(&self, ctx: &Context) -> Result<Vec<gix::ObjectId>> {
-        let repo = ctx.repo.get()?;
-        first_parent_commit_ids_until(&repo, self.head_oid(ctx)?, self.merge_base(ctx)?)
-    }
-
-    /// Returns the commits between the stack head (including) and the merge base (including) for the stack.
-    /// The commits are ordered from most recent to oldest.
-    ///
-    /// E.g. `[ 3, 2, 1 ]` where `3` is the branch head, and `1` is the oldest commit with the merge base as it's parent
-    ///
-    /// # Errors
-    /// - If a merge base cannot be found
-    /// - If logging between the head and merge base fails
-    fn commits_with_merge_base(&self, ctx: &Context) -> Result<Vec<gix::ObjectId>> {
-        let mut commits = self.commits(ctx)?;
-        let base_commit = self.merge_base(ctx)?;
-        commits.push(base_commit);
-        Ok(commits)
-    }
-
     /// Returns the merge base of the stack head and the project's target branch.
     /// The merge base is the common ancestor of the stack head and the project's target branch.
     ///
@@ -274,10 +199,6 @@ impl Stack {
     /// - If a target is not set for the project
     /// - If the head commit of the stack is not found
     pub fn merge_base(&self, ctx: &Context) -> Result<gix::ObjectId> {
-        self.merge_base_plumbing(ctx)
-    }
-
-    pub fn merge_base_plumbing(&self, ctx: &Context) -> Result<gix::ObjectId> {
         let target_base_oid = default_target_base_oid(ctx)?;
         let repo = ctx.repo.get()?;
         let merge_base = repo.merge_base(self.head_oid(ctx)?, target_base_oid)?;
@@ -289,15 +210,11 @@ impl Stack {
     /// # Errors
     /// - If the stack has not been initialized
     fn ensure_initialized(&self) -> Result<()> {
-        if !self.is_initialized() {
+        if self.heads.is_empty() {
             bail!("Stack has not been initialized")
         }
 
         Ok(())
-    }
-
-    pub fn is_initialized(&self) -> bool {
-        !self.heads.is_empty()
     }
 
     fn new_name(
@@ -331,7 +248,7 @@ impl Stack {
         Ok(reference)
     }
 
-    pub fn next_available_name(
+    fn next_available_name(
         repo: &gix::Repository,
         state: &VirtualBranchesHandle,
         push_remote_name: &str,
@@ -349,7 +266,6 @@ impl Stack {
         };
         while is_duplicate(&name)? {
             // keep incrementing the suffix until the name is unique
-            // let name = reference.name();
             let mut split = name.split('-');
             let left = split.clone().take(split.clone().count() - 1).join("-");
             name = split
@@ -361,142 +277,43 @@ impl Stack {
         Ok(name)
     }
 
-    /// Adds a new "Branch" to the Stack.
-    /// This is in fact just creating a new  GitButler patch reference (head) and associates it with the stack.
-    /// The name cannot be the same as existing git references or existing patch references.
-    /// The target must reference a commit (or change) that is part of the stack.
-    /// The branch name must be a valid reference name (i.e. can not contain spaces, special characters etc.)
-    ///
-    /// When creating heads, it is possible to have multiple heads that point to the same patch/commit.
-    /// If this is the case, the order can be disambiguated by specifying the `preceding_head`.
-    /// If there are multiple heads pointing to the same patch and `preceding_head` is not specified,
-    /// that means the new head will be first in order for that patch.
-    /// The argument `preceding_head` is only used if there are multiple heads that point to the same patch, otherwise it is ignored.
-    ///
-    /// This operation mutates the gitbutler::Branch.heads list and updates the state in `virtual_branches.toml`
-    pub fn add_series(
-        &mut self,
-        ctx: &Context,
-        new_head: StackBranch,
-        preceding_head_name: Option<String>,
-    ) -> Result<()> {
-        self.ensure_initialized()?;
-        let preceding_head = if let Some(preceding_head_name) = preceding_head_name {
-            let (_, preceding_head) = get_head(&self.heads, &preceding_head_name)
-                .context("The specified preceding_head could not be found")?;
-            Some(preceding_head)
-        } else {
-            None
-        };
-        let mut state = branch_state(ctx);
-        let patches = self.stack_patches(ctx, true)?;
-        validate_name(new_head.name(), &state)?;
-        let repo = ctx.repo.get()?;
-        validate_target(new_head.head_oid(&repo)?, &repo, self.head_oid(ctx)?, ctx)?;
-        let updated_heads = add_head(self.heads.clone(), new_head, preceding_head, patches, &repo)?;
-        self.heads = updated_heads;
-        state.set_stack(self.clone())
-    }
-
-    /// A convenience method just like `add_series`, but adds a new branch on top of the stack.
-    pub fn add_series_top_of_stack(&mut self, ctx: &Context, name: String) -> Result<()> {
-        self.ensure_initialized()?;
-        let current_top_head = self.heads.last().ok_or(anyhow!(
-            "Stack is in an invalid state - heads list is empty"
-        ))?;
-        let repo = ctx.repo.get()?;
-        let new_head = StackBranch::new(current_top_head.head_oid(&repo)?, name, &repo)?;
-        self.add_series(ctx, new_head, Some(current_top_head.name().clone()))
-    }
-
-    /// Removes a branch from the Stack.
-    /// The very last branch (reference) cannot be removed (A Stack must always contain at least one reference)
-    /// If there were commits/changes that were *only* referenced by the removed branch,
-    /// those commits are moved to the branch underneath it (or more accurately, the preceding it)
-    ///
-    /// This operation mutates the gitbutler::Branch.heads list and updates the state in `virtual_branches.toml`
-    pub fn remove_branch(&mut self, ctx: &Context, branch_name: &str) -> Result<()> {
-        self.ensure_initialized()?;
-        (self.heads, _) = remove_head(self.heads.clone(), branch_name, &*ctx.repo.get()?)?;
-        let mut state = branch_state(ctx);
-        state.set_stack(self.clone())
-    }
-
-    /// Updates an existing branch in the stack.
-    /// The same invariants as `add_branch` apply.
-    /// If the branch name is updated, the pr_number will be reset to None.
-    ///
-    /// This operation mutates the gitbutler::Branch.heads list and updates the state in `virtual_branches.toml`
-    pub fn update_branch(
+    /// Renames an existing branch in the stack and its local Git reference.
+    /// A rename resets the pull-request number and persists the updated stack.
+    pub fn rename_branch(
         &mut self,
         ctx: &Context,
         branch_name: String,
-        update: &PatchReferenceUpdate,
+        new_name: String,
     ) -> Result<()> {
         self.ensure_initialized()?;
-        if update == &PatchReferenceUpdate::default() {
-            return Ok(()); // noop
+
+        let mut updated_heads = self.heads.clone();
+        let head = updated_heads
+            .iter_mut()
+            .find(|head| *head.name() == branch_name)
+            .ok_or_else(|| {
+                anyhow!(
+                    "Series {} does not exist on stack {}",
+                    branch_name,
+                    self.name()
+                )
+            })?;
+        if new_name == branch_name {
+            return Ok(());
         }
 
         let mut state = branch_state(ctx);
-        let mut updated_heads = self.heads.clone();
-
-        // Handle name updates
-        if let Some(name) = update.name.clone()
-            && name != branch_name
-        {
-            let head = updated_heads
-                .iter_mut()
-                .find(|h: &&mut StackBranch| *h.name() == branch_name);
-            if let Some(head) = head {
-                validate_name(&name, &state)?;
-                head.set_name(name, &*ctx.repo.get()?)?;
-                head.pr_number = None; // reset pr_number
-            }
-        }
+        validate_name(&new_name, &state)?;
+        head.set_name(new_name, &*ctx.repo.get()?)?;
+        head.pr_number = None;
         self.heads = updated_heads;
         state.set_stack(self.clone())
     }
 
-    /// This will go over the stack heads and will ensure that the heads are consistent with the respective git reference.
-    /// If a head is not the same as the reference, it will be updated to match the git reference.
-    /// This operation should not really be needed since references are always updated.
-    /// However, this function exists to be called before an oplog snapshot of the virtual_branches.toml is taken because
-    /// upon snapshot restore, git references will be updated to match the stack heads from the toml file
-    /// TODO: is there a performance implication of this?
-    pub fn sync_heads_with_references(
-        &mut self,
-        state: &mut VirtualBranchesHandle,
-        gix_repo: &gix::Repository,
-    ) -> Result<()> {
-        if self
-            .heads
-            .iter_mut()
-            .any(|head| head.sync_with_reference(gix_repo).unwrap_or(false))
-        {
-            state.set_stack(self.clone())?;
-        }
-        Ok(())
-    }
-
-    /// Updates the most recent series of the stack to point to a new patch (commit or change ID).
-    /// This will set the
-    /// - `head` of the stack to the new commit
-    /// - the target of the most recent series to the new commit
-    /// - the timestamp of the stack to the current time
-    /// - the tree of the stack to the new tree (if provided)
+    /// Updates the top branch and its local Git reference to `commit_id`, then persists the stack.
     pub fn set_stack_head(
         &mut self,
         state: &mut VirtualBranchesHandle,
-        gix_repo: &gix::Repository,
-        commit_id: gix::ObjectId,
-    ) -> Result<()> {
-        self.set_stack_head_inner(Some(state), gix_repo, commit_id)
-    }
-
-    fn set_stack_head_inner(
-        &mut self,
-        state: Option<&mut VirtualBranchesHandle>,
         gix_repo: &gix::Repository,
         commit_id: gix::ObjectId,
     ) -> Result<()> {
@@ -510,83 +327,7 @@ impl Stack {
             .ok_or_else(|| anyhow!("Invalid state: no heads found"))?;
 
         head.set_head(commit.id, gix_repo)?;
-        if let Some(state) = state {
-            state.set_stack(self.clone())?;
-        }
-        Ok(())
-    }
-
-    /// Removes any heads that are referring to commits that are no longer between the stack head and the merge base
-    pub fn archive_integrated_heads(
-        &mut self,
-        ctx: &Context,
-        repo: &gix::Repository,
-        for_archival: &[Reference],
-        delete_local_refs: bool,
-    ) -> Result<Vec<String>> {
-        self.ensure_initialized()?;
-
-        let mut deleted_branches = vec![];
-
-        let mut state = branch_state(ctx);
-        for head in self.heads.iter_mut() {
-            let full_name = head.full_name()?;
-            if for_archival.iter().any(|reference| match reference {
-                Reference::Git(r) => r == &full_name,
-                Reference::Virtual(r) => r == head.name(),
-            }) {
-                head.archived = true;
-
-                if delete_local_refs {
-                    match head.delete_reference(repo) {
-                        Ok(_) => {
-                            deleted_branches.push(head.name().clone());
-                        }
-                        Err(_) => {
-                            // Ignore errors when deleting references
-                        }
-                    }
-                }
-            }
-        }
-
-        if self.heads.iter().all(|branch| branch.archived) {
-            // Remove previous PR information so it looks like we started a new stack
-            for head in self.heads.iter_mut() {
-                head.pr_number = None;
-            }
-
-            let push_remote_name = default_target_push_remote_name(ctx)?;
-            let new_name = Stack::new_name(
-                repo,
-                &state,
-                &push_remote_name,
-                self.upstream.clone(),
-                self.name(),
-                false,
-            )?;
-            let new_branch = Stack::create_stack_branch(repo, self.head_oid(ctx)?, new_name)?;
-            self.heads.push(new_branch);
-        }
-
-        state.set_stack(self.clone())?;
-
-        Ok(deleted_branches)
-    }
-
-    /// Prepares push details according to the series to be pushed (picking out the correct sha and remote refname)
-    /// This operation will error out if the target has no push remote configured.
-    pub fn push_details(&self, ctx: &Context, branch_name: String) -> Result<PushDetails> {
-        self.ensure_initialized()?;
-        let (_, reference) = get_head(&self.heads, &branch_name)?;
-        let oid = reference.head_oid(&*ctx.repo.get()?)?;
-        let remote_name = default_target_push_remote_name(ctx)?;
-        let upstream_refname =
-            RemoteRefname::from_str(&reference.remote_reference(remote_name.as_str()))?;
-        Ok(PushDetails {
-            head: oid,
-            remote_refname: upstream_refname,
-        })
+        state.set_stack(self.clone())
     }
 
     /// Returns the branch that precedes the given branch in the stack, if any.
@@ -670,54 +411,6 @@ impl Stack {
             ),
         }
     }
-
-    pub fn heads(&self, exclude_archived: bool) -> Vec<String> {
-        if !exclude_archived {
-            self.heads.iter().map(|h| h.name().clone()).collect()
-        } else {
-            self.heads
-                .iter()
-                .filter(|h| !h.archived)
-                .map(|h| h.name().clone())
-                .collect()
-        }
-    }
-
-    pub fn heads_by_commit(&self, commit_id: gix::ObjectId, repo: &gix::Repository) -> Vec<String> {
-        self.heads
-            .iter()
-            .filter(|h| !h.archived)
-            .filter(|h| h.head_oid(repo).ok() == Some(commit_id))
-            .map(|h| h.name().clone())
-            .collect_vec()
-    }
-
-    /// Returns the list of patches between the stack head and the merge base.
-    /// The most recent patch is at the top of the 'stack' (i.e. the last element in the vector)
-    fn stack_patches(&self, ctx: &Context, include_merge_base: bool) -> Result<Vec<gix::ObjectId>> {
-        let commits = if include_merge_base {
-            self.commits_with_merge_base(ctx)?
-        } else {
-            self.commits(ctx)?
-        };
-        let patches: Vec<gix::ObjectId> = commits.into_iter().rev().collect();
-        Ok(patches)
-    }
-}
-
-/// Request to update a PatchReference.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
-pub struct PatchReferenceUpdate {
-    pub name: Option<String>,
-}
-
-/// Push details to be supplied to the git context extension trait's `push` method.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct PushDetails {
-    /// The commit that is being pushed.
-    pub head: gix::ObjectId,
-    /// A remote refname to push to.
-    pub remote_refname: RemoteRefname,
 }
 
 impl TryFrom<&Stack> for VirtualRefname {
@@ -728,39 +421,6 @@ impl TryFrom<&Stack> for VirtualRefname {
             branch: normalize_branch_name(&value.name())?,
         })
     }
-}
-
-/// Validates that the commit in the reference target
-///  - exists
-///  - is between the stack (formerly vbranch) head (inclusive) and base (inclusive)
-///
-/// If the patch reference is a commit ID, it must be the case that the commit has no change ID associated with it.
-/// In other words, change IDs are enforced to be preferred over commit IDs when available.
-fn validate_target(
-    reference: gix::ObjectId,
-    repo: &gix::Repository,
-    stack_head: gix::ObjectId,
-    ctx: &Context,
-) -> Result<()> {
-    use gix::prelude::ObjectIdExt as _;
-
-    let target_base_oid = default_target_base_oid(ctx)?;
-    let merge_base = repo.merge_base(stack_head, target_base_oid)?.detach();
-    let mut stack_commits = stack_head
-        .attach(repo)
-        .ancestors()
-        .with_hidden(Some(merge_base))
-        .all()?
-        .filter_map(Result::ok)
-        .map(|info| info.id)
-        .collect_vec();
-    stack_commits.insert(0, merge_base);
-    if !stack_commits.contains(&reference) {
-        return Err(anyhow!(
-            "The commit {reference} is not between the stack head and the stack base"
-        ));
-    }
-    Ok(())
 }
 
 /// Validates the name of the stack head.
@@ -812,10 +472,6 @@ fn patch_reference_exists(state: &VirtualBranchesHandle, name: &str) -> Result<b
         .iter()
         .flat_map(|b| b.heads.iter())
         .any(|r| r.name() == name))
-}
-
-pub fn canned_branch_name(repo: &gix::Repository) -> Result<String> {
-    but_core::branch::canned_refname(repo).map(|rn| rn.shorten().to_string())
 }
 
 fn local_reference_exists(repo: &gix::Repository, name: &str) -> Result<bool> {

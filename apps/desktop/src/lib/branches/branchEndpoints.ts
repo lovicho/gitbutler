@@ -73,11 +73,6 @@ export function buildBranchEndpoints(build: BackendEndpointBuilder) {
 				invalidatesList(ReduxTag.StackDetails),
 			],
 		}),
-		pushBaseBranch: build.mutation<void, { projectId: string; withForce?: boolean }>({
-			extraOptions: { command: "push_base_branch" },
-			query: (args) => args,
-			invalidatesTags: [invalidatesType(ReduxTag.BaseBranchData)],
-		}),
 		remoteBranches: build.query<RemoteBranchInfo[], { projectId: string }>({
 			extraOptions: { command: "git_remote_branches" },
 			query: (args) => args,

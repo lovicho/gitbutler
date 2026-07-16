@@ -279,6 +279,38 @@
 	{/snippet}
 </Story>
 
+<Story name="With Headers">
+	{#snippet template(_args)}
+		<div class="wrap">
+			<Select
+				searchable
+				options={[
+					{ header: "Repos" },
+					{ value: "origin-head", label: "origin/HEAD" },
+					{ value: "add-extra-check", label: "add-extra-check" },
+					{ value: "origin-css-fixes", label: "origin/css-fixes" },
+					{ value: "lucky-backend-api", label: "lucky/backend-API" },
+					{ value: "sera-payment", label: "sera/payment-features" },
+					{ header: "Options" },
+					{ value: "add-new", label: "Add new project" },
+					{ value: "clone", label: "Clone a repository" },
+				]}
+				value={selectedWithSeparators}
+				onselect={(value: string) => {
+					selectedWithSeparators = value;
+				}}
+				placeholder="Placeholder"
+			>
+				{#snippet itemSnippet({ item, highlighted })}
+					<SelectItem selected={item.value === selectedWithSeparators} {highlighted}>
+						{item.label}
+					</SelectItem>
+				{/snippet}
+			</Select>
+		</div>
+	{/snippet}
+</Story>
+
 <Story name="Complex Separators">
 	{#snippet template(_args)}
 		<div class="wrap">

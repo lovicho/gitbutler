@@ -17,7 +17,6 @@ but-ctx = { workspace = true, features = ["legacy"] }
 
 gitbutler-project.workspace = true
 gitbutler-reference.workspace = true
-gitbutler-cherry-pick.workspace = true
 
 git2.workspace = true
 git2-hooks.workspace = true
@@ -28,7 +27,6 @@ tracing.workspace = true
 tempfile.workspace = true
 serde.workspace = true
 itertools.workspace = true
-toml.workspace = true
 base64 = "0.22.1"
 infer = "0.19.0"
 scopeguard = "1.2.0"
@@ -37,11 +35,8 @@ ignore = "0.4.25"
 
 [dev-dependencies]
 but-testsupport.workspace = true
-gitbutler-user.workspace = true
 but-settings.workspace = true
-serde_json = { workspace = true, features = ["arbitrary_precision"] }
 snapbox.workspace = true
-keyring.workspace = true
 
 [lints]
 workspace = true

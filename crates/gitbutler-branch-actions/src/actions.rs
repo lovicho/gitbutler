@@ -21,10 +21,6 @@ pub fn set_target_push_remote(ctx: &mut Context, push_remote: &str) -> Result<()
     base::set_target_push_remote(ctx, push_remote)
 }
 
-pub fn push_base_branch(ctx: &Context, with_force: bool) -> Result<()> {
-    base::push(ctx, with_force)
-}
-
 pub(crate) trait Verify {
     fn verify(&self, perm: &mut RepoExclusive) -> Result<()>;
 }

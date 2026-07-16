@@ -26,11 +26,10 @@ but-core = { workspace = true, features = ["legacy"] }
 but-graph = { workspace = true, features = ["legacy"] }
 but-oxidize.workspace = true
 but-ctx = { workspace = true, features = ["legacy"] }
+but-meta = { workspace = true, features = ["legacy"] }
 
 gitbutler-oplog.workspace = true
-gitbutler-git.workspace = true
 gitbutler-repo.workspace = true
-gitbutler-repo-actions.workspace = true
 gitbutler-branch.workspace = true
 gitbutler-reference.workspace = true
 gitbutler-commit.workspace = true
@@ -51,7 +50,6 @@ but-schemars = { workspace = true, optional = true }
 
 [dev-dependencies]
 but-askpass.workspace = true
-but-meta = { workspace = true, features = ["legacy"] }
 but-project-handle.workspace = true
 but-rebase.workspace = true
 but-settings.workspace = true

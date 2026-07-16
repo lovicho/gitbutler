@@ -538,5 +538,4 @@ This is a list of crates/modules that we want to eliminate or split into smaller
 - [gitbutler-reference](crates/gitbutler-reference/) (just bad)
 - [gitbutler-branch-actions](crates/gitbutler-branch-actions/) (contains functionality outside of the virtual branch domain (e.g. commit actions etc.))
 - [gitbutler-branch](crates/gitbutler-branch/) (contains `diff` and `branch` contexts due to a cyclic dependency)
-- [gitbutler-url](crates/gitbutler-url/) (this is a huge mess and ideally we need none of it)
 - [gitbutler_repo::config](crates/gitbutler-repo/src/config.rs) (seems like the wrong abstraction)

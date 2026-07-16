@@ -17,7 +17,6 @@
     clippy::too_many_lines
 )]
 
-pub mod broadcaster;
 #[cfg(feature = "irc")]
 pub mod irc;
 #[cfg(feature = "irc")]
@@ -28,7 +27,6 @@ pub mod menu;
 pub mod window;
 pub use window::state::{WindowState, event::ChangeForFrontend};
 
-pub mod action;
 pub mod askpass;
 pub mod debug;
 pub mod projects;

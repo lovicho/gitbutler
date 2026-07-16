@@ -10,14 +10,12 @@ use gix::refs::{
 
 use crate::{Stack, target::default_target_push_remote_name};
 
-/// A GitButler-specific reference type that points to a commit or a patch (change).
-/// The principal difference between a `PatchReference` and a regular git reference is that a `PatchReference` can point to a change (patch) that is mutable.
-///
-/// Because this is **NOT** a regular git reference, it will not be found in the `.git/refs`. It is instead managed by GitButler.
+/// Legacy metadata for a branch within a stack, paired with a local Git reference.
+/// The persisted `head` value remains as a fallback for restoring that reference.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StackBranch {
     /// The target of the reference - the commit ID that this branch points to.
-    /// This value is serialized and used when restoring from snapshots (via set_reference_to_head_value)
+    /// This value is serialized and used when restoring from snapshots.
     #[deprecated(note = "Use the git reference instead")]
     head: gix::ObjectId, // needs to stay private
     /// The name of the reference e.g. `master` or `feature/branch`. This should **NOT** include the `refs/heads/` prefix.
@@ -85,7 +83,7 @@ impl From<StackBranch> for virtual_branches_legacy_types::StackBranch {
     reason = "the legacy head value is still needed to restore and synchronize git references"
 )]
 impl StackBranch {
-    pub fn new(head: gix::ObjectId, name: String, repo: &gix::Repository) -> Result<Self> {
+    pub(crate) fn new(head: gix::ObjectId, name: String, repo: &gix::Repository) -> Result<Self> {
         let branch = StackBranch {
             head,
             name,
@@ -97,55 +95,21 @@ impl StackBranch {
         Ok(branch)
     }
 
-    pub fn new_with_zero_head(
-        name: String,
-        pr_number: Option<usize>,
-        review_id: Option<String>,
-        archived: bool,
-    ) -> Self {
-        StackBranch {
-            name,
-            pr_number,
-            archived,
-            review_id,
-            head: gix::hash::Kind::Sha1.null(),
-        }
-    }
-
-    pub fn full_name(&self) -> Result<gix::refs::FullName> {
-        qualified_reference_name(&self.name)
-            .try_into()
-            .map_err(Into::into)
-    }
-
     /// This will update the commit that real git reference points to, so it points to `target`,
     /// as well as the cached data in this instance.
-    /// Returns the full reference name like `refs/heads/name`.
-    pub fn set_head(
-        &mut self,
-        target: gix::ObjectId,
-        repo: &gix::Repository,
-    ) -> Result<Option<BString>> {
-        let refname = self.set_real_reference(repo, target)?;
+    pub(crate) fn set_head(&mut self, target: gix::ObjectId, repo: &gix::Repository) -> Result<()> {
+        self.set_real_reference(repo, target)?;
         self.head = target;
-        Ok(refname)
+        Ok(())
     }
 
     pub fn name(&self) -> &String {
         &self.name
     }
 
-    pub fn set_name(&mut self, name: String, repo: &gix::Repository) -> Result<()> {
+    pub(crate) fn set_name(&mut self, name: String, repo: &gix::Repository) -> Result<()> {
         self.rename_real_reference(&name, repo)?;
         self.name = name;
-        Ok(())
-    }
-
-    pub fn delete_reference(&self, repo: &gix::Repository) -> Result<()> {
-        let current_name: BString = qualified_reference_name(self.name()).into();
-        if let Some(reference) = repo.try_find_reference(&current_name)? {
-            but_core::branch::SafeDelete::new(repo)?.delete_reference(&reference)?;
-        }
         Ok(())
     }
 
@@ -209,18 +173,14 @@ impl StackBranch {
     /// Creates or updates a real git reference using the head information (target commit, name)
     /// NB: If the operation is an update of an existing reference, the operation will only succeed if the old reference matches the expected value.
     ///     Therefore this should be invoked before `self.head` has been updated.
-    fn set_real_reference(
-        &self,
-        repo: &gix::Repository,
-        new_head: gix::ObjectId,
-    ) -> Result<Option<BString>> {
-        let reference = repo.reference(
+    fn set_real_reference(&self, repo: &gix::Repository, new_head: gix::ObjectId) -> Result<()> {
+        repo.reference(
             qualified_reference_name(self.name()),
             new_head,
             PreviousValue::Any,
             "GitButler reference",
         )?;
-        Ok(Some(reference.name().as_bstr().to_owned()))
+        Ok(())
     }
 
     pub fn head_oid(&self, repo: &gix::Repository) -> Result<gix::ObjectId> {
@@ -233,36 +193,13 @@ impl StackBranch {
         }
     }
 
-    /// Updates the git reference to reflect what the current head property is (the head value from the persisted struct)
-    ///
-    /// This is basically the opposite of `sync_with_reference` and is something to do only after restoring from a snapshot.
-    /// Only works if the head is a commit id (as opposed to legacy change id value)
-    pub fn set_reference_to_head_value(&self, repo: &gix::Repository) -> Result<()> {
-        self.set_real_reference(repo, self.head)?;
-        Ok(())
-    }
-
-    /// Updates the value on the struct to reflect the current value of the reference.
-    /// Returns a boolean indicating whether the reference was updated.
-    /// This should not really be needed since the head is always updated, but this function exists as a stopgap measure to be performed before creating an oplog snapshot.
-    /// Snapshot restoring is the only place where we read the value from the persisted struct to update the reference so we want to be sure that the reference is in sync on snapshot creation.
-    pub fn sync_with_reference(&mut self, repo: &gix::Repository) -> Result<bool> {
-        let oid_from_ref = self.head_oid(repo)?;
-        if oid_from_ref != self.head {
-            self.head = oid_from_ref;
-            Ok(true)
-        } else {
-            Ok(false)
-        }
-    }
-
     /// Returns a fully qualified reference with the supplied remote e.g. `refs/remotes/origin/base-branch-improvements`
     pub fn remote_reference(&self, remote: &str) -> String {
         remote_reference(self.name(), remote)
     }
 
-    /// Returns `true` if the reference is pushed to the provided remote
-    pub fn pushed(&self, remote: &str, repo: &gix::Repository) -> bool {
+    /// Returns `true` if the reference is pushed to the provided remote.
+    fn pushed(&self, remote: &str, repo: &gix::Repository) -> bool {
         repo.find_reference(&self.remote_reference(remote)).is_ok()
     }
 
@@ -273,16 +210,13 @@ impl StackBranch {
         ctx: &Context,
         stack: &Stack,
     ) -> Result<BranchCommitIds> {
-        use gix::prelude::ObjectIdExt as _;
-
-        let merge_base = stack.merge_base_plumbing(ctx)?;
+        let merge_base = stack.merge_base(ctx)?;
         let head_commit = match repo.find_commit(self.head_oid(repo)?) {
             Ok(commit) => commit.id,
             Err(_) => {
                 return Ok(BranchCommitIds {
                     local_commits: vec![],
                     remote_commits: vec![],
-                    upstream_only: vec![],
                 });
             }
         };
@@ -309,7 +243,6 @@ impl StackBranch {
             .unwrap_or(push_remote_name);
 
         let mut remote_patches = vec![];
-        let mut upstream_only = vec![];
         if self.pushed(&remote, repo) {
             let upstream_head = repo
                 .find_reference(self.remote_reference(&remote).as_str())?
@@ -318,28 +251,11 @@ impl StackBranch {
 
             remote_patches = first_parent_commit_ids_until(repo, upstream_head, previous_head)?;
             remote_patches.reverse();
-
-            let mut hidden = vec![previous_head];
-            if let Some(pred) = stack.branch_predacessor(self)
-                && let Ok(mut head_ref) =
-                    repo.find_reference(pred.remote_reference(&remote).as_str())
-            {
-                hidden.push(head_ref.peel_to_commit()?.id);
-            }
-            upstream_only = upstream_head
-                .attach(repo)
-                .ancestors()
-                .with_hidden(hidden)
-                .all()?
-                .map(|info| Ok(info?.id))
-                .collect::<Result<Vec<_>>>()?;
-            upstream_only.reverse();
         }
 
         Ok(BranchCommitIds {
             local_commits: local_patches,
             remote_commits: remote_patches,
-            upstream_only,
         })
     }
 }
@@ -361,6 +277,4 @@ pub struct BranchCommitIds {
     pub local_commits: Vec<gix::ObjectId>,
     /// The remote commits that are part of this series.
     pub remote_commits: Vec<gix::ObjectId>,
-    /// List of commits that exist only on the upstream branch.
-    pub upstream_only: Vec<gix::ObjectId>,
 }

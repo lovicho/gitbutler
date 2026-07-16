@@ -257,13 +257,6 @@ pub fn set_base_branch_with_perm(
 
 #[but_api]
 #[instrument(err(Debug))]
-pub fn push_base_branch(ctx: &mut but_ctx::Context, with_force: bool) -> Result<()> {
-    gitbutler_branch_actions::push_base_branch(ctx, with_force)?;
-    Ok(())
-}
-
-#[but_api]
-#[instrument(err(Debug))]
 pub fn update_stack_order(
     ctx: &mut but_ctx::Context,
     stacks: Vec<BranchUpdateRequest>,

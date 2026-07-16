@@ -22,18 +22,16 @@ gitbutler-reference.workspace = true
 gix = { workspace = true, features = [] }
 itertools.workspace = true
 anyhow.workspace = true
-serde.workspace = true
-toml.workspace = true
 bstr.workspace = true
 
 [dev-dependencies]
-snapbox.workspace = true
 but-askpass.workspace = true
+but-db.workspace = true
 but-testsupport.workspace = true
+filetime = "0.2"
 gitbutler-git.workspace = true
 tempfile.workspace = true
-but-db.workspace = true
-filetime = "0.2"
+toml.workspace = true
 ctor = "0.6.3"
 
 [lints]

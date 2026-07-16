@@ -700,10 +700,6 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
             but_post(legacy::virtual_branches::switch_back_to_workspace_cmd),
         )
         .route(
-            "/push_base_branch",
-            but_post(legacy::virtual_branches::push_base_branch_cmd),
-        )
-        .route(
             "/update_stack_order",
             but_post(legacy::virtual_branches::update_stack_order_cmd),
         )

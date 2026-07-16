@@ -9,7 +9,6 @@ pub(crate) mod forge_reviews;
 pub(crate) mod gerrit_metadata;
 pub(crate) mod hunk_assignments;
 pub(crate) mod virtual_branches;
-pub(crate) mod workflows;
 
 /// Move migrations that relate to tables that don't have their module anymore here.
 pub(crate) const M_FULLY_REMOVED: &[M<'static>] = &[
@@ -81,5 +80,20 @@ DROP TABLE IF EXISTS worktrees;",
         SchemaVersion::Zero,
         "-- Drop workspace_rules table as the rules feature has been removed
 DROP TABLE IF EXISTS workspace_rules;",
+    ),
+    // Keep this inert table so older SchemaVersion::Zero binaries can still open the database.
+    M::up(
+        20250619192246,
+        SchemaVersion::Zero,
+        "CREATE TABLE `workflows`(
+	`id` TEXT NOT NULL PRIMARY KEY,
+	`created_at` TIMESTAMP NOT NULL,
+	`kind` TEXT NOT NULL,
+	`triggered_by` TEXT NOT NULL,
+	`status` TEXT NOT NULL,
+	`input_commits` TEXT NOT NULL,
+	`output_commits` TEXT NOT NULL,
+	`summary` TEXT
+);",
     ),
 ];

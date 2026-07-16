@@ -76,7 +76,6 @@ open.workspace = true
 opener = { version = "0.8.3", features = ["reveal"], optional = true }
 url = "2.5.4"
 but-path.workspace = true
-uuid.workspace = true
 tauri-plugin-deep-link = "2"
 document-features = { version = "0.2", optional = true }
 

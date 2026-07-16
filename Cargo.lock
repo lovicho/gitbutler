@@ -917,7 +917,6 @@ dependencies = [
  "gitbutler-oplog",
  "gitbutler-reference",
  "gix",
- "itertools",
  "rmcp",
  "schemars 1.2.1",
  "serde",
@@ -3877,13 +3876,11 @@ dependencies = [
  "git2",
  "gitbutler-branch",
  "gitbutler-commit",
- "gitbutler-git",
  "gitbutler-operating-modes",
  "gitbutler-oplog",
  "gitbutler-project",
  "gitbutler-reference",
  "gitbutler-repo",
- "gitbutler-repo-actions",
  "gitbutler-stack",
  "gitbutler-workspace",
  "gix",
@@ -4102,33 +4099,17 @@ dependencies = [
  "fuzzy-matcher",
  "git2",
  "git2-hooks",
- "gitbutler-cherry-pick",
  "gitbutler-project",
  "gitbutler-reference",
- "gitbutler-user",
  "gix",
  "ignore",
  "infer",
  "itertools",
- "keyring",
  "scopeguard",
  "serde",
- "serde_json",
  "snapbox",
  "tempfile",
- "toml 0.9.12+spec-1.1.0",
  "tracing",
-]
-
-[[package]]
-name = "gitbutler-repo-actions"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "but-ctx",
- "gitbutler-repo",
- "gitbutler-stack",
- "gix",
 ]
 
 [[package]]
@@ -4152,8 +4133,6 @@ dependencies = [
  "gitbutler-repo",
  "gix",
  "itertools",
- "serde",
- "snapbox",
  "tempfile",
  "toml 0.9.12+spec-1.1.0",
 ]
@@ -4209,16 +4188,6 @@ dependencies = [
  "tracing-appender",
  "tracing-forest",
  "tracing-subscriber",
- "url",
- "uuid",
-]
-
-[[package]]
-name = "gitbutler-url"
-version = "0.0.0"
-dependencies = [
- "bstr",
- "thiserror 2.0.18",
  "url",
 ]
 

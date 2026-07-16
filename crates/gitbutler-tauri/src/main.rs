@@ -11,8 +11,6 @@
     clippy::too_many_lines
 )]
 
-use std::sync::Arc;
-
 use anyhow::{Context, bail};
 use but_api::{
     bitbucket, branch, commit, diff, github, gitlab, land, legacy, open, platform, resolve,
@@ -24,13 +22,11 @@ use but_settings::AppSettingsWithDiskSync;
 #[cfg(feature = "irc")]
 use gitbutler_tauri::irc;
 use gitbutler_tauri::{
-    WindowState, action, askpass, broadcaster::Broadcaster, csp::csp_with_extras, env, logs, menu,
-    projects, settings, zip,
+    WindowState, askpass, csp::csp_with_extras, env, logs, menu, projects, settings, zip,
 };
 use tauri::{Emitter, Manager, generate_context};
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_log::{Target, TargetKind};
-use tokio::sync::Mutex;
 
 #[cfg(feature = "irc")]
 /// Return a copy of `irc` with `connection.enabled` forced to `false` when
@@ -219,24 +215,6 @@ fn main() -> anyhow::Result<()> {
                     }
                 })?;
 
-                let broadcaster = Arc::new(Mutex::new(Broadcaster::new()));
-
-                let (send, mut recv) = tokio::sync::mpsc::unbounded_channel();
-                let broadcaster2 = broadcaster.clone();
-                tokio::spawn(async move {
-                    broadcaster2
-                        .lock()
-                        .await
-                        .register_sender(&uuid::Uuid::new_v4(), send)
-                });
-
-                let window2 = window.clone();
-                std::thread::spawn(move || {
-                    while let Some(message) = recv.blocking_recv() {
-                        window2.emit(&message.name, message.payload).unwrap();
-                    }
-                });
-
                 let archival = but_feedback::Archival {
                     cache_dir: app_cache_dir.clone(),
                     logs_dir: app_log_dir.clone(),
@@ -357,7 +335,6 @@ fn main() -> anyhow::Result<()> {
                 legacy::virtual_branches::tauri_get_base_branch_data::get_base_branch_data,
                 legacy::virtual_branches::tauri_set_base_branch::set_base_branch,
                 legacy::virtual_branches::tauri_switch_back_to_workspace::switch_back_to_workspace,
-                legacy::virtual_branches::tauri_push_base_branch::push_base_branch,
                 legacy::virtual_branches::tauri_update_stack_order::update_stack_order,
                 legacy::virtual_branches::tauri_unapply_stack::unapply_stack,
                 legacy::virtual_branches::tauri_list_branches::list_branches,
@@ -431,11 +408,7 @@ fn main() -> anyhow::Result<()> {
                 diff::tauri_assign_hunk::assign_hunk,
                 #[cfg(unix)]
                 legacy::workspace::tauri_show_graph_svg::show_graph_svg,
-                action::list_actions,
-                action::handle_changes,
-                action::list_workflows,
                 askpass::submit_prompt_response,
-                menu::menu_item_set_enabled,
                 projects::list_projects,
                 projects::server_capabilities,
                 projects::set_project_active,

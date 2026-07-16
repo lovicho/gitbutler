@@ -1,37 +1,13 @@
+#[cfg(target_os = "macos")]
 use anyhow::Context as _;
-use but_api::json::Error;
-use but_error::Code;
 #[cfg(target_os = "macos")]
 use tauri::menu::AboutMetadata;
 use tauri::{
-    AppHandle, Emitter, EventTarget, Manager, Runtime, WebviewWindow,
+    AppHandle, Emitter, EventTarget, Runtime, WebviewWindow,
     menu::{Menu, MenuEvent, MenuItemBuilder, PredefinedMenuItem, Submenu, SubmenuBuilder},
 };
-use tracing::instrument;
 
 static SHORTCUT_EVENT: &str = "menu://shortcut";
-
-#[tauri::command(async)]
-#[instrument(skip(handle), err(Debug))]
-pub fn menu_item_set_enabled(handle: AppHandle, id: &str, enabled: bool) -> Result<(), Error> {
-    let window = handle
-        .get_window("main")
-        .expect("main window always present");
-
-    let menu_item = window
-        .menu()
-        .context("menu not found")?
-        .get(id)
-        .with_context(|| but_error::Context::new(format!("menu item not found: {id}")))?;
-
-    menu_item
-        .as_menuitem()
-        .context(Code::Unknown)?
-        .set_enabled(enabled)
-        .context(Code::Unknown)?;
-
-    Ok(())
-}
 
 pub fn build<R: Runtime>(handle: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     #[cfg(not(feature = "disable-auto-updates"))]

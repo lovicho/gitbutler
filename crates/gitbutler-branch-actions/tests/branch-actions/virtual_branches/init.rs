@@ -1,8 +1,3 @@
-#![expect(
-    deprecated,
-    reason = "VirtualBranchesHandle should be replaced with ctx.workspace_* helpers"
-)]
-
 use but_core::git_config::{edit_config, remove_config_value, set_config_value};
 
 use super::*;
@@ -270,10 +265,11 @@ fn bootstrap_missing_target_preserves_existing_workspace_ref() -> anyhow::Result
     let mut reopened: Context =
         but_testsupport::isolated_app_data_dir(|| project_id.clone().try_into())?;
     assert!(
-        gitbutler_stack::VirtualBranchesHandle::new(reopened.project_data_dir())
-            .read_file()?
-            .default_target
-            .is_none()
+        but_meta::legacy_storage::read_synced_virtual_branches(
+            &reopened.project_data_dir().join("virtual_branches.toml")
+        )?
+        .default_target
+        .is_none()
     );
 
     let mut guard = reopened.exclusive_worktree_access();

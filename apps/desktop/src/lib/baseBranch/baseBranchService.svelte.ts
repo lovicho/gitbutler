@@ -94,10 +94,6 @@ export default class BaseBranchService {
 		return this.backendApi.endpoints.switchBackToWorkspace.useMutation();
 	}
 
-	get push() {
-		return this.backendApi.endpoints.pushBaseBranch.useMutation();
-	}
-
 	remoteBranches(projectId: string) {
 		return this.backendApi.endpoints.remoteBranches.useQuery({ projectId });
 	}

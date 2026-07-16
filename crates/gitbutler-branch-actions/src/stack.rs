@@ -7,7 +7,7 @@ use gitbutler_oplog::{
     entry::{OperationKind, SnapshotDetails},
 };
 use gitbutler_reference::normalize_branch_name;
-use gitbutler_stack::{PatchReferenceUpdate, Stack};
+use gitbutler_stack::Stack;
 use serde::{Deserialize, Serialize};
 
 use crate::{VirtualBranchesExt, actions::Verify};
@@ -65,13 +65,7 @@ pub fn update_branch_name_with_perm(
         .context("Requires an open workspace mode")?;
     let mut stack = ctx.virtual_branches().get_stack(stack_id)?;
     let normalized_head_name = normalize_branch_name(&new_name)?;
-    stack.update_branch(
-        ctx,
-        branch_name,
-        &PatchReferenceUpdate {
-            name: Some(normalized_head_name.clone()),
-        },
-    )?;
+    stack.rename_branch(ctx, branch_name, normalized_head_name.clone())?;
     Ok(normalized_head_name)
 }
 

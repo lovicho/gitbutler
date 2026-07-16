@@ -4,9 +4,9 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-mod event;
+mod reword;
 use anyhow::Result;
-use but_action::{ActionHandler, Outcome, Source, reword::CommitEvent};
+use but_action::{ActionHandler, Outcome, Source, reword::RewordInput};
 use but_ctx::Context;
 use but_settings::AppSettings;
 use gitbutler_project::Project;
@@ -42,7 +42,7 @@ pub(crate) async fn start(app_settings: AppSettings) -> Result<()> {
 pub struct Mcp {
     metrics: BackgroundMetrics,
     client_info: Arc<Mutex<Option<Implementation>>>,
-    event_handler: event::Handler,
+    reword_handler: reword::Handler,
     tool_router: ToolRouter<Self>,
 }
 
@@ -50,11 +50,11 @@ pub struct Mcp {
 impl Mcp {
     pub fn new(app_settings: AppSettings, client_info: Arc<Mutex<Option<Implementation>>>) -> Self {
         let metrics = BackgroundMetrics::new_in_background(&app_settings);
-        let event_handler = event::Handler::new_in_background();
+        let reword_handler = reword::Handler::new_in_background();
         Self {
             metrics,
             client_info,
-            event_handler,
+            reword_handler,
             tool_router: Self::tool_router(),
         }
     }
@@ -132,7 +132,7 @@ impl Mcp {
         let mut guard = ctx.exclusive_worktree_access();
         let perm = guard.write_permission();
 
-        let (id, outcome) = but_action::record_uncommitted_changes_with_perm(
+        let (_, outcome) = but_action::record_uncommitted_changes_with_perm(
             &mut ctx,
             &request.changes_summary,
             Some(request.full_prompt.clone()),
@@ -146,15 +146,12 @@ impl Mcp {
         for branch in &outcome.updated_branches {
             for commit in &branch.new_commits {
                 if let Ok(commit_id) = gix::ObjectId::from_str(commit) {
-                    let commit_event = CommitEvent {
+                    let input = RewordInput {
                         external_summary: request.changes_summary.clone(),
                         external_prompt: request.full_prompt.clone(),
-                        branch_name: branch.branch_name.clone(),
                         commit_id,
-                        ctx: ctx.to_sync(),
-                        trigger: id,
                     };
-                    self.event_handler.process_commit(commit_event);
+                    self.reword_handler.queue(ctx.to_sync(), input);
                 }
             }
         }

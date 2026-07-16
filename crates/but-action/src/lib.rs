@@ -8,7 +8,6 @@ use std::{
 use but_core::sync::RepoExclusive;
 use but_ctx::Context;
 use but_meta::virtual_branches_legacy_types::Target;
-use but_workspace::legacy::ui::StackEntry;
 use gitbutler_operating_modes::OperatingMode;
 use gitbutler_oplog::{
     OplogExt,
@@ -21,14 +20,11 @@ mod action;
 pub mod cli;
 pub mod commit_format;
 mod generate;
-pub mod rename_branch;
 pub mod reword;
 mod simple;
-mod workflow;
 pub use action::{ActionListing, Source, list_actions};
 use but_core::ref_metadata::StackId;
 use strum::EnumString;
-pub use workflow::{WorkflowList, list_workflows};
 
 /// React to detected worktree changes by creating commits on the appropriate workspace stacks.
 ///
@@ -180,18 +176,6 @@ fn default_target_setting_if_none(ctx: &Context) -> anyhow::Result<()> {
 
     ctx.set_default_target(target)?;
     Ok(())
-}
-
-#[expect(deprecated, reason = "calls but_workspace::legacy::stacks_v3")]
-fn stacks(ctx: &Context, repo: &gix::Repository) -> anyhow::Result<Vec<StackEntry>> {
-    let meta = ctx.legacy_meta()?;
-    but_workspace::legacy::stacks_v3(
-        repo,
-        &meta,
-        &ctx.project_meta()?,
-        but_workspace::legacy::StacksFilter::InWorkspace,
-        None,
-    )
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, EnumString, Default)]

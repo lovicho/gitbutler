@@ -17,9 +17,11 @@
 		value?: T;
 		selectable?: boolean;
 		separator?: boolean; // When true, this item acts as a separator
+		header?: string; // When set, this item acts as a labeled section header/separator
 		[key: string]: any; // Allow additional properties for icons, emojis, etc.
 	} & (
 		| { separator: true } // Separator items don't need label or value
+		| { header: string } // Header items don't need label or value
 		| { label: string; value: T } // Regular items require label and value
 	);
 
@@ -89,28 +91,31 @@
 		options.filter(
 			(item) =>
 				item.separator ||
+				item.header !== undefined ||
 				(item.label && item.label.toLowerCase().includes(searchValue.toLowerCase())),
 		),
 	);
 
-	// Group options by separators
+	// Group options by separators and headers
 	const groupedOptions = $derived.by(() => {
-		const groups: SelectItem<T>[][] = [];
-		let currentGroup: SelectItem<T>[] = [];
+		const groups: { header?: string; items: SelectItem<T>[] }[] = [];
+		let currentItems: SelectItem<T>[] = [];
+		let currentHeader: string | undefined;
 
 		for (const option of filteredOptions) {
-			if (option.separator) {
-				if (currentGroup.length > 0) {
-					groups.push(currentGroup);
-					currentGroup = [];
+			if (option.separator || option.header !== undefined) {
+				if (currentItems.length > 0) {
+					groups.push({ header: currentHeader, items: currentItems });
+					currentItems = [];
 				}
+				currentHeader = option.header;
 			} else {
-				currentGroup.push(option as SelectItem<T>);
+				currentItems.push(option as SelectItem<T>);
 			}
 		}
 
-		if (currentGroup.length > 0) {
-			groups.push(currentGroup);
+		if (currentItems.length > 0) {
+			groups.push({ header: currentHeader, items: currentItems });
 		}
 
 		return groups;
@@ -118,7 +123,10 @@
 
 	// Flatten grouped options for navigation while preserving order
 	const selectableOptions = $derived.by(
-		() => filteredOptions.filter((item) => !item.separator) as SelectItem<T>[],
+		() =>
+			filteredOptions.filter(
+				(item) => !item.separator && item.header === undefined,
+			) as SelectItem<T>[],
 	);
 
 	// Auto-highlight first option when search results change, reset when search is cleared
@@ -207,7 +215,7 @@
 	}
 
 	function handleSelect(item: SelectItem<string>, event?: MouseEvent | KeyboardEvent) {
-		if (item.separator || !item.value) return;
+		if (item.separator || item.header !== undefined || !item.value) return;
 		const value = item.value as T;
 		const modifiers = event
 			? {
@@ -391,8 +399,8 @@
 						</OptionsGroup>
 					{:else}
 						{#each groupedOptions as group}
-							<OptionsGroup>
-								{#each group as item}
+							<OptionsGroup header={group.header}>
+								{#each group.items as item}
 									{@const selectableIdx = selectableOptions.findIndex(
 										(opt) => opt.value === item.value && item.value !== undefined,
 									)}

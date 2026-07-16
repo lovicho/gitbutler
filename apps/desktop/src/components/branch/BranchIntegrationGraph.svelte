@@ -1,6 +1,6 @@
 <script lang="ts">
 	import BranchHeaderIcon from "$components/branch/BranchHeaderIcon.svelte";
-	import { Avatar, ScrollableContainer } from "@gitbutler/ui";
+	import { Avatar, Badge, ScrollableContainer } from "@gitbutler/ui";
 	import { getTimeAgo } from "@gitbutler/ui/utils/timeAgo";
 	import type { BranchIconName } from "$lib/branches/branchIcon";
 	import type {
@@ -170,7 +170,7 @@
 							{/if}
 							{#if row.content.hasConflicts}
 								<span class="metadata-separator">•</span>
-								<span class="conflict">conflict</span>
+								<Badge style="danger" kind="soft">Conflict</Badge>
 							{/if}
 						</div>
 					</div>
@@ -451,12 +451,5 @@
 	.graph-author {
 		display: flex;
 		align-items: center;
-	}
-
-	.conflict {
-		padding: 1px 4px;
-		border-radius: 4px;
-		background-color: var(--bg-warn);
-		color: var(--fill-warn-bg);
 	}
 </style>
