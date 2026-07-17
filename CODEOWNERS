@@ -1,6 +1,5 @@
 /CODEOWNERS @krlvi @schacon
 /.github @krlvi @schacon @Byron @Caleb-T-Owens @estib-vega @mtsgrd @slarse
-/crates/but/skill @krlvi
 /crates/but-core @krlvi @Byron @Caleb-T-Owens @estib-vega @jonathantanmy2
 /crates/but-ctx @krlvi @Byron @Caleb-T-Owens @estib-vega @jonathantanmy2
 /crates/but-db @krlvi @Byron @Caleb-T-Owens @estib-vega @jonathantanmy2

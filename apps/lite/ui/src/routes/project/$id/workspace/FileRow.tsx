@@ -28,8 +28,8 @@ export const FileRow: FC<
 > = ({ item, projectId, fileParent, branchNameByCommitId, id, ...restProps }) => {
 	const relativePath = item._tag === "Change" ? item.change.path : item.path;
 
-	const outlineMode = useAppSelector((state) =>
-		projectSlice.selectors.selectOutlineModeState(state, projectId),
+	const isDefaultMode = useAppSelector(
+		(state) => projectSlice.selectors.selectOutlineModeState(state, projectId)._tag === "Default",
 	);
 	const menuItems = useFileMenuItems({
 		projectId,
@@ -71,7 +71,7 @@ export const FileRow: FC<
 						disableHoverablePopup
 					>
 						<RowCheckbox
-							disabled={hasCheckedCommits || outlineMode._tag !== "Default"}
+							disabled={hasCheckedCommits || !isDefaultMode}
 							aria-label={`Check file ${relativePath}`}
 							className={styles.checkbox}
 							nativeButton
@@ -95,7 +95,7 @@ export const FileRow: FC<
 					</RowLabel>
 				</RowLabelContainer>
 
-				{outlineMode._tag === "Default" && (
+				{isDefaultMode && (
 					<Toolbar.Root aria-label="File actions" render={<RowToolbar />}>
 						<Toolbar.Button
 							aria-label="File menu"
@@ -109,7 +109,7 @@ export const FileRow: FC<
 					</Toolbar.Root>
 				)}
 
-				{outlineMode._tag === "Default" &&
+				{isDefaultMode &&
 					item._tag === "Change" &&
 					fileParent._tag === "UncommittedChanges" &&
 					item.dependencyCommitIds.length > 0 && (

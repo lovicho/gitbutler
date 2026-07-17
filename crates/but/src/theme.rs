@@ -629,6 +629,81 @@ impl Display for Commit {
     }
 }
 
+/// A commit rendered the way `but status` identifies it: by its disambiguated
+/// short change ID, falling back to the short sha for commits without one.
+pub struct CommitRef<'a>(
+    pub &'a crate::IdMap,
+    pub &'a gix::Repository,
+    pub gix::ObjectId,
+);
+
+impl Display for CommitRef<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let CommitRef(id_map, repo, commit_id) = self;
+        let t = get();
+        match id_map.change_id_ref(*commit_id) {
+            Some(change_id) => {
+                // Like status: minimal unique prefix in the change-id style,
+                // the padding in the hint style.
+                let padded = change_id.padded_short_id();
+                let (id, hint) = padded.split_at(change_id.short_id.len());
+                write!(f, "{}{}", t.change_id.paint(id), t.hint.paint(hint))
+            }
+            None => write!(
+                f,
+                "{}",
+                t.cli_id
+                    .paint(crate::utils::shorten_object_id(repo, *commit_id))
+            ),
+        }
+    }
+}
+
+/// Render a [`CommitRef`] for a commit that a mutation just created, resolved
+/// against a freshly built [`crate::IdMap`] so the ID matches what the next
+/// `but status` displays (see [`crate::IdMap::change_id_ref`] for why a stale
+/// map must not be used). Renders "no commit was created" (`None`) as the
+/// empty string.
+///
+/// Building the map is not free — it diffs the worktree and persists the
+/// reconciled hunk assignments — so render each created commit only once.
+pub fn new_commit_ref_with_perm(
+    ctx: &but_ctx::Context,
+    perm: &but_core::sync::RepoShared,
+    commit_id: impl Into<Option<gix::ObjectId>>,
+) -> anyhow::Result<String> {
+    let Some(commit_id) = commit_id.into() else {
+        return Ok(String::new());
+    };
+    let repo = ctx.repo.get()?;
+    // The mutation has already succeeded when this renders its result, so a
+    // failure to build the map must not fail the command — an agent would
+    // retry a mutation that already happened. Degrade to the sha instead.
+    match crate::IdMap::new_from_context(ctx, None, perm) {
+        Ok(id_map) => Ok(CommitRef(&id_map, &repo, commit_id).to_string()),
+        Err(err) => {
+            tracing::warn!(?err, "could not build an IdMap to identify the new commit");
+            Ok(get()
+                .cli_id
+                .paint(crate::utils::shorten_object_id(&repo, commit_id))
+                .to_string())
+        }
+    }
+}
+
+/// Like [`new_commit_ref_with_perm`], for callers that hold no worktree lock.
+///
+/// When several operations run in sequence, an earlier operation's commit may
+/// be rewritten by a later one, so render each ref right after its operation
+/// completes rather than from one map built at the end.
+pub fn new_commit_ref(
+    ctx: &but_ctx::Context,
+    commit_id: impl Into<Option<gix::ObjectId>>,
+) -> anyhow::Result<String> {
+    let guard = ctx.shared_worktree_access();
+    new_commit_ref_with_perm(ctx, guard.read_permission(), commit_id)
+}
+
 pub struct Branch<T>(pub T);
 
 impl Display for Branch<FullName> {

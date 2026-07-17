@@ -26,8 +26,7 @@ use std::ffi::OsString;
 
 use anyhow::{Context as _, Result};
 use cfg_if::cfg_if;
-use clap::CommandFactory;
-use clap::Parser;
+use clap::{CommandFactory, FromArgMatches as _, Parser as _};
 
 pub mod args;
 use args::{
@@ -62,11 +61,11 @@ mod tui;
 const CLI_DATE: CustomFormat = gix::date::time::format::ISO8601;
 
 /// The format for help output printed before clap parses arguments, taken from a
-/// `--format` argument or the `BUT_OUTPUT_FORMAT` environment variable.
+/// `--format` argument, the `BUT_OUTPUT_FORMAT` environment variable, or agent detection.
 ///
 /// Help is always human-readable text; the format only decides whether terminal affordances
 /// like truncation apply, so formats other than human or agent fall back to human output.
-fn early_help_format(args: &[OsString]) -> OutputFormat {
+fn early_help_format(args: &[OsString], agent_detected: bool) -> OutputFormat {
     let parse = |value: &str| {
         <OutputFormat as clap::ValueEnum>::from_str(value, false)
             .ok()
@@ -93,7 +92,23 @@ fn early_help_format(args: &[OsString]) -> OutputFormat {
                 .ok()
                 .and_then(|value| parse(&value))
         })
-        .unwrap_or_default()
+        .unwrap_or(if agent_detected {
+            OutputFormat::Agent
+        } else {
+            OutputFormat::Human
+        })
+}
+
+fn parse_args(args: Vec<OsString>, agent_detected: bool) -> Args {
+    let mut command = Args::command();
+    if agent_detected {
+        command = command.mut_arg("format", |arg| arg.default_value("agent"));
+    }
+    let matches = command.get_matches_from(args);
+    let mut args = Args::from_arg_matches(&matches).unwrap_or_else(|err| err.exit());
+
+    args.status_after = agent_detected;
+    args
 }
 
 static APP_SETTINGS: std::sync::OnceLock<AppSettings> = std::sync::OnceLock::new();
@@ -151,12 +166,14 @@ pub async fn handle_args(args: impl Iterator<Item = OsString>) -> Result<()> {
         return Ok(());
     }
 
+    let agent_detected = utils::detect_agent::detect().is_some();
+
     // Check if help is requested and show grouped help instead of clap's default
     // Only intercept top-level help (but -h or but --help), not subcommand help
     let has_help_flag = args.iter().any(|arg| arg == "--help" || arg == "-h");
     let has_subcommand = args.len() > 2 && args[1] != "--help" && args[1] != "-h";
     if has_help_flag && !has_subcommand {
-        let mut out = OutputChannel::new(early_help_format(&args));
+        let mut out = OutputChannel::new(early_help_format(&args, agent_detected));
         command::help::print_grouped(&mut out)?;
         return Ok(());
     }
@@ -169,7 +186,7 @@ pub async fn handle_args(args: impl Iterator<Item = OsString>) -> Result<()> {
     if args_vec.iter().any(|arg| arg == "push")
         && args_vec.iter().any(|arg| arg == "--help" || arg == "-h")
     {
-        let mut out = OutputChannel::new(early_help_format(&args));
+        let mut out = OutputChannel::new(early_help_format(&args, agent_detected));
         command::push::help::print(&mut out)?;
         return Ok(());
     }
@@ -180,13 +197,12 @@ pub async fn handle_args(args: impl Iterator<Item = OsString>) -> Result<()> {
         && args_vec[1] == "help"
         && matches!(args_vec[2].as_str(), "--help" | "-h")
     {
-        let mut out = OutputChannel::new(early_help_format(&args));
+        let mut out = OutputChannel::new(early_help_format(&args, agent_detected));
         command::help::print_grouped(&mut out)?;
         return Ok(());
     }
 
-    let mut args: Args = Args::parse_from(args);
-    args.status_after = utils::detect_agent::detect().is_some();
+    let mut args = parse_args(args, agent_detected);
     let _tracing_appender_worker_guard = if args.trace > 0 {
         trace::init(args.trace, args.log_file.as_deref())?
     } else {
@@ -2004,3 +2020,50 @@ pub mod trace;
 mod utils;
 #[doc(hidden)]
 pub use utils::detect_agent::ENVIRONMENT_VARIABLES as AGENT_ENVIRONMENT_VARIABLES;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn os_args(args: &[&str]) -> Vec<OsString> {
+        args.iter().map(|arg| OsString::from(*arg)).collect()
+    }
+
+    #[test]
+    fn detected_agent_defaults_to_agent_output() {
+        let format = temp_env::with_var(envs::BUT_OUTPUT_FORMAT, None::<&str>, || {
+            parse_args(os_args(&["but", "status"]), true).format.format
+        });
+
+        assert!(matches!(format, OutputFormat::Agent));
+    }
+
+    #[test]
+    fn detected_agent_preserves_environment_output_format() {
+        let format = temp_env::with_var(envs::BUT_OUTPUT_FORMAT, Some("json"), || {
+            parse_args(os_args(&["but", "status"]), true).format.format
+        });
+
+        assert!(matches!(format, OutputFormat::Json));
+    }
+
+    #[test]
+    fn detected_agent_preserves_command_line_output_format() {
+        let format = temp_env::with_var(envs::BUT_OUTPUT_FORMAT, Some("shell"), || {
+            parse_args(os_args(&["but", "--format", "json", "status"]), true)
+                .format
+                .format
+        });
+
+        assert!(matches!(format, OutputFormat::Json));
+    }
+
+    #[test]
+    fn detected_agent_defaults_early_help_to_agent_output() {
+        let format = temp_env::with_var(envs::BUT_OUTPUT_FORMAT, None::<&str>, || {
+            early_help_format(&os_args(&["but", "--help"]), true)
+        });
+
+        assert!(matches!(format, OutputFormat::Agent));
+    }
+}

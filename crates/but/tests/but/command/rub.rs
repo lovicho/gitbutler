@@ -512,11 +512,13 @@ fn uncommitted_hunk_to_commit() -> anyhow::Result<()> {
     commit_file_with_worktree_changes_as_two_hunks(&env, "A", "a.txt");
 
     let target_commit = branch_commit_ids(&status_json(&env)?, "A")[0].clone();
+    // The amended commit is identified by its change ID, from a freshly built
+    // map that knows the post-amend workspace.
     env.but(format!("rub zz:a.txt:#0 {target_commit}"))
         .assert()
         .success()
         .stdout_eq(str![[r#"
-Amended [..] → [..]
+Amended [..] → 1
 
 "#]])
         .stderr_eq(str![""]);

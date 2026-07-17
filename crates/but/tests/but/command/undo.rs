@@ -242,7 +242,7 @@ fn can_undo_rewording_commit() {
             .args(["9ac4652", "-m", "reworded"])
             .assert()
             .success()
-            .stdout_eq("Updated commit message for [..] (now [..])\n")
+            .stdout_eq("Updated commit message for [..]\n")
             .stderr_eq("");
     });
 }

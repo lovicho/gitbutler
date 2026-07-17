@@ -44,7 +44,7 @@ fn uncommitted_file() -> anyhow::Result<()> {
         .stdout_eq(snapbox::str![[r#"
 Found 1 changed file to absorb:
 
-Absorbed to commit: f4ea7f8 a.txt
+Absorbed to commit: 1 a.txt
   (files locked to commit due to hunk range overlap)
     a.txt @1,4 +1,4
     a.txt @6,4 +6,4
@@ -127,7 +127,7 @@ n:e a.txt│
         .stdout_eq(snapbox::str![[r#"
 Found 1 changed file to absorb:
 
-Absorbed to commit: f4ea7f8 a.txt
+Absorbed to commit: 1 a.txt
   (files locked to commit due to hunk range overlap)
     a.txt @1,4 +1,4
 
@@ -338,11 +338,11 @@ Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "mes
         .stdout_eq(snapbox::str![[r#"
 Found 1 changed file to absorb:
 
-Absorbed to commit: 889385c partial change to a.txt 2
+Absorbed to commit: 1#1 partial change to a.txt 2
   (files locked to commit due to hunk range overlap)
     a.txt @1,4 +1,4
 
-Absorbed to commit: a7aa4ef partial change to a.txt 3
+Absorbed to commit: 1#0 partial change to a.txt 3
   (files locked to commit due to hunk range overlap)
     a.txt @6,4 +6,4
 
@@ -468,7 +468,7 @@ fn dry_run_shows_plan_without_changes() -> anyhow::Result<()> {
         .stdout_eq(snapbox::str![[r#"
 Found 1 changed file to absorb:
 
-Absorbed to commit: f4ea7f8 a.txt
+Absorbed to commit: 1 a.txt
   (files locked to commit due to hunk range overlap)
     a.txt @1,4 +1,4
     a.txt @6,4 +6,4

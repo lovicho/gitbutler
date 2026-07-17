@@ -7,10 +7,8 @@ use gix::ObjectId;
 use nonempty::NonEmpty;
 
 use crate::{
-    theme::{self, Paint},
-    utils::{
-        OutputChannel, diff_specs::DiffSpecBuilder, rejection, shorten_object_id, split_short_id,
-    },
+    theme,
+    utils::{OutputChannel, diff_specs::DiffSpecBuilder, rejection},
 };
 
 pub(crate) fn uncommitted_to_commit_with_perm(
@@ -35,15 +33,7 @@ pub(crate) fn uncommitted_to_commit_with_perm(
     let (new_commit, rejected) = amend_diff_specs(ctx, diff_specs, oid, perm)?;
     update_workspace_commit(ctx, false)?;
     if let Some(out) = out.for_human() {
-        let repo = ctx.repo.get()?;
-        let new_commit = new_commit
-            .map(|c| {
-                let short = shorten_object_id(&repo, c);
-                let (lead, rest) = split_short_id(&short, 2);
-                let t = theme::get();
-                format!("{}{}", t.cli_id.paint(lead), t.cli_id.paint(rest))
-            })
-            .unwrap_or_default();
+        let new_commit = theme::new_commit_ref_with_perm(ctx, perm.read_permission(), new_commit)?;
         writeln!(out, "Amended {description} → {new_commit}")?;
         rejection::write_rejection_report(out, &rejected, target_branch.as_deref())?;
     } else if let Some(out) = out.for_json() {

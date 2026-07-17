@@ -14,12 +14,3 @@ pub fn shorten_hex_object_id(repo: &gix::Repository, hex: &str) -> String {
         .map(|oid| shorten_object_id(repo, oid))
         .unwrap_or_else(|_| hex.to_owned())
 }
-
-/// Split a `short_id` into a leading prefix and remaining suffix for styled output.
-pub fn split_short_id(short_id: &str, prefix_len: usize) -> (&str, &str) {
-    if short_id.len() <= prefix_len {
-        (short_id, "")
-    } else {
-        short_id.split_at(prefix_len)
-    }
-}

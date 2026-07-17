@@ -12,11 +12,7 @@ use gix::ObjectId;
 use crate::theme::{self, Paint};
 
 use super::undo::stack_id_by_commit_id;
-use crate::{
-    CliId, IdMap,
-    command::legacy::ai,
-    utils::{OutputChannel, shorten_object_id},
-};
+use crate::{CliId, IdMap, command::legacy::ai, utils::OutputChannel};
 
 /// Handler for `but squash` command with support for:
 /// 1. Multiple commits: `but squash <commit1> <commit2> <commit3>` - squashes 1 and 2 into 3
@@ -86,6 +82,7 @@ pub(crate) fn handle(
             }
             return handle_multi_commit_squash(
                 ctx,
+                &id_map,
                 out,
                 sources,
                 drop_message,
@@ -102,6 +99,7 @@ pub(crate) fn handle(
             }
             return handle_multi_commit_squash(
                 ctx,
+                &id_map,
                 out,
                 sources,
                 drop_message,
@@ -133,6 +131,7 @@ pub(crate) fn handle(
 
     handle_multi_commit_squash(
         ctx,
+        &id_map,
         out,
         sources,
         drop_message,
@@ -143,8 +142,10 @@ pub(crate) fn handle(
 }
 
 /// Helper function to handle squashing multiple commits
+#[expect(clippy::too_many_arguments)]
 fn handle_multi_commit_squash(
     ctx: &mut Context,
+    id_map: &IdMap,
     out: &mut OutputChannel,
     sources: Vec<CliId>,
     drop_message: bool,
@@ -179,6 +180,7 @@ fn handle_multi_commit_squash(
     // Delegate to the shared squashing logic
     squash_commits_internal(
         ctx,
+        id_map,
         commit_oids,
         target_oid,
         drop_message,
@@ -193,6 +195,7 @@ fn handle_multi_commit_squash(
 #[expect(clippy::too_many_arguments)]
 fn squash_commits_internal(
     ctx: &mut Context,
+    id_map: &IdMap,
     source_oids: Vec<ObjectId>,
     target_oid: ObjectId,
     drop_message: bool,
@@ -323,30 +326,26 @@ fn squash_commits_internal(
     };
 
     // Output message based on context
-    let t = theme::get();
     if let Some(out) = out.for_human() {
         let repo = ctx.repo.get()?;
-        let final_short = shorten_object_id(&repo, final_commit_oid);
+        let new_commit =
+            theme::new_commit_ref_with_perm(ctx, perm.read_permission(), final_commit_oid)?;
         if source_oids_count == 1 {
             // Single commit squash (for backwards compatibility with `but rub`)
             writeln!(
                 out,
                 "Squashed {} → {}",
-                t.cli_id.paint(shorten_object_id(
+                theme::CommitRef(
+                    id_map,
                     &repo,
                     only_source_commit
                         .context("BUG: Source commits count is one, but first item is none")?
-                )),
-                t.cli_id.paint(&final_short)
+                ),
+                new_commit
             )?
         } else {
             // Multiple commits squash
-            writeln!(
-                out,
-                "Squashed {} commits → {}",
-                source_oids_count,
-                t.cli_id.paint(&final_short)
-            )?
+            writeln!(out, "Squashed {source_oids_count} commits → {new_commit}")?
         }
     } else if let Some(out) = out.for_json() {
         out.write_value(serde_json::json!({
@@ -410,6 +409,7 @@ fn squash_branch_commits(
     // Delegate to the shared squashing logic
     squash_commits_internal(
         ctx,
+        id_map,
         source_oids,
         target_oid,
         drop_message,

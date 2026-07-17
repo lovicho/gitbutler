@@ -100,11 +100,14 @@ const OperandC: FC<
 > = ({ projectId, operand, outline, render, ...props }) => {
 	const absorptionTargetCommitIds = assert(use(AbsorptionTargetCommitIdsContext));
 	const navigationIndex = assert(use(NavigationIndexContext));
-	const isSelected = useAppSelector((state) =>
-		projectSlice.selectors.selectIsSelectedOutline(state, projectId, navigationIndex, operand),
-	);
 
 	const activeOperation = useAppSelector((state) => {
+		const isSelected = projectSlice.selectors.selectIsSelectedOutline(
+			state,
+			projectId,
+			navigationIndex,
+			operand,
+		);
 		const outlineMode = projectSlice.selectors.selectOutlineModeState(state, projectId);
 
 		return Match.value(outlineMode).pipe(

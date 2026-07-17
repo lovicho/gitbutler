@@ -40,8 +40,8 @@ const useFilesTreeHotkeys = ({
 	fileParent: FileParent;
 	selection: string | null;
 }) => {
-	const outlineMode = useAppSelector((state) =>
-		projectSlice.selectors.selectOutlineModeState(state, projectId),
+	const isDefaultMode = useAppSelector(
+		(state) => projectSlice.selectors.selectOutlineModeState(state, projectId)._tag === "Default",
 	);
 	const { data: worktreeChanges } = useQuery(changesInWorktreeQueryOptions(projectId));
 	const { data: editors } = useQuery(listEditorsQueryOptions);
@@ -83,7 +83,7 @@ const useFilesTreeHotkeys = ({
 			callback: absorbSelectedFile,
 			options: {
 				conflictBehavior: "allow",
-				enabled: selectedChangesFile !== null && outlineMode._tag === "Default",
+				enabled: selectedChangesFile !== null && isDefaultMode,
 				target: ref,
 				meta: changesFileHotkeys.absorb.meta,
 			},

@@ -15,7 +15,7 @@ use itertools::Itertools;
 use crate::{
     CliId, IdMap,
     id::{UncommittedHunkOrFile, parser::parse_sources},
-    utils::{OutputChannel, shorten_object_id},
+    utils::OutputChannel,
 };
 /// Amends changes into the appropriate commits where they belong.
 ///
@@ -82,7 +82,7 @@ pub(crate) fn handle(
     // would overwrite the plan in the JSON buffer).
     let plan_json = {
         let repo = ctx.repo.get()?.clone().for_commit_shortening();
-        display_absorption_plan(&absorption_plan, &repo, out, dry_run)?
+        display_absorption_plan(&absorption_plan, &id_map, &repo, out, dry_run)?
     };
 
     if dry_run {
@@ -197,6 +197,7 @@ fn get_hunk_ranges(assignment: &HunkAssignment) -> Vec<String> {
 /// in a single JSON write — avoiding a double-write that would overwrite the buffer.
 fn display_absorption_plan(
     commit_absorptions: &[CommitAbsorption],
+    id_map: &IdMap,
     repo: &gix::Repository,
     out: &mut OutputChannel,
     write_json: bool,
@@ -269,14 +270,10 @@ fn display_absorption_plan(
         writeln!(out)?;
 
         for absorption in commit_absorptions {
-            let short_hash = shorten_object_id(repo, absorption.commit_id);
-            let verb = "Absorbed to commit";
-
             writeln!(
                 out,
-                "{}: {} {}",
-                verb,
-                t.commit_id.paint(&short_hash),
+                "Absorbed to commit: {} {}",
+                theme::CommitRef(id_map, repo, absorption.commit_id),
                 absorption.commit_summary
             )?;
             writeln!(out, "  ({})", t.hint.paint(absorption.reason.description()))?;

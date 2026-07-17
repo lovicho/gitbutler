@@ -23,7 +23,7 @@ fn reword_commit_with_message_flag() {
         .assert()
         .success()
         .stdout_eq(str![[r#"
-Updated commit message for [..] (now [..])
+Updated commit message for [..]
 
 "#]]);
 
@@ -36,6 +36,25 @@ Updated commit message for [..] (now [..])
 
 "#]]
     );
+}
+
+/// Commits with a change ID are identified by it, matching how `but status`
+/// displays them.
+#[test]
+fn reword_commit_with_change_id_shows_change_id() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    env.file("new.txt", "content\n");
+    env.but("commit A -m 'add new.txt'").assert().success();
+
+    env.but("reword 1 -m 'reworded'")
+        .assert()
+        .success()
+        .stdout_eq(str![[r#"
+Updated commit message for 1
+
+"#]]);
 }
 
 #[test]
@@ -58,7 +77,7 @@ fn reword_commit_with_multiline_message() -> anyhow::Result<()> {
         .assert()
         .success()
         .stdout_eq(str![[r#"
-Updated commit message for [..] (now [..])
+Updated commit message for [..]
 
 "#]]);
 

@@ -3,7 +3,6 @@ use bstr::{BString, ByteSlice};
 use but_api::diff::ComputeLineStats;
 use but_core::{DryRun, sync::RepoExclusive};
 use but_ctx::Context;
-use gix::prelude::ObjectIdExt;
 
 use super::{
     ShowDiffInEditor,
@@ -219,13 +218,12 @@ fn edit_commit_message_by_id_and_reword_commit(
         )?;
 
         if let Some(out) = out.for_human() {
-            let repo = ctx.repo.get()?;
-            writeln!(
-                out,
-                "Updated commit message for {} (now {})",
-                commit_oid.attach(&repo).shorten_or_id(),
-                new_commit_oid.new_commit.attach(&repo).shorten_or_id()
+            let new_commit = crate::theme::new_commit_ref_with_perm(
+                ctx,
+                perm.read_permission(),
+                new_commit_oid.new_commit,
             )?;
+            writeln!(out, "Updated commit message for {new_commit}")?;
         } else if let Some(out) = out.for_json() {
             out.write_value(serde_json::json!({
                 "new_commit_id": new_commit_oid.new_commit.to_string(),

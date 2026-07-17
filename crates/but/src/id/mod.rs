@@ -1199,6 +1199,29 @@ impl IdMap {
     pub fn stacks(&self) -> &Vec<StackWithId> {
         self.indexed_stacks.borrow_owner()
     }
+
+    /// The change ID behind the primary identifier `but status` displays for
+    /// `commit_id`, with its disambiguated short form. Returns `None` when the
+    /// sha is the identifier instead, i.e. for commits without a change ID or
+    /// commits this map does not contain.
+    ///
+    /// A commit is only found in a map built while it existed: use the map the
+    /// user's arguments were resolved against for commits they referenced, and
+    /// a freshly built map for commits a mutation just created. Do not
+    /// substitute a stale map for the latter: while plain change-ID prefixes
+    /// stay valid as the workspace changes (the parser matches them by
+    /// prefix), the `#N` collision suffixes are positional and only match
+    /// exactly, so an ID taken from the wrong map can silently identify a
+    /// different commit.
+    pub fn change_id_ref(&self, commit_id: gix::ObjectId) -> Option<&ChangeIdWithShortId> {
+        self.stacks()
+            .iter()
+            .flat_map(|stack| &stack.segments)
+            .flat_map(|segment| &segment.workspace_commits)
+            .find(|commit| commit.commit_id() == commit_id)?
+            .change_id
+            .as_ref()
+    }
 }
 
 fn cli_ids_refer_to_same_entity(lhs: &CliId, rhs: &CliId) -> bool {

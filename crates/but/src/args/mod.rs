@@ -58,7 +58,7 @@ pub struct Args {
 pub struct OutputFormatArg {
     /// Explicitly control how output should be formatted.
     ///
-    /// If unset and from a terminal, it defaults to human output, when redirected it's for shells.
+    /// If unset, detected agents use agent output and other invocations use human output.
     #[clap(
         long,
         env = crate::utils::envs::BUT_OUTPUT_FORMAT,

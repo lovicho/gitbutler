@@ -54,8 +54,8 @@ export const Outline: FC<
 	} & ComponentProps<"div">
 > = ({ absorptionTargetCommitIds, navigationIndex, project, projectId, ...restProps }) => {
 	const dispatch = useAppDispatch();
-	const outlineMode = useAppSelector((state) =>
-		projectSlice.selectors.selectOutlineModeState(state, projectId),
+	const isDefaultMode = useAppSelector(
+		(state) => projectSlice.selectors.selectOutlineModeState(state, projectId)._tag === "Default",
 	);
 
 	const selectBranch = (branch: BranchOperand) => {
@@ -125,15 +125,13 @@ export const Outline: FC<
 	// lacking this information:
 	// https://linear.app/gitbutler/issue/GB-1560/add-information-about-the-relation-to-the-upstream-to-the-head-info
 	const canUpdateWorkspace =
-		outlineMode._tag === "Default" &&
-		rebaseUpdates.length > 0 &&
-		!isWorkspaceIntegrateUpstreamPending;
+		isDefaultMode && rebaseUpdates.length > 0 && !isWorkspaceIntegrateUpstreamPending;
 
-	const canCreateIndependentBranch = outlineMode._tag === "Default" && !isBranchCreatePending;
+	const canCreateIndependentBranch = isDefaultMode && !isBranchCreatePending;
 
-	const canApplyBranch = outlineMode._tag === "Default";
+	const canApplyBranch = isDefaultMode;
 
-	const canOpenSettings = outlineMode._tag === "Default";
+	const canOpenSettings = isDefaultMode;
 
 	useHotkeys([
 		{

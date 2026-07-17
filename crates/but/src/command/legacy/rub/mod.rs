@@ -28,7 +28,7 @@ use crate::{
     CliError, CliId, IdMap, bad_input,
     command::legacy::rub::assign::stack_id_to_branch_name,
     id::parser::{IdResolutionError, parse_sources_with_disambiguation, prompt_for_disambiguation},
-    utils::{OutputChannel, diff_specs::DiffSpecBuilder, shorten_object_id, split_short_id},
+    utils::{OutputChannel, diff_specs::DiffSpecBuilder, shorten_object_id},
 };
 
 /// A description of a set of hunks.
@@ -285,18 +285,7 @@ impl<'a> UncommittedToCommitOperation<'a> {
     pub(crate) fn execute(self, ctx: &mut Context, out: &mut OutputChannel) -> anyhow::Result<()> {
         let result = self.execute_inner(ctx)?;
         if let Some(out) = out.for_human() {
-            let repo = ctx.repo.get()?;
-            let new_commit = result
-                .new_commit
-                .map(|c| {
-                    let short = shorten_object_id(&repo, c);
-                    let (lead, rest) = split_short_id(&short, 2);
-                    {
-                        let t = theme::get();
-                        format!("{}{}", t.cli_id.paint(lead), t.cli_id.paint(rest))
-                    }
-                })
-                .unwrap_or_default();
+            let new_commit = theme::new_commit_ref(ctx, result.new_commit)?;
             writeln!(out, "Amended {} → {new_commit}", self.description)?;
         } else if let Some(out) = out.for_json() {
             out.write_value(serde_json::json!({
@@ -462,18 +451,7 @@ impl StackToCommitOperation {
         let result = self.execute_inner(ctx)?;
         if let Some(out) = out.for_human() {
             let t = theme::get();
-            let repo = ctx.repo.get()?;
-            let new_commit = result
-                .new_commit
-                .map(|c| {
-                    let short = shorten_object_id(&repo, c);
-                    let (lead, rest) = split_short_id(&short, 2);
-                    {
-                        let t = theme::get();
-                        format!("{}{}", t.cli_id.paint(lead), t.cli_id.paint(rest))
-                    }
-                })
-                .unwrap_or_default();
+            let new_commit = theme::new_commit_ref(ctx, result.new_commit)?;
             writeln!(
                 out,
                 "Amended files assigned to {} → {}",
@@ -503,18 +481,7 @@ impl UncommittedAreaToCommitOperation {
     pub(crate) fn execute(self, ctx: &mut Context, out: &mut OutputChannel) -> anyhow::Result<()> {
         let result = self.execute_inner(ctx)?;
         if let Some(out) = out.for_human() {
-            let repo = ctx.repo.get()?;
-            let new_commit = result
-                .new_commit
-                .map(|c| {
-                    let short = shorten_object_id(&repo, c);
-                    let (lead, rest) = split_short_id(&short, 2);
-                    {
-                        let t = theme::get();
-                        format!("{}{}", t.cli_id.paint(lead), t.cli_id.paint(rest))
-                    }
-                })
-                .unwrap_or_default();
+            let new_commit = theme::new_commit_ref(ctx, result.new_commit)?;
             writeln!(out, "Amended uncommitted files → {new_commit}")?;
         } else if let Some(out) = out.for_json() {
             out.write_value(serde_json::json!({
@@ -585,17 +552,20 @@ impl UncommittedAreaToStackOperation {
 
 impl CommitToUncommittedAreaOperation {
     /// Executes this operation.
-    pub(crate) fn execute(self, ctx: &mut Context, out: &mut OutputChannel) -> anyhow::Result<()> {
+    pub(crate) fn execute(
+        self,
+        ctx: &mut Context,
+        id_map: &IdMap,
+        out: &mut OutputChannel,
+    ) -> anyhow::Result<()> {
         self.execute_inner(ctx)?;
         if let Some(out) = out.for_human() {
-            let t = theme::get();
             let repo = ctx.repo.get()?;
             if self.commits.len() == 1 {
                 writeln!(
                     out,
                     "Uncommitted {}",
-                    t.cli_id
-                        .paint(shorten_object_id(&repo, *self.commits.first()))
+                    theme::CommitRef(id_map, &repo, *self.commits.first())
                 )?;
             } else {
                 writeln!(out, "Uncommitted {} commits", self.commits.len())?;
@@ -619,7 +589,12 @@ impl CommitToUncommittedAreaOperation {
 
 impl CommitToStackOperation {
     /// Executes this operation.
-    pub(crate) fn execute(self, ctx: &mut Context, out: &mut OutputChannel) -> anyhow::Result<()> {
+    pub(crate) fn execute(
+        self,
+        ctx: &mut Context,
+        id_map: &IdMap,
+        out: &mut OutputChannel,
+    ) -> anyhow::Result<()> {
         self.execute_inner(ctx)?;
         if let Some(out) = out.for_human() {
             let t = theme::get();
@@ -627,7 +602,7 @@ impl CommitToStackOperation {
             writeln!(
                 out,
                 "Uncommitted {} to {}",
-                t.cli_id.paint(shorten_object_id(&repo, self.oid)),
+                theme::CommitRef(id_map, &repo, self.oid),
                 stack_id_to_branch_name(ctx, self.stack)
                     .map(|b| t.local_branch.paint(format!("[{b}]")))
                     .unwrap_or_else(|| t.important.paint("stack")),
@@ -651,32 +626,36 @@ impl CommitToStackOperation {
 
 impl SquashCommitsOperation {
     /// Executes this operation.
-    pub(crate) fn execute(self, ctx: &mut Context, out: &mut OutputChannel) -> anyhow::Result<()> {
+    pub(crate) fn execute(
+        self,
+        ctx: &mut Context,
+        id_map: &IdMap,
+        out: &mut OutputChannel,
+    ) -> anyhow::Result<()> {
         let result = self.execute_inner(ctx)?;
         if let Some(out) = out.for_human() {
-            let t = theme::get();
             let repo = ctx.repo.get()?;
+            let new_commit = theme::new_commit_ref(ctx, result.new_commit)?;
             if self.sources.len() == 1 {
                 writeln!(
                     out,
                     "Squashed {} → {}",
-                    t.cli_id
-                        .paint(shorten_object_id(&repo, *self.sources.first())),
-                    t.cli_id.paint(shorten_object_id(&repo, result.new_commit)),
+                    theme::CommitRef(id_map, &repo, *self.sources.first()),
+                    new_commit,
                 )?;
             } else {
                 writeln!(
                     out,
                     "Squashed {} commits → {}",
                     self.sources.len(),
-                    t.cli_id.paint(shorten_object_id(&repo, result.new_commit)),
+                    new_commit,
                 )?;
             }
         } else if let Some(out) = out.for_json() {
             out.write_value(serde_json::json!({
                 "ok": true,
                 "new_commit_id": result.new_commit.to_string(),
-                "squashed_count": 1,
+                "squashed_count": self.sources.len(),
             }))?;
         }
         Ok(())
@@ -696,7 +675,12 @@ impl SquashCommitsOperation {
 
 impl<'a> MoveCommitToBranchOperation<'a> {
     /// Executes this operation.
-    pub(crate) fn execute(self, ctx: &mut Context, out: &mut OutputChannel) -> anyhow::Result<()> {
+    pub(crate) fn execute(
+        self,
+        ctx: &mut Context,
+        id_map: &IdMap,
+        out: &mut OutputChannel,
+    ) -> anyhow::Result<()> {
         self.execute_inner(ctx)?;
         if let Some(out) = out.for_human() {
             let t = theme::get();
@@ -704,7 +688,7 @@ impl<'a> MoveCommitToBranchOperation<'a> {
             writeln!(
                 out,
                 "Moved {} → {}",
-                t.cli_id.paint(shorten_object_id(&repo, self.oid)),
+                theme::CommitRef(id_map, &repo, self.oid),
                 t.local_branch.paint(format!("[{}]", self.name))
             )?;
         } else if let Some(out) = out.for_json() {
@@ -783,18 +767,7 @@ impl<'a> BranchToCommitOperation<'a> {
         let result = self.execute_inner(ctx)?;
         if let Some(out) = out.for_human() {
             let t = theme::get();
-            let repo = ctx.repo.get()?;
-            let new_commit = result
-                .new_commit
-                .map(|c| {
-                    let short = shorten_object_id(&repo, c);
-                    let (lead, rest) = split_short_id(&short, 2);
-                    {
-                        let t = theme::get();
-                        format!("{}{}", t.cli_id.paint(lead), t.cli_id.paint(rest))
-                    }
-                })
-                .unwrap_or_default();
+            let new_commit = theme::new_commit_ref(ctx, result.new_commit)?;
             writeln!(
                 out,
                 "Amended assigned files {} → {}",
@@ -928,7 +901,12 @@ impl<'a> CommittedFileToUncommittedAreaOperation<'a> {
 
 impl<'a> RubOperation<'a> {
     /// Executes this operation, delegating to the wrapped operation payload.
-    pub(crate) fn execute(self, ctx: &mut Context, out: &mut OutputChannel) -> anyhow::Result<()> {
+    pub(crate) fn execute(
+        self,
+        ctx: &mut Context,
+        id_map: &IdMap,
+        out: &mut OutputChannel,
+    ) -> anyhow::Result<()> {
         match self {
             RubOperation::UnassignUncommitted(operation) => operation.execute(ctx, out),
             RubOperation::UncommittedToCommit(operation) => operation.execute(ctx, out),
@@ -940,10 +918,10 @@ impl<'a> RubOperation<'a> {
             RubOperation::UncommittedAreaToCommit(operation) => operation.execute(ctx, out),
             RubOperation::UncommittedAreaToBranch(operation) => operation.execute(ctx, out),
             RubOperation::UncommittedAreaToStack(operation) => operation.execute(ctx, out),
-            RubOperation::CommitToUncommittedArea(operation) => operation.execute(ctx, out),
-            RubOperation::CommitToStack(operation) => operation.execute(ctx, out),
-            RubOperation::SquashCommits(operation) => operation.execute(ctx, out),
-            RubOperation::MoveCommitToBranch(operation) => operation.execute(ctx, out),
+            RubOperation::CommitToUncommittedArea(operation) => operation.execute(ctx, id_map, out),
+            RubOperation::CommitToStack(operation) => operation.execute(ctx, id_map, out),
+            RubOperation::SquashCommits(operation) => operation.execute(ctx, id_map, out),
+            RubOperation::MoveCommitToBranch(operation) => operation.execute(ctx, id_map, out),
             RubOperation::BranchToUncommittedArea(operation) => operation.execute(ctx, out),
             RubOperation::BranchToStack(operation) => operation.execute(ctx, out),
             RubOperation::BranchToCommit(operation) => operation.execute(ctx, out),
@@ -1328,11 +1306,12 @@ pub(crate) fn handle(
 ) -> anyhow::Result<()> {
     let id_map = IdMap::legacy_new_from_context(ctx, None)?;
     let (sources, target) = ids(ctx, &id_map, source_str, target_str, out)?;
-    handle_resolved(ctx, out, sources, target, how_to_combine_messages)
+    handle_resolved(ctx, &id_map, out, sources, target, how_to_combine_messages)
 }
 
 fn handle_resolved(
     ctx: &mut Context,
+    id_map: &IdMap,
     out: &mut OutputChannel,
     sources: Vec<CliId>,
     target: CliId,
@@ -1345,7 +1324,7 @@ fn handle_resolved(
             bail!(makes_no_sense_error(&source, &target))
         };
 
-        operation.execute(ctx, out)?;
+        operation.execute(ctx, id_map, out)?;
     }
     Ok(())
 }
@@ -1519,7 +1498,7 @@ pub(crate) fn handle_uncommit(
                         writeln!(
                             out,
                             "Discarded {}",
-                            t.cli_id.paint(shorten_object_id(&repo, commit_id))
+                            theme::CommitRef(&id_map, &repo, commit_id)
                         )?;
                     }
                 }
@@ -1556,7 +1535,7 @@ pub(crate) fn handle_uncommit(
         .iter()
         .all(|source| matches!(source, CliId::CommittedFile { .. }))
     {
-        return uncommit_committed_files(ctx, out, &sources);
+        return uncommit_committed_files(ctx, &id_map, out, &sources);
     }
 
     // Call the main rub handler with "zz" as target
@@ -1579,6 +1558,7 @@ pub(crate) fn handle_uncommit(
 /// failing the whole operation.
 fn uncommit_committed_files(
     ctx: &mut Context,
+    id_map: &IdMap,
     out: &mut OutputChannel,
     sources: &[CliId],
 ) -> anyhow::Result<()> {
@@ -1633,7 +1613,10 @@ fn uncommit_committed_files(
             .map(|failure| {
                 format!(
                     "{}: {}",
-                    shorten_object_id(&repo, failure.commit_id),
+                    id_map
+                        .change_id_ref(failure.commit_id)
+                        .map(|change_id| change_id.padded_short_id())
+                        .unwrap_or_else(|| shorten_object_id(&repo, failure.commit_id)),
                     failure.error
                 )
             })
@@ -1646,13 +1629,12 @@ fn uncommit_committed_files(
     if !result.failures.is_empty()
         && let Some(out) = out.for_human()
     {
-        let t = theme::get();
         let repo = ctx.repo.get()?;
         for failure in &result.failures {
             writeln!(
                 out,
                 "Warning: could not uncommit changes from {}: {}",
-                t.cli_id.paint(shorten_object_id(&repo, failure.commit_id)),
+                theme::CommitRef(id_map, &repo, failure.commit_id),
                 failure.error
             )?;
         }
@@ -1869,6 +1851,7 @@ pub(crate) fn handle_stage(
 
     handle_resolved(
         ctx,
+        &id_map,
         out,
         files,
         branch,

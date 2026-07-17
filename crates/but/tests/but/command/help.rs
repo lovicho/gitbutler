@@ -66,8 +66,7 @@ Options:
       --format <FORMAT>
           Explicitly control how output should be formatted.
           
-          If unset and from a terminal, it defaults to human output, when redirected it's for
-          shells.
+          If unset, detected agents use agent output and other invocations use human output.
 
           Possible values:
           - human: The output to write is supposed to be for human consumption, and can be more
