@@ -674,15 +674,15 @@ pub(crate) fn commit(
     };
 
     if let Some(out) = out.for_human() {
-        let commit_short = match outcome.new_commit {
-            Some(id) => id.to_hex_with_len(7).to_string(),
-            None => "unknown".to_string(),
+        let commit_ref = match outcome.new_commit {
+            Some(id) => theme::new_commit_ref_with_perm(ctx, guard.read_permission(), id)?,
+            None => t.commit_id.paint("unknown").to_string(),
         };
         writeln!(
             out,
             "{} Created commit {} on branch {}",
             t.sym().success,
-            t.commit_id.paint(commit_short),
+            commit_ref,
             t.local_branch.paint(&target_branch.name),
         )?;
         rejection::write_rejection_report(out, &rejected, Some(target_branch.name.as_str()))?;

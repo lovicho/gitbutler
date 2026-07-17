@@ -1582,7 +1582,7 @@ q:3 file│
         .success()
         .stdout_eq(str![[r#"
 Created new independent branch 'a-branch-1'
-✓ Created commit d215849 on branch a-branch-1
+✓ Created commit 1 on branch a-branch-1
 
 "#]]);
 
@@ -1694,7 +1694,7 @@ fn committing_to_existing_branch_with_same_name_as_file() {
         .assert()
         .stderr_eq(snapbox::str![[""]])
         .stdout_eq(snapbox::str![[r#"
-✓ Created commit 500ca64 on branch A
+✓ Created commit 1 on branch A
 
 "#]])
         .success();
@@ -1713,7 +1713,7 @@ fn committing_to_new_branch_with_same_name_as_file() {
         .stderr_eq(snapbox::str![[""]])
         .stdout_eq(snapbox::str![[r#"
 Created new independent branch 'foo'
-✓ Created commit 5ee3c3d on branch foo
+✓ Created commit 1 on branch foo
 
 "#]])
         .success();

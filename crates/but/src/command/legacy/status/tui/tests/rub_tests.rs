@@ -68,7 +68,7 @@ fn rub_api_uncommitted_to_commit_preserves_global_file_list() {
         .assert_current_line_eq(str!["┊●   << amend >> 9477ae7 add A"]);
 
     tui.input(KeyCode::Enter)
-        .assert_current_line_eq(str!["┊●   8474410 add A"])
+        .assert_current_line_eq(str!["┊●   tpm add A"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/rub_api_uncommitted_to_commit_preserves_global_file_list_final.svg"
         ]);
@@ -141,7 +141,7 @@ fn mark_and_rub_multiple_uncommitted_files() {
         .assert_current_line_eq(str!["┊●   << amend >> 9477ae7 add A"]);
 
     tui.input(KeyCode::Enter)
-        .assert_current_line_eq(str!["┊●   91784b3 add A"]);
+        .assert_current_line_eq(str!["┊●   tpm add A"]);
 
     let status = tui.env().invoke_git("status --porcelain");
     assert_eq!(
@@ -326,7 +326,7 @@ fn rub_api_squash_commits_can_keep_target_message() {
         .assert_current_line_eq(str!["┊●   << squash (use this message) >> d3e2ba3 add B"]);
 
     tui.input(KeyCode::Enter)
-        .assert_current_line_eq(str!["┊●   4788772 add B"]);
+        .assert_current_line_eq(str!["┊●   lrm add B"]);
 }
 
 #[test]
@@ -351,7 +351,7 @@ fn rub_api_squash_commits_can_keep_source_message() {
         ]);
 
     tui.input(KeyCode::Enter)
-        .assert_current_line_eq(str!["┊●   75eb901 add A"]);
+        .assert_current_line_eq(str!["┊●   lrm add A"]);
 }
 
 // Tests RubOperation::CommittedFileToCommit.
@@ -432,7 +432,7 @@ fn rub_api_uncommitted_area_to_stack_operation() {
         .assert_current_line_eq(str!["┊●   << amend >> 9477ae7 add A"]);
 
     tui.input(KeyCode::Enter)
-        .assert_current_line_eq(str!["┊●   55d8e41 add A"]);
+        .assert_current_line_eq(str!["┊●   tpm add A"]);
 }
 
 // Tests RubOperation::UncommittedToStack.
@@ -459,7 +459,7 @@ fn rub_api_uncommitted_hunk_to_stack_operation() {
         .assert_current_line_eq(str!["┊●   << amend >> 9477ae7 add A"]);
 
     tui.input(KeyCode::Enter)
-        .assert_current_line_eq(str!["┊●   55d8e41 add A"]);
+        .assert_current_line_eq(str!["┊●   tpm add A"]);
 }
 
 // Tests RubOperation::StackToUncommittedArea.
@@ -485,7 +485,7 @@ fn rub_api_stack_to_uncommitted_operation() {
         .assert_current_line_eq(str!["┊●   << amend >> 9477ae7 add A"]);
 
     tui.input(KeyCode::Enter)
-        .assert_current_line_eq(str!["┊●   8474410 add A"]);
+        .assert_current_line_eq(str!["┊●   tpm add A"]);
 }
 
 // Tests RubOperation::StackToStack.
@@ -512,7 +512,7 @@ fn rub_api_stack_to_stack_operation() {
         .assert_current_line_eq(str!["┊●   << amend >> 9477ae7 add A"]);
 
     tui.input(KeyCode::Enter)
-        .assert_current_line_eq(str!["┊●   056a77b add A"]);
+        .assert_current_line_eq(str!["┊●   tpm add A"]);
 
     tui.input([
         KeyCode::Up,
@@ -535,7 +535,7 @@ fn rub_api_stack_to_stack_operation() {
         .assert_current_line_eq(str!["┊●   << amend >> d3e2ba3 add B"]);
 
     tui.input(KeyCode::Enter)
-        .assert_current_line_eq(str!["┊●   7f2e16d add B"]);
+        .assert_current_line_eq(str!["┊●   lrm add B"]);
 
     tui.input((KeyModifiers::SHIFT, 'K'))
         .assert_current_line_eq(str!["┊╭┄h0 [B]"]);

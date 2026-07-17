@@ -58,8 +58,9 @@ pub(crate) fn handle(
     }
 }
 
-/// Resolve a user-provided commit identifier (CLI ID or partial SHA) to an object id.
-fn parse_commit_id(ctx: &mut Context, commit_id_str: &str) -> Result<gix::ObjectId> {
+/// Resolve a user-provided commit identifier (CLI ID or partial SHA) to an
+/// object id, along with its display ref rendered from the same map.
+fn parse_commit_id(ctx: &mut Context, commit_id_str: &str) -> Result<(gix::ObjectId, String)> {
     // Create an IdMap to resolve commit IDs (supports both CLI IDs and partial SHAs)
     let id_map = IdMap::legacy_new_from_context(ctx, None)?;
 
@@ -80,7 +81,11 @@ fn parse_commit_id(ctx: &mut Context, commit_id_str: &str) -> Result<gix::Object
 
     // Extract the commit OID from the matched CliId
     match &matches[0] {
-        CliId::Commit { commit_id, .. } => Ok(*commit_id),
+        CliId::Commit { commit_id, .. } => {
+            let repo = ctx.repo.get()?;
+            let commit_ref = theme::CommitRef(&id_map, &repo, *commit_id).to_string();
+            Ok((*commit_id, commit_ref))
+        }
         _ => bail!("'{commit_id_str}' does not refer to a commit"),
     }
 }
@@ -89,7 +94,7 @@ fn enter_resolution(ctx: &mut Context, out: &mut OutputChannel, commit_id_str: &
     let t = theme::get();
     use gix::{prelude::ObjectIdExt as _, revision::walk::Sorting};
 
-    let commit_gix_oid = parse_commit_id(ctx, commit_id_str)?;
+    let (commit_gix_oid, commit_ref) = parse_commit_id(ctx, commit_id_str)?;
 
     // Get the commit and check if it's conflicted
     let repo = ctx.repo.get()?;
@@ -98,9 +103,8 @@ fn enter_resolution(ctx: &mut Context, out: &mut OutputChannel, commit_id_str: &
         .context("Failed to find commit")?;
 
     if !commit.is_conflicted() {
-        let commit_short = shorten_object_id(&repo, commit_gix_oid);
         bail!(
-            "Commit {commit_short} is not in a conflicted state. Only conflicted commits can be resolved."
+            "Commit {commit_ref} is not in a conflicted state. Only conflicted commits can be resolved."
         );
     }
 
@@ -130,10 +134,8 @@ fn enter_resolution(ctx: &mut Context, out: &mut OutputChannel, commit_id_str: &
         }
     }
 
-    let stack_id = found_stack_id.ok_or_else(|| {
-        let commit_short = shorten_object_id(&repo, commit_gix_oid);
-        anyhow::anyhow!("Could not find stack containing commit {commit_short}")
-    })?;
+    let stack_id = found_stack_id
+        .ok_or_else(|| anyhow::anyhow!("Could not find stack containing commit {commit_ref}"))?;
 
     drop(commit);
     drop(repo);
@@ -143,12 +145,11 @@ fn enter_resolution(ctx: &mut Context, out: &mut OutputChannel, commit_id_str: &
 
     // Show checkout message
     if let Some(out) = out.for_human() {
-        let repo = ctx.repo.get()?;
         writeln!(
             out,
             "{} {}",
             t.important.paint("Checking out conflicted commit"),
-            t.commit_id.paint(shorten_object_id(&repo, commit_gix_oid))
+            commit_ref
         )?;
     }
 
@@ -425,7 +426,7 @@ fn resolve_with_ai(
 
     let mut results = Vec::new();
     if let Some(commit_id_str) = commit_id_str {
-        let commit_oid = parse_commit_id(ctx, commit_id_str)?;
+        let (commit_oid, _commit_ref) = parse_commit_id(ctx, commit_id_str)?;
         results.push(resolve_one_with_ai(ctx, out, commit_oid)?);
     } else {
         // Resolving a commit rebases its descendants, which changes their ids
@@ -522,16 +523,14 @@ fn resolve_one_with_ai(
     commit_oid: gix::ObjectId,
 ) -> Result<but_api::resolve::AiResolutionResult> {
     let t = theme::get();
+    let commit_ref = theme::new_commit_ref(ctx, commit_oid)?;
     {
-        let repo = ctx.repo.get()?;
-        let short_id = shorten_object_id(&repo, commit_oid);
-        drop(repo);
         let mut progress = out.progress_channel();
         writeln!(
             progress,
             "{} {}{}",
             t.important.paint("Resolving conflicts in commit"),
-            t.commit_id.paint(short_id),
+            commit_ref,
             t.important.paint(" with AI…")
         )?;
     }
@@ -540,16 +539,13 @@ fn resolve_one_with_ai(
         but_api::resolve::resolve_commit_conflicts_ai(ctx, commit_oid, but_core::DryRun::No)?;
 
     if let Some(human_out) = out.for_human() {
-        let repo = ctx.repo.get()?;
         writeln!(
             human_out,
             "{} {} {} {}",
             t.success.paint("✓ Resolved"),
-            t.commit_id
-                .paint(shorten_object_id(&repo, result.commit_id)),
+            commit_ref,
             t.success.paint("→"),
-            t.commit_id
-                .paint(shorten_object_id(&repo, result.new_commit)),
+            theme::new_commit_ref(ctx, result.new_commit)?,
         )?;
         if let Some(summary) = &result.summary {
             writeln!(human_out)?;
@@ -675,6 +671,9 @@ fn find_conflicted_commits(ctx: &mut Context) -> Result<BTreeMap<String, Vec<Con
     use gix::{prelude::ObjectIdExt as _, revision::walk::Sorting};
 
     let stacks = crate::legacy::workspace::applied_stacks(ctx)?;
+    // Built lazily on the first conflicted commit — building it is not free.
+    // Best-effort: in edit mode the map may not build; fall back to shas then.
+    let mut id_map: Option<Option<IdMap>> = None;
     let repo = ctx.repo.get()?;
     let mut conflicts_by_branch: BTreeMap<String, Vec<ConflictedCommit>> = BTreeMap::new();
 
@@ -714,7 +713,12 @@ fn find_conflicted_commits(ctx: &mut Context) -> Result<BTreeMap<String, Vec<Con
 
                     let conflicted = ConflictedCommit {
                         commit_oid: oid,
-                        commit_short_id: shorten_object_id(&repo, oid),
+                        commit_short_id: id_map
+                            .get_or_insert_with(|| IdMap::legacy_new_from_context(ctx, None).ok())
+                            .as_ref()
+                            .and_then(|id_map| id_map.change_id_ref(oid))
+                            .map(|change_id| change_id.padded_short_id())
+                            .unwrap_or_else(|| shorten_object_id(&repo, oid)),
                         commit_message: message,
                     };
 

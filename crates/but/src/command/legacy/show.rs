@@ -17,6 +17,7 @@ pub(crate) fn show_commit(
     verbose: bool,
 ) -> Result<()> {
     let t = theme::get();
+    let id_map = IdMap::legacy_new_from_context(ctx, None)?;
 
     // First check if this is a branch by trying to find it in the branch list
     let branches = but_api::legacy::virtual_branches::list_branches(ctx, None)?;
@@ -27,7 +28,7 @@ pub(crate) fn show_commit(
 
     if let Some(branch) = branch_match {
         // This is a branch, display branch name and list of commits
-        return show_branch(ctx, out, &branch.name.to_string(), verbose);
+        return show_branch(ctx, out, &branch.name.to_string(), verbose, &id_map);
     }
 
     // Also check stacks to find branches within stacks
@@ -40,15 +41,12 @@ pub(crate) fn show_commit(
                 || head_name.to_lowercase() == commit_id_str.to_lowercase()
             {
                 // Found the branch in a stack
-                return show_branch(ctx, out, &head_name, verbose);
+                return show_branch(ctx, out, &head_name, verbose, &id_map);
             }
         }
     }
 
-    // Not a branch, proceed with commit logic
-    // Try to resolve the commit ID through the IdMap
-    let id_map = IdMap::legacy_new_from_context(ctx, None)?;
-
+    // Not a branch, resolve the commit ID through the IdMap
     let cli_ids = id_map.parse_using_context(commit_id_str, ctx)?;
 
     let commit_id = if cli_ids.is_empty() {
@@ -73,7 +71,7 @@ pub(crate) fn show_commit(
             CliId::Commit { commit_id, .. } => *commit_id,
             CliId::Branch { name, .. } => {
                 // This is a branch identified by CLI ID, show the branch
-                return show_branch(ctx, out, &name.to_string(), verbose);
+                return show_branch(ctx, out, &name.to_string(), verbose, &id_map);
             }
             _ => {
                 bail!(
@@ -237,13 +235,15 @@ fn show_branch(
     out: &mut OutputChannel,
     branch_name: &str,
     verbose: bool,
+    id_map: &IdMap,
 ) -> Result<()> {
     let t = theme::get();
 
     // In JSON mode, always include file info (verbose) so agents and tools
     // get complete data without needing to pass extra flags.
     let effective_verbose = verbose || out.is_json();
-    let (commits, base_commit_info) = get_branch_commits(ctx, branch_name, effective_verbose)?;
+    let (commits, base_commit_info) =
+        get_branch_commits(ctx, branch_name, effective_verbose, id_map)?;
 
     // Get the stack chain (branches this branch is stacked on)
     let stack_chain = get_stack_chain(ctx, branch_name)?;
@@ -270,7 +270,7 @@ fn show_branch(
                         out,
                         "{} {} {}",
                         t.info.paint("●"),
-                        t.commit_id.paint(&commit.short_sha),
+                        commit.display_ref(),
                         t.important.paint(&commit.message),
                     )?;
                     writeln!(
@@ -348,12 +348,7 @@ fn show_branch(
                     }
                 } else {
                     // Normal mode: compact display
-                    writeln!(
-                        out,
-                        "  {} {}",
-                        t.commit_id.paint(&commit.short_sha),
-                        commit.message
-                    )?;
+                    writeln!(out, "  {} {}", commit.display_ref(), commit.message)?;
                     writeln!(
                         out,
                         "    {} by {}",
@@ -372,7 +367,7 @@ fn show_branch(
                         out,
                         "{} {} {} {}",
                         t.border.paint("┴"),
-                        t.commit_id.paint(&base_commit.short_sha),
+                        base_commit.display_ref(),
                         t.hint.paint(&base_commit.message),
                         t.hint.paint("(base)")
                     )?;
@@ -435,6 +430,8 @@ fn show_branch(
 struct BranchCommitInfo {
     sha: String,
     short_sha: String,
+    /// The stable change-ID ref shown by `but status`, when the commit has one.
+    cli_id: Option<String>,
     message: String,
     full_message: Option<String>,
     author_name: String,
@@ -444,6 +441,14 @@ struct BranchCommitInfo {
     insertions: Option<usize>,
     deletions: Option<usize>,
     files: Option<Vec<FileChange>>,
+}
+
+impl BranchCommitInfo {
+    /// The commit ref for display: the stable change-ID ref when the commit
+    /// has one, its short sha otherwise.
+    fn display_ref(&self) -> String {
+        theme::commit_display_ref(self.cli_id.as_deref(), &self.short_sha)
+    }
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -478,6 +483,7 @@ fn get_branch_commits(
     ctx: &Context,
     branch_name: &str,
     verbose: bool,
+    id_map: &IdMap,
 ) -> Result<(Vec<BranchCommitInfo>, Option<BranchCommitInfo>)> {
     use gix::prelude::ObjectIdExt as _;
 
@@ -488,6 +494,11 @@ fn get_branch_commits(
 
     // Find merge base
     let guard = ctx.shared_worktree_access();
+    let cli_id_for = |oid: gix::ObjectId| {
+        id_map
+            .change_id_ref(oid)
+            .map(|change_id| change_id.padded_short_id())
+    };
     let Some(merge_base) = merge_base_with_target_branch(ctx, guard.read_permission(), branch_oid)?
     else {
         tracing::warn!(
@@ -537,6 +548,7 @@ fn get_branch_commits(
         commits.push(BranchCommitInfo {
             sha: info.id.to_string(),
             short_sha: shorten_object_id(&repo, info.id),
+            cli_id: cli_id_for(info.id),
             message,
             full_message,
             author_name: author.name.to_str_lossy().to_string(),
@@ -559,6 +571,7 @@ fn get_branch_commits(
         Some(BranchCommitInfo {
             sha: merge_base.to_string(),
             short_sha: shorten_object_id(&repo, merge_base),
+            cli_id: None,
             message: base_message,
             full_message: None,
             author_name: base_author.name.to_str_lossy().to_string(),

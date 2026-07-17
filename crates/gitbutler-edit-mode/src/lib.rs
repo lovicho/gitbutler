@@ -337,6 +337,7 @@ pub(crate) fn save_and_return_to_workspace(ctx: &Context, perm: &mut RepoExclusi
             },
             but_rebase::commit::DateMode::CommitterUpdateAuthorKeep,
             SignCommit::IfSignCommitsEnabled,
+            None,
         )?
     };
 

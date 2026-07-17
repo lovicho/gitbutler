@@ -2,7 +2,7 @@
 
 Real-world examples of common workflows.
 
-**Note on CLI IDs:** Examples below use illustrative IDs like `bu`, `c3`, `a1` to keep commands readable. In practice, **always read actual IDs from `but status -fv`** — they are generated per-session and will differ from these examples. Branch IDs are derived from unique substrings of the branch name (e.g., `fe` from `feature-x`), commit IDs use short hex prefixes (e.g., `5`, `8f`), and file/hunk/stack IDs are auto-generated (e.g., `r`, `r:c`, `h0`). All IDs are unique across entity types.
+**Note on CLI IDs:** Examples below use illustrative IDs like `bu`, `nn`, `a1` to keep commands readable. In practice, **always read actual IDs from `but status -fv`** — they are generated per-session and will differ from these examples. Branch IDs are derived from unique substrings of the branch name (e.g., `fe` from `feature-x`), commit IDs are short change-ID prefixes that stay stable across history edits (e.g., `kyn`; commits without a change ID fall back to a sha prefix), and file/hunk/stack IDs are auto-generated (e.g., `r`, `r:c`, `h0`). All IDs are unique across entity types.
 
 ## Example 1: Starting Independent Parallel Work
 
@@ -29,7 +29,7 @@ but commit <api-branch-id> -m "Add user details endpoint" --changes <api-file-id
 but commit <ui-branch-id> -m "Update button hover styles" --changes <ui-file-id>
 
 # Follow-up fix that belongs in a commit you just made? Amend it in.
-# Each mutation returns updated workspace state — take fresh IDs from it before the next command.
+# Each mutation returns updated workspace state — take any new IDs you need from it.
 # but amend <api-commit-id> --changes <api-fix-file-id>,<api-fix-hunk-id>
 
 # 6. Create pull requests (auto-pushes the branches)
@@ -81,8 +81,8 @@ but status -fv
 # Output shows:
 # Branch: feature-x (bu)
 # Commits:
-#   c3: Implement feature logic
-#   c2: Add feature tests
+#   nn: Implement feature logic
+#   mm: Add feature tests
 # Uncommitted:
 #   a1: fix-typo.js
 
@@ -92,8 +92,8 @@ but absorb a1 --dry-run    # Shows where a1 would be absorbed
 # 3. Absorb the specific file into appropriate commit
 but absorb a1    # Absorb just this file + get updated status
 
-# GitButler analyzes the change and amends it into c3
-# (because the typo is in code from c3)
+# GitButler analyzes the change and amends it into nn
+# (because the typo is in code from nn)
 ```
 
 **Targeted vs blanket absorb:**
@@ -113,21 +113,21 @@ but absorb       # Absorb ALL uncommitted changes (use with caution)
 **Situation:** Made 5 small WIP commits, want to combine into one logical commit.
 
 ```bash
-# Before:
-# c5: More tweaks
-# c4: Fix another thing
-# c3: Fix tests
-# c2: Adjust logic
-# c1: Initial implementation
+# Before (newest first):
+# rr: More tweaks
+# pp: Fix another thing
+# nn: Fix tests
+# mm: Adjust logic
+# kk: Initial implementation
 
 # Squash all commits in branch
 but squash bu
 
 # Or squash specific range
-but squash c2..c5    # Squashes c2, c3, c4, c5 into one
+but squash mm..rr    # Squashes mm, nn, pp, rr into one
 
 # Or squash specific commits
-but squash c2 c3 c4    # Squashes these three
+but squash mm nn pp    # Squashes these three
 ```
 
 ### Scenario B: Moving Files Between Commits
@@ -139,11 +139,11 @@ but squash c2 c3 c4    # Squashes these three
 but status -fv
 
 # Output shows:
-# c3: api.js, utils.js
-# c2: config.js
+# nn: api.js, utils.js
+# mm: config.js
 
-# 2. Move utils.js from c3 to c2
-but rub a2 c2    # File a2 (utils.js) → commit c2 + get updated status
+# 2. Move utils.js from nn to mm
+but rub a2 mm    # File a2 (utils.js) → commit mm + get updated status
 ```
 
 ### Scenario C: Moving Commit to Different Branch
@@ -156,14 +156,14 @@ but status -fv
 
 # Output:
 # Branch: feature-a (bu)
-#   c3: This should be in feature-b!
-#   c2: Correct commit
+#   nn: This should be in feature-b!
+#   mm: Correct commit
 
 # 2. Create or identify target branch
 but branch new feature-b    # Creates branch bv
 
 # 3. Move the commit
-but move c3 bv    # Move c3 to top of branch bv
+but move nn bv    # Move nn to top of branch bv
 ```
 
 ## Example 5: Stacking Existing Branches
@@ -202,20 +202,20 @@ but commit bv -m "Add dialog component" --changes <id> # To frontend
 but pull
 
 # Output:
-# Conflict in commit c3 on branch feature-x
+# Conflict in commit nn on branch feature-x
 
 # 2. Check status
 but status -fv
 
 # Output:
 # Branch: feature-x (bu)
-#   c3: Add validation (CONFLICTED)
+#   nn: Add validation (CONFLICTED)
 
 # 3. Enter resolution mode
-but resolve c3
+but resolve nn
 
 # Output:
-# Entering resolution mode for commit c3
+# Entering resolution mode for commit nn
 # Fix conflicts in: api/users.js, api/validation.js
 
 # 4. Read each conflicted file and edit to resolve
@@ -324,31 +324,32 @@ but resolve ...
 # 1. Current state
 but status -fv
 
-# Output:
+# Output (newest first):
 # Branch: feature-x (bu)
-#   c5: final commit
-#   c4: WIP
-#   c3: Fix stuff
-#   c2: Another fix
-#   c1: Initial
+#   rr: final commit
+#   pp: WIP
+#   nn: Fix stuff
+#   mm: Another fix
+#   kk: Initial
 
-# 2. Reword commit messages
-but reword c4 -m "Add validation logic"
-but reword c3 -m "Fix edge case in parser"
-but reword c2 -m "Update error messages"
+# 2. Reword commit messages — commit refs are change-ID based and stay
+#    valid across rewords and other history edits
+but reword pp -m "Add validation logic"
+but reword nn -m "Fix edge case in parser"
+but reword mm -m "Update error messages"
 
-# 3. Move c5 to be earlier
-but move c5 c3    # Move c5 before c3
+# 3. Move rr to be earlier
+but move rr nn    # Move rr before nn
 
 # 4. Squash similar commits
-but squash c2 c3    # Combine error handling commits
+but squash mm nn    # Combine error handling commits; target nn keeps its ref
 
-# Output:
+# Output (newest first):
 # Branch: feature-x (bu)
-#   c4: Add validation logic
-#   c3: final commit
-#   c2: Fix edge case in parser and update error messages
-#   c1: Initial
+#   pp: Add validation logic
+#   nn: Fix edge case in parser and update error messages
+#   rr: final commit
+#   kk: Initial
 
 # 5. Push clean history
 but push feature-x
@@ -419,7 +420,7 @@ but oplog
 # Output:
 # s5: squash branch bu
 # s4: commit bu "message"
-# s3: amend a1 into c2
+# s3: amend a1 into mm
 # s2: create branch bu
 # s1: pull from remote
 
@@ -472,8 +473,11 @@ but commit my-branch -m "Add parser" --changes qs:5,qs:2 \
 The commits stack in the order you write them, so `Add parser` ends up below (older
 than) `Add tests`. Only chain when each command references uncommitted IDs (plus the
 stable branch ID). If an ID stops resolving, re-read the diff and continue.
-Mutations that consume commit IDs — `amend`, `squash`, `move`, `uncommit` — rewrite
-those IDs, so run them one at a time and take fresh IDs from returned status.
+History edits — `amend`, `squash`, `move`, `uncommit`, `reword` — may also run in
+sequence off one status read when every commit ref involved is a change-ID ref;
+those stay stable across the edits. Run them one at a time when a ref is sha-based
+or `#N`-suffixed, or when the next command needs IDs the previous one prints, and
+take follow-up refs from the returned workspace state.
 
 
 ### Auto-completion

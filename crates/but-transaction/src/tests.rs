@@ -89,8 +89,8 @@ fn squashing_three_commits() {
     snapbox::assert_data_eq!(
         env.git_log(),
         snapbox::str![[r#"
-* ec6f55f (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-* a2fc6dc (branch) squashed
+* 12cb130 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* c0462e6 (branch) squashed
 * 6674d4f (origin/main, origin/HEAD, main, gitbutler/target) add random-file
 
 "#]]

@@ -96,7 +96,7 @@ fn multi_squash_marked_commits_into_selected_marked_target() {
         .assert_current_line_eq(str!["┊✔︎   << source >> << squash >> d3e2ba3 add B"]);
 
     tui.input(KeyCode::Enter)
-        .assert_current_line_eq(str!["┊●   377fa8b add B"])
+        .assert_current_line_eq(str!["┊●   lrm add B"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/multi_squash_marked_commits_into_selected_marked_target_final.svg"
         ]);

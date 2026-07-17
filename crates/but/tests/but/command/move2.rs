@@ -1016,7 +1016,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-Moved 1 changes from fe12bcd to new commit c019027 above commit 9ac4652
+Moved 1 changes from fe12bcd to new commit c15e460 above commit 9ac4652
 
 "#]]);
 
@@ -1031,7 +1031,7 @@ Moved 1 changes from fe12bcd to new commit c019027 above commit 9ac4652
 ┊│     1:l A first
 ┊●   ywx add second
 ┊│     ywx:w A second
-┊●   d8dfd0f add first (no changes)
+┊●   zll add first (no changes)
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -1124,7 +1124,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-Moved 1 changes from fe12bcd to new commit c019027 on new branch 'a-branch-1' above branch 'A'
+Moved 1 changes from fe12bcd to new commit c15e460 on new branch 'a-branch-1' above branch 'A'
 
 "#]]);
 
@@ -1141,7 +1141,7 @@ Moved 1 changes from fe12bcd to new commit c019027 on new branch 'a-branch-1' ab
 ┊├┄g0 [A]
 ┊●   ywx add second
 ┊│     ywx:w A second
-┊●   d8dfd0f add first (no changes)
+┊●   zll add first (no changes)
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -1196,11 +1196,11 @@ Moved 1 changes from d3e2ba3 to new commit be174de to the tip of branch 'A'
 ┊●   1 (no commit message)
 ┊│     1:p A B
 ┊●   9477ae7 add A
-┊│     9:t A A
+┊│     94:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
-┊●   5bbe27c add B (no changes)
+┊●   lrm add B (no changes)
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1254,7 +1254,7 @@ Moved 1 changes from 9ac4652 to new commit 8e35f84 on new branch 'new-branch'
 ├╯
 ┊
 ┊╭┄g0 [A]
-┊●   810e515 add second (no changes)
+┊●   ywx add second (no changes)
 ┊●   fe12bcd add first
 ┊│     f:l A first
 ├╯
@@ -1310,7 +1310,7 @@ Moved 1 changes from 9ac4652 to new commit 8e35f84 on new branch 'a-branch-1'
 ├╯
 ┊
 ┊╭┄g0 [A]
-┊●   810e515 add second (no changes)
+┊●   ywx add second (no changes)
 ┊●   fe12bcd add first
 ┊│     f:l A first
 ├╯

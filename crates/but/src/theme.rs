@@ -675,18 +675,53 @@ pub fn new_commit_ref_with_perm(
     let Some(commit_id) = commit_id.into() else {
         return Ok(String::new());
     };
+    let mut refs = new_commit_refs_with_perm(ctx, perm, &[commit_id])?;
+    Ok(refs.pop().expect("one ref per commit id"))
+}
+
+/// Paint a commit ref from precomputed parts: the stable change-ID ref when
+/// the commit has one, its short sha otherwise.
+pub fn commit_display_ref(cli_id: Option<&str>, short_sha: &str) -> String {
+    let t = get();
+    match cli_id {
+        Some(cli_id) => t.change_id.paint(cli_id).to_string(),
+        None => t.cli_id.paint(short_sha).to_string(),
+    }
+}
+
+/// Like [`new_commit_ref_with_perm`], for messages that mention several
+/// commits: all refs render from one freshly built [`crate::IdMap`].
+pub fn new_commit_refs_with_perm(
+    ctx: &but_ctx::Context,
+    perm: &but_core::sync::RepoShared,
+    commit_ids: &[gix::ObjectId],
+) -> anyhow::Result<Vec<String>> {
+    if commit_ids.is_empty() {
+        return Ok(Vec::new());
+    }
     let repo = ctx.repo.get()?;
     // The mutation has already succeeded when this renders its result, so a
     // failure to build the map must not fail the command — an agent would
     // retry a mutation that already happened. Degrade to the sha instead.
     match crate::IdMap::new_from_context(ctx, None, perm) {
-        Ok(id_map) => Ok(CommitRef(&id_map, &repo, commit_id).to_string()),
+        Ok(id_map) => Ok(commit_ids
+            .iter()
+            .map(|commit_id| CommitRef(&id_map, &repo, *commit_id).to_string())
+            .collect()),
         Err(err) => {
-            tracing::warn!(?err, "could not build an IdMap to identify the new commit");
-            Ok(get()
-                .cli_id
-                .paint(crate::utils::shorten_object_id(&repo, commit_id))
-                .to_string())
+            tracing::warn!(
+                ?err,
+                "could not build an IdMap to identify the resulting commits"
+            );
+            Ok(commit_ids
+                .iter()
+                .map(|commit_id| {
+                    get()
+                        .cli_id
+                        .paint(crate::utils::shorten_object_id(&repo, *commit_id))
+                        .to_string()
+                })
+                .collect())
         }
     }
 }

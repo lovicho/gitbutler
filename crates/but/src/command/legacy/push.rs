@@ -1157,11 +1157,25 @@ fn check_for_conflicted_commits(ctx: &Context, branch_name: &str) -> anyhow::Res
         if stack.id.is_some()
             && let Some(branch) = stack.branch(branch_name)
         {
-            let conflicted_commits: Vec<String> = branch
+            let conflicted: Vec<gix::ObjectId> = branch
                 .commits
                 .iter()
                 .filter(|c| c.has_conflicts)
-                .map(|c| shorten_object_id(&repo, c.id))
+                .map(|c| c.id)
+                .collect();
+            // Only pay for the map when the error actually prints.
+            let id_map = (!conflicted.is_empty())
+                .then(|| crate::IdMap::legacy_new_from_context(ctx, None).ok())
+                .flatten();
+            let conflicted_commits: Vec<String> = conflicted
+                .iter()
+                .map(|id| {
+                    id_map
+                        .as_ref()
+                        .and_then(|id_map| id_map.change_id_ref(*id))
+                        .map(|change_id| change_id.padded_short_id())
+                        .unwrap_or_else(|| shorten_object_id(&repo, *id))
+                })
                 .collect();
 
             if !conflicted_commits.is_empty() {

@@ -148,7 +148,7 @@ e0495e9
     snapbox::assert_data_eq!(
         visualize_commit_graph_all(&repo)?,
         snapbox::str![[r#"
-* 832a93c (HEAD -> three) commit three
+* 298ab48 (HEAD -> three) commit three
 * 16fd221 (origin/two, two) commit two
 * 8b426d0 (one) commit one
 
@@ -212,8 +212,8 @@ aac5238
     snapbox::assert_data_eq!(
         visualize_commit_graph_all(&repo)?,
         snapbox::str![[r#"
-* 300f366 (HEAD -> three) commit three
-* 0f198e0 (two) commit two
+* b5e5f88 (HEAD -> three) commit three
+* ebc7217 (two) commit two
 | * 16fd221 (origin/two) commit two
 |/  
 * 8b426d0 (one) commit one
@@ -290,9 +290,9 @@ fn uncommit_file_from_root_commit() -> Result<()> {
     snapbox::assert_data_eq!(
         visualize_commit_graph_all(&repo)?,
         snapbox::str![[r#"
-* 95fb0e5 (HEAD -> three) commit three
-* 910d5b1 (two) commit two
-* 7fcda42 (one) commit one
+* 5dbf8bd (HEAD -> three) commit three
+* 9d299c1 (two) commit two
+* c124928 (one) commit one
 * 16fd221 (origin/two) commit two
 * 8b426d0 commit one
 
@@ -368,7 +368,7 @@ fn uncommit_empty_changes_is_noop() -> Result<()> {
     snapbox::assert_data_eq!(
         visualize_commit_graph_all(&repo)?,
         snapbox::str![[r#"
-* fbb2bd1 (HEAD -> three) commit three
+* c389dc7 (HEAD -> three) commit three
 * 16fd221 (origin/two, two) commit two
 * 8b426d0 (one) commit one
 

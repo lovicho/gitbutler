@@ -162,7 +162,7 @@ fn discard_stack_confirm_yes_discards_staged_changes() {
         .assert_current_line_eq(str!["┊●   << amend >> 9477ae7 add A"]);
 
     tui.input(KeyCode::Enter)
-        .assert_current_line_eq(str!["┊●   8474410 add A"]);
+        .assert_current_line_eq(str!["┊●   tpm add A"]);
 
     tui.input([KeyCode::Up, KeyCode::Up])
         .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);

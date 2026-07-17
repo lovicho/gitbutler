@@ -21,7 +21,7 @@ fn undo_squash_commits() {
             .arg("fe")
             .assert()
             .success()
-            .stdout_eq("Squashed 9ac4652 → f66c907\n")
+            .stdout_eq("Squashed 9ac4652 → zll\n")
             .stderr_eq("");
     });
 }

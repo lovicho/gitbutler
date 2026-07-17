@@ -17,16 +17,16 @@
     <text x="66" y="60" style="fill:#00AA00;">A</text>
     <text x="74" y="60" style="fill:#CCCCCC;">]</text>
     <text x="10 18" y="78" style="fill:#FFFFFF;font-weight:bold;">┊●</text>
-    <text x="50" y="78" style="fill:#0000AA;font-weight:bold;">8</text>
-    <text x="58 66 74 82 90 98" y="78" style="fill:#FFFFFF;font-weight:bold;opacity:0.75;">474410</text>
-    <text x="114 122 130" y="78" style="fill:#FFFFFF;font-weight:bold;">add</text>
-    <text x="146" y="78" style="fill:#FFFFFF;font-weight:bold;">A</text>
+    <text x="50" y="78" style="fill:#AA00AA;font-weight:bold;">t</text>
+    <text x="58 66" y="78" style="fill:#FFFFFF;font-weight:bold;opacity:0.75;">pm</text>
+    <text x="82 90 98" y="78" style="fill:#FFFFFF;font-weight:bold;">add</text>
+    <text x="114" y="78" style="fill:#FFFFFF;font-weight:bold;">A</text>
     <text x="10 18" y="96" style="fill:#CCCCCC;">┊│</text>
-    <text x="66 74 82" y="96" style="fill:#0000AA;font-weight:bold;">8:t</text>
+    <text x="66 74 82" y="96" style="fill:#0000AA;font-weight:bold;">t:t</text>
     <text x="98" y="96" style="fill:#CCCCCC;">A</text>
     <text x="114" y="96" style="fill:#00AA00;">A</text>
     <text x="10 18" y="114" style="fill:#CCCCCC;">┊│</text>
-    <text x="66 74 82" y="114" style="fill:#0000AA;font-weight:bold;">8:v</text>
+    <text x="66 74 82" y="114" style="fill:#0000AA;font-weight:bold;">t:v</text>
     <text x="98" y="114" style="fill:#CCCCCC;">A</text>
     <text x="114 122 130 138 146 154 162 170" y="114" style="fill:#00AA00;">test.txt</text>
     <text x="10 18" y="132" style="fill:#CCCCCC;">├╯</text>

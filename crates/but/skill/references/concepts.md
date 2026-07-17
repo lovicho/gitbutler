@@ -44,17 +44,21 @@ workspace (gitbutler/workspace)
 Every object gets a short, human-readable CLI ID shown in `but status`. IDs are generated per-session and are unique across all entity types (no two objects share an ID) — always read them from `but status`.
 
 ```
-Commits:    1, 8f, c2      (short hex prefixes of the SHA, long enough to be unique)
+Commits:    1, kyn, mpq#0  (short change-ID prefix when the commit has one, sha prefix otherwise;
+                             a #N suffix disambiguates commits sharing a change ID)
 Branches:   fe, bu, ui     (unique 2–3 char substring of the branch name, e.g. "fe" from "feature-x";
                              falls back to auto-generated ID if no unique substring exists)
 Files:      g, qs, uo      (derived from the file path, long enough to be unique)
 Hunks:      g:5, uo:d      (<file-id>:<hunk-id>; the hunk part is derived from the hunk's content)
+Committed files: kyn:n     (<commit-id>:<file-id>, shown under each commit in `but status -fv`)
 Stacks:     m0, n0          (auto-generated, 2–3 chars)
 ```
 
 **Why?** Git commit SHAs are long (40 chars). CLI IDs are short, variable-length, and unique within your current workspace context. Commits, files, and hunks may use a single character when that is unambiguous.
 
-**Stability:** File/hunk IDs copied from the current output generally remain usable across ordinary commits, so you can reference several in a row, including across chained `but commit` calls. If an ID stops resolving, re-read the diff and continue. Commit IDs are SHA prefixes that get rewritten by history edits (`amend`, `squash`, `move`, `uncommit`) — amending a commit also gives every commit stacked above it a new ID — so run those one at a time and re-read commit IDs from the returned status rather than chaining.
+**Reading status output:** the first token on each line is that line's ID. Verbose commit lines append an informational `(sha …)` after the timestamp — it changes on every amend; do not pass it to commands.
+
+**Stability:** File/hunk IDs copied from the current output generally remain usable across ordinary commits, so you can reference several in a row, including across chained `but commit` calls. If an ID stops resolving, re-read the diff and continue. Commit IDs are change-ID prefixes when the commit has a change ID and sha prefixes otherwise. Change-ID refs survive history edits (`amend`, `squash`, `move`, `uncommit`, `reword`); sha refs and `#N`-suffixed refs do not — a stale sha can silently resolve to the wrong commit. History edits may run in sequence off one status read when every ref involved is a change-ID ref; otherwise run them one at a time and take the next ref from the returned workspace state.
 
 **Usage:** Pass these IDs as arguments to commands:
 
@@ -126,10 +130,10 @@ The operation performed depends on what you combine:
 
 | Source | Target | Operation              | Example         |
 | ------ | ------ | ---------------------- | --------------- |
-| File   | Commit | Amend file into commit | `but rub a1 c3` |
-| Commit | Commit | Squash commits         | `but rub c2 c3` |
-| Commit | Branch | Move commit to branch  | `but rub c2 bu` |
-| Commit | `zz`   | Undo commit            | `but rub c2 zz` |
+| File   | Commit | Amend file into commit | `but rub a1 nn` |
+| Commit | Commit | Squash commits         | `but rub mm nn` |
+| Commit | Branch | Move commit to branch  | `but rub mm bu` |
+| Commit | `zz`   | Undo commit            | `but rub mm zz` |
 
 `zz` is a special target meaning "uncommitted" (no branch).
 
@@ -176,8 +180,8 @@ Prevents you from creating broken states:
 You can create empty commits:
 
 ```bash
-but commit empty --before c3
-but commit empty --after c3
+but commit empty --before nn
+but commit empty --after nn
 ```
 
 **Use cases:**
@@ -188,7 +192,7 @@ but commit empty --after c3
 Example workflow:
 
 ```bash
-but commit empty --before c5 -m "TODO: Add error handling"
+but commit empty --before rr -m "TODO: Add error handling"
 # Later, amend the error handling changes into the placeholder
 but amend <empty-commit-id> --changes <file-id>
 ```

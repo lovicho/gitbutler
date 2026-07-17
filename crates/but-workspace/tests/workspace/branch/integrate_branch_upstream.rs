@@ -2117,8 +2117,8 @@ fn integrate_upstream_commits_into_local_with_squashed_local_commits() -> Result
     snapbox::assert_data_eq!(
         normalized_graph_snapshot(&repo)?,
         snapbox::str![[r#"
-* 5ef31c2 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-* c297225 (A) squashed local commits
+* d40c966 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* fb4b9eb (A) squashed local commits
 * 6a17628 (origin/A) remote change in A 2
 * 715d7b0 remote change in A 1
 * 621b98a shared local/remote
@@ -2177,8 +2177,8 @@ fn integrate_upstream_commits_into_local_with_squashed_remote_commits() -> Resul
     snapbox::assert_data_eq!(
         normalized_graph_snapshot(&repo)?,
         snapbox::str![[r#"
-* 3699070 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-* 3838b79 (A) squashed remote commits
+* 93f69a1 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 1577fe9 (A) squashed remote commits
 * 8347946 local change in A 2
 * 86838ae local change in A 1
 | * 6a17628 (origin/A) remote change in A 2
@@ -2238,9 +2238,9 @@ fn integrate_upstream_commits_into_local_with_squashed_remote_into_local_commits
     snapbox::assert_data_eq!(
         normalized_graph_snapshot(&repo)?,
         snapbox::str![[r#"
-* 8a9dd44 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-* c6b942b (A) squash commits 2
-* a524f0a squash commits 1
+* b3a4b49 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* b5f69de (A) squash commits 2
+* a9e262f squash commits 1
 | * 6a17628 (origin/A) remote change in A 2
 | * 715d7b0 remote change in A 1
 |/
@@ -2299,8 +2299,8 @@ fn integrate_upstream_commits_into_local_with_squashed_remote_into_local_conflic
         normalized_graph_snapshot(&repo)?,
         snapbox::str![[r#"
 * f03fc2c (origin/A, new-origin) remote change in A 1
-| * 1b052b4 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-| * 20ebfcc (A) [conflict] squashed conflicting commits
+| * 19567a9 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+| * 9e257ee (A) [conflict] squashed conflicting commits
 |/
 * 2b73dee (origin/main, main) init-integration
 "#]]

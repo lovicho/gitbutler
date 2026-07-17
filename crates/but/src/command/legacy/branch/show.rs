@@ -21,17 +21,18 @@ pub fn show(
     generate_ai_summary: bool,
     check_merge: bool,
 ) -> CliResult<()> {
-    let branch_arg = {
+    let (branch_arg, id_map) = {
         let guard = ctx.exclusive_worktree_access();
         let id_map = IdMap::new_from_context(ctx, None, guard.read_permission())?;
         let repo = ctx.repo.get()?;
-        branch_arg
+        let branch_arg = branch_arg
             .try_resolve_branch(&repo, &id_map)?
-            .unwrap_or(BranchArg(branch_arg.0))
+            .unwrap_or(BranchArg(branch_arg.0));
+        (branch_arg, id_map)
     };
 
     // Get the list of commits ahead of base for this branch
-    let commits = get_commits_ahead(ctx, &branch_arg, show_files)?;
+    let commits = get_commits_ahead(ctx, &branch_arg, show_files, &id_map)?;
 
     // Get uncommitted files for this branch
     let uncommitted_files = get_uncommitted_files(ctx, &branch_arg)?;
@@ -61,7 +62,7 @@ pub fn show(
 
     // Check merge conflicts if requested
     let merge_check = if check_merge {
-        Some(check_merge_conflicts(ctx, branch_name)?)
+        Some(check_merge_conflicts(ctx, branch_name, &id_map)?)
     } else {
         None
     };
@@ -108,6 +109,8 @@ struct ConflictingFile {
 struct CommitRef {
     sha: String,
     short_sha: String,
+    /// The stable change-ID ref shown by `but status`, when the commit has one.
+    cli_id: Option<String>,
     message: String,
     author_name: String,
     timestamp: i64,
@@ -116,7 +119,11 @@ struct CommitRef {
 // TODO(perf): re-write with `gix`, just avoid duplicate work there (get_merge_conflict_paths) isn't needed.
 // TODO(perf): re-write this to use a graph that includes all branches from the listing, needs a listing that uses
 //             the graph.
-fn check_merge_conflicts(ctx: &Context, branch_name: &str) -> CliResult<MergeCheck> {
+fn check_merge_conflicts(
+    ctx: &Context,
+    branch_name: &str,
+    id_map: &IdMap,
+) -> CliResult<MergeCheck> {
     use but_core::RepositoryExt;
 
     let guard = ctx.shared_worktree_access();
@@ -149,10 +156,10 @@ fn check_merge_conflicts(ctx: &Context, branch_name: &str) -> CliResult<MergeChe
         // For each conflicting file, find which commits on both sides modified it
         for path in conflict_paths {
             let branch_commits =
-                find_commits_modifying_file(&repo, &path, merge_base, branch.head)?;
+                find_commits_modifying_file(&repo, id_map, &path, merge_base, branch.head)?;
 
             let upstream_commits =
-                find_commits_modifying_file(&repo, &path, merge_base, target.oid())?;
+                find_commits_modifying_file(&repo, id_map, &path, merge_base, target.oid())?;
 
             conflicting_files.push(ConflictingFile {
                 path,
@@ -205,6 +212,7 @@ fn get_merge_conflict_paths(
 // TODO(perf): we need a common mechanism for doing this and let it create a per-commit cache per repository.
 fn find_commits_modifying_file(
     repo: &gix::Repository,
+    id_map: &IdMap,
     path: &str,
     from_commit: gix::ObjectId,
     to_commit: gix::ObjectId,
@@ -239,6 +247,9 @@ fn find_commits_modifying_file(
             commits.push(CommitRef {
                 sha: info.id.to_string(),
                 short_sha: shorten_object_id(repo, info.id),
+                cli_id: id_map
+                    .change_id_ref(info.id)
+                    .map(|change_id| change_id.padded_short_id()),
                 message: super::super::commit_summary(&commit),
                 author_name: author.name.to_str_lossy().to_string(),
                 timestamp: commit.committer()?.time()?.seconds,
@@ -253,6 +264,7 @@ fn get_commits_ahead(
     ctx: &Context,
     branch_arg: &BranchArg,
     show_files: bool,
+    id_map: &IdMap,
 ) -> CliResult<Vec<CommitInfo>> {
     use gix::prelude::ObjectIdExt as _;
 
@@ -299,6 +311,9 @@ fn get_commits_ahead(
         commits.push(CommitInfo {
             sha: info.id.to_string(),
             short_sha: shorten_object_id(&repo, info.id),
+            cli_id: id_map
+                .change_id_ref(info.id)
+                .map(|change_id| change_id.padded_short_id()),
             message: super::super::commit_summary(&commit),
             author_name: author.name.to_str_lossy().to_string(),
             author_email: author.email.to_str_lossy().to_string(),
@@ -356,6 +371,8 @@ fn get_uncommitted_files(ctx: &mut Context, branch_arg: &BranchArg) -> anyhow::R
 struct CommitInfo {
     sha: String,
     short_sha: String,
+    /// The stable change-ID ref shown by `but status`, when the commit has one.
+    cli_id: Option<String>,
     message: String,
     author_name: String,
     author_email: String,
@@ -509,7 +526,7 @@ fn output_human(
             writeln!(
                 buf,
                 "{} {}",
-                t.commit_id.paint(&commit.short_sha),
+                theme::commit_display_ref(commit.cli_id.as_deref(), &commit.short_sha),
                 commit.message
             )?;
             writeln!(
@@ -672,7 +689,7 @@ fn output_human(
                         writeln!(
                             buf,
                             "      {} {}",
-                            t.commit_id.paint(&commit.short_sha),
+                            theme::commit_display_ref(commit.cli_id.as_deref(), &commit.short_sha),
                             commit.message
                         )?;
                         writeln!(
@@ -692,7 +709,7 @@ fn output_human(
                         writeln!(
                             buf,
                             "      {} {}",
-                            t.commit_id.paint(&commit.short_sha),
+                            theme::commit_display_ref(commit.cli_id.as_deref(), &commit.short_sha),
                             commit.message
                         )?;
                         writeln!(

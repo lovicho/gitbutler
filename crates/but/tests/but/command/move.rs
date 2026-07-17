@@ -40,7 +40,7 @@ fn move_commit_before_another_commit() -> anyhow::Result<()> {
         .assert()
         .success()
         .stdout_eq(str![[r#"
-Moved 23e1bf8 → before fce8ecc
+Moved 1#2 → before 1#1
 
 "#]]);
 
@@ -80,7 +80,7 @@ fn move_commit_after_another_commit() -> anyhow::Result<()> {
         .assert()
         .success()
         .stdout_eq(str![[r#"
-Moved fce8ecc → after 23e1bf8
+Moved 1#0 → after 1#1
 
 "#]]);
 
@@ -140,7 +140,7 @@ Hint: run `but help` for all commands
     .assert()
     .success()
     .stdout_eq(str![[r#"
-Moved 2 commits → before fce8ecc
+Moved 2 commits → before 1#0
 
 "#]]);
 
@@ -218,7 +218,7 @@ Hint: run `but help` for all commands
     .assert()
     .success()
     .stdout_eq(str![[r#"
-Moved 2 commits → after 23e1bf8
+Moved 2 commits → after 1#2
 
 "#]]);
 
@@ -703,7 +703,7 @@ fn move_cross_stack_works_yay() -> anyhow::Result<()> {
         .assert()
         .success()
         .stdout_eq(str![[r#"
-Moved c629281 → before ae3978a
+Moved 1#1 → before 1#0
 
 "#]]);
 

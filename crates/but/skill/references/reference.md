@@ -35,6 +35,8 @@ Shows:
 - Commits on each stack
 - CLI IDs to use in other commands
 
+The first token on each line is that line's ID. Commit lines lead with the commit's change ID (stable across history edits); commits without a change ID lead with a sha prefix, which goes stale after history edits. Verbose output appends an informational `(sha …)` after the timestamp — do not pass the sha to commands.
+
 ### `but show <id>`
 
 Details about a commit or branch.
@@ -136,7 +138,7 @@ Cherry-pick commits from unapplied branches into applied branches.
 
 ```bash
 but pick <commit-sha> <branch>       # Pick specific commit into branch
-but pick <cli-id> <branch>           # Pick using CLI ID (e.g., "c5")
+but pick <cli-id> <branch>           # Pick using CLI ID (e.g., "nn")
 but pick <unapplied-branch>          # Interactive commit selection from branch
 but pick <commit-sha>                # Auto-select target if only one branch
 ```
@@ -182,9 +184,9 @@ but commit empty --after <target>        # Insert empty commit after target
 
 **Creating branches on commit:** Use `-c` / `--create` to create a new branch for the commit. If the branch name matches an existing branch, that branch is used instead.
 
-**Placing commits:** Use `--before <target>` or `--after <target>` when the new commit should be inserted at a specific position in existing history. After an insertion, later commit IDs may be rewritten; use fresh IDs from returned status output for subsequent history edits.
+**Placing commits:** Use `--before <target>` or `--after <target>` when the new commit should be inserted at a specific position in existing history. Change-ID refs of existing commits remain valid after an insertion; sha and `#N`-suffixed refs may go stale — use refs from the returned status output for subsequent history edits.
 
-**Several commits from one diff:** Chain `but commit` calls with `&&` to split a broad uncommitted change into several semantic commits: `but commit <branch> -m "msg1" --changes a1,b2 && but commit <branch> -m "msg2" --changes c3,d4`. The commits stack in the order you write them — the first `but commit` is the oldest of the new commits and each later one goes on top (newest). File/hunk IDs copied from the original output generally remain usable across commits; if an ID stops resolving, re-read the diff and continue. Do not chain mutations that consume commit IDs (`amend`, `squash`, `move`, `uncommit`) — those get rewritten, so run them one at a time. If a commit must stay *above* the new ones, see "Split an existing commit" in SKILL.md: commit them, then `but move <preserved-commit-id> <branch>` rather than anchoring with `--before`/`--after`.
+**Several commits from one diff:** Chain `but commit` calls with `&&` to split a broad uncommitted change into several semantic commits: `but commit <branch> -m "msg1" --changes a1,b2 && but commit <branch> -m "msg2" --changes c3,d4`. The commits stack in the order you write them — the first `but commit` is the oldest of the new commits and each later one goes on top (newest). File/hunk IDs copied from the original output generally remain usable across commits; if an ID stops resolving, re-read the diff and continue. History edits (`amend`, `squash`, `move`, `uncommit`, `reword`) may run in sequence off one status read when every commit ref involved is a change-ID ref; run them one at a time when a ref is sha-based or `#N`-suffixed, or when the next command needs IDs the previous one prints, and take follow-up refs from the returned workspace state. If a commit must stay *above* the new ones, see "Split an existing commit" in SKILL.md: commit them, then `but move <preserved-commit-id> <branch>` rather than anchoring with `--before`/`--after`.
 
 Example: `but commit my-branch -m "Fix bug" --changes ab,cd` commits files/hunks `ab` and `cd`.
 
@@ -251,9 +253,10 @@ but squash <branch> -i                          # Squash with AI-generated commi
 ```
 
 Use explicit IDs when the target commit must be unambiguous. For multiple
-independent squash groups, prefer newer/top groups first; history edits can
-rewrite IDs above the edited commit, so use returned status before the next
-squash.
+independent squash groups, prefer newer/top groups first; change-ID refs from
+one status read stay valid across squashes (the target keeps its ref), so the
+groups may run in sequence — take fresh refs from the returned status only
+when a ref is sha-based or `#N`-suffixed.
 
 ### `but amend <commit> --changes <file>[,<file>...]`
 

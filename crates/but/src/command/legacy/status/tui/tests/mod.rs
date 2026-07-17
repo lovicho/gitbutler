@@ -622,7 +622,7 @@ fn inline_reword_open_editor_keeps_inline_message_when_editor_makes_no_changes()
 
     with_var("GIT_EDITOR", Some(editor_command), || {
         tui.input((KeyModifiers::ALT, 'e'))
-            .assert_current_line_eq(str!["┊●   711ccd7 add A updated"]);
+            .assert_current_line_eq(str!["┊●   tpm add A updated"]);
     });
 }
 

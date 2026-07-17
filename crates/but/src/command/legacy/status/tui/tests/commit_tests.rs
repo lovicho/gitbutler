@@ -365,7 +365,7 @@ fn commit_mode_from_staged_changes_stays_within_current_stack() {
         .assert_current_line_eq(str!["┊●   << amend >> 9477ae7 add A"]);
 
     tui.input(KeyCode::Enter)
-        .assert_current_line_eq(str!["┊●   8474410 add A"]);
+        .assert_current_line_eq(str!["┊●   tpm add A"]);
 
     tui.input([KeyCode::Up, KeyCode::Up])
         .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
@@ -378,7 +378,7 @@ fn commit_mode_from_staged_changes_stays_within_current_stack() {
         .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊●   8474410 add A"])
+        .assert_current_line_eq(str!["┊●   tpm add A"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/commit_mode_from_staged_changes_stays_within_current_stack_001.svg"
         ]);

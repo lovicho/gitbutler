@@ -33,15 +33,15 @@ but commit <branch> -c -m "<msg>" --changes <id>,<id>
 
 `but commit <branch> -c ... --changes ...` creates the branch and prints the resulting workspace state. Do not run a separate `but branch new`, staging command, status command, or verification diff unless the returned output lacks information you need.
 
-`--changes` (or `-p`) takes comma-separated file or hunk IDs from `but diff` / `but status -fv`. A hunk ID is written `<file-id>:<hunk-id>` (e.g. `qs:5`, copied from `but diff`) — the part after the colon is the hunk's ID, **not** a line range (`qs:16-40` is invalid). Do not invent flags like `--hunk` / `--hunks` / `--ids`, pass a line range, or pass change IDs as positional arguments.
+`--changes` (or `-p`) takes comma-separated file or hunk IDs from `but diff` / `but status -fv`. A hunk ID is written `<file-id>:<hunk-id>` (e.g. `qs:5`, copied from `but diff`) — the part after the colon is the hunk's ID, **not** a line range (`qs:16-40` is invalid). Do not invent flags like `--hunk` / `--hunks` / `--ids`, pass a line range, or pass the IDs as positional arguments.
 
-CLI IDs may be a single character when unambiguous; copy them exactly from command output. Longer unambiguous prefixes also work.
+The first token on each status line is that line's ID — pass it to commands as-is. Commit IDs are stable change IDs that survive history edits (`amend`, `squash`, `move`, `uncommit`, `reword`); commits without a change ID (e.g. upstream-only) lead with a sha prefix instead, which goes stale after history edits. The `(sha …)` shown on verbose commit lines is informational — do not pass it to commands. CLI IDs may be a single character when unambiguous; copy them exactly from command output. Longer unambiguous prefixes also work.
 
 ## Non-Negotiable Rules
 
 1. Use `but` for all write operations. Never run `git add`, `git commit`, `git push`, `git checkout`, `git merge`, `git rebase`, `git stash`, or `git cherry-pick`. If the user says a `git` write command, translate it to `but` and run that. Exceptions: `git add -- <path>` to mark a conflicted uncommitted file resolved (see "Conflicts in uncommitted files"), and a worktree-local Git commit when `but commit` reports that linked worktrees are unsupported. Never run `but setup` from a linked worktree.
 2. After mutations, read the returned output for the updated workspace state — it replaces a follow-up status command.
-3. You may chain `but commit` mutations with `&&` to make several commits from one diff; they stack in the order you write them, so the first `but commit` is the oldest of the new commits and each later one goes on top (newest). File/hunk IDs copied from the original output generally remain usable across commits, and branch IDs are stable. Do NOT chain mutations that consume or rewrite commit IDs (`amend`, `squash`, `move`, `uncommit`); those reassign IDs the next command needs, so run one, read the returned workspace state, and take fresh IDs from it. If a chained command cannot resolve an ID, re-read with `but status`/`but diff` and retry.
+3. You may chain `but commit` mutations with `&&` to make several commits from one diff; they stack in the order you write them, so the first `but commit` is the oldest of the new commits and each later one goes on top (newest). File/hunk IDs copied from the original output generally remain usable across commits, and branch IDs are stable. History edits (`amend`, `squash`, `move`, `uncommit`, `reword`) may also run in sequence off one status read when every commit ref involved is a change-ID ref — those stay valid across the edits. Run them one at a time when a ref is sha-based or `#N`-suffixed (those go stale after a history edit, and a stale sha can silently resolve to the wrong commit), or when the next command needs IDs the previous one prints (e.g. recommitting after `but uncommit --diff`). Take follow-up refs from the returned workspace state. If a chained command cannot resolve an ID, re-read with `but status`/`but diff` and retry.
 4. Use CLI IDs from `but diff` / `but status` / `but status -fv` / `but show`; never hardcode IDs.
 5. Do not run `but status` or `but status -fv` as routine preflight for selected dirty-file or hunk commits. Start with `but diff`; use compact `but status` for commit order, branch/stack placement, or conflict overview. Use `but status -fv` when file/hunk IDs or per-commit file details matter.
 6. For "commit these selected changes on a new branch", prefer one command: `but commit <branch> -c -m "<msg>" --changes <ids>`.
@@ -126,7 +126,7 @@ Edge case: if wanted and unwanted edits are in the same diff hunk, GitButler can
 
 1. `but status -fv` (or `but show <branch-id>`)
 2. Locate file/hunk IDs and target commit ID.
-3. `but amend <commit-id> --changes <file-or-hunk-id>,<file-or-hunk-id>`; use one command for multiple files/hunks that belong in the same commit. To amend into several different commits, run one `but amend` at a time and take fresh commit IDs from the returned status before the next — amending a commit rewrites the IDs of the commits stacked above it.
+3. `but amend <commit-id> --changes <file-or-hunk-id>,<file-or-hunk-id>`; use one command for multiple files/hunks that belong in the same commit. To amend into several different commits, run the amends in sequence — change-ID refs from one status read survive each amend, but take fresh refs from the returned status whenever a ref is sha-based or `#N`-suffixed.
 
 ### Split an existing commit
 
@@ -138,7 +138,7 @@ Use this when an existing commit should be replaced by selected smaller commits.
 4. Create the replacement commits in the requested order, oldest first, by chaining `but commit` calls (file/hunk IDs from the diff stay usable across commits):
    `but commit <branch> -m "<message 1>" --changes <id>,<id> && but commit <branch> -m "<message 2>" --changes <id>,<id>`
    Each new commit goes to the TOP of the stack. So if you split a commit that had other commits above it, the replacements are now sitting above those preserved commits.
-5. **If any commit must stay ABOVE the replacements (a preserved top commit), put it back on top instead of fighting anchors.** Do not anchor the replacements with `--before <top>`/`--after <top>`: `but uncommit` and each insert rewrite the top commit's ID, so a captured anchor goes stale (and `--before <branch>` just puts commits on top of the branch). Instead, take the preserved commit's CURRENT id from the workspace state the last `but commit` printed, then `but move <preserved-commit-id> <branch>` to lift it back to the top/newest (for several preserved commits, list every one, oldest first: `but move <id1>,<id2>,<id3> <branch>`).
+5. **If any commit must stay ABOVE the replacements (a preserved top commit), put it back on top instead of fighting anchors.** Do not anchor the replacements with `--before <top>`/`--after <top>`: a sha-based or `#N`-suffixed anchor goes stale as `but uncommit` and each insert rewrite history (and `--before <branch>` just puts commits on top of the branch). Instead, take the preserved commit's ref from the workspace state the last `but commit` printed, then `but move <preserved-commit-id> <branch>` to lift it back to the top/newest (for several preserved commits, list every one, oldest first: `but move <id1>,<id2>,<id3> <branch>`).
 6. Leave unwanted changes uncommitted. The returned workspace state shows the resulting commit order; if it matches the request, stop.
 
 ### Reorder commits
@@ -162,7 +162,7 @@ Use this when multiple existing commits should become one commit.
 
 1. `but status` to get commit IDs and current order. Use `but status -fv` only if you also need per-commit file details.
 2. Put the result/target commit last: `but squash <source-commit-id> [<source-commit-id>...] <target-commit-id> -m "<new message>"`.
-3. For multiple independent squash groups, prefer newer/top groups first; history edits can rewrite IDs above the edited commit, so use returned status before the next squash.
+3. For multiple independent squash groups, prefer newer/top groups first; change-ID refs from one status read stay valid across squashes (the target keeps its ref), so the groups may run in sequence — take fresh refs from the returned status only when a ref is sha-based or `#N`-suffixed.
 4. After the final squash, stop if returned status shows the requested history; do not run `--help`, `status`, or `status -fv` only to reconfirm.
 
 ### Stack existing branches
@@ -183,7 +183,7 @@ This moves the frontend branch on top of the backend branch in one step.
 but move feature/logging zz
 ```
 
-**Note:** branch stack/tear-off operations use branch **names** (like `feature/frontend`) or branch CLI IDs, while commit reordering uses commit **IDs** (like `c3`). Do NOT use `but undo` to unstack — it may revert more than intended and lose commits.
+**Note:** branch stack/tear-off operations use branch **names** (like `feature/frontend`) or branch CLI IDs, while commit reordering uses commit **IDs** (like `nn`). Do NOT use `but undo` to unstack — it may revert more than intended and lose commits.
 
 ### Create or manage pull requests
 

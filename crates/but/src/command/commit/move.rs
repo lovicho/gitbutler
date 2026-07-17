@@ -1,7 +1,7 @@
 use crate::{
     CliId,
     theme::{self, Paint},
-    utils::{OutputChannel, shorten_object_id},
+    utils::OutputChannel,
 };
 use anyhow::bail;
 use but_core::{DryRun, sync::RepoExclusive};
@@ -186,7 +186,7 @@ pub fn move_commit_to_commit_with_perm(
         return Ok(());
     }
 
-    but_api::commit::move_commit::commit_move_with_perm(
+    let result = but_api::commit::move_commit::commit_move_with_perm(
         ctx,
         sources.clone(),
         RelativeTo::Commit(target),
@@ -197,30 +197,39 @@ pub fn move_commit_to_commit_with_perm(
 
     let t = theme::get();
     if let Some(out) = out.for_human() {
-        let repo = ctx.repo.get()?;
         let action = if after { "after" } else { "before" };
         if sources.len() == 1 {
-            let source = sources[0];
-            writeln!(
-                out,
-                "Moved {} → {} {}",
-                t.cli_id.paint(shorten_object_id(&repo, source)),
-                action,
-                t.commit_id.paint(shorten_object_id(&repo, target)),
+            let refs = theme::new_commit_refs_with_perm(
+                ctx,
+                perm.read_permission(),
+                &[
+                    post_move_id(&result.workspace, sources[0]),
+                    post_move_id(&result.workspace, target),
+                ],
             )?;
+            writeln!(out, "Moved {} → {action} {}", refs[0], refs[1])?;
         } else {
+            let target_ref = theme::new_commit_ref_with_perm(
+                ctx,
+                perm.read_permission(),
+                post_move_id(&result.workspace, target),
+            )?;
             writeln!(
                 out,
-                "Moved {} commits → {} {}",
+                "Moved {} commits → {action} {target_ref}",
                 t.cli_id.paint(sources.len().to_string()),
-                action,
-                t.commit_id.paint(shorten_object_id(&repo, target)),
             )?;
         }
     } else if let Some(out) = out.for_json() {
         out.write_value(serde_json::json!({"ok": true}))?;
     }
     Ok(())
+}
+
+/// The id a commit has after the move; commits untouched by the rebase keep
+/// their id.
+fn post_move_id(workspace: &but_api::WorkspaceState, id: gix::ObjectId) -> gix::ObjectId {
+    workspace.replaced_commits.get(&id).copied().unwrap_or(id)
 }
 
 pub fn move_commit_to_branch_with_perm(
@@ -231,7 +240,7 @@ pub fn move_commit_to_branch_with_perm(
     perm: &mut RepoExclusive,
 ) -> Result<(), anyhow::Error> {
     let target_full_name = gix::refs::FullName::try_from(format!("refs/heads/{target_branch}"))?;
-    but_api::commit::move_commit::commit_move_with_perm(
+    let result = but_api::commit::move_commit::commit_move_with_perm(
         ctx,
         sources.clone(),
         RelativeTo::Reference(target_full_name),
@@ -242,13 +251,16 @@ pub fn move_commit_to_branch_with_perm(
 
     let t = theme::get();
     if let Some(out) = out.for_human() {
-        let repo = ctx.repo.get()?;
         if sources.len() == 1 {
-            let source = sources[0];
+            let source_ref = theme::new_commit_ref_with_perm(
+                ctx,
+                perm.read_permission(),
+                post_move_id(&result.workspace, sources[0]),
+            )?;
             writeln!(
                 out,
                 "Moved {} → {}",
-                t.cli_id.paint(shorten_object_id(&repo, source)),
+                source_ref,
                 t.local_branch.paint(format!("[{target_branch}]"))
             )?;
         } else {

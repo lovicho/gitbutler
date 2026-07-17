@@ -30,7 +30,7 @@ fn reword_head_commit() -> Result<()> {
     snapbox::assert_data_eq!(
         visualize_commit_graph_all(&repo)?,
         snapbox::str![[r#"
-* f0a8655 (HEAD -> three) New name
+* bee1f03 (HEAD -> three) New name
 * 16fd221 (origin/two, two) commit two
 * 8b426d0 (one) commit one
 
@@ -67,8 +67,8 @@ fn reword_middle_commit() -> Result<()> {
     snapbox::assert_data_eq!(
         visualize_commit_graph_all(&repo)?,
         snapbox::str![[r#"
-* d8b7d8a (HEAD -> three) commit three
-* ada51de (two) New name
+* 555bf78 (HEAD -> three) commit three
+* 5608218 (two) New name
 | * 16fd221 (origin/two) commit two
 |/  
 * 8b426d0 (one) commit one
@@ -108,9 +108,9 @@ fn reword_base_commit() -> Result<()> {
     snapbox::assert_data_eq!(
         visualize_commit_graph_all(&repo)?,
         snapbox::str![[r#"
-* 9a3264d (HEAD -> three) commit three
-* 86c4bef (two) commit two
-* 1121ebc (one) New name
+* 93151df (HEAD -> three) commit three
+* fc0e8de (two) commit two
+* f1db5b0 (one) New name
 * 16fd221 (origin/two) commit two
 * 8b426d0 commit one
 
