@@ -20,14 +20,14 @@ export type AbsorbMode = {
 
 /** @public */
 export type KeyboardTransferMode = {
-	source: Operand;
+	sources: Array<Operand>;
 	operationType: OperationType;
 	restoreSelection: SelectionState;
 };
 
 /** @public */
 export type PointerTransferMode = {
-	source: Operand;
+	sources: Array<Operand>;
 	target: Operand | null;
 	operationType: OperationType | null;
 };
@@ -39,24 +39,24 @@ export type TransferMode =
 
 /** @public */
 export const keyboardTransferMode = ({
-	source,
+	sources,
 	operationType,
 	restoreSelection,
 }: KeyboardTransferMode): TransferMode => ({
 	_tag: "Keyboard",
-	source,
+	sources,
 	operationType,
 	restoreSelection,
 });
 
 /** @public */
 export const pointerTransferMode = ({
-	source,
+	sources,
 	target,
 	operationType,
 }: PointerTransferMode): TransferMode => ({
 	_tag: "Pointer",
-	source,
+	sources,
 	target,
 	operationType,
 });
@@ -124,12 +124,12 @@ export const isValidOutlineModeForSelection = ({
 		}),
 	);
 
-export const getOperationSource = (mode: OutlineMode): Operand | null =>
+export const getOperationSources = (mode: OutlineMode): Array<Operand> | null =>
 	Match.value(mode).pipe(
 		Match.tagsExhaustive({
 			Default: () => null,
-			Absorb: (x) => x.source,
-			Transfer: (x) => x.value.source,
+			Absorb: (x) => [x.source],
+			Transfer: (x) => x.value.sources,
 			RenameBranch: () => null,
 			RewordCommit: () => null,
 		}),

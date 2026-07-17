@@ -1,4 +1,6 @@
+import { HeadInfoIndex } from "#ui/api/ref-info.ts";
 import {
+	branchOperand,
 	commitOperand,
 	operandIdentityKey,
 	type CommitOperand,
@@ -6,33 +8,35 @@ import {
 } from "#ui/operands.ts";
 import { type NavigationIndex } from "#ui/workspace/navigation-index.ts";
 
-const isCommitDiscardBoundary = (operand: Operand): boolean =>
-	operand._tag === "Branch" || operand._tag === "UncommittedChanges";
-
 export const selectAfterDiscardedCommit = ({
 	navigationIndex,
 	commit,
+	headInfoIndex,
 }: {
 	navigationIndex: NavigationIndex<Operand>;
 	commit: CommitOperand;
+	headInfoIndex: HeadInfoIndex | undefined;
 }): Operand | null => {
 	const commitIndex = navigationIndex.indexByKey.get(operandIdentityKey(commitOperand(commit)));
 	if (commitIndex === undefined) return null;
 
-	for (const item of navigationIndex.items.slice(commitIndex + 1)) {
-		if (isCommitDiscardBoundary(item)) break;
-		if (item._tag === "Commit") return item;
-	}
+	const nextCommit = navigationIndex.items[commitIndex + 1];
+	if (nextCommit?._tag === "Commit") return nextCommit;
 
-	for (const item of navigationIndex.items.slice(0, commitIndex).reverse()) {
-		if (isCommitDiscardBoundary(item)) break;
-		if (item._tag === "Commit") return item;
-	}
+	const prevCommit = navigationIndex.items[commitIndex - 1];
+	if (prevCommit?._tag === "Commit") return prevCommit;
 
-	for (const item of navigationIndex.items.slice(0, commitIndex + 1).reverse()) {
-		if (item._tag === "Branch") return item;
-		if (isCommitDiscardBoundary(item)) break;
-	}
+	const commitCtx = headInfoIndex?.commitContextById(commit.commitId);
+	if (!commitCtx?.segment.refName) return null;
 
-	return null;
+	const branchIdx = navigationIndex.indexByKey.get(
+		operandIdentityKey(
+			branchOperand({
+				branchRef: commitCtx.segment.refName.fullNameBytes,
+			}),
+		),
+	);
+	if (branchIdx === undefined) return null;
+
+	return navigationIndex.items[branchIdx] ?? null;
 };

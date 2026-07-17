@@ -1,10 +1,10 @@
 import type { Operand } from "#ui/operands.ts";
 
 export type DragData = {
-	source: Operand;
+	sources: Array<Operand>;
 };
 
 export const parseDragData = (data: unknown): DragData | null => {
-	if (typeof data !== "object" || data === null || !("source" in data)) return null;
+	if (typeof data !== "object" || data === null || !("sources" in data)) return null;
 	return data as DragData;
 };

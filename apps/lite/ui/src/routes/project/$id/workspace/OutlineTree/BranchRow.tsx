@@ -246,7 +246,7 @@ export const BranchRow: FC<
 		dispatch(
 			projectSlice.actions.enterKeyboardTransferMode({
 				projectId,
-				source: operand,
+				sources: [operand],
 			}),
 		);
 		focusSelectionScope("outline");

@@ -1,7 +1,7 @@
 import { Operand, operandEquals } from "#ui/operands.ts";
-import { getOperationSource, pointerTransferMode } from "#ui/outline/mode.ts";
+import { getOperationSources, pointerTransferMode } from "#ui/outline/mode.ts";
 import styles from "./OperationSourceC.module.css";
-import { operandLabel } from "./operandLabel.ts";
+import { operandsLabel } from "./operandLabel.ts";
 import { headInfoQueryOptions } from "#ui/api/queries.ts";
 import { getHeadInfoIndex } from "#ui/api/ref-info.ts";
 import { classes } from "#ui/components/classes.ts";
@@ -37,6 +37,25 @@ export const OperationSourceC: FC<
 	const outlineMode = useAppSelector((state) =>
 		projectSlice.selectors.selectOutlineModeState(state, projectId),
 	);
+	// We don't necessarily wrap in an array here in order to preserve reference identity.
+	const dragSource = useAppSelector((state) => {
+		if (source._tag !== "Commit" || !headInfoIndex) return source;
+
+		const isCheckedCommit = projectSlice.selectors.selectCommitChecked(
+			state,
+			projectId,
+			source.commitId,
+		);
+		if (!isCheckedCommit) return source;
+
+		const checkedCommitOperands = projectSlice.selectors.selectCheckedCommitOperands(
+			state,
+			projectId,
+			headInfoIndex,
+		);
+		return checkedCommitOperands.length > 0 ? checkedCommitOperands : source;
+	});
+	const dragSources = Array.isArray(dragSource) ? dragSource : [dragSource];
 
 	const dispatch = useAppDispatch();
 	const dragRef = useRef<HTMLElement>(null);
@@ -49,7 +68,7 @@ export const OperationSourceC: FC<
 					if (!headInfoIndex) return;
 					const root = createRoot(container);
 					root.render(
-						<DragPreview>{operandLabel({ operand: source, headInfoIndex })}</DragPreview>,
+						<DragPreview>{operandsLabel({ operands: dragSources, headInfoIndex })}</DragPreview>,
 					);
 					return () => {
 						root.unmount();
@@ -65,14 +84,14 @@ export const OperationSourceC: FC<
 			projectSlice.actions.enterTransferMode({
 				projectId,
 				mode: pointerTransferMode({
-					source,
+					sources: dragSources,
 					target: null,
 					operationType: null,
 				}),
 			}),
 		);
 	});
-	const getInitialData = useEffectEvent((): DragData => ({ source }));
+	const getInitialData = useEffectEvent((): DragData => ({ sources: dragSources }));
 
 	useEffect(() => {
 		const element = dragRef.current;
@@ -93,8 +112,10 @@ export const OperationSourceC: FC<
 		});
 	}, [dispatch, projectId]);
 
-	const operationSource = getOperationSource(outlineMode);
-	const isActiveSource = operationSource ? operandEquals(operationSource, source) : false;
+	const operationSources = getOperationSources(outlineMode);
+	const isActiveSource = operationSources
+		? operationSources.some((operationSource) => operandEquals(operationSource, source))
+		: false;
 
 	return useRender({
 		render,

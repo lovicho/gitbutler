@@ -375,11 +375,8 @@
 					disabled={isReadOnly || !isOpenWorkspace}
 					caption={!isOpenWorkspace ? "Only available in workspace mode" : undefined}
 					onclick={async () => {
-						try {
-							await stackService.unapply({ projectId, stackId });
-						} finally {
-							close();
-						}
+						close();
+						await stackService.unapply({ projectId, stackId });
 					}}
 				/>
 			</ContextMenuSection>

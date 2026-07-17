@@ -56,7 +56,7 @@ const useOperationDropTarget = ({
 		const dragData = parseDragData(source.data);
 		if (!dragData) return {};
 
-		const { into, above, below } = getOperations(dragData.source, target);
+		const { into, above, below } = getOperations(dragData.sources, target);
 		return attachInstruction(
 			{},
 			{
@@ -117,7 +117,7 @@ const useOperationDropTarget = ({
 				const operation =
 					dragData && operationType !== null
 						? getOperation({
-								source: dragData.source,
+								sources: dragData.sources,
 								target,
 								operationType,
 							})
@@ -134,7 +134,7 @@ const useOperationDropTarget = ({
 		});
 	}, [dispatch, projectId, runOperation, target]);
 
-	return { dropRef };
+	return dropRef;
 };
 
 export type OperationTargetOutline = "inside" | "outside";
@@ -150,7 +150,7 @@ export const OperationTarget: FC<
 		outline: OperationTargetOutline;
 	} & useRender.ComponentProps<"div">
 > = ({ enabled, target, projectId, activeOperation, outline, render, ...props }) => {
-	const { dropRef } = useOperationDropTarget({ enabled, target, projectId });
+	const dropRef = useOperationDropTarget({ enabled, target, projectId });
 
 	const targetEl = useRender({
 		render,

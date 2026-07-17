@@ -7,19 +7,13 @@ import {
 	useCommitReword,
 	useCommitUncommit,
 } from "#ui/api/mutations.ts";
-import { forgeInfoOptions } from "#ui/api/queries.ts";
+import { forgeInfoOptions, headInfoQueryOptions } from "#ui/api/queries.ts";
 import { classes } from "#ui/components/classes.ts";
 import { GraphSegment } from "#ui/components/GraphSegment.tsx";
 import { Icon } from "#ui/components/Icon.tsx";
 import { TooltipPopup } from "#ui/components/Tooltip.tsx";
 import { assert } from "#ui/assert.ts";
-import {
-	commitBody,
-	commitForgeUrl,
-	commitIsDiverged,
-	commitTitle,
-	rewrittenCommitSelection,
-} from "#ui/commit.ts";
+import { commitBody, commitForgeUrl, commitIsDiverged, commitTitle } from "#ui/commit.ts";
 import { errorMessageForToast } from "#ui/errors.ts";
 import { outlineHotkeys, selectionOperationHotkeys, toElectronAccelerator } from "#ui/hotkeys.ts";
 import {
@@ -47,6 +41,7 @@ import { insertBlankCommitMenuItem } from "./insertBlankCommitMenuItem.ts";
 import { ItemRow } from "./ItemRow.tsx";
 import { selectAfterDiscardedCommit } from "./selectAfterDiscardedCommit.ts";
 import styles from "./CommitRow.module.css";
+import { getHeadInfoIndex } from "#ui/api/ref-info.ts";
 
 const focusCommitMessageInput = () => {
 	document.getElementById(commitMessageInputId)?.focus();
@@ -58,8 +53,9 @@ export const CommitRow: FC<
 		projectId: string;
 		isCommitTarget: boolean;
 		dryRunCommit: Commit | null;
+		checkCommit: (evt: { commitId: string; shiftKey: boolean }) => void;
 	} & ComponentProps<"div">
-> = ({ commit, projectId, isCommitTarget, dryRunCommit, ...restProps }) => {
+> = ({ commit, projectId, isCommitTarget, dryRunCommit, checkCommit, ...restProps }) => {
 	const { data: forgeInfo } = useQuery(forgeInfoOptions(projectId));
 	const mforgeUrl = forgeInfo && commitForgeUrl(commit, forgeInfo);
 
@@ -142,10 +138,16 @@ export const CommitRow: FC<
 		);
 	};
 
+	const { data: headInfoIndex } = useQuery({
+		...headInfoQueryOptions(projectId),
+		select: getHeadInfoIndex,
+	});
+
 	const deleteCommit = () => {
 		const selectionAfterDiscard = selectAfterDiscardedCommit({
 			navigationIndex,
 			commit: commitOperandV,
+			headInfoIndex,
 		});
 
 		commitDiscard(
@@ -156,13 +158,17 @@ export const CommitRow: FC<
 			},
 			{
 				onSuccess: (response) => {
+					const newId =
+						selectionAfterDiscard?._tag === "Commit"
+							? response.workspace.replacedCommits[selectionAfterDiscard.commitId]
+							: undefined;
+					const latestSelectionAfterDiscard =
+						newId === undefined ? selectionAfterDiscard : commitOperand({ commitId: newId });
+
 					dispatch(
 						projectSlice.actions.selectOutline({
 							projectId,
-							selection: rewrittenCommitSelection({
-								selection: selectionAfterDiscard,
-								replacedCommits: response.workspace.replacedCommits,
-							}),
+							selection: latestSelectionAfterDiscard,
 						}),
 					);
 				},
@@ -174,7 +180,7 @@ export const CommitRow: FC<
 		dispatch(
 			projectSlice.actions.enterKeyboardTransferMode({
 				projectId,
-				source: operand,
+				sources: [operand],
 			}),
 		);
 		focusSelectionScope("outline");
@@ -368,10 +374,11 @@ export const CommitRow: FC<
 						className={styles.checkbox}
 						nativeButton
 						render={<Tooltip.Trigger />}
-						onCheckedChange={(checked) => {
-							dispatch(
-								projectSlice.actions.setCommitChecked({ projectId, commitId: commit.id, checked }),
-							);
+						onCheckedChange={(_checked, { event }) => {
+							const shiftKey =
+								(event instanceof MouseEvent || event instanceof KeyboardEvent) &&
+								event.shiftKey === true;
+							checkCommit({ commitId: commit.id, shiftKey });
 						}}
 					/>
 					<Tooltip.Portal>

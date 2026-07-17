@@ -1,7 +1,7 @@
 import rowStyles from "./Row.module.css";
 import {
 	changesInWorktreeQueryOptions,
-	getGUISettingsQueryOptions,
+	guiSettingsQueryOptions,
 	headInfoQueryOptions,
 	listEditorsQueryOptions,
 } from "#ui/api/queries.ts";
@@ -46,7 +46,7 @@ const useFilesTreeHotkeys = ({
 	const { data: worktreeChanges } = useQuery(changesInWorktreeQueryOptions(projectId));
 	const { data: editors } = useQuery(listEditorsQueryOptions);
 	const { data: preferredEditor } = useQuery({
-		...getGUISettingsQueryOptions(),
+		...guiSettingsQueryOptions,
 		select: (cfg) => editors?.find((editor) => editor.id === cfg.editorId),
 	});
 	const { mutate: openInEditor } = useOpenInEditor();
@@ -117,7 +117,7 @@ const useFilesTreeHotkeys = ({
 		selection,
 		ref,
 		getKey: (path) => path,
-		operationSourceForItem: (path) => fileOperand({ parent: fileParent, path }),
+		operationSourcesForItem: (path) => [fileOperand({ parent: fileParent, path })],
 	});
 };
 
@@ -193,6 +193,7 @@ export const FilesTree: FC<
 										render={
 											<FileRow
 												item={item}
+												headInfoIndex={headInfoIndex}
 												inert={!navigationIndexIncludes(navigationIndex, item.path, (path) => path)}
 												isSelected={selection !== null && selection === item.path}
 												onSelect={() => onFileSelection(item.path)}

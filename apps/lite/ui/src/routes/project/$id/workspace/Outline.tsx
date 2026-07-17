@@ -307,6 +307,7 @@ export const Outline: FC<
 				data-selection-scope={"outline" satisfies SelectionScope}
 				navigationIndex={navigationIndex}
 				absorptionTargetCommitIds={absorptionTargetCommitIds}
+				headInfoIndex={headInfoIndex}
 				projectId={projectId}
 				commitTarget={commitTarget?.relativeTo ?? null}
 				// Focus on page load.

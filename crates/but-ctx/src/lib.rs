@@ -28,6 +28,8 @@ pub use legacy::types::{LegacyProject, LegacyProjectId};
 /// Utilities to control access to the project directory of the context.
 pub mod access;
 
+pub mod worktrees;
+
 /// Conversions from project identifier values into context types.
 mod project_handle;
 /// Project identifier types live in a temporary transition crate while legacy

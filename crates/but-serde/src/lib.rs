@@ -50,6 +50,30 @@ pub mod bstring_lossy {
     }
 }
 
+/// Use on `PathBuf` fields that should serialize as JSON strings, degrading
+/// lossily instead of failing on paths that are not valid UTF-8 (which is what
+/// serde's built-in `Path` serialization does).
+///
+/// ```rust
+/// #[derive(serde::Serialize)]
+/// struct Example {
+///     #[serde(with = "but_serde::path_lossy")]
+///     path: std::path::PathBuf,
+/// }
+/// ```
+pub mod path_lossy {
+    use std::path::Path;
+
+    use serde::Serialize;
+
+    pub fn serialize<S>(v: &Path, s: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        v.to_string_lossy().serialize(s)
+    }
+}
+
 /// Use on `gix::refs::FullName` fields that should serialize as JSON strings.
 ///
 /// ```rust

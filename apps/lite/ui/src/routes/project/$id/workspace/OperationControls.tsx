@@ -15,7 +15,7 @@ import {
 	type OperationsByType,
 } from "#ui/operations/operation.ts";
 import { projectSlice } from "#ui/projects/state.ts";
-import { operandLabel } from "#ui/routes/project/$id/workspace/operandLabel.ts";
+import { operandLabel, operandsLabel } from "#ui/routes/project/$id/workspace/operandLabel.ts";
 import { focusSelectionScope } from "#ui/selection-scopes.ts";
 import { useAppDispatch, useAppSelector } from "#ui/store.ts";
 import { Button, Tooltip } from "@base-ui/react";
@@ -300,7 +300,7 @@ const TransferKeyboardOperationControls: FC<{
 
 	const target = selection;
 
-	const operations = getOperations(mode.source, target);
+	const operations = getOperations(mode.sources, target);
 	const operation = operations[mode.operationType];
 
 	const run = () => {
@@ -327,7 +327,7 @@ const TransferKeyboardOperationControls: FC<{
 			<Separator />
 			<ControlsRow>
 				<Label>
-					<div>Source: {operandLabel({ headInfoIndex, operand: mode.source })}</div>
+					<div>Source: {operandsLabel({ headInfoIndex, operands: mode.sources })}</div>
 					<div>Target: {operandLabel({ headInfoIndex, operand: target })}</div>
 				</Label>
 				<Controls
@@ -359,7 +359,9 @@ export const OperationControls: FC<{ outlineNavigationIndex: NavigationIndex<Ope
 		select: getHeadInfoIndex,
 	});
 	const checkedCommitCount = useAppSelector((state) =>
-		projectSlice.selectors.selectCheckedCommitCount(state, projectId),
+		headInfoIndex
+			? projectSlice.selectors.selectCheckedCommitCount(state, projectId, headInfoIndex)
+			: 0,
 	);
 
 	return Match.value(outlineMode).pipe(

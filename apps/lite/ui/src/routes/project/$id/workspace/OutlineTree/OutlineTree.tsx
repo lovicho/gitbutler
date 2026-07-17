@@ -1,7 +1,7 @@
 import rowStyles from "../Row.module.css";
 import { changesInWorktreeQueryOptions, headInfoQueryOptions } from "#ui/api/queries.ts";
 import { relativeToEquals } from "#ui/api/relative-to.ts";
-import { getHeadInfoIndex } from "#ui/api/ref-info.ts";
+import { getHeadInfoIndex, type HeadInfoIndex } from "#ui/api/ref-info.ts";
 import { commitIsDiverged, commitTitle } from "#ui/commit.ts";
 import {
 	branchOperand,
@@ -22,7 +22,7 @@ import {
 	OperationTargetOutline,
 } from "#ui/routes/project/$id/workspace/OperationTarget.tsx";
 import { NavigationIndexContext } from "#ui/routes/project/$id/workspace/OutlineNavigationIndexContext.ts";
-import { useAppDispatch, useAppSelector } from "#ui/store.ts";
+import { useAppDispatch, useAppSelector, useAppStore } from "#ui/store.ts";
 import { classes } from "#ui/components/classes.ts";
 import { navigationIndexIncludes, type NavigationIndex } from "#ui/workspace/navigation-index.ts";
 import { mergeProps, useRender } from "@base-ui/react";
@@ -57,6 +57,7 @@ import {
 	downstackPushStatusesFromSegments,
 	type DownstackPushStatus,
 } from "#ui/segment.ts";
+import { checkedRange, navigationIndexRange } from "#ui/checking.ts";
 
 const DryRunWorkspaceContext = createContext<WorkspaceState | null>(null);
 
@@ -133,7 +134,7 @@ const OperandC: FC<
 					return {
 						operationType: mode.operationType,
 						tooltip: getOperation({
-							source: mode.source,
+							sources: mode.sources,
 							target: operand,
 							operationType: mode.operationType,
 						})?.label,
@@ -201,6 +202,7 @@ const UncommittedChanges: FC<{
 							key={item.path}
 							item={item}
 							projectId={projectId}
+							headInfoIndex={headInfoIndex ?? undefined}
 							branchNameByCommitId={(cid) =>
 								headInfoIndex?.commitContextById(cid)?.segment.refName?.displayName
 							}
@@ -215,8 +217,9 @@ const UncommittedChanges: FC<{
 const UncommittedFileRow: FC<{
 	item: FileRowItem;
 	projectId: string;
+	headInfoIndex: HeadInfoIndex | undefined;
 	branchNameByCommitId: (commitId: string) => string | undefined;
-}> = ({ item, projectId, branchNameByCommitId }) => {
+}> = ({ item, projectId, headInfoIndex, branchNameByCommitId }) => {
 	const operand = fileOperand({
 		parent: uncommittedChangesFileParent,
 		path: item.path,
@@ -242,6 +245,7 @@ const UncommittedFileRow: FC<{
 							item={item}
 							projectId={projectId}
 							fileParent={uncommittedChangesFileParent}
+							headInfoIndex={headInfoIndex}
 							branchNameByCommitId={branchNameByCommitId}
 							inert={!navigationIndexIncludes(navigationIndex, operand, operandIdentityKey)}
 							isSelected={isSelected}
@@ -280,6 +284,7 @@ const BranchSegment: FC<{
 	canRemoveBranch: boolean;
 	downstackPushStatus: DownstackPushStatus;
 	isTopSegment: boolean;
+	checkCommit: (evt: { commitId: string; shiftKey: boolean }) => void;
 }> = ({
 	projectId,
 	segment,
@@ -290,6 +295,7 @@ const BranchSegment: FC<{
 	canRemoveBranch,
 	downstackPushStatus,
 	isTopSegment,
+	checkCommit,
 }) => {
 	const operand = branchOperand({ branchRef: refName.fullNameBytes });
 
@@ -324,7 +330,12 @@ const BranchSegment: FC<{
 
 			{/* oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- Tree items need ARIA group semantics. */}
 			<div role="group">
-				<SegmentContent projectId={projectId} segment={segment} commitTarget={commitTarget} />
+				<SegmentContent
+					projectId={projectId}
+					segment={segment}
+					commitTarget={commitTarget}
+					checkCommit={checkCommit}
+				/>
 			</div>
 		</TreeItem>
 	);
@@ -361,7 +372,8 @@ const SegmentContent: FC<{
 	projectId: string;
 	segment: Segment;
 	commitTarget: RelativeTo | null;
-}> = ({ projectId, segment, commitTarget }) => {
+	checkCommit: (evt: { commitId: string; shiftKey: boolean }) => void;
+}> = ({ projectId, segment, commitTarget, checkCommit }) => {
 	if (segment.commits.length === 0) return <EmptySegmentContent segment={segment} />;
 
 	const dryRunWorkspace = use(DryRunWorkspaceContext);
@@ -390,6 +402,7 @@ const SegmentContent: FC<{
 								render={
 									<CommitRow
 										commit={commit}
+										checkCommit={checkCommit}
 										projectId={projectId}
 										isCommitTarget={
 											commitTarget
@@ -415,7 +428,8 @@ const StackC: FC<{
 	projectId: string;
 	stack: Stack;
 	commitTarget: RelativeTo | null;
-}> = ({ projectId, stack, commitTarget }) => {
+	checkCommit: (evt: { commitId: string; shiftKey: boolean }) => void;
+}> = ({ projectId, stack, commitTarget, checkCommit }) => {
 	// From Caleb:
 	// > There shouldn't be a way within GitButler to end up with a stack without a
 	//   StackId. Users can disrupt our matching against our metadata by playing
@@ -423,8 +437,8 @@ const StackC: FC<{
 	//   so it probably isn't too common.
 	// For now we'll treat this as non-nullable until we identify cases where it
 	// could genuinely be null (assuming backend correctness).
-	// oxlint-disable-next-line typescript/no-non-null-assertion -- [tag:stack-id-required]
-	const stackId = stack.id!;
+	// [tag:stack-id-required]
+	const stackId = assert(stack.id);
 	const operand = stackOperand({ stackId });
 	const canTearOffBranch = stack.segments.length > 1;
 	const downstackPushStatuses = downstackPushStatusesFromSegments(stack.segments);
@@ -466,12 +480,14 @@ const StackC: FC<{
 										canRemoveBranch={canRemoveBranchReference(stack, index)}
 										downstackPushStatus={downstackPushStatus}
 										isTopSegment={index === 0}
+										checkCommit={checkCommit}
 									/>
 								) : (
 									<SegmentContent
 										projectId={projectId}
 										segment={segment}
 										commitTarget={commitTarget}
+										checkCommit={checkCommit}
 									/>
 								)}
 							</div>
@@ -510,7 +526,8 @@ const StackC: FC<{
 const Stacks: FC<{
 	projectId: string;
 	commitTarget: RelativeTo | null;
-}> = ({ projectId, commitTarget }) => {
+	checkCommit: (evt: { commitId: string; shiftKey: boolean }) => void;
+}> = ({ projectId, commitTarget, checkCommit }) => {
 	const navigationIndex = assert(use(NavigationIndexContext));
 	const { data: headInfo } = useQuery(headInfoQueryOptions(projectId));
 	const dryRunOperation = useAppSelector((state) => {
@@ -535,7 +552,7 @@ const Stacks: FC<{
 					if (!target) return;
 
 					return getOperation({
-						source: mode.source,
+						sources: mode.sources,
 						target,
 						operationType: mode.operationType,
 					})?.operation;
@@ -556,7 +573,13 @@ const Stacks: FC<{
 		<DryRunWorkspaceContext value={dryRunWorkspace}>
 			<div className={styles.stacks}>
 				{(headInfo?.stacks.toReversed() ?? []).map((stack) => (
-					<StackC key={stack.id} projectId={projectId} stack={stack} commitTarget={commitTarget} />
+					<StackC
+						key={stack.id}
+						projectId={projectId}
+						stack={stack}
+						commitTarget={commitTarget}
+						checkCommit={checkCommit}
+					/>
 				))}
 			</div>
 		</DryRunWorkspaceContext>
@@ -569,12 +592,14 @@ export const OutlineTree: FC<
 		commitTarget: RelativeTo | null;
 		navigationIndex: NavigationIndex<Operand>;
 		absorptionTargetCommitIds: ReadonlySet<string>;
+		headInfoIndex: HeadInfoIndex | undefined;
 	} & ComponentProps<"div">
 > = ({
 	projectId,
 	commitTarget,
 	navigationIndex,
 	absorptionTargetCommitIds,
+	headInfoIndex,
 	ref: refProp,
 	...props
 }) => {
@@ -582,8 +607,49 @@ export const OutlineTree: FC<
 		projectSlice.selectors.selectSelectionOutline(state, projectId, navigationIndex),
 	);
 	const hasCheckedCommits = useAppSelector((state) =>
-		projectSlice.selectors.selectHasCheckedCommits(state, projectId),
+		headInfoIndex
+			? projectSlice.selectors.selectHasCheckedCommits(state, projectId, headInfoIndex)
+			: false,
 	);
+	const store = useAppStore();
+	const dispatch = useAppDispatch();
+
+	const commitCheckRangeAnchor = useRef<string>(null);
+	const commitCheckRangeEnd = useRef<string>(null);
+
+	const rangeResolver = navigationIndexRange<Operand, string>({
+		navigationIndex,
+		getKey: (commitId) => operandIdentityKey(commitOperand({ commitId })),
+		filterMap: (item) => (item._tag === "Commit" ? item.commitId : null),
+	});
+	const getCheckedRange = checkedRange(rangeResolver);
+
+	const checkCommit = ({ commitId, shiftKey }: { commitId: string; shiftKey: boolean }): void => {
+		if (!headInfoIndex) return;
+
+		const checkedCommitIds = projectSlice.selectors.selectCheckedCommits(
+			store.getState(),
+			projectId,
+			headInfoIndex,
+		);
+		const nextCommitRange = getCheckedRange({
+			checked: checkedCommitIds,
+			rangeAnchor: commitCheckRangeAnchor.current,
+			rangeEnd: commitCheckRangeEnd.current,
+		})({
+			item: commitId,
+			shiftKey,
+		});
+
+		commitCheckRangeAnchor.current = nextCommitRange.rangeAnchor;
+		commitCheckRangeEnd.current = nextCommitRange.rangeEnd;
+		dispatch(
+			projectSlice.actions.setCheckedCommits({
+				projectId,
+				commitIds: Array.from(nextCommitRange.checked),
+			}),
+		);
+	};
 
 	const layoutId = `project=${projectId}:outline-tree`;
 	const outlineLayout = useDefaultLayout({
@@ -596,6 +662,7 @@ export const OutlineTree: FC<
 		navigationIndex,
 		projectId,
 		ref: hotkeysRef,
+		checkCommit,
 	});
 
 	return (
@@ -636,7 +703,7 @@ export const OutlineTree: FC<
 					<Separator className={styles.resizeHandle} />
 
 					<Panel id={"stacks-panel" satisfies PanelId} className={styles.panel} minSize={120}>
-						<Stacks projectId={projectId} commitTarget={commitTarget} />
+						<Stacks projectId={projectId} commitTarget={commitTarget} checkCommit={checkCommit} />
 					</Panel>
 				</Group>
 			</AbsorptionTargetCommitIdsContext>

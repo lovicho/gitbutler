@@ -7,18 +7,9 @@
 use std::env;
 use std::ffi::OsString;
 
-#[derive(Clone, Copy)]
-struct Variable(&'static str);
-
-impl Variable {
-    fn name(self) -> &'static str {
-        self.0
-    }
-}
-
 macro_rules! environment_variables {
     ($($name:ident = $value:literal),+ $(,)?) => {
-        $(const $name: Variable = Variable($value);)+
+        $(const $name: &str = $value;)+
 
         /// Every environment variable consulted during agent detection.
         pub const ENVIRONMENT_VARIABLES: &[&str] = &[$($value),+];
@@ -73,6 +64,7 @@ environment_variables! {
 
 /// An AI coding agent that may be driving the CLI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Agent {
     ClaudeCode,
     ClaudeCodeCowork,
@@ -115,7 +107,7 @@ pub enum Agent {
 
 impl Agent {
     /// A short, stable identifier suitable for telemetry or output-format decisions.
-    pub fn name(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Self::ClaudeCode => "claude-code",
             Self::ClaudeCodeCowork => "claude-code-cowork",
@@ -160,8 +152,47 @@ impl Agent {
 
 impl std::fmt::Display for Agent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.name())
+        f.write_str(self.as_str())
     }
+}
+
+/// Error returned when parsing a string that does not name a known agent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ParseAgentError;
+
+impl std::fmt::Display for ParseAgentError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("unrecognized agent name")
+    }
+}
+
+impl std::error::Error for ParseAgentError {}
+
+impl std::str::FromStr for Agent {
+    type Err = ParseAgentError;
+
+    /// Parse an agent identifier exactly the way detection interprets
+    /// `AI_AGENT` values: normalized (`Claude_Code`, `claude code`, and
+    /// `claude-code@2` all parse to [`Agent::ClaudeCode`]), accepting known
+    /// aliases and version-decorated prefixes such as
+    /// `claude-code_2-1-202_agent`.
+    ///
+    /// Unlike detection this never falls back to [`Agent::Unknown`]:
+    /// unrecognized values are an error.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match_normalized_value(&normalize_agent_value(s)).ok_or(ParseAgentError)
+    }
+}
+
+/// Match an already-normalized identifier against known agents, including
+/// decorated forms.
+fn match_normalized_value(val: &str) -> Option<Agent> {
+    // GitLab decorates Duo CLI with the LSP version between its product
+    // names, for example `gitlab-lsp_7.17.0__duo-cli`.
+    if val.starts_with("gitlab-lsp-") && val.ends_with("-duo-cli") {
+        return Some(Agent::GitLabDuoCli);
+    }
+    match_agent_name(val).or_else(|| match_agent_name_prefix(val))
 }
 
 /// Detect the current AI coding agent from environment variables.
@@ -174,14 +205,17 @@ pub fn detect() -> Option<Agent> {
     detect_with(|key| env::var_os(key))
 }
 
-/// Core detection logic, parameterised over an env-var lookup function for testability.
-fn detect_with(lookup: impl Fn(&str) -> Option<OsString>) -> Option<Agent> {
-    let is_set = |var: Variable| lookup(var.name()).is_some_and(|v| !v.is_empty());
-    let is_value = |var: Variable, expected: &str| {
-        lookup(var.name()).is_some_and(|v| v.to_str() == Some(expected))
-    };
-    let contains = |var: Variable, needle: &str| {
-        lookup(var.name()).is_some_and(|v| v.to_str().is_some_and(|value| value.contains(needle)))
+/// Core detection logic, parameterised over an env-var lookup function.
+///
+/// [`detect`] is this with [`std::env::var_os`] as the lookup; injecting the
+/// lookup keeps detection testable and lets embedders supply a snapshot of the
+/// environment instead of the live process environment.
+pub fn detect_with(lookup: impl Fn(&str) -> Option<OsString>) -> Option<Agent> {
+    let is_set = |var: &str| lookup(var).is_some_and(|v| !v.is_empty());
+    let is_value =
+        |var: &str, expected: &str| lookup(var).is_some_and(|v| v.to_str() == Some(expected));
+    let contains = |var: &str, needle: &str| {
+        lookup(var).is_some_and(|v| v.to_str().is_some_and(|value| value.contains(needle)))
     };
 
     // Generic `AI_AGENT` convention (as documented by `@vercel/detect-agent`).
@@ -311,23 +345,14 @@ fn detect_with(lookup: impl Fn(&str) -> Option<OsString>) -> Option<Agent> {
 /// setting `AI_AGENT` is an explicit "an agent is driving this" signal, so we
 /// keep it even when we can't name the agent.
 fn parse_ai_agent_var(lookup: &impl Fn(&str) -> Option<OsString>) -> Option<Agent> {
-    let val = normalize_agent_value(&lookup(AI_AGENT.name())?.to_string_lossy());
+    let val = normalize_agent_value(&lookup(AI_AGENT)?.to_string_lossy());
     if val.is_empty() {
         return None;
     }
-    // GitLab decorates Duo CLI with the LSP version between its product names,
-    // for example `gitlab-lsp_7.17.0__duo-cli`.
-    if val.starts_with("gitlab-lsp-") && val.ends_with("-duo-cli") {
-        return Some(Agent::GitLabDuoCli);
-    }
-    Some(
-        match_agent_name(&val)
-            .or_else(|| match_agent_name_prefix(&val))
-            .unwrap_or(Agent::Unknown),
-    )
+    Some(match_normalized_value(&val).unwrap_or(Agent::Unknown))
 }
 
-/// Match a normalized `AI_AGENT` value whose leading segments name a known
+/// Match a normalized agent identifier whose leading segments name a known
 /// agent, tolerating trailing decorations that embed a version without the
 /// `@` separator — Claude Code desktop sets e.g. `claude-code_2-1-202_agent`.
 /// Segments are dropped from the end one at a time, so the longest matching
@@ -350,7 +375,7 @@ fn match_agent_name_prefix(val: &str) -> Option<Agent> {
 /// values counts as an agent signal — anything else is ignored (returns `None`)
 /// rather than reported as `Agent::Unknown`, to avoid false positives.
 fn parse_agent_var(lookup: &impl Fn(&str) -> Option<OsString>) -> Option<Agent> {
-    match normalize_agent_value(&lookup(AGENT.name())?.to_string_lossy()).as_str() {
+    match normalize_agent_value(&lookup(AGENT)?.to_string_lossy()).as_str() {
         "goose" => Some(Agent::Goose),
         "amp" => Some(Agent::Amp),
         "crush" => Some(Agent::Crush),

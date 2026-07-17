@@ -684,6 +684,7 @@ export function buildStackEndpoints(build: BackendEndpointBuilder) {
 				invalidatesList(ReduxTag.WorktreeChanges),
 				invalidatesList(ReduxTag.HeadSha),
 				invalidatesList(ReduxTag.BranchListing),
+				invalidatesList(ReduxTag.Stacks),
 			],
 		}),
 		updateBranchName: build.mutation<

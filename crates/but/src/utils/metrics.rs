@@ -615,7 +615,7 @@ impl Event {
         event.insert_prop("$os", Event::normalize_os(env::consts::OS));
         event.insert_prop("Arch", env::consts::ARCH);
         if let Some(agent) = super::detect_agent::detect() {
-            event.insert_prop("agent", agent.name());
+            event.insert_prop("agent", agent.as_str());
         }
         event.clone()
     }

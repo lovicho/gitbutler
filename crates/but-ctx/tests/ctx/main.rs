@@ -738,3 +738,331 @@ impl From<ProjectMeta> for ProjectMetaView {
         }
     }
 }
+
+#[test]
+fn worktree_adoption_archives_preexisting_worktrees() -> anyhow::Result<()> {
+    let root = TempDir::new()?;
+    gix::init(root.path().join("main"))?;
+    let repo = open_repo(&root.path().join("main"))?;
+    but_testsupport::invoke_bash(
+        "git commit --allow-empty -m M
+         git worktree add -b feat-a ../wt-a
+         git worktree add -b feat-b ../wt-b",
+        &repo,
+    );
+    let mut ctx = Context::from_repo_for_testing(repo)?;
+    ctx.settings.feature_flags.worktree_manipulation = true;
+
+    assert_eq!(
+        active_names(&ctx)?,
+        Vec::<String>::new(),
+        "the first-ever read adopts, archiving all pre-existing worktrees"
+    );
+
+    but_testsupport::invoke_bash(
+        "git worktree add -b feat-c ../wt-c
+         git -C ../wt-c commit --allow-empty -m C1",
+        &*ctx.repo.get()?,
+    );
+    let active = ctx.active_worktrees()?;
+    assert_eq!(
+        active
+            .iter()
+            .map(|wt| wt.name.to_string())
+            .collect::<Vec<_>>(),
+        ["wt-c"],
+        "worktrees created after adoption are active by default"
+    );
+    assert_eq!(
+        active[0]
+            .ref_name
+            .as_ref()
+            .map(|name| name.as_bstr().to_string()),
+        Some("refs/heads/feat-c".into()),
+        "the checked-out branch is recorded for ref-first graph seeding"
+    );
+    assert_eq!(
+        active[0].head,
+        ctx.repo.get()?.rev_parse_single("feat-c")?.detach(),
+        "the head is the worktree's own HEAD, which has advanced past the main one"
+    );
+    assert_eq!(
+        active[0].path.canonicalize()?,
+        root.path().join("wt-c").canonicalize()?,
+        "the checkout path is reported, not the admin dir under .git/worktrees/"
+    );
+    assert_eq!(
+        ctx.worktrees_with_state()?
+            .iter()
+            .map(|wt| (wt.name.to_string(), wt.archived))
+            .collect::<Vec<_>>(),
+        [
+            ("wt-a".to_string(), true),
+            ("wt-b".to_string(), true),
+            ("wt-c".to_string(), false)
+        ],
+        "archived entries are returned with their flag set, not filtered out"
+    );
+
+    {
+        let mut db = ctx.db.get_cache_mut()?;
+        db.worktree_meta_mut().upsert(but_db::WorktreeMeta {
+            name: b"wt-a".to_vec(),
+            archived: false,
+        })?;
+    }
+    assert_eq!(
+        active_names(&ctx)?,
+        ["wt-a", "wt-c"],
+        "unarchiving makes a pre-existing worktree visible again"
+    );
+    Ok(())
+}
+
+fn active_names(ctx: &Context) -> anyhow::Result<Vec<String>> {
+    Ok(ctx
+        .active_worktrees()?
+        .into_iter()
+        .map(|wt| wt.name.to_string())
+        .collect())
+}
+
+#[test]
+fn worktree_manipulation_flag_gates_worktree_state() -> anyhow::Result<()> {
+    let root = TempDir::new()?;
+    gix::init(root.path().join("main"))?;
+    let repo = open_repo(&root.path().join("main"))?;
+    but_testsupport::invoke_bash(
+        "git commit --allow-empty -m M
+         git worktree add -b feat-a ../wt-a",
+        &repo,
+    );
+
+    // Flag off: nothing is returned and no adoption side-effects happen.
+    let ctx = Context::from_repo_for_testing(repo.clone())?;
+    assert_eq!(active_names(&ctx)?, Vec::<String>::new());
+    {
+        let db = ctx.db.get_cache_mut()?;
+        assert!(
+            !db.worktree_meta().adoption_ran()?,
+            "flag off must not adopt"
+        );
+        assert_eq!(
+            db.worktree_meta().list()?.len(),
+            0,
+            "flag off must not touch the worktree_meta table"
+        );
+    }
+
+    // Flag on: the first read adopts (archives) the pre-existing worktree.
+    let mut ctx = Context::from_repo_for_testing(repo)?;
+    ctx.settings.feature_flags.worktree_manipulation = true;
+    assert_eq!(
+        active_names(&ctx)?,
+        Vec::<String>::new(),
+        "pre-existing worktrees are archived at adoption"
+    );
+    let db = ctx.db.get_cache_mut()?;
+    assert!(db.worktree_meta().adoption_ran()?);
+    assert_eq!(
+        db.worktree_meta().list()?.len(),
+        1,
+        "adoption records the pre-existing worktree as archived"
+    );
+    Ok(())
+}
+
+#[test]
+fn worktree_adoption_with_zero_worktrees_is_persisted() -> anyhow::Result<()> {
+    let root = TempDir::new()?;
+    gix::init(root.path().join("main"))?;
+    let repo = open_repo(&root.path().join("main"))?;
+    but_testsupport::invoke_bash("git commit --allow-empty -m M", &repo);
+    let mut ctx = Context::from_repo_for_testing(repo)?;
+    ctx.settings.feature_flags.worktree_manipulation = true;
+
+    assert_eq!(active_names(&ctx)?, Vec::<String>::new());
+
+    // The explicit marker keeps the adoption alive even though it archived
+    // nothing, so a project's first worktree is active instead of being swept
+    // into a re-run of adoption.
+    but_testsupport::invoke_bash(
+        "git worktree add -b feat ../wt-new
+         git worktree add --detach ../wt-detached",
+        &*ctx.repo.get()?,
+    );
+    let active = ctx.active_worktrees()?;
+    assert_eq!(
+        active
+            .iter()
+            .map(|wt| (wt.name.to_string(), wt.ref_name.is_some()))
+            .collect::<Vec<_>>(),
+        [("wt-detached".into(), false), ("wt-new".into(), true)],
+        "a detached worktree is listed like any other, just without a ref name"
+    );
+    Ok(())
+}
+
+#[test]
+fn pruned_worktrees_are_adopted_but_not_returned() -> anyhow::Result<()> {
+    let root = TempDir::new()?;
+    gix::init(root.path().join("main"))?;
+    let repo = open_repo(&root.path().join("main"))?;
+    but_testsupport::invoke_bash(
+        "git commit --allow-empty -m M
+         git worktree add -b feat ../wt-gone",
+        &repo,
+    );
+    std::fs::remove_dir_all(root.path().join("wt-gone"))?;
+
+    let mut ctx = Context::from_repo_for_testing(repo)?;
+    ctx.settings.feature_flags.worktree_manipulation = true;
+    assert_eq!(
+        active_names(&ctx)?,
+        Vec::<String>::new(),
+        "a deleted checkout directory makes the worktree prunable, not active"
+    );
+    {
+        let mut db = ctx.db.get_cache_mut()?;
+        assert_eq!(
+            db.worktree_meta().get(b"wt-gone")?.map(|row| row.archived),
+            Some(true),
+            "the unusable worktree was still archived at adoption"
+        );
+        db.worktree_meta_mut().upsert(but_db::WorktreeMeta {
+            name: b"wt-gone".to_vec(),
+            archived: false,
+        })?;
+    }
+    assert_eq!(
+        active_names(&ctx)?,
+        Vec::<String>::new(),
+        "even unarchived, a pruned checkout is excluded - it is unusable, not merely hidden"
+    );
+    Ok(())
+}
+
+#[test]
+fn unborn_head_worktrees_are_adopted_but_not_returned() -> anyhow::Result<()> {
+    let root = TempDir::new()?;
+    gix::init(root.path().join("main"))?;
+    let repo = open_repo(&root.path().join("main"))?;
+    but_testsupport::invoke_bash(
+        "git commit --allow-empty -m M
+         git worktree add -b feat ../wt-unborn
+         git -C ../wt-unborn symbolic-ref HEAD refs/heads/never-born",
+        &repo,
+    );
+
+    let mut ctx = Context::from_repo_for_testing(repo)?;
+    ctx.settings.feature_flags.worktree_manipulation = true;
+    assert_eq!(
+        active_names(&ctx)?,
+        Vec::<String>::new(),
+        "an unborn HEAD has no commit to list - the worktree is skipped, not an error"
+    );
+    {
+        let mut db = ctx.db.get_cache_mut()?;
+        assert_eq!(
+            db.worktree_meta()
+                .get(b"wt-unborn")?
+                .map(|row| row.archived),
+            Some(true),
+            "the unborn worktree was still archived at adoption"
+        );
+        db.worktree_meta_mut().upsert(but_db::WorktreeMeta {
+            name: b"wt-unborn".to_vec(),
+            archived: false,
+        })?;
+    }
+    assert_eq!(
+        active_names(&ctx)?,
+        Vec::<String>::new(),
+        "even unarchived, an unborn-HEAD worktree is not listed until its branch is born"
+    );
+    Ok(())
+}
+
+#[test]
+fn workspace_ref_worktrees_are_adopted_but_never_returned() -> anyhow::Result<()> {
+    let root = TempDir::new()?;
+    gix::init(root.path().join("main"))?;
+    let repo = open_repo(&root.path().join("main"))?;
+    but_testsupport::invoke_bash(
+        "git commit --allow-empty -m M
+         git branch gitbutler/workspace
+         git worktree add ../wt-ws gitbutler/workspace",
+        &repo,
+    );
+
+    let mut ctx = Context::from_repo_for_testing(repo)?;
+    ctx.settings.feature_flags.worktree_manipulation = true;
+    assert_eq!(active_names(&ctx)?, Vec::<String>::new());
+    {
+        let mut db = ctx.db.get_cache_mut()?;
+        assert_eq!(
+            db.worktree_meta().get(b"wt-ws")?.map(|row| row.archived),
+            Some(true),
+            "a workspace-ref worktree is still adopted like any other"
+        );
+        db.worktree_meta_mut().upsert(but_db::WorktreeMeta {
+            name: b"wt-ws".to_vec(),
+            archived: false,
+        })?;
+    }
+    assert_eq!(
+        active_names(&ctx)?,
+        Vec::<String>::new(),
+        "even unarchived, a worktree on the workspace ref is never listed - \
+         GitButler manages that ref itself"
+    );
+    Ok(())
+}
+
+#[test]
+fn worktree_state_is_unreachable_from_linked_worktree_contexts() -> anyhow::Result<()> {
+    let root = TempDir::new()?;
+    gix::init(root.path().join("main"))?;
+    let repo = open_repo(&root.path().join("main"))?;
+    but_testsupport::invoke_bash(
+        "git commit --allow-empty -m M
+         git worktree add -b feat-a ../wt-a",
+        &repo,
+    );
+
+    // A context opened inside a linked worktree stores its database in the
+    // worktree's private git dir - adoption and archived state written there
+    // would silently diverge from the main worktree's database.
+    let mut ctx = Context::from_repo_for_testing(open_repo(&root.path().join("wt-a"))?)?;
+    assert_eq!(
+        active_names(&ctx)?,
+        Vec::<String>::new(),
+        "with the flag off even a linked-worktree context returns nothing, without erroring"
+    );
+    ctx.settings.feature_flags.worktree_manipulation = true;
+    assert!(
+        ctx.worktrees_with_state()
+            .unwrap_err()
+            .to_string()
+            .contains("main worktree"),
+        "linked-worktree contexts must be refused, not given their own state"
+    );
+
+    // The same holds for worktrees of a bare repository, whose git dirs contain
+    // no `.git` path component for kind heuristics to latch onto.
+    but_testsupport::invoke_bash_at_dir(
+        "git clone --bare main bare.git
+         git -C bare.git worktree add -b feat-bare ../wt-bare",
+        root.path(),
+    );
+    let mut ctx = Context::from_repo_for_testing(open_repo(&root.path().join("wt-bare"))?)?;
+    ctx.settings.feature_flags.worktree_manipulation = true;
+    assert!(
+        ctx.worktrees_with_state()
+            .unwrap_err()
+            .to_string()
+            .contains("main worktree"),
+        "a worktree of a bare repository is still a linked-worktree context"
+    );
+    Ok(())
+}

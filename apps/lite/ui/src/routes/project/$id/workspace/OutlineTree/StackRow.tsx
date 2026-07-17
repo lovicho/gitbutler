@@ -16,6 +16,7 @@ import { BottomUpdate, Stack } from "@gitbutler/but-sdk";
 import { ComponentProps, FC } from "react";
 import { getRowButtonClassName } from "../Row-utils.ts";
 import { Row, RowLabelContainer, RowToolbar } from "../Row.tsx";
+import { assert } from "#ui/assert.ts";
 
 export const StackRow: FC<
 	{
@@ -33,8 +34,8 @@ export const StackRow: FC<
 
 	const { isPending: isUnapplyStackPending, mutate: unapplyStack } = useUnapplyStack();
 	const unapply = () => {
-		// oxlint-disable-next-line typescript/no-non-null-assertion -- [ref:stack-id-required]
-		unapplyStack({ projectId, stackId: stack.id! });
+		// [ref:stack-id-required]
+		unapplyStack({ projectId, stackId: assert(stack.id) });
 	};
 
 	const { mutate: workspaceIntegrateUpstream } = useWorkspaceIntegrateUpstream();

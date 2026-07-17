@@ -71,6 +71,8 @@ pub use upstream_integration::{
 mod worktree;
 pub use worktree::worktree_conflicts_for_rebase;
 
+pub mod worktrees;
+
 pub mod workspace;
 
 /// Information about refs, as seen from within or outsie of a workspace.

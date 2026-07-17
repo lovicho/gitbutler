@@ -15,7 +15,7 @@ import {
 	changesInWorktreeQueryOptions,
 	commitDetailsWithLineStatsQueryOptions,
 	forgeInfoOptions,
-	getGUISettingsQueryOptions,
+	guiSettingsQueryOptions,
 	getReviewMergeStatusQueryOptions,
 	headInfoQueryOptions,
 	listCIChecksQueryOptions,
@@ -113,6 +113,7 @@ import { AggregateCIChecks } from "#ui/ci.ts";
 import { IconName } from "#ui/components/iconNames.ts";
 import { draftPRQueryOptions, usePersistDraftPR } from "#ui/pr.ts";
 import { combineHashes, hash } from "#ui/hash.ts";
+import { assert } from "#ui/assert.ts";
 
 type BranchTab = "diff" | "pr";
 
@@ -191,8 +192,8 @@ const mkCodeViewItem = (
 		type: "diff",
 		id: codeViewItemId({ changesetKey, path: change.path }),
 		version,
-		// oxlint-disable-next-line typescript/no-non-null-assertion -- There should always be exactly one result given our one parsed hunk.
-		fileDiff: parsed[0]!.files[0]!,
+		// There should always be exactly one result given our one parsed hunk.
+		fileDiff: assert(assert(parsed[0]).files[0]),
 	};
 };
 
@@ -340,19 +341,19 @@ const DiffContents: FC<{
 	const dispatch = useAppDispatch();
 	const { data: editors } = useQuery(listEditorsQueryOptions);
 	const { data: preferredEditor } = useQuery({
-		...getGUISettingsQueryOptions(),
+		...guiSettingsQueryOptions,
 		select: (cfg) => editors?.find((editor) => editor.id === cfg.editorId),
 	});
 	const { data: preferredFontFamily } = useQuery({
-		...getGUISettingsQueryOptions(),
+		...guiSettingsQueryOptions,
 		select: (cfg) => cfg.diffFontFamily,
 	});
 	const { data: preferredFontSize } = useQuery({
-		...getGUISettingsQueryOptions(),
+		...guiSettingsQueryOptions,
 		select: (cfg) => cfg.diffFontSize,
 	});
 	const { data: preferredTabSize } = useQuery({
-		...getGUISettingsQueryOptions(),
+		...guiSettingsQueryOptions,
 		select: (cfg) => cfg.diffTabSize,
 	});
 	const { mutate: openInEditor } = useOpenInEditor();
@@ -388,12 +389,11 @@ const DiffContents: FC<{
 		selection: diffSelection,
 		selectSectionPredicate: (hunk) => {
 			const k = hunkOperandIdentityKey(hunk);
-			// oxlint-disable-next-line typescript/no-non-null-assertion -- Absurd.
-			return hunkOperandIdentityKey(fileByHunkKey.get(k)!.hunks[0]!.operand) === k;
+			return hunkOperandIdentityKey(assert(assert(fileByHunkKey.get(k)).hunks[0]).operand) === k;
 		},
 		ref: selectionScopeRef,
 		getKey: hunkOperandIdentityKey,
-		operationSourceForItem: hunkOperand,
+		operationSourcesForItem: (hunk) => [hunkOperand(hunk)],
 	});
 
 	useHotkeys([
@@ -445,8 +445,8 @@ const DiffContents: FC<{
 
 		const activeItem = viewer
 			.getRenderedItems()
-			// oxlint-disable-next-line typescript/no-non-null-assertion -- It can only be undefined if the item ID is invalid.
-			.findLast((item) => viewer.getTopForItem(item.id)! <= scrollTop);
+			// It can only be undefined if the item ID is invalid.
+			.findLast((item) => assert(viewer.getTopForItem(item.id)) <= scrollTop);
 
 		// This can happen on very fast scroll.
 		if (activeItem === undefined) return;
@@ -502,8 +502,8 @@ const DiffContents: FC<{
 	const enhanceCollapsed = (item: CodeViewDiffItem): CodeViewDiffItem => ({
 		...item,
 		collapsed: true,
-		// oxlint-disable-next-line typescript/no-non-null-assertion -- We always use versions.
-		version: combineHashes(item.version!, 1),
+		// We always use versions.
+		version: combineHashes(assert(item.version), 1),
 	});
 
 	return items.length === 0 ? (
@@ -803,7 +803,7 @@ const DiffOverflowToggle: FC<
 	Omit<ComponentProps<typeof Toggle>, "aria-label" | "pressed" | "onPressedChange">
 > = (toggleProps) => {
 	const { data: diffOverflow } = useQuery({
-		...getGUISettingsQueryOptions(),
+		...guiSettingsQueryOptions,
 		select: (cfg) => cfg.diffOverflow,
 	});
 	const { mutate: saveGUISettings } = useSaveGUISettings();
@@ -835,7 +835,7 @@ const DiffBackgroundsToggle: FC<
 	Omit<ComponentProps<typeof Toggle>, "aria-label" | "pressed" | "onPressedChange">
 > = (toggleProps) => {
 	const { data: diffBackgrounds } = useQuery({
-		...getGUISettingsQueryOptions(),
+		...guiSettingsQueryOptions,
 		select: (cfg) => cfg.diffBackground,
 	});
 	const { mutate: saveGUISettings } = useSaveGUISettings();
@@ -868,7 +868,7 @@ const DiffStyleToggleGroup: FC<
 	>
 > = (toggleGroupProps) => {
 	const { data: diffStyle } = useQuery({
-		...getGUISettingsQueryOptions(),
+		...guiSettingsQueryOptions,
 		select: (cfg) => cfg.diffStyle,
 	});
 	const { mutate: saveGUISettings } = useSaveGUISettings();
@@ -1027,7 +1027,7 @@ const Diff: FC<{
 	};
 
 	const { data: diffSettings } = useQuery({
-		...getGUISettingsQueryOptions(),
+		...guiSettingsQueryOptions,
 		select: (cfg) => ({
 			diffBackground: cfg.diffBackground,
 			diffOverflow: cfg.diffOverflow,

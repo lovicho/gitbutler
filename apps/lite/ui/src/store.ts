@@ -1,5 +1,5 @@
 import { configureStore } from "@reduxjs/toolkit";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch, useSelector, useStore } from "react-redux";
 import { projectSlice } from "#ui/projects/state.ts";
 
 export const store = configureStore({
@@ -8,8 +8,10 @@ export const store = configureStore({
 	},
 });
 
-type RootState = ReturnType<typeof store.getState>;
-export type AppDispatch = typeof store.dispatch;
+type AppStore = typeof store;
+type RootState = ReturnType<AppStore["getState"]>;
+export type AppDispatch = AppStore["dispatch"];
 
+export const useAppStore = useStore.withTypes<AppStore>();
 export const useAppDispatch = useDispatch.withTypes<AppDispatch>();
 export const useAppSelector = useSelector.withTypes<RootState>();

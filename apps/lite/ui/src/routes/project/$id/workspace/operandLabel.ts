@@ -32,3 +32,15 @@ export const operandLabel = ({
 			},
 		}),
 	);
+
+export const operandsLabel = ({
+	operands,
+	headInfoIndex,
+}: {
+	operands: Array<Operand>;
+	headInfoIndex: HeadInfoIndex;
+}) => {
+	if (operands.length !== 1) return `${operands.length.toLocaleString()} items`;
+
+	return operandLabel({ operand: assert(operands[0]), headInfoIndex });
+};

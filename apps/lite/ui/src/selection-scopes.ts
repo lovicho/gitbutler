@@ -5,6 +5,7 @@ import { projectSlice } from "#ui/projects/state.ts";
 import { useAppDispatch } from "#ui/store.ts";
 import { getAdjacent, type NavigationIndex } from "#ui/workspace/navigation-index.ts";
 import { useHotkeySequences, useHotkeys } from "@tanstack/react-hotkeys";
+import { assert } from "#ui/assert.ts";
 
 export type SelectionScope = "outline" | "files" | "diff";
 const allSelectionScopes: Array<SelectionScope> = ["outline", "files", "diff"];
@@ -50,10 +51,10 @@ export const focusAdjacentSelectionScope = ({
 		if (nextSelectionScope !== undefined) focusSelectionScope(nextSelectionScope);
 	} else {
 		const curr = orderedSelectionScopes.indexOf(currentSelectionScope);
-		// oxlint-disable-next-line typescript/no-non-null-assertion -- This shouldn't ever fail.
-		const nextSelectionScope = orderedSelectionScopes.at(
-			(curr + offset) % orderedSelectionScopes.length,
-		)!;
+		// This shouldn't ever fail.
+		const nextSelectionScope = assert(
+			orderedSelectionScopes.at((curr + offset) % orderedSelectionScopes.length),
+		);
 
 		focusSelectionScope(nextSelectionScope);
 	}
@@ -67,7 +68,7 @@ export const useNavigationIndexHotkeys = <T>({
 	selection,
 	ref,
 	selectSectionPredicate,
-	operationSourceForItem,
+	operationSourcesForItem,
 	getKey,
 }: {
 	navigationIndex: NavigationIndex<T>;
@@ -77,7 +78,7 @@ export const useNavigationIndexHotkeys = <T>({
 	selection: T | null;
 	ref: React.RefObject<HTMLElement | null>;
 	selectSectionPredicate?: (item: T) => boolean;
-	operationSourceForItem: (item: T) => Operand;
+	operationSourcesForItem: (item: T) => Array<Operand>;
 	getKey: (item: T) => string;
 }) => {
 	const dispatch = useAppDispatch();
@@ -264,15 +265,14 @@ export const useNavigationIndexHotkeys = <T>({
 	const enterTransferModeForSelection = (operationType: OperationType) => {
 		if (selection === null) return;
 
-		const source = operationSourceForItem(selection);
-
 		dispatch(
 			projectSlice.actions.enterKeyboardTransferMode({
 				projectId,
-				source,
+				sources: operationSourcesForItem(selection),
 				operationType,
 			}),
 		);
+
 		focusSelectionScope("outline");
 	};
 

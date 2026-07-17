@@ -148,8 +148,8 @@ const useWorkspaceHotkeys = (projectId: string) => {
 	]);
 };
 
-const hasAnyOperation = (source: Operand, target: Operand) => {
-	const operations = getOperations(source, target);
+const hasAnyOperation = (sources: Array<Operand>, target: Operand) => {
+	const operations = getOperations(sources, target);
 	return !!operations.into || !!operations.above || !!operations.below;
 };
 
@@ -164,20 +164,24 @@ const buildOutlineNavigationIndex = ({
 	outlineMode: OutlineMode;
 	absorptionTargetCommitIds: ReadonlySet<string>;
 }): NavigationIndex<Operand> => {
-	const allItems = () => [
+	const allItems = (): Array<Operand> => [
 		uncommittedChangesOperand,
 		...(worktreeChanges?.changes.map((change) =>
 			fileOperand({ parent: uncommittedChangesFileParent, path: change.path }),
 		) ?? []),
 
-		...(headInfo?.stacks.toReversed() ?? []).flatMap((stack) =>
-			stack.segments.flatMap(
-				(segment): Array<Operand> => [
-					...(segment.refName ? [branchOperand({ branchRef: segment.refName.fullNameBytes })] : []),
-					...segment.commits.map((commit) => commitOperand({ commitId: commit.id })),
-				],
-			),
-		),
+		...(headInfo?.stacks
+			.toReversed()
+			.flatMap((stack) =>
+				stack.segments.flatMap(
+					(segment): Array<Operand> => [
+						...(segment.refName
+							? [branchOperand({ branchRef: segment.refName.fullNameBytes })]
+							: []),
+						...segment.commits.map((commit) => commitOperand({ commitId: commit.id })),
+					],
+				),
+			) ?? []),
 	];
 
 	const filteredItems = Match.value(outlineMode).pipe(
@@ -193,9 +197,9 @@ const buildOutlineNavigationIndex = ({
 			Transfer: ({ value: activeMode }) =>
 				allItems().filter(
 					(operand) =>
-						operandEquals(operand, activeMode.source) ||
-						operandContains(operand, activeMode.source) ||
-						hasAnyOperation(activeMode.source, operand),
+						activeMode.sources.some(
+							(source) => operandEquals(operand, source) || operandContains(operand, source),
+						) || hasAnyOperation(activeMode.sources, operand),
 				),
 			RenameBranch: (x) => [branchOperand(x.operand)],
 			RewordCommit: (x) => [commitOperand(x.operand)],

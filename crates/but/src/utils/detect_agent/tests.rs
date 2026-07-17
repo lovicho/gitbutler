@@ -324,7 +324,7 @@ fn ai_agent_accepts_known_aliases() {
             detect_with(env_from(&[("AI_AGENT", name)])),
             Some(agent),
             "AI_AGENT alias {name} should resolve to {}",
-            agent.name(),
+            agent.as_str(),
         );
     }
 }
@@ -357,7 +357,7 @@ fn ai_agent_matches_known_prefix_with_trailing_decorations() {
             detect_with(env_from(&[("AI_AGENT", value)])),
             Some(expected),
             "AI_AGENT={value} should prefix-match {}",
-            expected.name(),
+            expected.as_str(),
         );
     }
 }
@@ -376,7 +376,7 @@ fn ai_agent_strips_version_suffix() {
             detect_with(env_from(&[("AI_AGENT", value)])),
             Some(expected),
             "AI_AGENT={value} should strip the version and resolve to {}",
-            expected.name(),
+            expected.as_str(),
         );
     }
 }
@@ -519,7 +519,7 @@ fn detect_new_invocation_specific_markers() {
             detect_with(env_from(&[(var, value)])),
             Some(expected),
             "{var} should detect {}",
-            expected.name(),
+            expected.as_str(),
         );
     }
 }
@@ -679,12 +679,88 @@ fn agent_name_roundtrip() {
         Agent::Unknown,
     ];
     for agent in agents {
-        let lookup = env_from(&[("AI_AGENT", agent.name())]);
+        // Completeness guard: this wildcard-free match stops compiling when a
+        // variant is added to `Agent`, forcing whoever adds one to revisit
+        // this test — and, by proximity, the `agents` list above.
+        match agent {
+            Agent::ClaudeCode
+            | Agent::ClaudeCodeCowork
+            | Agent::Cursor
+            | Agent::CursorCli
+            | Agent::Codex
+            | Agent::KiroCli
+            | Agent::Junie
+            | Agent::QwenCode
+            | Agent::GitLabDuoCli
+            | Agent::KiloCode
+            | Agent::Hermes
+            | Agent::Devin
+            | Agent::Dirac
+            | Agent::GeminiCli
+            | Agent::GitHubCopilot
+            | Agent::OpenCode
+            | Agent::Poolside
+            | Agent::Augment
+            | Agent::Antigravity
+            | Agent::Replit
+            | Agent::V0
+            | Agent::Crush
+            | Agent::PulumiNeo
+            | Agent::Goose
+            | Agent::Amp
+            | Agent::Cline
+            | Agent::RooCode
+            | Agent::Trae
+            | Agent::TabnineCli
+            | Agent::Pi
+            | Agent::AmazonQ
+            | Agent::CodeBuddy
+            | Agent::GrokBuild
+            | Agent::Warp
+            | Agent::OpenHands
+            | Agent::OpenClaw
+            | Agent::Unknown => {}
+        }
+        let lookup = env_from(&[("AI_AGENT", agent.as_str())]);
         assert_eq!(
             detect_with(lookup),
             Some(agent),
             "roundtrip failed for {}",
-            agent.name()
+            agent.as_str()
         );
+    }
+}
+
+#[test]
+fn from_str_accepts_aliases_and_normalizes() {
+    for (value, expected) in [
+        ("claude-code", Agent::ClaudeCode),
+        ("claude", Agent::ClaudeCode),
+        ("Claude_Code", Agent::ClaudeCode),
+        ("claude-code@2", Agent::ClaudeCode),
+        ("gemini", Agent::GeminiCli),
+    ] {
+        assert_eq!(value.parse(), Ok(expected), "{value:?} should parse");
+    }
+}
+
+#[test]
+fn from_str_matches_detection_leniency() {
+    // The public parse accepts everything the `AI_AGENT` detection path
+    // accepts, including decorated values.
+    for (value, expected) in [
+        ("claude-code_2-1-202_agent", Agent::ClaudeCode),
+        ("gitlab-lsp_7.17.0__duo-cli", Agent::GitLabDuoCli),
+    ] {
+        assert_eq!(value.parse(), Ok(expected), "{value:?} should parse");
+    }
+}
+
+#[test]
+fn from_str_rejects_unknown_names() {
+    // A strict parse: unknown values error instead of resolving to
+    // `Agent::Unknown` the way `AI_AGENT` detection does.
+    for value in ["some-new-agent", "unknown", ""] {
+        assert_eq!(value.parse::<Agent>(), Err(ParseAgentError));
     }
 }
