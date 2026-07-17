@@ -104,16 +104,16 @@ fn pick_and_goto_noop_when_commit_file_list_open() {
     let mut tui = test_tui(env);
 
     tui.input([KeyCode::Down, KeyCode::Down])
-        .assert_current_line_eq(str!["┊●   9477ae7 add A"]);
+        .assert_current_line_eq(str!["┊●   tpm add A"]);
 
     tui.input('f')
-        .assert_current_line_eq(str!["┊│     9:t A A"]);
+        .assert_current_line_eq(str!["┊│     t:t A A"]);
 
     tui.input('t')
         .assert_rendered_term_svg_eq(file![
             "snapshots/pick_and_goto_noop_when_commit_file_list_open_001.svg"
         ])
-        .assert_current_line_eq(str!["┊│     9:t A A"]);
+        .assert_current_line_eq(str!["┊│     t:t A A"]);
 }
 
 #[test]

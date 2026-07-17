@@ -5,6 +5,7 @@
     .fg-blue { fill: #0000AA }
     .fg-cyan { fill: #00AAAA }
     .fg-green { fill: #00AA00 }
+    .fg-magenta { fill: #AA00AA }
     .fg-yellow { fill: #AA5500 }
     .container {
       padding: 0 10px;
@@ -36,7 +37,7 @@
 </tspan>
     <tspan x="10px" y="136px"><tspan>┊-</tspan>
 </tspan>
-    <tspan x="10px" y="154px"><tspan>┊●   </tspan><tspan class="fg-blue bold">4</tspan><tspan class="dimmed">366169</tspan><tspan> add A amended</tspan>
+    <tspan x="10px" y="154px"><tspan>┊●   </tspan><tspan class="fg-magenta">q</tspan><tspan class="dimmed">zq</tspan><tspan> add A amended</tspan>
 </tspan>
     <tspan x="10px" y="172px"><tspan>├╯</tspan>
 </tspan>

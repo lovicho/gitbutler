@@ -106,7 +106,7 @@
 									</p>
 									<CopyButton
 										class="text-12 clr-text-2"
-										text={commitAbsorption.commitId}
+										text={commitAbsorption.commitId.slice(0, 7)}
 										onclick={() => {
 											clipboardService.write(commitAbsorption.commitId, {
 												message: "Commit ID copied",

@@ -39,7 +39,7 @@ Deleted branch A
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [B]
-┊●   d3e2ba3 add B
+┊●   lrm add B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -111,7 +111,7 @@ Deleted branch B
 ┊●   wlx add C
 ┊│
 ┊├┄h0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -144,10 +144,10 @@ Deleted branch C
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [B]
-┊●   582f37b add B
+┊●   wwm add B
 ┊│
 ┊├┄h0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -180,10 +180,10 @@ Deleted branch C
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [B]
-┊●   582f37b add B
+┊●   wwm add B
 ┊│
 ┊├┄h0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M

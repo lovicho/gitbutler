@@ -5,7 +5,9 @@ use crate::support::{
     assert_workspace_ref, create_empty_branch_above, repo_with_feature_branch, write_file,
 };
 
-fn context_with_three_branch_stack() -> anyhow::Result<(but_ctx::Context, tempfile::TempDir)> {
+fn context_with_three_branch_stack_options(
+    empty_top_branch: bool,
+) -> anyhow::Result<(but_ctx::Context, tempfile::TempDir)> {
     let tmp = tempfile::tempdir()?;
     git_at_dir(tmp.path()).args(["init", "-b", "main"]).run();
     git_at_dir(tmp.path())
@@ -28,6 +30,9 @@ fn context_with_three_branch_stack() -> anyhow::Result<(but_ctx::Context, tempfi
         git_at_dir(tmp.path())
             .args(["checkout", "-b", branch])
             .run();
+        if empty_top_branch && branch == "C" {
+            continue;
+        }
         let file_name = format!("{branch}.txt");
         write_file(tmp.path(), &file_name, &format!("{branch}\n"))?;
         git_at_dir(tmp.path()).args(["add", &file_name]).run();
@@ -52,6 +57,14 @@ fn context_with_three_branch_stack() -> anyhow::Result<(but_ctx::Context, tempfi
     ])?;
     drop(meta);
     Ok((ctx, tmp))
+}
+
+fn context_with_three_branch_stack() -> anyhow::Result<(but_ctx::Context, tempfile::TempDir)> {
+    context_with_three_branch_stack_options(false)
+}
+
+fn context_with_empty_top_branch() -> anyhow::Result<(but_ctx::Context, tempfile::TempDir)> {
+    context_with_three_branch_stack_options(true)
 }
 
 #[cfg(not(feature = "graph-workspace"))]
@@ -206,6 +219,57 @@ fn successful_branch_move_returns_and_persists_reordered_stack() -> anyhow::Resu
         ctx.meta()?.branch_stack_order(tip.as_ref())?,
         Some(vec![tip, subject, target]),
         "the successful materialization should persist the new order"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn move_empty_top_branch_below_middle_preserves_commit_ownership() -> anyhow::Result<()> {
+    let (mut ctx, _tmp) = context_with_empty_top_branch()?;
+    let bottom: gix::refs::FullName = "refs/heads/A".try_into()?;
+    let middle: gix::refs::FullName = "refs/heads/B".try_into()?;
+    let empty_top: gix::refs::FullName = "refs/heads/C".try_into()?;
+    let middle_tip_before = ctx.repo.get()?.rev_parse_single(middle.as_ref())?.detach();
+    assert_eq!(
+        ctx.repo
+            .get()?
+            .rev_parse_single(empty_top.as_ref())?
+            .detach(),
+        middle_tip_before,
+        "the top branch starts empty"
+    );
+
+    // The branch dropzone below B targets A, making the requested order B, C, A (tip to base).
+    let result =
+        but_api::branch::move_branch(&mut ctx, empty_top.as_ref(), bottom.as_ref(), DryRun::No)?;
+
+    assert_workspace_ref(&result.workspace, "refs/heads/B");
+    #[cfg(not(feature = "graph-workspace"))]
+    assert_eq!(workspace_branch_names(&result.workspace), ["B", "C", "A"]);
+
+    let repo = ctx.repo.get()?;
+    let bottom_tip = repo.rev_parse_single(bottom.as_ref())?.detach();
+    assert_eq!(
+        repo.rev_parse_single(middle.as_ref())?.detach(),
+        middle_tip_before,
+        "the middle branch keeps owning its commit"
+    );
+    assert_eq!(
+        repo.rev_parse_single(empty_top.as_ref())?.detach(),
+        bottom_tip,
+        "the moved branch stays empty at its new position"
+    );
+    assert_eq!(
+        repo.head_name()?.as_ref(),
+        Some(&middle),
+        "HEAD follows the new stack tip"
+    );
+    drop(repo);
+    assert_eq!(
+        ctx.meta()?.branch_stack_order(middle.as_ref())?,
+        Some(vec![middle, empty_top, bottom]),
+        "the persisted order matches the ownership-preserving ref move"
     );
 
     Ok(())

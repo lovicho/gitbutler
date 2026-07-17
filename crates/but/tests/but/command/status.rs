@@ -60,10 +60,10 @@ fn anonymous_segment() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0
-┊●   b36b65c anonymous (no changes)
+┊●   sxu anonymous (no changes)
 ┊│
 ┊├┄h0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -162,7 +162,8 @@ fn json_shows_paths_as_strings() {
           "name": "A",
           "commits": [
             {
-              "cliId": "9",
+              "cliId": "tpm",
+              "changeId": "tpmktkqkknswxzyszlkxlrzoqorvpmur",
               "commitId": "9477ae721ab521d9d0174f70e804ce3ff9f6fb56",
               "createdAt": "2000-01-01T00:00:00+00:00",
               "message": "add A/n",
@@ -189,7 +190,8 @@ fn json_shows_paths_as_strings() {
           "name": "B",
           "commits": [
             {
-              "cliId": "d",
+              "cliId": "lrm",
+              "changeId": "lrmqkrvsuswuvvsnqpzqsoyswomkqvpw",
               "commitId": "d3e2ba36c529fbdce8de90593e22aceae21f9b17",
               "createdAt": "2000-01-01T00:00:00+00:00",
               "message": "add B/n",
@@ -358,14 +360,14 @@ fn long_cli_ids() {
 }
 
 #[test]
-fn long_cli_ids_json() -> anyhow::Result<()> {
+fn json_commit_cli_ids_use_change_ids() -> anyhow::Result<()> {
     let env = Sandbox::init_scenario_with_target_and_default_settings("commits-with-same-prefix");
 
     // Must set metadata to match the scenario, or else the old APIs used here won't deliver.
     env.setup_metadata(&["A"]);
 
-    // Assert a handful of commits to show that the commit CLI IDs become longer
-    // if a short ID would be ambiguous, but remain at 2 characters otherwise.
+    // Assert that JSON exposes each full change ID and uses its display-padded prefix as CLI ID,
+    // while retaining the underlying commit ID.
     env.but("--format json status -f")
         .allow_json()
         .with_assert(env.assert_with_uuid_and_timestamp_redactions())
@@ -376,13 +378,15 @@ fn long_cli_ids_json() -> anyhow::Result<()> {
 ...
           "commits": [
             {
-              "cliId": "5c8",
+              "cliId": "usn",
+              "changeId": "usnytowxypnotllltxmxrklxpksltzzr",
               "commitId": "5c88a8ec10067ef547f14b467776d3584cd683ea",
               "createdAt": "[RFC_TIMESTAMP]",
               "message": "add A13/n",
 ...
             {
-              "cliId": "a",
+              "cliId": "opy",
+              "changeId": "opypvmowxsmlvxvktmlrnqwkywlwlrno",
               "commitId": "a18ea48cd317c7c8fc9317b6f2427be4cdb2585d",
               "createdAt": "[RFC_TIMESTAMP]",
               "message": "add A12/n",
@@ -404,7 +408,8 @@ fn long_cli_ids_json() -> anyhow::Result<()> {
             {
 ...
             {
-              "cliId": "5c7",
+              "cliId": "tvm",
+              "changeId": "tvmyxqqsmtxrysurmzrxmylqrtmmxpyn",
               "commitId": "5c7c6d7f3854bb61978b410b1ae8146be9948b26",
               "createdAt": "[RFC_TIMESTAMP]",
               "message": "add A3/n",
@@ -571,7 +576,7 @@ fn status_upstream_and_merge_base_messages_truncate_when_unpaged() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A] [✓ upstream merges cleanly]
-┊●   601614c add A
+┊●   lvx add A
 ├╯
 ┊
 ┊╭┄(upstream) ⏫ 1 commit
@@ -616,11 +621,11 @@ fn status_marks_merged_upstream_without_upstream_flag() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A] (merged upstream)
-┊●   756ee31 A-change
+┊●   nyq A-change
 ├╯
 ┊
 ┊╭┄h0 [B]
-┊●   536958e B-change
+┊●   kyl B-change
 ├╯
 ┊
 ┊● 9354ac4 (upstream) ⏫ 2 commits
@@ -896,11 +901,11 @@ fn status_upstream_prunes_untracked_integrated_branch() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A] (merged upstream)
-┊●   756ee31 A-change
+┊●   nyq A-change
 ├╯
 ┊
 ┊╭┄h0 [B] [✓ upstream merges cleanly]
-┊●   536958e B-change
+┊●   kyl B-change
 ├╯
 ┊
 ┊╭┄(upstream) ⏫ 2 commits
@@ -938,11 +943,11 @@ fn status_upstream_prunes_metadata_tracked_integrated_branches() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A] (merged upstream)
-┊●   756ee31 A-change
+┊●   nyq A-change
 ├╯
 ┊
 ┊╭┄h0 [B] [✓ upstream merges cleanly]
-┊●   536958e B-change
+┊●   kyl B-change
 ├╯
 ┊
 ┊╭┄ex [extra-untracked] ○ empty (no commits)
@@ -988,15 +993,15 @@ fn status_upstream_prunes_with_different_bases() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A] [✓ upstream merges cleanly]
-┊●   756ee31 A-change
+┊●   nyq A-change
 ├╯
 ┊
 ┊╭┄h0 [B] [✓ upstream merges cleanly]
-┊●   594a02c B-change
+┊●   wxl B-change
 ┊│
 ┊├┄ma [main] (merged upstream)
-┊●   ba5149e M2
-┊●   6daac93 M1
+┊●   upk M2
+┊●   tpp M1
 ├╯
 ┊
 ┊╭┄(upstream) ⏫ 2 commits
@@ -1219,7 +1224,7 @@ printf '100644 %s 1\tconflicted.txt\n100644 %s 2\tconflicted.txt\n100644 %s 3\tc
 ┊    conflicted.txt {conflicted}
 ┊
 ┊╭┄g0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1289,7 +1294,7 @@ fn status_in_edit_mode_delegates_to_resolve_status() -> anyhow::Result<()> {
 }
 
 #[test]
-fn status_file_prefixed_with_change_id_when_available_and_commit_id_otherwise() {
+fn status_file_prefixed_with_persisted_or_synthetic_change_id() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
     env.setup_metadata(&["A"]);
 
@@ -1309,8 +1314,8 @@ fn status_file_prefixed_with_change_id_when_available_and_commit_id_otherwise() 
 ┊╭┄g0 [A]
 ┊●   123 Commit with change ID
 ┊│     123:p A B
-┊●   9477ae7 add A
-┊│     9:t A A
+┊●   tpm add A
+┊│     tpm:t A A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M

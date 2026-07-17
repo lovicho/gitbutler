@@ -94,7 +94,7 @@ fn discard_commit_confirm_yes_removes_commit() {
     let mut tui = test_tui(env);
 
     tui.input([KeyCode::Down, KeyCode::Down])
-        .assert_current_line_eq(str!["┊●   9477ae7 add A"]);
+        .assert_current_line_eq(str!["┊●   tpm add A"]);
 
     tui.input('x')
         .assert_rendered_contains("Discard commit")
@@ -159,7 +159,7 @@ fn discard_stack_confirm_yes_discards_staged_changes() {
         .assert_current_line_eq(str!["┊   << source >> << noop >> v A test.txt"]);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊●   << amend >> 9477ae7 add A"]);
+        .assert_current_line_eq(str!["┊●   << amend >> tpm add A"]);
 
     tui.input(KeyCode::Enter)
         .assert_current_line_eq(str!["┊●   tpm add A"]);
@@ -492,7 +492,7 @@ fn global_file_list_stays_open_after_discarding_the_last_file_in_a_commit() {
     tui.input('j');
     tui.input('j');
     tui.input('j')
-        .assert_current_line_eq(str!["┊│     9:t A A"]);
+        .assert_current_line_eq(str!["┊│     t:t A A"]);
     tui.input('x');
     tui.input('y');
 

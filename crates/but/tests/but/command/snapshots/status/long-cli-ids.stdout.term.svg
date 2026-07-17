@@ -5,6 +5,7 @@
     .fg-blue { fill: #0000AA }
     .fg-cyan { fill: #00AAAA }
     .fg-green { fill: #00AA00 }
+    .fg-magenta { fill: #AA00AA }
     .container {
       padding: 0 10px;
       line-height: 18px;
@@ -27,31 +28,31 @@
 </tspan>
     <tspan x="10px" y="64px"><tspan>┊╭┄</tspan><tspan class="fg-blue bold">g0</tspan><tspan> [</tspan><tspan class="fg-green">A</tspan><tspan>]</tspan>
 </tspan>
-    <tspan x="10px" y="82px"><tspan>┊●   </tspan><tspan class="fg-blue bold">5c8</tspan><tspan class="dimmed">8a8e</tspan><tspan> add A13</tspan>
+    <tspan x="10px" y="82px"><tspan>┊●   </tspan><tspan class="fg-magenta">u</tspan><tspan class="dimmed">sn</tspan><tspan> add A13</tspan>
 </tspan>
-    <tspan x="10px" y="100px"><tspan>┊●   </tspan><tspan class="fg-blue bold">a</tspan><tspan class="dimmed">18ea48</tspan><tspan> add A12</tspan>
+    <tspan x="10px" y="100px"><tspan>┊●   </tspan><tspan class="fg-magenta">opy</tspan><tspan> add A12</tspan>
 </tspan>
-    <tspan x="10px" y="118px"><tspan>┊●   </tspan><tspan class="fg-blue bold">0c</tspan><tspan class="dimmed">0fcbf</tspan><tspan> add A11</tspan>
+    <tspan x="10px" y="118px"><tspan>┊●   </tspan><tspan class="fg-magenta">opk</tspan><tspan> add A11</tspan>
 </tspan>
-    <tspan x="10px" y="136px"><tspan>┊●   </tspan><tspan class="fg-blue bold">c4</tspan><tspan class="dimmed">72887</tspan><tspan> add A10</tspan>
+    <tspan x="10px" y="136px"><tspan>┊●   </tspan><tspan class="fg-magenta">vv</tspan><tspan class="dimmed">l</tspan><tspan> add A10</tspan>
 </tspan>
-    <tspan x="10px" y="154px"><tspan>┊●   </tspan><tspan class="fg-blue bold">8</tspan><tspan class="dimmed">188106</tspan><tspan> add A9</tspan>
+    <tspan x="10px" y="154px"><tspan>┊●   </tspan><tspan class="fg-magenta">mz</tspan><tspan class="dimmed">z</tspan><tspan> add A9</tspan>
 </tspan>
-    <tspan x="10px" y="172px"><tspan>┊●   </tspan><tspan class="fg-blue bold">7</tspan><tspan class="dimmed">69f4a8</tspan><tspan> add A8</tspan>
+    <tspan x="10px" y="172px"><tspan>┊●   </tspan><tspan class="fg-magenta">vm</tspan><tspan class="dimmed">w</tspan><tspan> add A8</tspan>
 </tspan>
-    <tspan x="10px" y="190px"><tspan>┊●   </tspan><tspan class="fg-blue bold">2a</tspan><tspan class="dimmed">98cfc</tspan><tspan> add A7</tspan>
+    <tspan x="10px" y="190px"><tspan>┊●   </tspan><tspan class="fg-magenta">tp</tspan><tspan class="dimmed">w</tspan><tspan> add A7</tspan>
 </tspan>
-    <tspan x="10px" y="208px"><tspan>┊●   </tspan><tspan class="fg-blue bold">d</tspan><tspan class="dimmed">60e311</tspan><tspan> add A6</tspan>
+    <tspan x="10px" y="208px"><tspan>┊●   </tspan><tspan class="fg-magenta">l</tspan><tspan class="dimmed">yq</tspan><tspan> add A6</tspan>
 </tspan>
-    <tspan x="10px" y="226px"><tspan>┊●   </tspan><tspan class="fg-blue bold">c6</tspan><tspan class="dimmed">7c49e</tspan><tspan> add A5</tspan>
+    <tspan x="10px" y="226px"><tspan>┊●   </tspan><tspan class="fg-magenta">p</tspan><tspan class="dimmed">yq</tspan><tspan> add A5</tspan>
 </tspan>
-    <tspan x="10px" y="244px"><tspan>┊●   </tspan><tspan class="fg-blue bold">23</tspan><tspan class="dimmed">c280d</tspan><tspan> add A4</tspan>
+    <tspan x="10px" y="244px"><tspan>┊●   </tspan><tspan class="fg-magenta">mv</tspan><tspan class="dimmed">v</tspan><tspan> add A4</tspan>
 </tspan>
-    <tspan x="10px" y="262px"><tspan>┊●   </tspan><tspan class="fg-blue bold">5c7</tspan><tspan class="dimmed">c6d7</tspan><tspan> add A3</tspan>
+    <tspan x="10px" y="262px"><tspan>┊●   </tspan><tspan class="fg-magenta">tv</tspan><tspan class="dimmed">m</tspan><tspan> add A3</tspan>
 </tspan>
-    <tspan x="10px" y="280px"><tspan>┊●   </tspan><tspan class="fg-blue bold">1</tspan><tspan class="dimmed">299ac9</tspan><tspan> add A2</tspan>
+    <tspan x="10px" y="280px"><tspan>┊●   </tspan><tspan class="fg-magenta">s</tspan><tspan class="dimmed">xq</tspan><tspan> add A2</tspan>
 </tspan>
-    <tspan x="10px" y="298px"><tspan>┊●   </tspan><tspan class="fg-blue bold">07</tspan><tspan class="dimmed">48e42</tspan><tspan> add A1</tspan>
+    <tspan x="10px" y="298px"><tspan>┊●   </tspan><tspan class="fg-magenta">zp</tspan><tspan class="dimmed">l</tspan><tspan> add A1</tspan>
 </tspan>
     <tspan x="10px" y="316px"><tspan>├╯</tspan>
 </tspan>

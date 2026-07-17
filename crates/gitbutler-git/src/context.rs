@@ -1,4 +1,4 @@
-use std::time::UNIX_EPOCH;
+use std::{path::Path, time::UNIX_EPOCH};
 
 use anyhow::{Context as _, Result, anyhow};
 use but_askpass as askpass;
@@ -56,41 +56,7 @@ pub trait GitContextExt {
 
 impl GitContextExt for Context {
     fn fetch(&self, remote_name: &str, askpass: Option<String>) -> Result<()> {
-        let on_prompt = if askpass::get_broker().is_some() {
-            Some(move |prompt: String| handle_git_prompt_fetch(prompt, askpass.clone()))
-        } else {
-            None
-        };
-
-        let repo_path = self.workdir_or_gitdir()?;
-        let remote = remote_name.to_string();
-        let result = std::thread::spawn(move || -> Result<_> {
-            let runtime = tokio::runtime::Runtime::new().context(
-                but_error::Context::new("failed to initialize async runtime for git fetch")
-                    .with_code(Code::Unknown),
-            )?;
-            Ok(runtime.block_on(crate::fetch(
-                repo_path,
-                crate::tokio::TokioExecutor,
-                &remote,
-                on_prompt,
-            )))
-        })
-        .join()
-        .map_err(|panic| {
-            let reason = if let Some(message) = panic.downcast_ref::<String>() {
-                message.clone()
-            } else if let Some(message) = panic.downcast_ref::<&'static str>() {
-                (*message).to_owned()
-            } else {
-                "unknown panic payload".to_owned()
-            };
-
-            anyhow!("git fetch worker thread panicked: {reason}").context(
-                but_error::Context::new("git fetch failed unexpectedly").with_code(Code::Unknown),
-            )
-        })??;
-        result.map_err(Into::into)
+        fetch_with_askpass(self.workdir_or_gitdir()?, remote_name, askpass)
     }
 
     fn push<B>(
@@ -162,6 +128,53 @@ impl GitContextExt for Context {
 
         Ok(())
     }
+}
+
+/// Fetch from `remote_name`, forwarding credential prompts through the application askpass broker
+/// when it is enabled.
+///
+/// The fetch runs on its own thread and runtime so synchronous API callers don't block the runtime
+/// responsible for delivering askpass responses.
+pub fn fetch_with_askpass(
+    repo_path: impl AsRef<Path>,
+    remote_name: &str,
+    action: Option<String>,
+) -> Result<()> {
+    let on_prompt = if askpass::get_broker().is_some() {
+        Some(move |prompt: String| handle_git_prompt_fetch(prompt, action.clone()))
+    } else {
+        None
+    };
+
+    let repo_path = repo_path.as_ref().to_owned();
+    let remote = remote_name.to_owned();
+    let result = std::thread::spawn(move || -> Result<_> {
+        let runtime = tokio::runtime::Runtime::new().context(
+            but_error::Context::new("failed to initialize async runtime for git fetch")
+                .with_code(Code::Unknown),
+        )?;
+        Ok(runtime.block_on(crate::fetch(
+            repo_path,
+            crate::tokio::TokioExecutor,
+            &remote,
+            on_prompt,
+        )))
+    })
+    .join()
+    .map_err(|panic| {
+        let reason = if let Some(message) = panic.downcast_ref::<String>() {
+            message.clone()
+        } else if let Some(message) = panic.downcast_ref::<&'static str>() {
+            (*message).to_owned()
+        } else {
+            "unknown panic payload".to_owned()
+        };
+
+        anyhow!("git fetch worker thread panicked: {reason}").context(
+            but_error::Context::new("git fetch failed unexpectedly").with_code(Code::Unknown),
+        )
+    })??;
+    result.map_err(Into::into)
 }
 
 /// Push the given commit to the provided remote branch.

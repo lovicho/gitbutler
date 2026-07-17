@@ -5,8 +5,8 @@
 use std::path::PathBuf;
 
 use super::{
-    find_format_installations, home_dir, is_current_skill_installation, skill_format_for_agent,
-    skill_format_for_name, write_skill_files,
+    check_skill_status, find_format_installations, home_dir, is_current_skill_installation,
+    skill_format_for_agent, skill_format_for_name, write_skill_files,
 };
 use crate::{
     theme,
@@ -14,6 +14,7 @@ use crate::{
 };
 
 pub(crate) enum AgentSkillNotice {
+    NotInstalled(String),
     Hint(String),
     Updated(String),
     UpdateFailed(String),
@@ -22,27 +23,34 @@ pub(crate) enum AgentSkillNotice {
 impl AgentSkillNotice {
     pub(crate) fn text(&self) -> &str {
         match self {
-            Self::Hint(text) | Self::Updated(text) | Self::UpdateFailed(text) => text,
+            Self::NotInstalled(text)
+            | Self::Hint(text)
+            | Self::Updated(text)
+            | Self::UpdateFailed(text) => text,
         }
     }
 
     fn into_text(self) -> String {
         match self {
-            Self::Hint(text) | Self::Updated(text) | Self::UpdateFailed(text) => text,
+            Self::NotInstalled(text)
+            | Self::Hint(text)
+            | Self::Updated(text)
+            | Self::UpdateFailed(text) => text,
         }
     }
 
     pub(crate) fn is_hint(&self) -> bool {
-        matches!(self, Self::Hint(_))
+        matches!(self, Self::NotInstalled(_) | Self::Hint(_))
     }
 }
 
 pub(crate) fn agent_skill_notice(current_dir: &std::path::Path) -> Option<AgentSkillNotice> {
     let update = agent_skill_freshness_check();
     let hint = agent_skill_install_hint(current_dir);
-    match update {
-        Some(failed @ AgentSkillNotice::UpdateFailed(_)) => Some(failed),
-        update => hint.or(update),
+    match (hint, update) {
+        (Some(missing @ AgentSkillNotice::NotInstalled(_)), _) => Some(missing),
+        (_, Some(failed @ AgentSkillNotice::UpdateFailed(_))) => Some(failed),
+        (hint, update) => hint.or(update),
     }
 }
 
@@ -52,31 +60,39 @@ pub(crate) fn agent_skill_update_notice() -> Option<String> {
 
 /// Skill upkeep for agent commands. Returns `None` when no agent is detected.
 ///
-/// Scans skill installations and updates the detected agent's stale global copy.
+/// Scans skill installations and updates all stale global copies.
 ///
 /// Best-effort by construction: every failure in skill detection or file
 /// updates is logged or turned into an agent-facing line.
 /// Nothing propagates to the command that triggered the check.
 fn agent_skill_freshness_check() -> Option<AgentSkillNotice> {
-    let agent = detect_agent::detect()?;
-    let version = option_env!("VERSION").unwrap_or("dev");
-    let outdated: Vec<_> = agent_skill_installations(agent, None)?
+    detect_agent::detect()?;
+    let result = check_skill_status(None, true, false).ok()?;
+    let outdated: Vec<_> = result
+        .skills
         .into_iter()
-        .filter(|path| !is_current_skill_installation(path, version))
+        .filter(|skill| !skill.up_to_date)
+        .map(|skill| skill.path)
         .collect();
     if outdated.is_empty() {
         return None;
     }
+    let mut update_error = None;
     for path in outdated {
         if let Err(err) = write_skill_files(&path) {
-            tracing::debug!(?err, "failed to update the agent skill");
-            return Some(AgentSkillNotice::UpdateFailed(
-                agent_skill_update_failed_notice(&err),
-            ));
+            tracing::debug!(?err, ?path, "failed to update the agent skill");
+            if update_error.is_none() {
+                update_error = Some(err);
+            }
         }
     }
+    if let Some(err) = update_error {
+        return Some(AgentSkillNotice::UpdateFailed(
+            agent_skill_update_failed_notice(&err),
+        ));
+    }
     Some(AgentSkillNotice::Updated(agent_skill_updated_message(
-        version,
+        &result.cli_version,
     )))
 }
 
@@ -89,7 +105,9 @@ fn agent_skill_install_hint(current_dir: &std::path::Path) -> Option<AgentSkillN
     let installations = agent_skill_installations(agent, workdir.as_deref())?;
     let version = option_env!("VERSION").unwrap_or("dev");
     if installations.is_empty() {
-        Some(AgentSkillNotice::Hint(agent_skill_not_installed_notice()))
+        Some(AgentSkillNotice::NotInstalled(
+            agent_skill_not_installed_notice(),
+        ))
     } else if installations
         .iter()
         .all(|path| is_current_skill_installation(path, version))

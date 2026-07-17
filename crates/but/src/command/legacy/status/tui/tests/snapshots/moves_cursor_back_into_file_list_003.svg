@@ -26,15 +26,15 @@
     <text x="66" y="78" style="fill:#00AA00;opacity:0.75;">A</text>
     <text x="74" y="78" style="fill:#CCCCCC;opacity:0.75;">]</text>
     <text x="10 18" y="96" style="fill:#CCCCCC;">┊●</text>
-    <text x="50" y="96" style="fill:#0000AA;font-weight:bold;">9</text>
-    <text x="58 66 74 82 90 98" y="96" style="fill:#CCCCCC;opacity:0.75;">477ae7</text>
-    <text x="114 122 130" y="96" style="fill:#CCCCCC;">add</text>
-    <text x="146" y="96" style="fill:#CCCCCC;">A</text>
+    <text x="50" y="96" style="fill:#AA00AA;">t</text>
+    <text x="58 66" y="96" style="fill:#CCCCCC;opacity:0.75;">pm</text>
+    <text x="82 90 98" y="96" style="fill:#CCCCCC;">add</text>
+    <text x="114" y="96" style="fill:#CCCCCC;">A</text>
     <text x="10 18" y="114" style="fill:#CCCCCC;">┊│</text>
     <text x="66 74" y="114" style="fill:#FFFFFF;">&lt;&lt;</text>
     <text x="90 98 106 114 122 130" y="114" style="fill:#FFFFFF;">source</text>
     <text x="146 154" y="114" style="fill:#FFFFFF;">&gt;&gt;</text>
-    <text x="170 178 186" y="114" style="fill:#0000AA;font-weight:bold;">9:t</text>
+    <text x="170 178 186" y="114" style="fill:#0000AA;font-weight:bold;">t:t</text>
     <text x="202" y="114" style="fill:#CCCCCC;">A</text>
     <text x="218" y="114" style="fill:#00AA00;">A</text>
     <text x="10 18" y="132" style="fill:#CCCCCC;">├╯</text>

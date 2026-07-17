@@ -43,8 +43,8 @@ fn commit_moved_file_replaced_by_directory() {
 ┊●   1 Commit everything
 ┊│     1:q A A/file
 ┊│     1:p R B
-┊●   9477ae7 add A
-┊│     9:t A A
+┊●   tpm add A
+┊│     tpm:t A A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -360,7 +360,7 @@ fn commit_with_position_on_different_branch_fails() -> anyhow::Result<()> {
     env.file("new-file.txt", "content");
 
     let output = env
-        .but("commit -m 'Wrong target' A --before d3e2ba3")
+        .but("commit -m 'Wrong target' A --before lrm")
         .assert()
         .failure();
     let stderr = std::str::from_utf8(&output.get_output().stderr)?;
@@ -381,7 +381,7 @@ fn commit_empty_default() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -403,7 +403,7 @@ Created blank commit at the tip of branch 'A'
 ┊
 ┊╭┄g0 [A]
 ┊●   1 (no commit message) (no changes)
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -465,9 +465,8 @@ fn commit_empty_with_before_flag() {
 
     env.setup_metadata(&["A"]);
 
-    // Get the commit ID from the CLI ID map
-    // Use the short git hash for the commit on branch A
-    env.but("commit empty --before 9477ae7")
+    // Use the displayed change ID for the commit on branch A.
+    env.but("commit empty --before tpm")
         .assert()
         .success()
         .stdout_eq(str![[r#"
@@ -497,7 +496,7 @@ fn commit_empty_with_positional_target_defaults_to_before() {
     env.setup_metadata(&["A"]);
 
     // Use positional argument without flag (should default to --before behavior)
-    env.but("commit empty 9477ae7")
+    env.but("commit empty tpm")
         .assert()
         .success()
         .stdout_eq(str![[r#"
@@ -525,7 +524,7 @@ fn commit_empty_after_stack_head_is_disallowed() -> anyhow::Result<()> {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -583,10 +582,10 @@ fn commit_empty_after_branch_for_non_stack_head() -> anyhow::Result<()> {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9ac4652 add second
+┊●   ywx add second
 ┊│
 ┊├┄bo [bottom]
-┊●   fe12bcd add first
+┊●   zll add first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -612,7 +611,7 @@ Created blank commit above branch 'bottom'
 ┊●   1 (no commit message) (no changes)
 ┊│
 ┊├┄bo [bottom]
-┊●   fe12bcd add first
+┊●   zll add first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -633,7 +632,7 @@ fn commit_empty_with_before_branch() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -655,7 +654,7 @@ Created blank commit at the tip of branch 'A'
 ┊
 ┊╭┄g0 [A]
 ┊●   1 (no commit message) (no changes)
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -681,7 +680,7 @@ fn commit_empty_with_after_commit() {
     env.setup_metadata(&["A"]);
 
     // Insert empty commit after a specific commit
-    env.but("commit empty --after 9477ae7")
+    env.but("commit empty --after tpm")
         .assert()
         .success()
         .stdout_eq(str![[r#"
@@ -1082,7 +1081,7 @@ fn commit_json_positioned_omits_branch_tip() -> anyhow::Result<()> {
     env.file("new-file.txt", "test content");
 
     let output = env
-        .but("commit --format json -m 'Test commit' A --before 9477ae7")
+        .but("commit --format json -m 'Test commit' A --before tpm")
         .assert()
         .success();
     let json: serde_json::Value = serde_json::from_slice(&output.get_output().stdout)?;

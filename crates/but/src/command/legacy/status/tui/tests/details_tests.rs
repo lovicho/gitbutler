@@ -1159,7 +1159,7 @@ fn dims_unselectable_lines_while_in_details_mode() {
 }
 
 #[test]
-fn doesnt_show_synthetic_change_id() {
+fn shows_synthetic_change_id() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
     env.setup_metadata(&["A"]);
 
@@ -1168,5 +1168,5 @@ fn doesnt_show_synthetic_change_id() {
     tui.input('j');
     tui.input('j');
     tui.input('d')
-        .assert_rendered_term_svg_eq(file!["snapshots/doesnt_show_synthetic_change_id_001.svg"]);
+        .assert_rendered_term_svg_eq(file!["snapshots/shows_synthetic_change_id_001.svg"]);
 }

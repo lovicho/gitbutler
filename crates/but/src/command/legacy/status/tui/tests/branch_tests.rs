@@ -28,10 +28,10 @@ fn branch_key_from_commit_is_noop() {
     let mut tui = test_tui(env);
 
     tui.input([KeyCode::Down, KeyCode::Down, KeyCode::Down, KeyCode::Down])
-        .assert_current_line_eq(str!["┊●   d3e2ba3 add B"]);
+        .assert_current_line_eq(str!["┊●   lrm add B"]);
 
     tui.input('b')
-        .assert_current_line_eq(str!["┊●   d3e2ba3 add B"]);
+        .assert_current_line_eq(str!["┊●   lrm add B"]);
 }
 
 #[test]
@@ -60,11 +60,11 @@ fn branch_key_keeps_global_file_list_open() {
 
     tui.input((KeyModifiers::SHIFT, 'F'))
         .assert_current_line_eq(str!["┊╭┄g0 [A]"])
-        .assert_rendered_contains("9:t A A");
+        .assert_rendered_contains("t:t A A");
 
     tui.input('b')
         .assert_current_line_eq(str!["┊╭┄br [c-branch-1] (no commits)"])
-        .assert_rendered_contains("9:t A A");
+        .assert_rendered_contains("t:t A A");
 }
 
 #[test]

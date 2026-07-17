@@ -211,7 +211,7 @@ fn rejects_non_branch_cli_id() -> anyhow::Result<()> {
         .failure()
         .stdout_eq(str![])
         .stderr_eq(str![[r#"
-Error: Could not find branch: '9'
+Error: Could not find branch: 'tpm'
 
 Hint: Run `but status` for applicable targets.
 
@@ -243,7 +243,7 @@ fn assert_workspace_status(env: &crate::utils::Sandbox) {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M

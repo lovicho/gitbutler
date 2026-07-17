@@ -199,6 +199,11 @@ pub(crate) enum BranchStatus {
 pub(crate) struct Commit {
     /// A unique ID specific to the current state of the workspace, to be used by other CLI operations (e.g `rub`)
     cli_id: String,
+    /// Full change ID, including a synthetic one if the commit does not persist one.
+    ///
+    /// Currently optional as we don't resolve change IDs for remote commits at this time.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    change_id: Option<String>,
     /// The commit ID (SHA-1 or SHA-256 depending on the repository configuration)
     commit_id: String,
     /// Timestamp of when the commit was created in format "YYYY-MM-DD HH:MM:SS +ZZZZ"
@@ -319,13 +324,12 @@ impl Branch {
             .workspace_commits
             .iter()
             .map(|c| {
-                Commit::from_local_commit(
-                    repo,
-                    c.short_id.clone(),
-                    c.clone(),
-                    local_commits_by_id,
-                    show_files,
-                )
+                let cli_id = c
+                    .change_id
+                    .as_ref()
+                    .map(|change_id| change_id.padded_short_id())
+                    .unwrap_or_else(|| c.short_id.clone());
+                Commit::from_local_commit(repo, cli_id, c.clone(), local_commits_by_id, show_files)
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
 
@@ -395,12 +399,17 @@ impl Commit {
             None
         };
 
+        let change_id = commit
+            .change_id
+            .as_ref()
+            .map(|change_id| change_id.change_id.to_string());
         let commit = &local_commits_by_id
             .get(&commit.commit_id())
             .context("BUG: head_info does not have local commit that graph has")?
             .inner;
         Ok(Commit {
             cli_id,
+            change_id,
             commit_id: commit.id.to_string(),
             created_at: gix_time_to_rfc3339(&commit.author.time),
             message: commit.message.to_string(),
@@ -426,6 +435,8 @@ impl Commit {
         };
         Ok(Some(Commit {
             cli_id,
+            // Remote-only commits are not assigned change IDs by the status ID map.
+            change_id: None,
             commit_id: commit.id.to_string(),
             created_at: gix_time_to_rfc3339(&commit.author.time),
             message: commit.message.to_string(),
@@ -444,6 +455,7 @@ impl Commit {
     ) -> Self {
         Commit {
             cli_id: String::new(),
+            change_id: commit.change_id,
             commit_id: commit.id.to_string(),
             created_at: i128_to_rfc3339(commit.authored_at),
             message: commit.message.to_string(),

@@ -137,8 +137,8 @@ mod util {
         serde_json::from_slice(&output.stdout).context("status output should be valid JSON")
     }
 
-    /// Return the CLI ids for all commits on `branch_name` in `status` output.
-    pub fn branch_commit_ids(status: &serde_json::Value, branch_name: &str) -> Vec<String> {
+    /// Return the CLI IDs for all commits on `branch_name` in `status` output.
+    pub fn branch_commit_cli_ids(status: &serde_json::Value, branch_name: &str) -> Vec<String> {
         status["stacks"]
             .as_array()
             .unwrap()
@@ -153,8 +153,8 @@ mod util {
             .collect()
     }
 
-    /// Return the CLI id of the commit on `branch_name` containing `file_path` in `status` output.
-    pub fn branch_commit_id_for_file(
+    /// Return the CLI ID of the commit on `branch_name` containing `file_path` in `status` output.
+    pub fn branch_commit_cli_id_for_file(
         status: &serde_json::Value,
         branch_name: &str,
         file_path: &str,

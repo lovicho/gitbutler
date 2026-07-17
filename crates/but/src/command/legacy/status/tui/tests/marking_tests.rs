@@ -12,13 +12,13 @@ fn marking_individual_commit_toggles_mark_indicator() {
     let mut tui = test_tui(env);
 
     tui.input([KeyCode::Down, KeyCode::Down])
-        .assert_current_line_eq(str!["┊●   9477ae7 add A"]);
+        .assert_current_line_eq(str!["┊●   tpm add A"]);
 
     tui.input(' ')
-        .assert_current_line_eq(str!["┊✔︎   9477ae7 add A"]);
+        .assert_current_line_eq(str!["┊✔︎   tpm add A"]);
 
     tui.input(' ')
-        .assert_current_line_eq(str!["┊●   9477ae7 add A"])
+        .assert_current_line_eq(str!["┊●   tpm add A"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/marking_individual_commit_toggles_mark_indicator_final.svg"
         ]);
@@ -37,7 +37,7 @@ fn marking_branch_toggles_all_commits_in_that_branch() {
     tui.input(' ').assert_current_line_eq(str!["┊╭┄g0 [A]"]);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊✔︎   9477ae7 add A"])
+        .assert_current_line_eq(str!["┊✔︎   tpm add A"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/marking_branch_toggles_all_commits_in_that_branch_final.svg"
         ]);
@@ -78,22 +78,22 @@ fn multi_squash_marked_commits_into_selected_marked_target() {
     let mut tui = test_tui(env);
 
     tui.input([KeyCode::Down, KeyCode::Down])
-        .assert_current_line_eq(str!["┊●   9477ae7 add A"]);
+        .assert_current_line_eq(str!["┊●   tpm add A"]);
 
     tui.input(' ')
-        .assert_current_line_eq(str!["┊✔︎   9477ae7 add A"]);
+        .assert_current_line_eq(str!["┊✔︎   tpm add A"]);
 
     tui.input((KeyModifiers::SHIFT, 'J'))
         .assert_current_line_eq(str!["┊╭┄h0 [B]"]);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊●   d3e2ba3 add B"]);
+        .assert_current_line_eq(str!["┊●   lrm add B"]);
 
     tui.input(' ')
-        .assert_current_line_eq(str!["┊✔︎   d3e2ba3 add B"]);
+        .assert_current_line_eq(str!["┊✔︎   lrm add B"]);
 
     tui.input('r')
-        .assert_current_line_eq(str!["┊✔︎   << source >> << squash >> d3e2ba3 add B"]);
+        .assert_current_line_eq(str!["┊✔︎   << source >> << squash >> lrm add B"]);
 
     tui.input(KeyCode::Enter)
         .assert_current_line_eq(str!["┊●   lrm add B"])

@@ -14,18 +14,18 @@
     <text x="194 202 210 218 226 234 242 250" y="24" style="fill:#FFFFFF;font-weight:bold;opacity:0.75;">changes)</text>
     <text x="10" y="42" style="fill:#CCCCCC;">┊</text>
     <text x="10 18 26" y="60" style="fill:#CCCCCC;">┊╭┄</text>
-    <text x="34" y="60" style="fill:#0000AA;font-weight:bold;">b</text>
+    <text x="34" y="60" style="fill:#0000AA;font-weight:bold;">r</text>
     <text x="42" y="60" style="fill:#000000;">r</text>
     <text x="58" y="60" style="fill:#CCCCCC;">[</text>
-    <text x="66 74 82 90 98 106" y="60" style="fill:#00AA00;">branch</text>
-    <text x="114" y="60" style="fill:#CCCCCC;">]</text>
+    <text x="66 74 82 90 98 106 114 122 130" y="60" style="fill:#00AA00;">rr-branch</text>
+    <text x="138" y="60" style="fill:#CCCCCC;">]</text>
     <text x="10 18" y="78" style="fill:#CCCCCC;">┊●</text>
-    <text x="50" y="78" style="fill:#0000AA;font-weight:bold;">b</text>
-    <text x="58" y="78" style="fill:#000000;">0</text>
-    <text x="66 74 82 90 98" y="78" style="fill:#CCCCCC;opacity:0.75;">f22e6</text>
-    <text x="114 122 130" y="78" style="fill:#CCCCCC;">add</text>
-    <text x="146 154 162 170 178 186" y="78" style="fill:#CCCCCC;">branch</text>
-    <text x="202 210 218" y="78" style="fill:#CCCCCC;">814</text>
+    <text x="50" y="78" style="fill:#AA00AA;">r</text>
+    <text x="58" y="78" style="fill:#000000;">z</text>
+    <text x="66" y="78" style="fill:#CCCCCC;opacity:0.75;">r</text>
+    <text x="82 90 98" y="78" style="fill:#CCCCCC;">add</text>
+    <text x="114 122 130 138 146 154" y="78" style="fill:#CCCCCC;">branch</text>
+    <text x="170 178 186" y="78" style="fill:#CCCCCC;">814</text>
     <text x="10 18" y="96" style="fill:#CCCCCC;">├╯</text>
     <text x="10" y="114" style="fill:#CCCCCC;">┊</text>
     <text x="10" y="132" style="fill:#CCCCCC;">┴</text>
@@ -37,6 +37,6 @@
     <text x="322" y="132" style="fill:#CCCCCC;opacity:0.75;">M</text>
     <text x="26 34 42 50" y="366" style="fill:#000000;">jump</text>
     <text x="82" y="366" style="fill:#CCCCCC;">/</text>
-    <text x="98" y="366" style="fill:#CCCCCC;">b</text>
+    <text x="98" y="366" style="fill:#CCCCCC;">r</text>
   </g>
 </svg>

@@ -1,8 +1,13 @@
 //! Functions that operate on the workspace.
 
-use std::{borrow::Cow, collections::HashSet};
+use std::{
+    borrow::Cow,
+    collections::HashSet,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use crate::WorkspaceState;
+use bstr::ByteSlice;
 use but_api_macros::but_api;
 use but_core::{
     DryRun, RefMetadata, extract_remote_name_and_short_name, is_workspace_ref_name,
@@ -16,6 +21,133 @@ use but_workspace::{
     BottomUpdate, BottomUpdateKind, IntegrateUpstreamOutcome, ReviewIntegrationHint,
 };
 use tracing::{instrument, warn};
+
+/// The persisted status of fetches performed through [`workspace_fetch_from_remotes()`].
+#[derive(Debug, Clone, Default, serde::Serialize)]
+#[cfg_attr(feature = "export-schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceFetchStatus {
+    /// When the most recent fetch attempt finished, in milliseconds since the Unix epoch.
+    pub last_attempted_ms: Option<u64>,
+    /// When the most recent successful fetch finished, in milliseconds since the Unix epoch.
+    pub last_successful_ms: Option<u64>,
+    /// The error produced by the most recent attempt, or `None` if it succeeded.
+    pub last_error: Option<String>,
+}
+
+#[cfg(feature = "export-schema")]
+but_schemars::register_sdk_type!(WorkspaceFetchStatus);
+
+impl TryFrom<but_db::FetchStatus> for WorkspaceFetchStatus {
+    type Error = std::num::TryFromIntError;
+
+    fn try_from(value: but_db::FetchStatus) -> Result<Self, Self::Error> {
+        Ok(Self {
+            last_attempted_ms: Some(value.last_attempted_ms.try_into()?),
+            last_successful_ms: value
+                .last_successful_ms
+                .map(TryInto::try_into)
+                .transpose()?,
+            last_error: value.last_error,
+        })
+    }
+}
+
+/// Fetch all configured remotes and persist the outcome for [`workspace_fetch_status()`].
+///
+/// Fetching continues after an individual remote fails so every configured remote gets an attempt.
+/// If any fetch fails, all errors are persisted and returned together. Credential prompts are
+/// associated with `action`, which defaults to `"unknown"`.
+#[but_api(napi)]
+#[instrument(skip_all, err(Debug))]
+pub fn workspace_fetch_from_remotes(
+    ctx: &but_ctx::Context,
+    action: Option<String>,
+    _perm: &mut RepoExclusive,
+) -> anyhow::Result<()> {
+    let askpass_action = Some(action.unwrap_or_else(|| "unknown".to_owned()));
+    let fetch_result = (|| {
+        let repo_path = ctx.workdir_or_gitdir()?;
+        let remotes = {
+            let repo = ctx.repo.get()?;
+            repo.remote_names()
+                .iter()
+                .map(|name| name.to_str().map(str::to_owned))
+                .collect::<Result<Vec<_>, _>>()?
+        };
+        let errors = remotes
+            .iter()
+            .filter_map(|remote| {
+                gitbutler_git::fetch_with_askpass(&repo_path, remote, askpass_action.clone())
+                    .err()
+                    .map(|err| format!("{remote}: {err}"))
+            })
+            .collect::<Vec<_>>();
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!(errors.join("\n")))
+        }
+    })();
+
+    let attempted_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|err| anyhow::anyhow!("system clock is before the Unix epoch: {err}"))?
+        .as_millis()
+        .try_into()
+        .map_err(|err| anyhow::anyhow!("fetch timestamp does not fit in the database: {err}"))?;
+    match &fetch_result {
+        Ok(()) => ctx
+            .db
+            .get_cache_mut()?
+            .fetch_status_mut()
+            .record_success(attempted_ms)?,
+        Err(err) => ctx
+            .db
+            .get_cache_mut()?
+            .fetch_status_mut()
+            .record_failure(attempted_ms, &format!("{err:#}"))?,
+    }
+
+    // A partial failure may still have updated some remote refs.
+    ctx.invalidate_workspace_cache()?;
+    prune_missing_branch_stack_order(ctx)?;
+    fetch_result
+}
+
+/// Reconcile branch-order metadata against the current local branch refs.
+pub(crate) fn prune_missing_branch_stack_order(ctx: &but_ctx::Context) -> anyhow::Result<()> {
+    let local_branch_refs = {
+        let repo = ctx.repo.get()?;
+        repo.references()?
+            .prefixed("refs/heads/")?
+            .filter_map(Result::ok)
+            .map(|reference| reference.name().to_owned())
+            .collect::<Vec<_>>()
+    };
+    ctx.meta()?
+        .remove_missing_branch_stack_order_references(&local_branch_refs)?;
+    Ok(())
+}
+
+/// Return the persisted status of fetches performed through
+/// [`workspace_fetch_from_remotes()`].
+///
+/// A project that hasn't used the workspace fetch API returns an empty status. Legacy fetch state
+/// is intentionally not imported.
+#[but_api(napi)]
+#[instrument(skip_all, err(Debug))]
+pub fn workspace_fetch_status(ctx: &but_ctx::Context) -> anyhow::Result<WorkspaceFetchStatus> {
+    ctx.db
+        .get_cache()?
+        .fetch_status()
+        .get()?
+        .map(TryInto::try_into)
+        .transpose()
+        .map(Option::unwrap_or_default)
+        .map_err(Into::into)
+}
 
 /// Return the current detailed graph workspace for the frontend.
 ///
@@ -443,7 +575,10 @@ pub fn workspace_integrate_upstream_only_with_perm(
 
 #[cfg(test)]
 mod tests {
-    use super::{review_integration_hints_from_reviews, target_branch_name};
+    use super::{
+        review_integration_hints_from_reviews, target_branch_name, workspace_fetch_from_remotes,
+    };
+    use but_core::RefMetadata;
     use but_testsupport::{CommandExt, git_at_dir, open_repo};
     use std::collections::HashSet;
     use std::path::Path;
@@ -475,6 +610,32 @@ mod tests {
 
     fn write_file(root: &Path, relative_path: &str, content: &str) -> anyhow::Result<()> {
         std::fs::write(root.join(relative_path), content)?;
+        Ok(())
+    }
+
+    #[test]
+    fn failed_fetch_prunes_missing_branch_stack_order() -> anyhow::Result<()> {
+        but_askpass::disable();
+        let (repo, tmp) = repo_with_feature_branch()?;
+        let feature: gix::refs::FullName = "refs/heads/feature".try_into()?;
+        let main = repo.head_name()?.expect("HEAD is symbolic").to_owned();
+        let mut ctx = but_ctx::Context::from_repo_for_testing(repo)?.with_memory_app_cache();
+        ctx.meta()?
+            .set_branch_stack_order(&[feature.clone(), main.clone()])?;
+
+        git_at_dir(tmp.path())
+            .args(["branch", "-D", "feature"])
+            .run();
+
+        let mut guard = ctx.exclusive_worktree_access();
+        workspace_fetch_from_remotes(&ctx, None, guard.write_permission())
+            .expect_err("the configured origin does not exist");
+        drop(guard);
+
+        assert!(
+            ctx.meta()?.branch_stack_order(main.as_ref())?.is_none(),
+            "failed fetch should still prune missing branch-order references"
+        );
         Ok(())
     }
 

@@ -114,7 +114,7 @@ const HIGH_VOLUME_EVENTS: EventDescription[] = [{ name: "tauri_command", command
 
 const MID_VOLUME_EVENTS: EventDescription[] = [
 	{ name: "tauri_command", command: "get_base_branch_data" },
-	{ name: "tauri_command", command: "fetch_from_remotes" },
+	{ name: "tauri_command", command: "workspace_fetch_from_remotes" },
 ];
 
 function shouldIgnoreEvent(eventName: string, properties: Properties | undefined): boolean {

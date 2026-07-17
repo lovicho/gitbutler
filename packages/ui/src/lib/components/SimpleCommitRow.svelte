@@ -63,13 +63,13 @@
 			{/if}
 
 			<div class="details text-11">
-				<CopyButton class="details-btn" text={sha} onclick={onCopy} />
+				<CopyButton class="details-btn" text={sha.slice(0, 7)} onclick={onCopy} />
 
 				{#if upstreamSha}
 					<span class="details-divider">•</span>
 					<CopyButton
 						class="details-btn"
-						text={upstreamSha}
+						text={upstreamSha.slice(0, 7)}
 						prefix="upstream"
 						onclick={onCopyUpstream}
 					/>

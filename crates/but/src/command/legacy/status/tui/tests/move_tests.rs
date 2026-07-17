@@ -55,10 +55,10 @@ fn move_mode_keeps_selected_commit_and_extension_visible_when_scrolled() {
         .assert_current_line_eq(str!["┊●   1#0 (no commit message) (no changes)"]);
 
     tui.input([KeyCode::Down, KeyCode::Down])
-        .assert_current_line_eq(str!["┊●   9477ae7 add A"]);
+        .assert_current_line_eq(str!["┊●   tpm add A"]);
 
     tui.input('m')
-        .assert_current_line_eq(str!["┊●   << source >> << noop >> 9477ae7 add A"]);
+        .assert_current_line_eq(str!["┊●   << source >> << noop >> tpm add A"]);
 
     tui.input(KeyCode::Up)
         .assert_rendered_contains("<< move commit above >>")
@@ -86,10 +86,10 @@ fn move_commit_above_other_commit_reorders_tui() {
         .assert_current_line_eq(str!["┊●   1#0 (no commit message) (no changes)"]);
 
     tui.input([KeyCode::Down, KeyCode::Down])
-        .assert_current_line_eq(str!["┊●   9477ae7 add A"]);
+        .assert_current_line_eq(str!["┊●   tpm add A"]);
 
     tui.input('m')
-        .assert_current_line_eq(str!["┊●   << source >> << noop >> 9477ae7 add A"]);
+        .assert_current_line_eq(str!["┊●   << source >> << noop >> tpm add A"]);
 
     tui.input(KeyCode::Up)
         .assert_current_line_eq(str!["┊│   << move commit above >>"]);
@@ -146,10 +146,10 @@ fn move_commit_up_from_top_commit_selects_source_branch() {
         .assert_current_line_eq(str!["┊╭┄h0 [C]"]);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊●   3842fc0 add C"]);
+        .assert_current_line_eq(str!["┊●   xwn add C"]);
 
     tui.input('m')
-        .assert_current_line_eq(str!["┊●   << source >> << noop >> 3842fc0 add C"]);
+        .assert_current_line_eq(str!["┊●   << source >> << noop >> xwn add C"]);
 
     tui.input(KeyCode::Up)
         .assert_current_line_eq(str!["┊╭┄h0 [C]"])

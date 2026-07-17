@@ -74,7 +74,6 @@ legacy = [
     "dep:gitbutler-edit-mode",
     "dep:gitbutler-operating-modes",
     "dep:gitbutler-oplog",
-    "dep:gitbutler-git",
     "dep:but-action",
     "dep:but-gerrit",
     "dep:but-worktrees",
@@ -124,7 +123,7 @@ gitbutler-repo = { workspace = true, optional = true }
 gitbutler-edit-mode = { workspace = true, optional = true }
 gitbutler-operating-modes = { workspace = true, optional = true }
 gitbutler-oplog = { workspace = true, optional = true }
-gitbutler-git = { workspace = true, optional = true }
+gitbutler-git.workspace = true
 tauri = { version = "^2.10.3", features = [
     "unstable",
 ], optional = true } # For the #[tauri::command(async)] macro only

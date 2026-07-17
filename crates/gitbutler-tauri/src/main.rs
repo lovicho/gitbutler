@@ -500,6 +500,8 @@ fn main() -> anyhow::Result<()> {
                 commit::uncommit::tauri_commit_uncommit_changes_from_commits::commit_uncommit_changes_from_commits,
                 commit::uncommit::tauri_commit_uncommit::commit_uncommit,
                 workspace::tauri_workspace_integrate_upstream::workspace_integrate_upstream,
+                workspace::tauri_workspace_fetch_from_remotes::workspace_fetch_from_remotes,
+                workspace::tauri_workspace_fetch_status::workspace_fetch_status,
                 land::tauri_branch_land::branch_land,
                 resolve::tauri_resolve_commit_conflicts_ai::resolve_commit_conflicts_ai,
                 platform::tauri_build_type::build_type,

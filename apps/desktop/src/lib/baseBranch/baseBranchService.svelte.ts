@@ -68,8 +68,12 @@ export default class BaseBranchService {
 		await this.backendApi.endpoints.baseBranch.fetch({ projectId }, { forceRefetch: true });
 	}
 
-	async fetchFromRemotes(projectId: string, action?: "auto" | "modal") {
-		return await this.backendApi.endpoints.fetchFromRemotes
+	fetchStatus(projectId: string) {
+		return this.backendApi.endpoints.workspaceFetchStatus.useQuery({ projectId });
+	}
+
+	async fetchFromRemotes(projectId: string, action: "auto" | "modal" = "auto") {
+		return await this.backendApi.endpoints.workspaceFetchFromRemotes
 			.mutate({ projectId, action })
 			.catch((error: unknown) => {
 				// Auto-fetches run on a timer and shouldn't surface to the user.

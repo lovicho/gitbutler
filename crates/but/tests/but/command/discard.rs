@@ -59,7 +59,7 @@ fn discard_by_path_prefix_removes_only_matching_files() {
 ┊   r A path/to/second.txt
 ┊
 ┊╭┄g0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -78,7 +78,7 @@ Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "mes
 ┊   u A path/other/third.txt
 ┊
 ┊╭┄g0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M

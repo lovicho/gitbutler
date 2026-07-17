@@ -4,6 +4,7 @@ mod branch_order;
 mod butler_actions;
 mod ci_check;
 mod claude;
+mod fetch_status;
 mod file_write_lock;
 mod forge_review;
 mod gerrit_metadata;

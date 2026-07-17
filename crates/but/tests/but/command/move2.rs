@@ -12,8 +12,8 @@ fn move_commit_above_other_commit() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9ac4652 add second
-┊●   fe12bcd add first
+┊●   ywx add second
+┊●   zll add first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -22,7 +22,7 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    env.but("_move2 fe --above 9a")
+    env.but("_move2 zll --above ywx")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
@@ -60,8 +60,8 @@ fn move_commit_below_other_commit() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9ac4652 add second
-┊●   fe12bcd add first
+┊●   ywx add second
+┊●   zll add first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -70,7 +70,7 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    env.but("_move2 9a --below fe")
+    env.but("_move2 ywx --below zll")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
@@ -108,19 +108,19 @@ fn move_multiple_consecutive_commits_relative_to_other_commit() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   5c88a8e add A13
-┊●   a18ea48 add A12
-┊●   0c0fcbf add A11
-┊●   c472887 add A10
-┊●   8188106 add A9
-┊●   769f4a8 add A8
-┊●   2a98cfc add A7
-┊●   d60e311 add A6
-┊●   c67c49e add A5
-┊●   23c280d add A4
-┊●   5c7c6d7 add A3
-┊●   1299ac9 add A2
-┊●   0748e42 add A1
+┊●   usn add A13
+┊●   opy add A12
+┊●   opk add A11
+┊●   vvl add A10
+┊●   mzz add A9
+┊●   vmw add A8
+┊●   tpw add A7
+┊●   lyq add A6
+┊●   pyq add A5
+┊●   mvv add A4
+┊●   tvm add A3
+┊●   sxq add A2
+┊●   zpl add A1
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -129,14 +129,14 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    for (operator, target_commit) in [("--above", "c4"), ("--below", "0c")] {
-        env.but("_move2 2a 76")
+    for (operator, target_cli_id) in [("--above", "lyq"), ("--below", "tpw")] {
+        env.but("_move2 vvl mzz")
             .arg(operator)
-            .arg(target_commit)
+            .arg(target_cli_id)
             .assert()
             .success()
             .stdout_eq(snapbox::str![["
-Moved 2a98cfc, 769f4a8 [..]
+Moved c472887, 8188106 [..]
 
 "]]);
 
@@ -154,12 +154,12 @@ Moved 2a98cfc, 769f4a8 [..]
 ┊●   tpw add A7
 ┊●   vvl add A10
 ┊●   mzz add A9
-┊●   d60e311 add A6
-┊●   c67c49e add A5
-┊●   23c280d add A4
-┊●   5c7c6d7 add A3
-┊●   1299ac9 add A2
-┊●   0748e42 add A1
+┊●   lyq add A6
+┊●   pyq add A5
+┊●   mvv add A4
+┊●   tvm add A3
+┊●   sxq add A2
+┊●   zpl add A1
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -184,19 +184,19 @@ fn move_multiple_non_consecutive_commits_in_arbitrary_order_relative_to_other_co
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   5c88a8e add A13
-┊●   a18ea48 add A12
-┊●   0c0fcbf add A11
-┊●   c472887 add A10
-┊●   8188106 add A9
-┊●   769f4a8 add A8
-┊●   2a98cfc add A7
-┊●   d60e311 add A6
-┊●   c67c49e add A5
-┊●   23c280d add A4
-┊●   5c7c6d7 add A3
-┊●   1299ac9 add A2
-┊●   0748e42 add A1
+┊●   usn add A13
+┊●   opy add A12
+┊●   opk add A11
+┊●   vvl add A10
+┊●   mzz add A9
+┊●   vmw add A8
+┊●   tpw add A7
+┊●   lyq add A6
+┊●   pyq add A5
+┊●   mvv add A4
+┊●   tvm add A3
+┊●   sxq add A2
+┊●   zpl add A1
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -205,15 +205,15 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    for (operator, target_commit) in [("--above", "76"), ("--below", "81")] {
+    for (operator, target_cli_id) in [("--above", "vmw"), ("--below", "mzz")] {
         // We pick the source commits in an "incorrect" order, but they should later be sorted correctly
         // via topological sort.
         //
         // Order as picked is: A7 A1 A5 --above A8, but we expect the commits to be applied from oldest
         // to newest, i.e. (A8) <- A1 <- A5 <- A7
-        env.but("_move2 2a 07 c6")
+        env.but("_move2 tpw zpl pyq")
             .arg(operator)
-            .arg(target_commit)
+            .arg(target_cli_id)
             .assert()
             .success()
             .stdout_eq(snapbox::str![["
@@ -265,8 +265,8 @@ fn moving_commits_above_branch_creates_branch_above() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9ac4652 add second
-┊●   fe12bcd add first
+┊●   ywx add second
+┊●   zll add first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -275,7 +275,7 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    env.but("_move2 fe --above g0")
+    env.but("_move2 zll --above g0")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
@@ -315,8 +315,8 @@ fn moving_commits_above_branch_without_changing_relative_order_only_creates_bran
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9ac4652 add second
-┊●   fe12bcd add first
+┊●   ywx add second
+┊●   zll add first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -325,7 +325,7 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    env.but("_move2 9a --above g0")
+    env.but("_move2 ywx --above g0")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
@@ -340,10 +340,10 @@ Moved 9ac4652 to new branch 'a-branch-1' above branch 'A'
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄br [a-branch-1]
-┊●   9ac4652 add second
+┊●   ywx add second
 ┊│
 ┊├┄g0 [A]
-┊●   fe12bcd add first
+┊●   zll add first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -365,8 +365,8 @@ fn moving_commits_below_branch_creates_branch_below() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9ac4652 add second
-┊●   fe12bcd add first
+┊●   ywx add second
+┊●   zll add first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -375,7 +375,7 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    env.but("_move2 9a --below g0")
+    env.but("_move2 ywx --below g0")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
@@ -415,8 +415,8 @@ fn moving_commits_below_branch_without_changing_relative_order_only_creates_bran
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9ac4652 add second
-┊●   fe12bcd add first
+┊●   ywx add second
+┊●   zll add first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -425,7 +425,7 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    env.but("_move2 fe --below g0")
+    env.but("_move2 zll --below g0")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
@@ -440,10 +440,10 @@ Moved fe12bcd to new branch 'a-branch-1' below branch 'A'
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9ac4652 add second
+┊●   ywx add second
 ┊│
 ┊├┄br [a-branch-1]
-┊●   fe12bcd add first
+┊●   zll add first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -465,8 +465,8 @@ fn moving_all_commits_above_branch_retains_branch() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9ac4652 add second
-┊●   fe12bcd add first
+┊●   ywx add second
+┊●   zll add first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -475,7 +475,7 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    env.but("_move2 9a fe --above g0")
+    env.but("_move2 ywx zll --above g0")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
@@ -490,8 +490,8 @@ Moved 9ac4652, fe12bcd to new branch 'a-branch-1' above branch 'A'
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄br [a-branch-1]
-┊●   9ac4652 add second
-┊●   fe12bcd add first
+┊●   ywx add second
+┊●   zll add first
 ┊│
 ┊├┄g0 [A] (no commits)
 ├╯
@@ -515,8 +515,8 @@ fn moving_all_commits_below_branch_retains_branch() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9ac4652 add second
-┊●   fe12bcd add first
+┊●   ywx add second
+┊●   zll add first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -525,7 +525,7 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    env.but("_move2 9a fe --below g0")
+    env.but("_move2 ywx zll --below g0")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
@@ -542,8 +542,8 @@ Moved 9ac4652, fe12bcd to new branch 'a-branch-1' below branch 'A'
 ┊╭┄g0 [A] (no commits)
 ┊│
 ┊├┄br [a-branch-1]
-┊●   9ac4652 add second
-┊●   fe12bcd add first
+┊●   ywx add second
+┊●   zll add first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -565,7 +565,7 @@ fn move_commit_above_empty_branch() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┊╭┄h0 [B] (no commits)
@@ -577,7 +577,7 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    env.but("_move2 94 --above h0")
+    env.but("_move2 tpm --above h0")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
@@ -595,7 +595,7 @@ Moved 9477ae7 to new branch 'a-branch-1' above branch 'B'
 ├╯
 ┊
 ┊╭┄br [a-branch-1]
-┊●   9477ae7 add A
+┊●   tpm add A
 ┊│
 ┊├┄h0 [B] (no commits)
 ├╯
@@ -619,7 +619,7 @@ fn move_commit_below_empty_branch() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┊╭┄h0 [B] (no commits)
@@ -631,7 +631,7 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    env.but("_move2 94 --below h0")
+    env.but("_move2 tpm --below h0")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
@@ -651,7 +651,7 @@ Moved 9477ae7 to new branch 'a-branch-1' below branch 'B'
 ┊╭┄h0 [B] (no commits)
 ┊│
 ┊├┄br [a-branch-1]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -673,7 +673,7 @@ fn above_or_below_unapplied_or_non_existing_branch_errors() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┊╭┄h0 [B] (no commits)
@@ -686,7 +686,7 @@ Hint: run `but help` for all commands
 "#]]);
     env.but("unapply B").assert().success();
 
-    env.but("_move2 94 --above B")
+    env.but("_move2 tpm --above B")
         .assert()
         .failure()
         .stderr_eq(snapbox::str![[r#"
@@ -696,7 +696,7 @@ Hint: Run `but status` for applicable targets.
 
 "#]]);
 
-    env.but("_move2 94 --below B")
+    env.but("_move2 tpm --below B")
         .assert()
         .failure()
         .stderr_eq(snapbox::str![[r#"
@@ -706,7 +706,7 @@ Hint: Run `but status` for applicable targets.
 
 "#]]);
 
-    env.but("_move2 94 --above no-such-branch")
+    env.but("_move2 tpm --above no-such-branch")
         .assert()
         .failure()
         .stderr_eq(snapbox::str![[r#"
@@ -716,7 +716,7 @@ Hint: Run `but status` for applicable targets.
 
 "#]]);
 
-    env.but("_move2 94 --below no-such-branch")
+    env.but("_move2 tpm --below no-such-branch")
         .assert()
         .failure()
         .stderr_eq(snapbox::str![[r#"
@@ -739,11 +739,11 @@ fn move_to_tip_of_branch() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┊╭┄h0 [B]
-┊●   d3e2ba3 add B
+┊●   lrm add B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -752,7 +752,7 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    env.but("_move2 94 -b B")
+    env.but("_move2 tpm -b B")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
@@ -771,7 +771,7 @@ Moved 9477ae7 to the tip of branch 'B'
 ┊
 ┊╭┄h0 [B]
 ┊●   tpm add A
-┊●   d3e2ba3 add B
+┊●   lrm add B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -793,7 +793,7 @@ fn move_to_tip_of_empty_branch() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┊╭┄h0 [B] (no commits)
@@ -805,7 +805,7 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    env.but("_move2 94 -b B")
+    env.but("_move2 tpm -b B")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
@@ -823,7 +823,7 @@ Moved 9477ae7 to the tip of branch 'B'
 ├╯
 ┊
 ┊╭┄h0 [B]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -845,8 +845,8 @@ fn move_to_tip_of_new_unstacked_branch() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9ac4652 add second
-┊●   fe12bcd add first
+┊●   ywx add second
+┊●   zll add first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -855,7 +855,7 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    env.but("_move2 9a --branch new-branch")
+    env.but("_move2 ywx --branch new-branch")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
@@ -874,7 +874,7 @@ Moved 9ac4652 to new branch 'new-branch'
 ├╯
 ┊
 ┊╭┄g0 [A]
-┊●   fe12bcd add first
+┊●   zll add first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -896,8 +896,8 @@ fn move_to_tip_of_new_unstacked_branch_with_canned_name() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9ac4652 add second
-┊●   fe12bcd add first
+┊●   ywx add second
+┊●   zll add first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -906,7 +906,7 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    env.but("_move2 9a --branch")
+    env.but("_move2 ywx --branch")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
@@ -925,7 +925,7 @@ Moved 9ac4652 to new branch 'a-branch-1'
 ├╯
 ┊
 ┊╭┄g0 [A]
-┊●   fe12bcd add first
+┊●   zll add first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -947,10 +947,10 @@ fn move_file_below_commit_creates_commit() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9ac4652 add second
-┊│     9:w A second
-┊●   fe12bcd add first
-┊│     f:l A first
+┊●   ywx add second
+┊│     ywx:w A second
+┊●   zll add first
+┊│     zll:l A first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -959,7 +959,7 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    env.but("_move2 9a:wu --below fe")
+    env.but("_move2 ywx:wu --below zll")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
@@ -1000,10 +1000,10 @@ fn move_file_above_commit_creates_commit() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9ac4652 add second
-┊│     9:w A second
-┊●   fe12bcd add first
-┊│     f:l A first
+┊●   ywx add second
+┊│     ywx:w A second
+┊●   zll add first
+┊│     zll:l A first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -1012,7 +1012,7 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    env.but("_move2 fe:lz --above 9a")
+    env.but("_move2 zll:lz --above ywx")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
@@ -1053,10 +1053,10 @@ fn move_file_below_branch_creates_branch_and_commit() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9ac4652 add second
-┊│     9:w A second
-┊●   fe12bcd add first
-┊│     f:l A first
+┊●   ywx add second
+┊│     ywx:w A second
+┊●   zll add first
+┊│     zll:l A first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -1065,7 +1065,7 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    env.but("_move2 9a:wu --below A")
+    env.but("_move2 ywx:wu --below A")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
@@ -1108,10 +1108,10 @@ fn move_file_above_branch_creates_branch_and_commit() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9ac4652 add second
-┊│     9:w A second
-┊●   fe12bcd add first
-┊│     f:l A first
+┊●   ywx add second
+┊│     ywx:w A second
+┊●   zll add first
+┊│     zll:l A first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -1120,7 +1120,7 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    env.but("_move2 fe:lz --above A")
+    env.but("_move2 zll:lz --above A")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
@@ -1163,13 +1163,13 @@ fn move_file_to_branch_tip_creates_commit() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9477ae7 add A
-┊│     9:t A A
+┊●   tpm add A
+┊│     tpm:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
-┊●   d3e2ba3 add B
-┊│     d:p A B
+┊●   lrm add B
+┊│     lrm:p A B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1178,7 +1178,7 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    env.but("_move2 d3:pl --branch A")
+    env.but("_move2 lrm:pl --branch A")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
@@ -1195,8 +1195,8 @@ Moved 1 changes from d3e2ba3 to new commit be174de to the tip of branch 'A'
 ┊╭┄g0 [A]
 ┊●   1 (no commit message)
 ┊│     1:p A B
-┊●   9477ae7 add A
-┊│     94:t A A
+┊●   tpm add A
+┊│     tpm:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
@@ -1222,10 +1222,10 @@ fn move_file_to_non_existing_branch_tip_creates_unstacked_branch_and_commit() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9ac4652 add second
-┊│     9:w A second
-┊●   fe12bcd add first
-┊│     f:l A first
+┊●   ywx add second
+┊│     ywx:w A second
+┊●   zll add first
+┊│     zll:l A first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -1234,7 +1234,7 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    env.but("_move2 9a:wu --branch new-branch")
+    env.but("_move2 ywx:wu --branch new-branch")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
@@ -1255,8 +1255,8 @@ Moved 1 changes from 9ac4652 to new commit 8e35f84 on new branch 'new-branch'
 ┊
 ┊╭┄g0 [A]
 ┊●   ywx add second (no changes)
-┊●   fe12bcd add first
-┊│     f:l A first
+┊●   zll add first
+┊│     zll:l A first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -1278,10 +1278,10 @@ fn move_file_branch_without_argument_creates_unstacked_branch_with_canned_name_a
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9ac4652 add second
-┊│     9:w A second
-┊●   fe12bcd add first
-┊│     f:l A first
+┊●   ywx add second
+┊│     ywx:w A second
+┊●   zll add first
+┊│     zll:l A first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -1290,7 +1290,7 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    env.but("_move2 9a:wu --branch")
+    env.but("_move2 ywx:wu --branch")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
@@ -1311,8 +1311,8 @@ Moved 1 changes from 9ac4652 to new commit 8e35f84 on new branch 'a-branch-1'
 ┊
 ┊╭┄g0 [A]
 ┊●   ywx add second (no changes)
-┊●   fe12bcd add first
-┊│     f:l A first
+┊●   zll add first
+┊│     zll:l A first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -1361,7 +1361,7 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    env.but("_move2 e3:py e3:ul --above e3")
+    env.but("_move2 1#0:u 1#0:p --above 1#0")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
@@ -1393,7 +1393,7 @@ Hint: run `but help` for all commands
 
     env.but("undo").assert().success();
 
-    env.but("_move2 e3:ul e3:py --above e3")
+    env.but("_move2 1#0:p 1#0:u --above 1#0")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
@@ -1436,13 +1436,13 @@ fn move_file_from_multiple_source_commits_is_not_allowed() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9477ae7 add A
-┊│     9:t A A
+┊●   tpm add A
+┊│     tpm:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
-┊●   d3e2ba3 add B
-┊│     d:p A B
+┊●   lrm add B
+┊│     lrm:p A B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1451,7 +1451,7 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    env.but("_move2 94:tm d3:pl -b")
+    env.but("_move2 tpm:tm lrm:pl -b")
         .assert()
         .failure()
         .stderr_eq(snapbox::str![[r#"
@@ -1476,13 +1476,13 @@ fn move_branch_above_within_same_stack() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [C]
-┊●   aebb090 add C
+┊●   wlx add C
 ┊│
 ┊├┄h0 [B]
-┊●   582f37b add B
+┊●   wwm add B
 ┊│
 ┊├┄i0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1512,7 +1512,7 @@ Stacked branch 'B' on top of branch 'C'
 ┊●   wlx add C
 ┊│
 ┊├┄i0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1595,11 +1595,11 @@ fn move_branch_above_to_other_stack() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┊╭┄h0 [B]
-┊●   d3e2ba3 add B
+┊●   lrm add B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1626,7 +1626,7 @@ Stacked branch 'B' on top of branch 'A'
 ┊●   lrm add B
 ┊│
 ┊├┄h0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1648,7 +1648,7 @@ fn move_empty_branch_above_other_branch() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┊╭┄h0 [B] (no commits)
@@ -1677,7 +1677,7 @@ Stacked branch 'B' on top of branch 'A'
 ┊╭┄g0 [B] (no commits)
 ┊│
 ┊├┄h0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1755,13 +1755,13 @@ fn unstack_tip_branch() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [C]
-┊●   aebb090 add C
+┊●   wlx add C
 ┊│
 ┊├┄h0 [B]
-┊●   582f37b add B
+┊●   wwm add B
 ┊│
 ┊├┄i0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1785,10 +1785,10 @@ Unstacked branch 'C'
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [B]
-┊●   582f37b add B
+┊●   wwm add B
 ┊│
 ┊├┄h0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┊╭┄i0 [C]
@@ -1816,13 +1816,13 @@ fn unstack_middle_branch() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [C]
-┊●   aebb090 add C
+┊●   wlx add C
 ┊│
 ┊├┄h0 [B]
-┊●   582f37b add B
+┊●   wwm add B
 ┊│
 ┊├┄i0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1853,7 +1853,7 @@ Unstacked branch 'B'
 ┊●   wlx add C
 ┊│
 ┊├┄i0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1877,13 +1877,13 @@ fn unstack_bottom_branch() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [C]
-┊●   aebb090 add C
+┊●   wlx add C
 ┊│
 ┊├┄h0 [B]
-┊●   582f37b add B
+┊●   wwm add B
 ┊│
 ┊├┄i0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1907,7 +1907,7 @@ Unstacked branch 'A'
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┊╭┄h0 [C]
@@ -1990,13 +1990,13 @@ fn unstack_branch_using_branch_arg() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [C]
-┊●   aebb090 add C
+┊●   wlx add C
 ┊│
 ┊├┄h0 [B]
-┊●   582f37b add B
+┊●   wwm add B
 ┊│
 ┊├┄i0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -2021,7 +2021,7 @@ Unstacked branch 'A'
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┊╭┄h0 [C]
@@ -2050,10 +2050,10 @@ fn unstack_file() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9ac4652 add second
-┊│     9:w A second
-┊●   fe12bcd add first
-┊│     f:l A first
+┊●   ywx add second
+┊│     ywx:w A second
+┊●   zll add first
+┊│     zll:l A first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -2062,7 +2062,7 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    env.but("_move2 fe --unstack")
+    env.but("_move2 zll --unstack")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
@@ -2083,10 +2083,10 @@ fn unstack_commit() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9ac4652 add second
-┊│     9:w A second
-┊●   fe12bcd add first
-┊│     f:l A first
+┊●   ywx add second
+┊│     ywx:w A second
+┊●   zll add first
+┊│     zll:l A first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -2095,7 +2095,7 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    env.but("_move2 fe:lz --unstack")
+    env.but("_move2 zll:lz --unstack")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
@@ -2138,13 +2138,13 @@ fn cannot_move_multiple_branches_at_once() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [C]
-┊●   aebb090 add C
+┊●   wlx add C
 ┊│
 ┊├┄h0 [B]
-┊●   582f37b add B
+┊●   wwm add B
 ┊│
 ┊├┄i0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -2178,13 +2178,13 @@ fn cannot_move_branch_below() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [C]
-┊●   aebb090 add C
+┊●   wlx add C
 ┊│
 ┊├┄h0 [B]
-┊●   582f37b add B
+┊●   wwm add B
 ┊│
 ┊├┄i0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -2220,13 +2220,13 @@ fn cannot_move_branch_to_branch_tip() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [C]
-┊●   aebb090 add C
+┊●   wlx add C
 ┊│
 ┊├┄h0 [B]
-┊●   582f37b add B
+┊●   wwm add B
 ┊│
 ┊├┄i0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -2256,13 +2256,13 @@ fn cannot_mix_sources() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9477ae7 add A
-┊│     9:t A A
+┊●   tpm add A
+┊│     tpm:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
-┊●   d3e2ba3 add B
-┊│     d:p A B
+┊●   lrm add B
+┊│     lrm:p A B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -2271,7 +2271,7 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    env.but("_move2 94 d3:pl -b")
+    env.but("_move2 tpm lrm:pl -b")
         .assert()
         .failure()
         .stderr_eq(snapbox::str![[r#"
@@ -2283,7 +2283,7 @@ Hint: You can only move one kind of source (e.g. commits) at a time
 
 "#]]);
 
-    env.but("_move2 d3 B --above A")
+    env.but("_move2 lrm B --above A")
         .assert()
         .failure()
         .stderr_eq(snapbox::str![[r#"
@@ -2295,7 +2295,7 @@ Hint: You can only move one kind of source (e.g. commits) at a time
 
 "#]]);
 
-    env.but("_move2 d3:pl B --above A")
+    env.but("_move2 lrm:pl B --above A")
         .assert()
         .failure()
         .stderr_eq(snapbox::str![[r#"
@@ -2320,7 +2320,7 @@ fn targeting_unapplied_branch_errors() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┊╭┄h0 [B] (no commits)
@@ -2333,7 +2333,7 @@ Hint: run `but help` for all commands
 "#]]);
     env.but("unapply B").assert().success();
 
-    env.but("_move2 94 --branch B")
+    env.but("_move2 tpm --branch B")
         .assert()
         .failure()
         .stderr_eq(snapbox::str![[r#"
@@ -2354,8 +2354,8 @@ fn cannot_combine_targets() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9ac4652 add second
-┊●   fe12bcd add first
+┊●   ywx add second
+┊●   zll add first
 ├╯
 ┊
 ┴ 1bbc04b (common base) 2000-01-02 add Base
@@ -2364,7 +2364,7 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    env.but("_move2 9a --below fe --above fe")
+    env.but("_move2 ywx --below zll --above zll")
         .assert()
         .failure()
         .stderr_eq(snapbox::str![[r#"
@@ -2420,27 +2420,27 @@ fn source_cannot_be_target() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack-two-commits");
     env.setup_metadata(&["A"]);
 
-    env.but("_move2 9a --above 9a")
+    env.but("_move2 ywx --above ywx")
         .assert()
         .failure()
         .stderr_eq(snapbox::str![[r#"
-Error: Bad input '9a' for '--above'
+Error: Bad input 'ywx' for '--above'
 
 Source cannot also be target
 
-Hint: Trying to move items above '9a'? Remove '9a' from '<SOURCES>' and try again!
+Hint: Trying to move items above 'ywx'? Remove 'ywx' from '<SOURCES>' and try again!
 
 "#]]);
 
-    env.but("_move2 9a --below 9a")
+    env.but("_move2 ywx --below ywx")
         .assert()
         .failure()
         .stderr_eq(snapbox::str![[r#"
-Error: Bad input '9a' for '--below'
+Error: Bad input 'ywx' for '--below'
 
 Source cannot also be target
 
-Hint: Trying to move items below '9a'? Remove '9a' from '<SOURCES>' and try again!
+Hint: Trying to move items below 'ywx'? Remove 'ywx' from '<SOURCES>' and try again!
 
 "#]]);
 
@@ -2470,7 +2470,7 @@ fn cannot_move_from_uncommitted() {
 ┊   q A file
 ┊
 ┊╭┄g0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -2515,7 +2515,7 @@ fn cannot_move_to_uncommitted() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -2524,7 +2524,7 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    env.but("_move2 94 --below zz")
+    env.but("_move2 tpm --below zz")
         .assert()
         .failure()
         .stderr_eq(snapbox::str![[r#"

@@ -26,10 +26,10 @@
     <text x="66" y="114" style="fill:#00AA00;">A</text>
     <text x="74" y="114" style="fill:#CCCCCC;">]</text>
     <text x="10 18" y="132" style="fill:#CCCCCC;">┊●</text>
-    <text x="50" y="132" style="fill:#0000AA;font-weight:bold;">9</text>
-    <text x="58 66 74 82 90 98" y="132" style="fill:#CCCCCC;opacity:0.75;">477ae7</text>
-    <text x="114 122 130" y="132" style="fill:#CCCCCC;">add</text>
-    <text x="146" y="132" style="fill:#CCCCCC;">A</text>
+    <text x="50" y="132" style="fill:#AA00AA;">t</text>
+    <text x="58 66" y="132" style="fill:#CCCCCC;opacity:0.75;">pm</text>
+    <text x="82 90 98" y="132" style="fill:#CCCCCC;">add</text>
+    <text x="114" y="132" style="fill:#CCCCCC;">A</text>
     <text x="10 18" y="150" style="fill:#CCCCCC;">├╯</text>
     <text x="10" y="168" style="fill:#CCCCCC;">┊</text>
     <text x="10 18 26" y="186" style="fill:#CCCCCC;">┊╭┄</text>
@@ -38,10 +38,10 @@
     <text x="66" y="186" style="fill:#00AA00;">B</text>
     <text x="74" y="186" style="fill:#CCCCCC;">]</text>
     <text x="10 18" y="204" style="fill:#FFFFFF;font-weight:bold;">┊●</text>
-    <text x="50" y="204" style="fill:#0000AA;font-weight:bold;">d</text>
-    <text x="58 66 74 82 90 98" y="204" style="fill:#FFFFFF;font-weight:bold;opacity:0.75;">3e2ba3</text>
-    <text x="114 122 130" y="204" style="fill:#FFFFFF;font-weight:bold;">add</text>
-    <text x="146" y="204" style="fill:#FFFFFF;font-weight:bold;">B</text>
+    <text x="50" y="204" style="fill:#AA00AA;font-weight:bold;">l</text>
+    <text x="58 66" y="204" style="fill:#FFFFFF;font-weight:bold;opacity:0.75;">rm</text>
+    <text x="82 90 98" y="204" style="fill:#FFFFFF;font-weight:bold;">add</text>
+    <text x="114" y="204" style="fill:#FFFFFF;font-weight:bold;">B</text>
     <text x="10 18" y="222" style="fill:#CCCCCC;">├╯</text>
     <text x="10" y="240" style="fill:#CCCCCC;">┊</text>
     <text x="10" y="258" style="fill:#CCCCCC;">┴</text>

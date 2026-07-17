@@ -26,7 +26,7 @@ fn outputs_branch_name() {
 
 "#]]);
 
-    env.but("branch new --anchor 9477ae7 my-anchored-feature")
+    env.but("branch new --anchor tpm my-anchored-feature")
         .assert()
         .success()
         .stderr_eq(str![])
@@ -144,7 +144,7 @@ fn with_json_output() {
 "#]]);
 
     // Test JSON output with anchor
-    env.but("branch new --format json --anchor 9477ae7 my-anchored-feature")
+    env.but("branch new --format json --anchor tpm my-anchored-feature")
         .allow_json()
         .assert()
         .success()
@@ -152,7 +152,7 @@ fn with_json_output() {
         .stdout_eq(str![[r#"
 {
   "branch": "my-anchored-feature",
-  "anchor": "9477ae7"
+  "anchor": "tpm"
 }
 
 "#]]);

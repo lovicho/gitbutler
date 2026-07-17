@@ -21,7 +21,7 @@ fn move_commit_before_another_commit() -> anyhow::Result<()> {
     commit_two_files_as_two_hunks_each(&env, "A", "c.txt", "d.txt", "second commit");
     commit_two_files_as_two_hunks_each(&env, "A", "e.txt", "f.txt", "third commit");
 
-    // Get commit IDs from status
+    // Get commit CLI IDs from status
     let status_output = env.but("--format json status").allow_json().output()?;
     let status_json: serde_json::Value = serde_json::from_slice(&status_output.stdout)?;
     let commits = &status_json["stacks"][0]["branches"][0]["commits"];
@@ -32,11 +32,11 @@ fn move_commit_before_another_commit() -> anyhow::Result<()> {
     // commits[2] = "first commit"
     // commits[3] = initial "add A" commit
 
-    let third_commit_id = commits[0]["cliId"].as_str().unwrap();
-    let first_commit_id = commits[2]["cliId"].as_str().unwrap();
+    let third_commit_cli_id = commits[0]["cliId"].as_str().unwrap();
+    let first_commit_cli_id = commits[2]["cliId"].as_str().unwrap();
 
     // Move "third commit" before "first commit" (making it the oldest)
-    env.but(format!("move {third_commit_id} {first_commit_id}"))
+    env.but(format!("move {third_commit_cli_id} {first_commit_cli_id}"))
         .assert()
         .success()
         .stdout_eq(str![[r#"
@@ -67,19 +67,21 @@ fn move_commit_after_another_commit() -> anyhow::Result<()> {
     commit_two_files_as_two_hunks_each(&env, "A", "c.txt", "d.txt", "second commit");
     commit_two_files_as_two_hunks_each(&env, "A", "e.txt", "f.txt", "third commit");
 
-    // Get commit IDs
+    // Get commit CLI IDs
     let status_output = env.but("--format json status").allow_json().output()?;
     let status_json: serde_json::Value = serde_json::from_slice(&status_output.stdout)?;
     let commits = &status_json["stacks"][0]["branches"][0]["commits"];
 
-    let first_commit_id = commits[2]["cliId"].as_str().unwrap();
-    let third_commit_id = commits[0]["cliId"].as_str().unwrap();
+    let first_commit_cli_id = commits[2]["cliId"].as_str().unwrap();
+    let third_commit_cli_id = commits[0]["cliId"].as_str().unwrap();
 
     // Move "first commit" after "third commit" (making it the newest)
-    env.but(format!("move {first_commit_id} {third_commit_id} --after"))
-        .assert()
-        .success()
-        .stdout_eq(str![[r#"
+    env.but(format!(
+        "move {first_commit_cli_id} {third_commit_cli_id} --after"
+    ))
+    .assert()
+    .success()
+    .stdout_eq(str![[r#"
 Moved 1#0 → after 1#1
 
 "#]]);
@@ -117,7 +119,7 @@ fn move_multiple_commits_before_another_commit() -> anyhow::Result<()> {
 ┊●   1#0 create e.txt and f.txt
 ┊●   1#1 create c.txt and d.txt
 ┊●   1#2 create a.txt and b.txt
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -130,12 +132,12 @@ Hint: run `but help` for all commands
     let status_json: serde_json::Value = serde_json::from_slice(&status_output.stdout)?;
     let commits = &status_json["stacks"][0]["branches"][0]["commits"];
 
-    let third_commit_id = commits[0]["cliId"].as_str().unwrap();
-    let second_commit_id = commits[1]["cliId"].as_str().unwrap();
-    let first_commit_id = commits[2]["cliId"].as_str().unwrap();
+    let third_commit_cli_id = commits[0]["cliId"].as_str().unwrap();
+    let second_commit_cli_id = commits[1]["cliId"].as_str().unwrap();
+    let first_commit_cli_id = commits[2]["cliId"].as_str().unwrap();
 
     env.but(format!(
-        "move {second_commit_id},{third_commit_id} {first_commit_id}"
+        "move {second_commit_cli_id},{third_commit_cli_id} {first_commit_cli_id}"
     ))
     .assert()
     .success()
@@ -161,7 +163,7 @@ Moved 2 commits → before 1#0
 ┊●   1#0 create a.txt and b.txt
 ┊●   1#1 create e.txt and f.txt
 ┊●   1#2 create c.txt and d.txt
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -195,7 +197,7 @@ fn move_multiple_commits_after_another_commit() -> anyhow::Result<()> {
 ┊●   1#0 create e.txt and f.txt
 ┊●   1#1 create c.txt and d.txt
 ┊●   1#2 create a.txt and b.txt
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -208,12 +210,12 @@ Hint: run `but help` for all commands
     let status_json: serde_json::Value = serde_json::from_slice(&status_output.stdout)?;
     let commits = &status_json["stacks"][0]["branches"][0]["commits"];
 
-    let third_commit_id = commits[0]["cliId"].as_str().unwrap();
-    let second_commit_id = commits[1]["cliId"].as_str().unwrap();
-    let first_commit_id = commits[2]["cliId"].as_str().unwrap();
+    let third_commit_cli_id = commits[0]["cliId"].as_str().unwrap();
+    let second_commit_cli_id = commits[1]["cliId"].as_str().unwrap();
+    let first_commit_cli_id = commits[2]["cliId"].as_str().unwrap();
 
     env.but(format!(
-        "move {first_commit_id},{second_commit_id} {third_commit_id} --after"
+        "move {first_commit_cli_id},{second_commit_cli_id} {third_commit_cli_id} --after"
     ))
     .assert()
     .success()
@@ -239,7 +241,7 @@ Moved 2 commits → after 1#2
 ┊●   1#0 create c.txt and d.txt
 ┊●   1#1 create a.txt and b.txt
 ┊●   1#2 create e.txt and f.txt
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -265,18 +267,18 @@ fn move_multiple_commits_from_different_branches() -> anyhow::Result<()> {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   add59d2 A: 10 lines on top
+┊●   psr A: 10 lines on top
 ├╯
 ┊
 ┊╭┄h0 [B]
-┊●   a748762 B: another 10 lines at the bottom
-┊●   62e05ba B: 10 lines at the bottom
+┊●   ynm B: another 10 lines at the bottom
+┊●   tlv B: 10 lines at the bottom
 ├╯
 ┊
 ┊╭┄i0 [C]
-┊●   930563a C: add another 10 lines to new file
-┊●   68a2fc3 C: add 10 lines to new file
-┊●   984fd1c C: new file with 10 lines
+┊●   zmt C: add another 10 lines to new file
+┊●   xkt C: add 10 lines to new file
+┊●   sxz C: new file with 10 lines
 ├╯
 ┊
 ┴ 8f0d338 (common base) 2000-01-02 base
@@ -301,27 +303,27 @@ Hint: run `but help` for all commands
         .as_array()
         .context("Missing commits for branch C")?;
 
-    let mut source_commit_ids = Vec::with_capacity(4);
-    source_commit_ids.push(
+    let mut source_commit_cli_ids = Vec::with_capacity(4);
+    source_commit_cli_ids.push(
         a_commits[0]["cliId"]
             .as_str()
             .context("Missing cliId for A commit")?,
     );
     for commit in c_commits {
-        source_commit_ids.push(
+        source_commit_cli_ids.push(
             commit["cliId"]
                 .as_str()
                 .context("Missing cliId for C commit")?,
         );
     }
 
-    let b_tip_commit_id = b_commits[0]["cliId"]
+    let b_tip_commit_cli_id = b_commits[0]["cliId"]
         .as_str()
         .context("Missing cliId for B tip commit")?;
 
     env.but(format!(
-        "move {} {b_tip_commit_id}",
-        source_commit_ids.join(",")
+        "move {} {b_tip_commit_cli_id}",
+        source_commit_cli_ids.join(",")
     ))
     .assert()
     .success()
@@ -380,7 +382,7 @@ Moved 4 commits → before [..]
 ┊●   xkt C: add 10 lines to new file
 ┊●   sxz C: new file with 10 lines
 ┊●   psr A: 10 lines on top
-┊●   62e05ba B: 10 lines at the bottom
+┊●   tlv B: 10 lines at the bottom
 ├╯
 ┊
 ┊╭┄i0 [C] (no commits)
@@ -409,18 +411,18 @@ fn move_multiple_commits_from_different_branches_after() -> anyhow::Result<()> {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   add59d2 A: 10 lines on top
+┊●   psr A: 10 lines on top
 ├╯
 ┊
 ┊╭┄h0 [B]
-┊●   a748762 B: another 10 lines at the bottom
-┊●   62e05ba B: 10 lines at the bottom
+┊●   ynm B: another 10 lines at the bottom
+┊●   tlv B: 10 lines at the bottom
 ├╯
 ┊
 ┊╭┄i0 [C]
-┊●   930563a C: add another 10 lines to new file
-┊●   68a2fc3 C: add 10 lines to new file
-┊●   984fd1c C: new file with 10 lines
+┊●   zmt C: add another 10 lines to new file
+┊●   xkt C: add 10 lines to new file
+┊●   sxz C: new file with 10 lines
 ├╯
 ┊
 ┴ 8f0d338 (common base) 2000-01-02 base
@@ -445,32 +447,32 @@ Hint: run `but help` for all commands
         .as_array()
         .context("Missing commits for branch C")?;
 
-    let mut source_commit_ids = Vec::with_capacity(4);
-    source_commit_ids.push(
+    let mut source_commit_cli_ids = Vec::with_capacity(4);
+    source_commit_cli_ids.push(
         a_commits[0]["cliId"]
             .as_str()
             .context("Missing cliId for A commit")?,
     );
     for commit in c_commits {
-        source_commit_ids.push(
+        source_commit_cli_ids.push(
             commit["cliId"]
                 .as_str()
                 .context("Missing cliId for C commit")?,
         );
     }
 
-    let b_tip_commit_id = b_commits[0]["cliId"]
+    let b_tip_commit_cli_id = b_commits[0]["cliId"]
         .as_str()
         .context("Missing cliId for B tip commit")?;
 
     env.but(format!(
-        "move {} {b_tip_commit_id} --after",
-        source_commit_ids.join(",")
+        "move {} {b_tip_commit_cli_id} --after",
+        source_commit_cli_ids.join(",")
     ))
     .assert()
     .success()
     .stdout_eq(str![[r#"
-Moved 4 commits → after a748762
+Moved 4 commits → after ynm
 
 "#]]);
 
@@ -523,8 +525,8 @@ Moved 4 commits → after a748762
 ┊●   xkt C: add 10 lines to new file
 ┊●   sxz C: new file with 10 lines
 ┊●   psr A: 10 lines on top
-┊●   a748762 B: another 10 lines at the bottom
-┊●   62e05ba B: 10 lines at the bottom
+┊●   ynm B: another 10 lines at the bottom
+┊●   tlv B: 10 lines at the bottom
 ├╯
 ┊
 ┊╭┄i0 [C] (no commits)
@@ -548,15 +550,15 @@ fn move_commit_to_branch() -> anyhow::Result<()> {
     // Create a commit on branch A
     commit_two_files_as_two_hunks_each(&env, "A", "a.txt", "b.txt", "commit on A");
 
-    // Get commit ID
+    // Get commit CLI ID
     let status_output = env.but("--format json status").allow_json().output()?;
     let status_json: serde_json::Value = serde_json::from_slice(&status_output.stdout)?;
-    let commit_id = status_json["stacks"][0]["branches"][0]["commits"][0]["cliId"]
+    let commit_cli_id = status_json["stacks"][0]["branches"][0]["commits"][0]["cliId"]
         .as_str()
         .unwrap();
 
     // Move commit to branch B
-    env.but(format!("move {commit_id} B"))
+    env.but(format!("move {commit_cli_id} B"))
         .assert()
         .success()
         .stdout_eq(str![[r#"
@@ -604,15 +606,15 @@ fn move_commit_with_after_flag_and_branch_target() -> anyhow::Result<()> {
 
     commit_two_files_as_two_hunks_each(&env, "A", "a.txt", "b.txt", "commit on A");
 
-    // Get commit ID
+    // Get commit CLI ID
     let status_output = env.but("--format json status").allow_json().output()?;
     let status_json: serde_json::Value = serde_json::from_slice(&status_output.stdout)?;
-    let commit_id = status_json["stacks"][0]["branches"][0]["commits"][0]["cliId"]
+    let commit_cli_id = status_json["stacks"][0]["branches"][0]["commits"][0]["cliId"]
         .as_str()
         .unwrap();
 
     // Try to move commit to branch with --after flag (should error)
-    env.but(format!("move {commit_id} B --after"))
+    env.but(format!("move {commit_cli_id} B --after"))
         .assert()
         .failure()
         .stderr_eq(str![[r#"
@@ -632,15 +634,15 @@ fn move_same_commit_to_itself() -> anyhow::Result<()> {
 
     commit_two_files_as_two_hunks_each(&env, "A", "a.txt", "b.txt", "first commit");
 
-    // Get commit ID
+    // Get commit CLI ID
     let status_output = env.but("--format json status").allow_json().output()?;
     let status_json: serde_json::Value = serde_json::from_slice(&status_output.stdout)?;
-    let commit_id = status_json["stacks"][0]["branches"][0]["commits"][0]["cliId"]
+    let commit_cli_id = status_json["stacks"][0]["branches"][0]["commits"][0]["cliId"]
         .as_str()
         .unwrap();
 
     // Move commit to itself (should be no-op)
-    env.but(format!("move {commit_id} {commit_id}"))
+    env.but(format!("move {commit_cli_id} {commit_cli_id}"))
         .assert()
         .success()
         .stdout_eq(str![[r#"
@@ -659,14 +661,14 @@ fn move_commit_with_invalid_target() -> anyhow::Result<()> {
 
     commit_two_files_as_two_hunks_each(&env, "A", "a.txt", "b.txt", "first commit");
 
-    // Get commit ID
+    // Get commit CLI ID
     let status_output = env.but("--format json status").allow_json().output()?;
     let status_json: serde_json::Value = serde_json::from_slice(&status_output.stdout)?;
-    let commit_id = status_json["stacks"][0]["branches"][0]["commits"][0]["cliId"]
+    let commit_cli_id = status_json["stacks"][0]["branches"][0]["commits"][0]["cliId"]
         .as_str()
         .unwrap();
 
-    env.but(format!("move {commit_id} nonexistent"))
+    env.but(format!("move {commit_cli_id} nonexistent"))
         .assert()
         .failure()
         .stderr_eq(str![[r#"
@@ -687,19 +689,19 @@ fn move_cross_stack_works_yay() -> anyhow::Result<()> {
     commit_two_files_as_two_hunks_each(&env, "A", "a.txt", "b.txt", "commit on A");
     commit_two_files_as_two_hunks_each(&env, "B", "c.txt", "d.txt", "commit on B");
 
-    // Get commit IDs
+    // Get commit CLI IDs
     let status_output = env.but("--format json status").allow_json().output()?;
     let status_json: serde_json::Value = serde_json::from_slice(&status_output.stdout)?;
 
-    let commit_a_id = status_json["stacks"][0]["branches"][0]["commits"][0]["cliId"]
+    let commit_a_cli_id = status_json["stacks"][0]["branches"][0]["commits"][0]["cliId"]
         .as_str()
         .unwrap();
-    let commit_b_id = status_json["stacks"][1]["branches"][0]["commits"][0]["cliId"]
+    let commit_b_cli_id = status_json["stacks"][1]["branches"][0]["commits"][0]["cliId"]
         .as_str()
         .unwrap();
 
     // Try to move commit from A to specific position in B (should work amazingly)
-    env.but(format!("move {commit_a_id} {commit_b_id}"))
+    env.but(format!("move {commit_a_cli_id} {commit_b_cli_id}"))
         .assert()
         .success()
         .stdout_eq(str![[r#"
@@ -720,18 +722,18 @@ fn move_committed_file_to_another_commit() -> anyhow::Result<()> {
     commit_two_files_as_two_hunks_each(&env, "A", "a.txt", "b.txt", "first commit");
     commit_two_files_as_two_hunks_each(&env, "A", "c.txt", "d.txt", "second commit");
 
-    // Get commit IDs and file IDs from status with files (-f flag)
+    // Get commit and file CLI IDs from status with files (-f flag)
     let status_output = env.but("--format json status -f").allow_json().output()?;
     let status_json: serde_json::Value = serde_json::from_slice(&status_output.stdout)?;
     let commits = &status_json["stacks"][0]["branches"][0]["commits"];
 
     // commits[0] = "second commit" with c.txt and d.txt
     // commits[1] = "first commit" with a.txt and b.txt
-    let first_commit_id = commits[1]["cliId"].as_str().unwrap();
+    let first_commit_cli_id = commits[1]["cliId"].as_str().unwrap();
 
-    // Get the file ID for c.txt in the second commit
+    // Get the file CLI ID for c.txt in the second commit
     // Files are under the "changes" array in the commit
-    let c_txt_file_id = commits[0]["changes"]
+    let c_txt_file_cli_id = commits[0]["changes"]
         .as_array()
         .and_then(|changes| {
             changes
@@ -739,10 +741,10 @@ fn move_committed_file_to_another_commit() -> anyhow::Result<()> {
                 .find(|change| change["filePath"].as_str() == Some("c.txt"))
         })
         .and_then(|change| change["cliId"].as_str())
-        .expect("Could not find c.txt file ID in status output");
+        .expect("Could not find c.txt file CLI ID in status output");
 
     // Move c.txt from second commit to first commit
-    env.but(format!("move {c_txt_file_id} {first_commit_id}"))
+    env.but(format!("move {c_txt_file_cli_id} {first_commit_cli_id}"))
         .assert()
         .success()
         .stdout_eq(str![[r#"
@@ -791,14 +793,14 @@ fn move_branch_by_name_from_top_level_move() -> anyhow::Result<()> {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┊╭┄h0 [C]
-┊●   3842fc0 add C
+┊●   xwn add C
 ┊│
 ┊├┄i0 [B]
-┊●   d3e2ba3 add B
+┊●   lrm add B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -830,10 +832,10 @@ Moved branch A on top of C.
 ┊●   tpm add A
 ┊│
 ┊├┄h0 [C]
-┊●   3842fc0 add C
+┊●   xwn add C
 ┊│
 ┊├┄i0 [B]
-┊●   d3e2ba3 add B
+┊●   lrm add B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -859,17 +861,19 @@ fn move_empty_branch_on_top_of_empty_branch_by_cli_id() -> anyhow::Result<()> {
         vec![vec!["B".to_string(), "A".to_string()]]
     );
 
-    let source_branch_id = initial_status["stacks"][0]["branches"][1]["cliId"]
+    let source_branch_cli_id = initial_status["stacks"][0]["branches"][1]["cliId"]
         .as_str()
         .context("Missing source branch cliId")?;
-    let target_branch_id = initial_status["stacks"][0]["branches"][0]["cliId"]
+    let target_branch_cli_id = initial_status["stacks"][0]["branches"][0]["cliId"]
         .as_str()
         .context("Missing target branch cliId")?;
 
-    env.but(format!("move {source_branch_id} {target_branch_id}"))
-        .assert()
-        .success()
-        .stdout_eq(str![[r#"
+    env.but(format!(
+        "move {source_branch_cli_id} {target_branch_cli_id}"
+    ))
+    .assert()
+    .success()
+    .stdout_eq(str![[r#"
 Moved branch A on top of B.
 
 "#]]);
@@ -944,14 +948,14 @@ fn move_branch_by_cli_id_from_top_level_move() -> anyhow::Result<()> {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┊╭┄h0 [C]
-┊●   3842fc0 add C
+┊●   xwn add C
 ┊│
 ┊├┄i0 [B]
-┊●   d3e2ba3 add B
+┊●   lrm add B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -961,17 +965,19 @@ Hint: run `but help` for all commands
 "#]]);
 
     let initial_status = status_json(&env)?;
-    let source_branch_id = initial_status["stacks"][0]["branches"][0]["cliId"]
+    let source_branch_cli_id = initial_status["stacks"][0]["branches"][0]["cliId"]
         .as_str()
         .context("Missing source branch cliId")?;
-    let target_branch_id = initial_status["stacks"][1]["branches"][0]["cliId"]
+    let target_branch_cli_id = initial_status["stacks"][1]["branches"][0]["cliId"]
         .as_str()
         .context("Missing target branch cliId")?;
 
-    env.but(format!("move {source_branch_id} {target_branch_id}"))
-        .assert()
-        .success()
-        .stdout_eq(str![[r#"
+    env.but(format!(
+        "move {source_branch_cli_id} {target_branch_cli_id}"
+    ))
+    .assert()
+    .success()
+    .stdout_eq(str![[r#"
 Moved branch A on top of C.
 
 "#]]);
@@ -994,10 +1000,10 @@ Moved branch A on top of C.
 ┊●   tpm add A
 ┊│
 ┊├┄h0 [C]
-┊●   3842fc0 add C
+┊●   xwn add C
 ┊│
 ┊├┄i0 [B]
-┊●   d3e2ba3 add B
+┊●   lrm add B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1025,14 +1031,14 @@ fn tear_off_branch_with_top_level_move_to_zz() -> anyhow::Result<()> {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┊╭┄h0 [C]
-┊●   3842fc0 add C
+┊●   xwn add C
 ┊│
 ┊├┄i0 [B]
-┊●   d3e2ba3 add B
+┊●   lrm add B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1073,11 +1079,11 @@ Unstacked branch C.
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┊╭┄h0 [B]
-┊●   d3e2ba3 add B
+┊●   lrm add B
 ├╯
 ┊
 ┊╭┄i0 [C]
@@ -1109,14 +1115,14 @@ fn move_branch_with_after_flag_fails_from_top_level_move() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┊╭┄h0 [C]
-┊●   3842fc0 add C
+┊●   xwn add C
 ┊│
 ┊├┄i0 [B]
-┊●   d3e2ba3 add B
+┊●   lrm add B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1141,14 +1147,14 @@ Failed to move branch. The --after flag only makes sense when moving a commit to
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┊╭┄h0 [C]
-┊●   3842fc0 add C
+┊●   xwn add C
 ┊│
 ┊├┄i0 [B]
-┊●   d3e2ba3 add B
+┊●   lrm add B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M

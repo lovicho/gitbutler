@@ -2,8 +2,8 @@ use crate::{
     command::{
         undo::run_mutate_undo_roundtrip_test,
         util::{
-            branch_commit_id_for_file, branch_commit_ids, commit_two_files_as_two_hunks_each,
-            status_json, status_json_with_files,
+            branch_commit_cli_id_for_file, branch_commit_cli_ids,
+            commit_two_files_as_two_hunks_each, status_json, status_json_with_files,
         },
     },
     utils::Sandbox,
@@ -17,11 +17,11 @@ fn undo_squash_commits() {
 
     run_mutate_undo_roundtrip_test(&env, |env| {
         env.but("rub")
-            .arg("9a")
-            .arg("fe")
+            .arg("y")
+            .arg("z")
             .assert()
             .success()
-            .stdout_eq("Squashed 9ac4652 → zll\n")
+            .stdout_eq("Squashed ywx → zll\n")
             .stderr_eq("");
     });
 }
@@ -50,10 +50,10 @@ fn undo_uncommitted_hunk_to_commit() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
     env.setup_metadata(&["A", "B"]);
     env.file("uncommitted-to-commit.txt", "content\n");
-    let target_commit = branch_commit_ids(&status_json(&env).unwrap(), "A")[0].clone();
+    let target_cli_id = branch_commit_cli_ids(&status_json(&env).unwrap(), "A")[0].clone();
 
     run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but(format!("rub uncommitted-to-commit.txt {target_commit}"))
+        env.but(format!("rub uncommitted-to-commit.txt {target_cli_id}"))
             .assert()
             .success()
             .stdout_eq("Amended [..] → [..]\n")
@@ -158,10 +158,10 @@ fn undo_stack_to_commit() {
     env.setup_metadata(&["A", "B"]);
     env.file("stack-to-commit.txt", "content\n");
     env.but("rub stack-to-commit.txt A").assert().success();
-    let target_commit = branch_commit_ids(&status_json(&env).unwrap(), "A")[0].clone();
+    let target_cli_id = branch_commit_cli_ids(&status_json(&env).unwrap(), "A")[0].clone();
 
     run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but(format!("rub A@{{stack}} {target_commit}"))
+        env.but(format!("rub A@{{stack}} {target_cli_id}"))
             .assert()
             .success()
             .stdout_eq("Amended files assigned to [A] → [..]\n")
@@ -175,10 +175,10 @@ fn undo_uncommitted_area_to_commit() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
     env.setup_metadata(&["A", "B"]);
     env.file("uncommitted-to-commit.txt", "content\n");
-    let target_commit = branch_commit_ids(&status_json(&env).unwrap(), "A")[0].clone();
+    let target_cli_id = branch_commit_cli_ids(&status_json(&env).unwrap(), "A")[0].clone();
 
     run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but(format!("rub zz {target_commit}"))
+        env.but(format!("rub zz {target_cli_id}"))
             .assert()
             .success()
             .stdout_eq("Amended uncommitted files → [..]\n")
@@ -232,10 +232,10 @@ fn undo_commit_to_uncommitted_area() {
         "commit-to-zz-b.txt",
         "first",
     );
-    let source_commit = branch_commit_ids(&status_json(&env).unwrap(), "A")[0].clone();
+    let source_cli_id = branch_commit_cli_ids(&status_json(&env).unwrap(), "A")[0].clone();
 
     run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but(format!("rub {source_commit} zz"))
+        env.but(format!("rub {source_cli_id} zz"))
             .assert()
             .success()
             .stdout_eq("Uncommitted [..]\n")
@@ -255,10 +255,10 @@ fn undo_commit_to_stack() {
         "commit-to-stack-b.txt",
         "first",
     );
-    let source_commit = branch_commit_ids(&status_json(&env).unwrap(), "A")[0].clone();
+    let source_cli_id = branch_commit_cli_ids(&status_json(&env).unwrap(), "A")[0].clone();
 
     run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but(format!("rub {source_commit} B@{{stack}}"))
+        env.but(format!("rub {source_cli_id} B@{{stack}}"))
             .assert()
             .success()
             .stdout_eq("Uncommitted [..] to [B]\n")
@@ -278,10 +278,10 @@ fn undo_move_commit_to_branch() {
         "commit-to-branch-b.txt",
         "first",
     );
-    let source_commit = branch_commit_ids(&status_json(&env).unwrap(), "A")[0].clone();
+    let source_cli_id = branch_commit_cli_ids(&status_json(&env).unwrap(), "A")[0].clone();
 
     run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but(format!("rub {source_commit} B"))
+        env.but(format!("rub {source_cli_id} B"))
             .assert()
             .success()
             .stdout_eq("Moved [..] → [B]\n")
@@ -334,10 +334,10 @@ fn undo_branch_to_commit() {
     env.setup_metadata(&["A", "B"]);
     env.file("branch-to-commit.txt", "content\n");
     env.but("rub branch-to-commit.txt A").assert().success();
-    let target_commit = branch_commit_ids(&status_json(&env).unwrap(), "A")[0].clone();
+    let target_cli_id = branch_commit_cli_ids(&status_json(&env).unwrap(), "A")[0].clone();
 
     run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but(format!("rub A {target_commit}"))
+        env.but(format!("rub A {target_cli_id}"))
             .assert()
             .success()
             .stdout_eq("Amended assigned files [A] → [..]\n")
@@ -375,10 +375,10 @@ fn undo_committed_file_to_branch() {
         "file-to-branch-b.txt",
         "first",
     );
-    let source_commit = branch_commit_ids(&status_json(&env).unwrap(), "A")[0].clone();
+    let source_cli_id = branch_commit_cli_ids(&status_json(&env).unwrap(), "A")[0].clone();
 
     run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but(format!("rub {source_commit}:file-to-branch-a.txt B"))
+        env.but(format!("rub {source_cli_id}:file-to-branch-a.txt B"))
             .assert()
             .success()
             .stdout_eq("Uncommitted changes\n")
@@ -394,11 +394,11 @@ fn undo_committed_file_to_commit() {
     commit_two_files_as_two_hunks_each(&env, "A", "source-a.txt", "source-b.txt", "source");
     commit_two_files_as_two_hunks_each(&env, "A", "target-a.txt", "target-b.txt", "target");
     let status = status_json_with_files(&env).unwrap();
-    let source_commit = branch_commit_id_for_file(&status, "A", "source-a.txt").unwrap();
-    let target_commit = branch_commit_id_for_file(&status, "A", "target-a.txt").unwrap();
+    let source_cli_id = branch_commit_cli_id_for_file(&status, "A", "source-a.txt").unwrap();
+    let target_cli_id = branch_commit_cli_id_for_file(&status, "A", "target-a.txt").unwrap();
 
     run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but(format!("rub {source_commit}:source-a.txt {target_commit}"))
+        env.but(format!("rub {source_cli_id}:source-a.txt {target_cli_id}"))
             .assert()
             .success()
             .stdout_eq("Moved files between commits!\n")
@@ -412,10 +412,10 @@ fn undo_committed_file_to_uncommitted_area() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
     env.setup_metadata(&["A", "B"]);
     commit_two_files_as_two_hunks_each(&env, "A", "file-to-zz-a.txt", "file-to-zz-b.txt", "first");
-    let source_commit = branch_commit_ids(&status_json(&env).unwrap(), "A")[0].clone();
+    let source_cli_id = branch_commit_cli_ids(&status_json(&env).unwrap(), "A")[0].clone();
 
     run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but(format!("rub {source_commit}:file-to-zz-a.txt zz"))
+        env.but(format!("rub {source_cli_id}:file-to-zz-a.txt zz"))
             .assert()
             .success()
             .stdout_eq("Uncommitted changes\n")

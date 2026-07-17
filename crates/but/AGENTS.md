@@ -6,16 +6,15 @@ For CLI work that touches graph/workspace/branch/stack/commit relationships,
 reachability, ordering, operation targets, or Git graph/history/ref-placement
 changes, also read `crates/WORKSPACE_MODEL.md`.
 
-## CLI I/O
+## Command structure and I/O
 
-- Route user-visible command output through `out: &mut OutputChannel`:
-  `out.for_human()` for human text, `out.for_shell()` for shell-friendly output,
-  and `out.for_json()` with `write_value(...)` for JSON.
-- Do not read `std::io::stdin()` directly in command or business logic. For
-  interactive input, gate with `out.can_prompt()` or use
-  `out.prepare_for_terminal_input()`; for piped or machine input, accept
-  `read: impl std::io::Read` so tests can inject data. Keep `stdin().lock()` at
-  top-level CLI wiring.
+- Use CLI atoms for arguments that resolve to Git objects, workspace files etc.
+  See `crates/but/src/args/atoms/mod.rs`.
+- Command outcome should be returned as a struct that implements `CliOutput` or
+  `CliOutputHuman` - it should never be printed inline in the command itself
+- Progress and interactive output may be written intermittently in commands
+  using `IntermediateChannel` when applicable
+- See `crates/but/src/command/legacy/commit2.rs` for a modern example
 
 ## Worktree Guards And Deadlocks
 
@@ -48,6 +47,8 @@ permission-taking helper.
   scoped to a test name when possible. For colored terminal output, assert
   against `snapbox::file!["snapshots/<test-name>/<invocation>.stdout.term.svg"]`
   and update with the same command.
+    - When updating snapshots, always inspect the results to ensure that the
+      tests still test what they claim to
 - Use sandbox helpers instead of `std::process::Command::new("git")`:
   `env.invoke_bash(...)` for multi-line command sequences and
   `env.invoke_git("...")` for single Git commands. Do not rewrite existing

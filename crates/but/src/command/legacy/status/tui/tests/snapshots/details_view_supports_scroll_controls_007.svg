@@ -46,10 +46,10 @@
     <text x="482 490 498 506 514 522" y="96" style="fill:#CCCCCC;opacity:0.75;">+1,120</text>
     <text x="538 546" y="96" style="fill:#CCCCCC;opacity:0.75;">@@</text>
     <text x="10 18" y="114" style="fill:#CCCCCC;">┊●</text>
-    <text x="50" y="114" style="fill:#0000AA;font-weight:bold;">9</text>
-    <text x="58 66 74 82 90 98" y="114" style="fill:#CCCCCC;opacity:0.75;">477ae7</text>
-    <text x="114 122 130" y="114" style="fill:#CCCCCC;">add</text>
-    <text x="146" y="114" style="fill:#CCCCCC;">A</text>
+    <text x="50" y="114" style="fill:#AA00AA;">t</text>
+    <text x="58 66" y="114" style="fill:#CCCCCC;opacity:0.75;">pm</text>
+    <text x="82 90 98" y="114" style="fill:#CCCCCC;">add</text>
+    <text x="114" y="114" style="fill:#CCCCCC;">A</text>
     <text x="410" y="114" style="fill:#FFA500;">▌</text>
     <text x="418 426 434 442 450 458 466 474 482 490 498 506 514 522 530 538 546" y="114" style="fill:#555555;">─────────────────</text>
     <text x="10 18" y="132" style="fill:#CCCCCC;">├╯</text>

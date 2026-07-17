@@ -1,7 +1,7 @@
 use snapbox::str;
 
 use crate::{
-    command::util::{branch_commit_ids, status_json_with_files as status_json},
+    command::util::{branch_commit_cli_ids, status_json_with_files as status_json},
     utils::Sandbox,
 };
 
@@ -45,8 +45,8 @@ fn amend_reports_dependency_changes() -> anyhow::Result<()> {
     // depends on and suggest stacking bar onto foo.
     env.file("first", "changes");
     let status = status_json(&env)?;
-    let bar_commit = branch_commit_ids(&status, "bar")[0].clone();
-    env.but(format!("amend {bar_commit} --changes first"))
+    let bar_commit_cli_id = branch_commit_cli_ids(&status, "bar")[0].clone();
+    env.but(format!("amend {bar_commit_cli_id} --changes first"))
         .assert()
         .success()
         .stdout_eq(str![[r#"
@@ -65,15 +65,15 @@ Hint: you can stack bar on top of foo to apply these changes:
 
 #[test]
 fn amend_accepts_comma_separated_uncommitted_changes() {
-    assert_multiple_amend(|target_commit| {
-        format!("amend {target_commit} --changes one.txt,two.txt")
+    assert_multiple_amend(|target_cli_id| {
+        format!("amend {target_cli_id} --changes one.txt,two.txt")
     })
     .unwrap();
 }
 
 #[test]
 fn amend_legacy_form_still_accepts_comma_separated_uncommitted_changes() {
-    assert_multiple_amend(|target_commit| format!("amend one.txt,two.txt {target_commit}"))
+    assert_multiple_amend(|target_cli_id| format!("amend one.txt,two.txt {target_cli_id}"))
         .unwrap();
 }
 
@@ -128,9 +128,9 @@ fn assert_multiple_amend(args: impl FnOnce(&str) -> String) -> anyhow::Result<()
     env.file("three.txt", "three\n");
 
     let before = status_json(&env)?;
-    let target_commit = branch_commit_ids(&before, "A")[0].clone();
+    let target_cli_id = branch_commit_cli_ids(&before, "A")[0].clone();
 
-    env.but(args(&target_commit))
+    env.but(args(&target_cli_id))
         .assert()
         .success()
         .stdout_eq(str![[r#"

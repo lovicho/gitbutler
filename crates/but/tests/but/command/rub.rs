@@ -2,7 +2,7 @@ use snapbox::str;
 
 use crate::{
     command::util::{
-        branch_commit_id_for_file, branch_commit_ids,
+        branch_commit_cli_id_for_file, branch_commit_cli_ids,
         commit_file_with_worktree_changes_as_two_hunks, commit_two_files_as_two_hunks_each,
         status_json_with_files as status_json,
     },
@@ -73,7 +73,7 @@ fn branch_commits_contain_file(
         .any(|change| change["filePath"].as_str().unwrap() == file_path)
 }
 
-fn committed_file_id_for_file(
+fn committed_file_cli_id_for_file(
     status: &serde_json::Value,
     branch_name: &str,
     file_path: &str,
@@ -240,7 +240,7 @@ fn committed_file_to_uncommitted_area() -> anyhow::Result<()> {
 ...
               "changes": [
                 {
-                  "cliId": "9:t",
+                  "cliId": "t:t",
                   "filePath": "A",
                   "changeType": "added"
                 }
@@ -312,7 +312,7 @@ Uncommitted changes
 ...
               "changes": [
                 {
-                  "cliId": "9:t",
+                  "cliId": "t:t",
                   "filePath": "A",
                   "changeType": "added"
                 }
@@ -330,7 +330,7 @@ Uncommitted changes
 ...
               "changes": [
                 {
-                  "cliId": "d:p",
+                  "cliId": "l:p",
                   "filePath": "B",
                   "changeType": "added"
                 }
@@ -511,10 +511,10 @@ fn uncommitted_hunk_to_commit() -> anyhow::Result<()> {
 
     commit_file_with_worktree_changes_as_two_hunks(&env, "A", "a.txt");
 
-    let target_commit = branch_commit_ids(&status_json(&env)?, "A")[0].clone();
+    let target_cli_id = branch_commit_cli_ids(&status_json(&env)?, "A")[0].clone();
     // The amended commit is identified by its change ID, from a freshly built
     // map that knows the post-amend workspace.
-    env.but(format!("rub zz:a.txt:#0 {target_commit}"))
+    env.but(format!("rub zz:a.txt:#0 {target_cli_id}"))
         .assert()
         .success()
         .stdout_eq(str![[r#"
@@ -600,12 +600,14 @@ fn uncommit_command_on_commit() -> anyhow::Result<()> {
     // Get the commit ID from status
     let status_output = env.but("--format json status").allow_json().output()?;
     let status_json: serde_json::Value = serde_json::from_slice(&status_output.stdout)?;
-    let commit_id = status_json["stacks"][0]["branches"][0]["commits"][0]["cliId"]
+    let commit_cli_id = status_json["stacks"][0]["branches"][0]["commits"][0]["cliId"]
         .as_str()
         .unwrap();
 
     // Test uncommit command
-    env.but(format!("uncommit {commit_id}")).assert().success();
+    env.but(format!("uncommit {commit_cli_id}"))
+        .assert()
+        .success();
 
     // Verify the files are now uncommitted
     env.but("--format json status -f")
@@ -647,8 +649,8 @@ fn uncommit_diff_json_keeps_mutation_result_and_diff() -> anyhow::Result<()> {
         commit_two_files_as_two_hunks_each(&env, "A", "a.txt", "b.txt", "first commit");
 
         let before = status_json(&env)?;
-        let commit_id = branch_commit_ids(&before, "A")[0].clone();
-        let command = format!("--format json uncommit {commit_id} --diff");
+        let commit_cli_id = branch_commit_cli_ids(&before, "A")[0].clone();
+        let command = format!("--format json uncommit {commit_cli_id} --diff");
         let output = if agent {
             env.but(command)
                 .env("AI_AGENT", "codex")
@@ -723,8 +725,8 @@ fn uncommit_command_with_discard_on_commit() -> anyhow::Result<()> {
     commit_two_files_as_two_hunks_each(&env, "A", "a.txt", "b.txt", "first commit");
 
     let before = status_json(&env)?;
-    let commits_before = branch_commit_ids(&before, "A");
-    let source_commit = commits_before[0].clone();
+    let commit_cli_ids_before = branch_commit_cli_ids(&before, "A");
+    let source_cli_id = commit_cli_ids_before[0].clone();
 
     env.but("stf")
         .assert()
@@ -737,13 +739,13 @@ fn uncommit_command_with_discard_on_commit() -> anyhow::Result<()> {
 ┊●   1 create a.txt and b.txt
 ┊│     1:n A a.txt
 ┊│     1:p A b.txt
-┊●   9477ae7 add A
-┊│     9:t A A
+┊●   tpm add A
+┊│     tpm:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
-┊●   d3e2ba3 add B
-┊│     d:p A B
+┊●   lrm add B
+┊│     lrm:p A B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -752,20 +754,20 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    env.but(format!("uncommit {source_commit} --discard"))
+    env.but(format!("uncommit {source_cli_id} --discard"))
         .assert()
         .success();
 
     let after = status_json(&env)?;
-    let commits_after = branch_commit_ids(&after, "A");
+    let commit_cli_ids_after = branch_commit_cli_ids(&after, "A");
 
     assert_eq!(
-        commits_after.len() + 1,
-        commits_before.len(),
+        commit_cli_ids_after.len() + 1,
+        commit_cli_ids_before.len(),
         "discarding a commit via uncommit should remove that commit from branch history"
     );
     assert!(
-        !commits_after.contains(&source_commit),
+        !commit_cli_ids_after.contains(&source_cli_id),
         "source commit should no longer be present after discard"
     );
     assert!(
@@ -781,13 +783,13 @@ Hint: run `but help` for all commands
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9477ae7 add A
-┊│     9:t A A
+┊●   tpm add A
+┊│     tpm:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
-┊●   d3e2ba3 add B
-┊│     d:p A B
+┊●   lrm add B
+┊│     lrm:p A B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -807,7 +809,7 @@ fn uncommit_command_with_discard_on_committed_file() -> anyhow::Result<()> {
     commit_two_files_as_two_hunks_each(&env, "A", "a.txt", "b.txt", "first commit");
 
     let before = status_json(&env)?;
-    let committed_file_id = committed_file_id_for_file(&before, "A", "b.txt")
+    let committed_file_cli_id = committed_file_cli_id_for_file(&before, "A", "b.txt")
         .expect("b.txt committed-file id should exist");
 
     env.but("stf")
@@ -821,13 +823,13 @@ fn uncommit_command_with_discard_on_committed_file() -> anyhow::Result<()> {
 ┊●   1 create a.txt and b.txt
 ┊│     1:n A a.txt
 ┊│     1:p A b.txt
-┊●   9477ae7 add A
-┊│     9:t A A
+┊●   tpm add A
+┊│     tpm:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
-┊●   d3e2ba3 add B
-┊│     d:p A B
+┊●   lrm add B
+┊│     lrm:p A B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -836,7 +838,7 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    env.but(format!("uncommit {committed_file_id} -d"))
+    env.but(format!("uncommit {committed_file_cli_id} -d"))
         .assert()
         .success();
 
@@ -864,13 +866,13 @@ Hint: run `but help` for all commands
 ┊╭┄g0 [A]
 ┊●   1 create a.txt and b.txt
 ┊│     1:n A a.txt
-┊●   9477ae7 add A
-┊│     94:t A A
+┊●   tpm add A
+┊│     tpm:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
-┊●   d3e2ba3 add B
-┊│     d:p A B
+┊●   lrm add B
+┊│     lrm:p A B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -911,11 +913,11 @@ fn agent_uncommit_discard_multiple_sources_writes_single_json_with_status() -> a
     commit_two_files_as_two_hunks_each(&env, "A", "a.txt", "b.txt", "second commit");
 
     let before = status_json(&env)?;
-    let commits_before = branch_commit_ids(&before, "A");
-    let sources = format!("{},{}", commits_before[0], commits_before[1]);
+    let commit_cli_ids_before = branch_commit_cli_ids(&before, "A");
+    let source_cli_ids = format!("{},{}", commit_cli_ids_before[0], commit_cli_ids_before[1]);
 
     let output = env
-        .but(format!("--format json uncommit {sources} --discard"))
+        .but(format!("--format json uncommit {source_cli_ids} --discard"))
         .env("AI_AGENT", "codex")
         .allow_json()
         .output()?;
@@ -929,11 +931,11 @@ fn agent_uncommit_discard_multiple_sources_writes_single_json_with_status() -> a
     );
 
     let after = status_json(&env)?;
-    let commits_after = branch_commit_ids(&after, "A");
+    let commit_cli_ids_after = branch_commit_cli_ids(&after, "A");
 
     assert_eq!(
-        commits_after.len() + 2,
-        commits_before.len(),
+        commit_cli_ids_after.len() + 2,
+        commit_cli_ids_before.len(),
         "discarding two commit sources should remove both from branch history"
     );
     assert!(
@@ -1175,15 +1177,15 @@ fn unstage_command_validation() -> anyhow::Result<()> {
     env.setup_metadata(&["A", "B"]);
     commit_two_files_as_two_hunks_each(&env, "A", "a.txt", "b.txt", "first commit");
 
-    // Get the commit ID from status
+    // Get the commit CLI ID from status
     let status_output = env.but("--format json status").allow_json().output()?;
-    let status_json: serde_json::Value = serde_json::from_slice(&status_output.stdout)?;
-    let commit_id = status_json["stacks"][0]["branches"][0]["commits"][0]["cliId"]
+    let status: serde_json::Value = serde_json::from_slice(&status_output.stdout)?;
+    let commit_cli_id = status["stacks"][0]["branches"][0]["commits"][0]["cliId"]
         .as_str()
         .unwrap();
 
     // Test that unstage rejects commits
-    env.but(format!("unstage {commit_id}"))
+    env.but(format!("unstage {commit_cli_id}"))
         .assert()
         .failure()
         .stderr_eq(str![[r#"
@@ -1191,13 +1193,15 @@ Failed to unstage. Cannot unstage f - it is a commit. Only uncommitted files and
 
 "#]]);
 
-    // Test that unstage rejects non-branch as branch parameter
+    // Test that unstage rejects non-branch as branch parameter. Refresh the ID after adding a
+    // commit, as duplicate change IDs can gain a new disambiguator.
     commit_file_with_worktree_changes_as_two_hunks(&env, "A", "c.txt");
-    env.but(format!("unstage c.txt {commit_id}"))
+    let commit_cli_id = branch_commit_cli_ids(&status_json(&env)?, "A")[0].clone();
+    env.but(format!("unstage c.txt {commit_cli_id}"))
         .assert()
         .failure()
         .stderr_eq(str![[r#"
-Failed to unstage. Cannot unstage from f - it is a commit. Target must be a branch.
+Failed to unstage. Cannot unstage from 2 - it is a commit. Target must be a branch.
 
 "#]]);
 
@@ -1214,9 +1218,9 @@ fn rub_matrix_uncommitted_hunk_to_commit_smoke() -> anyhow::Result<()> {
     env.file("uncommitted-to-commit.txt", "content\n");
 
     let before = status_json(&env)?;
-    let target_commit = branch_commit_ids(&before, "A")[0].clone();
+    let target_cli_id = branch_commit_cli_ids(&before, "A")[0].clone();
 
-    env.but(format!("rub uncommitted-to-commit.txt {target_commit}"))
+    env.but(format!("rub uncommitted-to-commit.txt {target_cli_id}"))
         .assert()
         .success()
         .stdout_eq(str![[r#"
@@ -1300,9 +1304,9 @@ fn rub_matrix_uncommitted_area_to_commit_smoke() -> anyhow::Result<()> {
     env.file("zz-to-commit.txt", "content\n");
 
     let before = status_json(&env)?;
-    let target_commit = branch_commit_ids(&before, "A")[0].clone();
+    let target_cli_id = branch_commit_cli_ids(&before, "A")[0].clone();
 
-    env.but(format!("rub zz {target_commit}"))
+    env.but(format!("rub zz {target_cli_id}"))
         .assert()
         .success()
         .stdout_eq(str![[r#"
@@ -1349,9 +1353,9 @@ fn rub_matrix_uncommitted_to_commit_consumes_renames() -> anyhow::Result<()> {
     );
 
     let before = status_json(&env)?;
-    let target_commit = branch_commit_ids(&before, "A")[0].clone();
+    let target_cli_id = branch_commit_cli_ids(&before, "A")[0].clone();
 
-    env.but(format!("rub zz {target_commit}"))
+    env.but(format!("rub zz {target_cli_id}"))
         .assert()
         .success()
         .stdout_eq(str![[r#"
@@ -1399,11 +1403,11 @@ fn rub_matrix_uncommitted_file_to_commit_consumes_renames() -> anyhow::Result<()
     );
 
     let before = status_json(&env)?;
-    let source_file_id = uncommitted_cli_id_for_file(&before, "rename-target-single.txt")
+    let source_file_cli_id = uncommitted_cli_id_for_file(&before, "rename-target-single.txt")
         .expect("renamed uncommitted file should be present in status");
-    let target_commit = branch_commit_ids(&before, "A")[0].clone();
+    let target_cli_id = branch_commit_cli_ids(&before, "A")[0].clone();
 
-    env.but(format!("rub {source_file_id} {target_commit}"))
+    env.but(format!("rub {source_file_cli_id} {target_cli_id}"))
         .assert()
         .success()
         .stdout_eq(str![[r#"
@@ -1443,15 +1447,15 @@ fn rub_uncommitted_deleted_file_to_commit_keeps_unrelated_deleted_file() -> anyh
     std::fs::remove_file(env.projects_root().join("b.txt"))?;
 
     let before = status_json(&env)?;
-    let source_file_id = uncommitted_cli_id_for_file(&before, "a.txt")
+    let source_file_cli_id = uncommitted_cli_id_for_file(&before, "a.txt")
         .expect("a.txt deletion should be present in the uncommitted area");
-    let target_commit = branch_commit_ids(&before, "A")[0].clone();
+    let target_cli_id = branch_commit_cli_ids(&before, "A")[0].clone();
     assert!(
         uncommitted_contains_file(&before, "b.txt"),
         "b.txt deletion should start in the uncommitted area"
     );
 
-    env.but(format!("rub {source_file_id} {target_commit}"))
+    env.but(format!("rub {source_file_cli_id} {target_cli_id}"))
         .assert()
         .success()
         .stdout_eq(str![[r#"
@@ -1522,10 +1526,10 @@ fn rub_matrix_commit_to_uncommitted_smoke() -> anyhow::Result<()> {
     commit_two_files_as_two_hunks_each(&env, "A", "a.txt", "b.txt", "first commit");
 
     let before = status_json(&env)?;
-    let commits_before = branch_commit_ids(&before, "A");
-    let source_commit = commits_before[0].clone();
+    let commit_cli_ids_before = branch_commit_cli_ids(&before, "A");
+    let source_cli_id = commit_cli_ids_before[0].clone();
 
-    env.but(format!("rub {source_commit} zz"))
+    env.but(format!("rub {source_cli_id} zz"))
         .assert()
         .success()
         .stdout_eq(str![[r#"
@@ -1535,15 +1539,15 @@ Uncommitted [..]
         .stderr_eq(str![""]);
 
     let after = status_json(&env)?;
-    let commits_after = branch_commit_ids(&after, "A");
+    let commit_cli_ids_after = branch_commit_cli_ids(&after, "A");
 
     assert_eq!(
-        commits_after.len() + 1,
-        commits_before.len(),
+        commit_cli_ids_after.len() + 1,
+        commit_cli_ids_before.len(),
         "uncommitting a commit should remove that commit from branch history"
     );
     assert!(
-        !commits_after.contains(&source_commit),
+        !commit_cli_ids_after.contains(&source_cli_id),
         "source commit should no longer be present after uncommit"
     );
 
@@ -1564,11 +1568,11 @@ fn rub_matrix_commit_to_commit_smoke() -> anyhow::Result<()> {
     commit_two_files_as_two_hunks_each(&env, "A", "a.txt", "b.txt", "second commit");
 
     let before = status_json(&env)?;
-    let commits_before = branch_commit_ids(&before, "A");
-    let source_commit = commits_before[0].clone();
-    let target_commit = commits_before[1].clone();
+    let commit_cli_ids_before = branch_commit_cli_ids(&before, "A");
+    let source_cli_id = commit_cli_ids_before[0].clone();
+    let target_cli_id = commit_cli_ids_before[1].clone();
 
-    env.but(format!("rub {source_commit} {target_commit}"))
+    env.but(format!("rub {source_cli_id} {target_cli_id}"))
         .assert()
         .success()
         .stdout_eq(str![[r#"
@@ -1578,10 +1582,10 @@ Squashed [..] → [..]
         .stderr_eq(str![""]);
 
     let after = status_json(&env)?;
-    let commits_after = branch_commit_ids(&after, "A");
+    let commit_cli_ids_after = branch_commit_cli_ids(&after, "A");
     assert_eq!(
-        commits_after.len() + 1,
-        commits_before.len(),
+        commit_cli_ids_after.len() + 1,
+        commit_cli_ids_before.len(),
         "squashing should reduce commit count by one"
     );
 
@@ -1604,7 +1608,7 @@ fn rub_commit_without_message_to_commit() {
 ┊
 ┊╭┄g0 [A]
 ┊●   1 add one.txt
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1622,7 +1626,7 @@ fn rub_commit_without_message_to_commit() {
 ┊╭┄g0 [A]
 ┊●   1#0 (no commit message) (no changes)
 ┊●   1#1 add one.txt
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1639,7 +1643,7 @@ fn rub_commit_without_message_to_commit() {
 ┊
 ┊╭┄g0 [A]
 ┊●   1 add one.txt
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1686,10 +1690,10 @@ fn rub_matrix_commit_to_branch_smoke() -> anyhow::Result<()> {
     commit_two_files_as_two_hunks_each(&env, "A", "a.txt", "b.txt", "first commit");
 
     let before = status_json(&env)?;
-    let source_commit = branch_commit_ids(&before, "A")[0].clone();
-    let branch_b_count_before = branch_commit_ids(&before, "B").len();
+    let source_cli_id = branch_commit_cli_ids(&before, "A")[0].clone();
+    let branch_b_count_before = branch_commit_cli_ids(&before, "B").len();
 
-    env.but(format!("rub {source_commit} B"))
+    env.but(format!("rub {source_cli_id} B"))
         .assert()
         .success()
         .stdout_eq(str![[r#"
@@ -1699,7 +1703,7 @@ Moved [..] → [B]
         .stderr_eq(str![""]);
 
     let after = status_json(&env)?;
-    let branch_b_count_after = branch_commit_ids(&after, "B").len();
+    let branch_b_count_after = branch_commit_cli_ids(&after, "B").len();
     assert!(
         branch_b_count_after > branch_b_count_before,
         "moving a commit to B should increase commit count on B"
@@ -1716,9 +1720,9 @@ fn rub_matrix_commit_to_stack_smoke() -> anyhow::Result<()> {
     commit_two_files_as_two_hunks_each(&env, "A", "a.txt", "b.txt", "first commit");
 
     let before = status_json(&env)?;
-    let source_commit = branch_commit_ids(&before, "A")[0].clone();
+    let source_cli_id = branch_commit_cli_ids(&before, "A")[0].clone();
 
-    env.but(format!("rub {source_commit} B@{{stack}}"))
+    env.but(format!("rub {source_cli_id} B@{{stack}}"))
         .assert()
         .success()
         .stdout_eq(str![[r#"
@@ -1728,9 +1732,9 @@ Uncommitted [..] to [B]
         .stderr_eq(str![""]);
 
     let after = status_json(&env)?;
-    let commits_after = branch_commit_ids(&after, "A");
+    let commit_cli_ids_after = branch_commit_cli_ids(&after, "A");
     assert!(
-        !commits_after.contains(&source_commit),
+        !commit_cli_ids_after.contains(&source_cli_id),
         "source commit should no longer be present in branch A after uncommit to stack"
     );
     assert!(
@@ -1824,9 +1828,9 @@ Staged the only hunk in branch-to-commit.txt in the uncommitted area → [A].
         .stderr_eq(str![""]);
 
     let before = status_json(&env)?;
-    let target_commit = branch_commit_ids(&before, "A")[0].clone();
+    let target_cli_id = branch_commit_cli_ids(&before, "A")[0].clone();
 
-    env.but(format!("rub A {target_commit}"))
+    env.but(format!("rub A {target_cli_id}"))
         .assert()
         .success()
         .stdout_eq(str![[r#"
@@ -1992,9 +1996,9 @@ Staged the only hunk in stack-to-commit.txt in the uncommitted area → [A].
         .stderr_eq(str![""]);
 
     let before = status_json(&env)?;
-    let target_commit = branch_commit_ids(&before, "A")[0].clone();
+    let target_cli_id = branch_commit_cli_ids(&before, "A")[0].clone();
 
-    env.but(format!("rub A@{{stack}} {target_commit}"))
+    env.but(format!("rub A@{{stack}} {target_cli_id}"))
         .assert()
         .success()
         .stdout_eq(str![[r#"
@@ -2024,9 +2028,9 @@ fn rub_matrix_committed_file_to_branch_smoke() -> anyhow::Result<()> {
     commit_two_files_as_two_hunks_each(&env, "A", "a.txt", "b.txt", "first commit");
 
     let before = status_json(&env)?;
-    let source_commit = branch_commit_ids(&before, "A")[0].clone();
+    let source_cli_id = branch_commit_cli_ids(&before, "A")[0].clone();
 
-    env.but(format!("rub {source_commit}:a.txt B"))
+    env.but(format!("rub {source_cli_id}:a.txt B"))
         .assert()
         .success()
         .stdout_eq(str![[r#"
@@ -2053,12 +2057,12 @@ fn rub_matrix_committed_file_to_commit_smoke() -> anyhow::Result<()> {
     commit_two_files_as_two_hunks_each(&env, "A", "target-a.txt", "target-b.txt", "target commit");
 
     let before = status_json(&env)?;
-    let source_commit =
-        branch_commit_id_for_file(&before, "A", "source-a.txt").expect("source commit with file");
-    let target_commit =
-        branch_commit_id_for_file(&before, "A", "target-a.txt").expect("target commit with file");
+    let source_cli_id = branch_commit_cli_id_for_file(&before, "A", "source-a.txt")
+        .expect("source commit with file");
+    let target_cli_id = branch_commit_cli_id_for_file(&before, "A", "target-a.txt")
+        .expect("target commit with file");
 
-    env.but(format!("rub {source_commit}:source-a.txt {target_commit}"))
+    env.but(format!("rub {source_cli_id}:source-a.txt {target_cli_id}"))
         .assert()
         .success()
         .stdout_eq(str![[r#"
@@ -2086,7 +2090,7 @@ fn rub_matrix_invalid_pairs_smoke() -> anyhow::Result<()> {
     env.file("invalid-b.txt", "content\n");
 
     let status = status_json(&env)?;
-    let commit = branch_commit_ids(&status, "A")[0].clone();
+    let commit_cli_id = branch_commit_cli_ids(&status, "A")[0].clone();
 
     env.but("rub invalid-a.txt invalid-b.txt")
         .assert()
@@ -2109,7 +2113,7 @@ Rubbed the wrong way. Operation doesn't make sense.[..]
 
 "#]]);
 
-    env.but(format!("rub {commit}:a.txt A@{{stack}}"))
+    env.but(format!("rub {commit_cli_id}:a.txt A@{{stack}}"))
         .assert()
         .failure()
         .stderr_eq(str![[r#"

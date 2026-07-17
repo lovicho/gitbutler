@@ -226,13 +226,7 @@ impl AppChannel {
             .unwrap()
             .as_millis();
 
-        let url = format!(
-            "{}://open?path={}&t={}&new_window={}",
-            scheme,
-            possibly_project_dir.display(),
-            timestamp,
-            if new_window { 1 } else { 0 }
-        );
+        let url = build_open_url(scheme, possibly_project_dir, timestamp, new_window)?;
 
         let cleaned_vars: Vec<(&str, String)> = clean_env_vars(&[
             "APPDIR",
@@ -280,7 +274,7 @@ impl AppChannel {
             // whatever we find. This can be fixed by giving the binaries different names, but as
             // so few users use nightly builds, it's just not worth the effort.
             let mut cmd = Command::new("gitbutler-tauri");
-            cmd.arg(&url);
+            cmd.arg(url.as_str());
             cmd.current_dir(env::temp_dir());
             cmd.envs(cleaned_vars.clone());
 
@@ -303,7 +297,7 @@ impl AppChannel {
         #[cfg(not(target_os = "linux"))]
         {
             let mut cmd_errors = Vec::new();
-            for mut cmd in open::commands(&url) {
+            for mut cmd in open::commands(url.as_str()) {
                 cmd.envs(cleaned_vars.clone());
                 cmd.current_dir(env::temp_dir());
                 if cmd.status().is_ok() {
@@ -318,6 +312,20 @@ impl AppChannel {
         }
         Ok(())
     }
+}
+
+fn build_open_url(
+    scheme: &str,
+    possibly_project_dir: &std::path::Path,
+    timestamp: u128,
+    new_window: bool,
+) -> anyhow::Result<url::Url> {
+    let mut url = url::Url::parse(&format!("{scheme}://open"))?;
+    url.query_pairs_mut()
+        .append_pair("path", &possibly_project_dir.to_string_lossy())
+        .append_pair("t", &timestamp.to_string())
+        .append_pair("new_window", if new_window { "1" } else { "0" });
+    Ok(url)
 }
 
 impl std::str::FromStr for AppChannel {
@@ -351,4 +359,40 @@ fn clean_env_vars<'a, 'b>(
                     .join(":"),
             )
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_open_url;
+
+    #[test]
+    fn open_url_encodes_query_parameters() -> anyhow::Result<()> {
+        let path = std::path::Path::new(r"C:\project & tools\#one");
+        let url = build_open_url("but", path, 123, true)?;
+
+        assert_eq!(
+            url.as_str(),
+            "but://open?path=C%3A%5Cproject+%26+tools%5C%23one&t=123&new_window=1",
+            "reserved path characters are encoded"
+        );
+        assert_eq!(url.scheme(), "but", "the requested app channel is retained");
+        assert_eq!(url.host_str(), Some("open"), "the open command is retained");
+        assert_eq!(
+            url.query_pairs()
+                .collect::<std::collections::HashMap<_, _>>(),
+            std::collections::HashMap::from([
+                (std::borrow::Cow::Borrowed("path"), path.to_string_lossy()),
+                (
+                    std::borrow::Cow::Borrowed("t"),
+                    std::borrow::Cow::Borrowed("123")
+                ),
+                (
+                    std::borrow::Cow::Borrowed("new_window"),
+                    std::borrow::Cow::Borrowed("1"),
+                ),
+            ]),
+            "query values round-trip after encoding"
+        );
+        Ok(())
+    }
 }

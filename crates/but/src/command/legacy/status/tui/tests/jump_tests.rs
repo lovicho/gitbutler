@@ -56,7 +56,7 @@ fn jump_from_other_modes() {
         .assert_rendered_term_svg_eq(file!["snapshots/jump_from_other_modes_001.svg"]);
     tui.input('/')
         .assert_rendered_term_svg_eq(file!["snapshots/jump_from_other_modes_002.svg"]);
-    tui.input("38")
+    tui.input('x')
         .assert_rendered_term_svg_eq(file!["snapshots/jump_from_other_modes_003.svg"]);
 }
 
@@ -96,7 +96,7 @@ fn restores_backstack_from_previous_mode() {
 
     tui.input('/')
         .assert_backstack_eq([BackstackEntry::LeaveNormalMode, BackstackEntry::Mark]);
-    tui.input("38")
+    tui.input('x')
         .assert_backstack_eq([BackstackEntry::LeaveNormalMode, BackstackEntry::Mark]);
 }
 
@@ -111,7 +111,7 @@ fn highlights_exact_matches_when_file_list_is_open() {
 
     tui.input((KeyModifiers::SHIFT, 'F'));
     tui.input('/');
-    tui.input('9').assert_rendered_term_svg_eq(file![
+    tui.input('t').assert_rendered_term_svg_eq(file![
         "snapshots/highlights_exact_matches_when_file_list_is_open_001.svg"
     ]);
 
@@ -127,25 +127,25 @@ fn highlights_exact_matches_when_file_list_is_open() {
 }
 
 #[test]
-fn when_branch_short_code_matches_commit_sha_without_change_id() {
+fn when_branch_short_code_and_commit_change_id_have_same_initial_character() {
     let env = Sandbox::init_scenario_with_target_and_default_settings(
-        "branch-short-code-matches-commit-sha",
+        "branch-short-code-matches-commit-change-id",
     );
-    env.setup_metadata(&["branch"]);
+    env.setup_metadata(&["rr-branch"]);
 
     let mut tui = test_tui(env);
 
     tui.input("g");
     tui.input("/");
-    tui.input("b").assert_rendered_term_svg_eq(file![
+    tui.input("r").assert_rendered_term_svg_eq(file![
         "snapshots/when_branch_short_code_matches_commit_sha_without_change_id_001.svg"
     ]);
     tui.input("r")
-        .assert_current_line_eq(str![["┊╭┄br [branch]"]]);
+        .assert_current_line_eq(str![["┊╭┄rr [rr-branch]"]]);
 
     tui.input("g");
     tui.input("/");
-    tui.input("b");
-    tui.input("0")
-        .assert_current_line_eq(str![["┊●   b0f22e6 add branch 814"]]);
+    tui.input("r");
+    tui.input("z")
+        .assert_current_line_eq(str!["┊●   rzr add branch 814"]);
 }

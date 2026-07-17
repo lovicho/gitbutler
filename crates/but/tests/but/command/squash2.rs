@@ -751,6 +751,7 @@ Hint: run `but help` for all commands
 
     env.but("unapply second").assert().success();
 
+    // Unapplied commits have no change ID in the workspace map, so use the commit ID intentionally.
     env.but("_squash2 1#0 -t d15f721")
         .assert()
         .failure()
@@ -791,8 +792,8 @@ fn cannot_squash_branch_with_one_commit_into_that_one_commit() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9477ae7 add A
-┊│     9:t A A
+┊●   tpm add A
+┊│     tpm:t A A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -801,7 +802,7 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    env.but("_squash2 A -t 9477ae7")
+    env.but("_squash2 A -t tpm")
         .assert()
         .failure()
         .stderr_eq(snapbox::str![[r#"

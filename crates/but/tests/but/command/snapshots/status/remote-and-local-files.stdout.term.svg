@@ -5,6 +5,7 @@
     .fg-blue { fill: #0000AA }
     .fg-cyan { fill: #00AAAA }
     .fg-green { fill: #00AA00 }
+    .fg-magenta { fill: #AA00AA }
     .fg-yellow { fill: #AA5500 }
     .container {
       padding: 0 10px;
@@ -44,9 +45,9 @@
 </tspan>
     <tspan x="10px" y="208px"><tspan>┊-</tspan>
 </tspan>
-    <tspan x="10px" y="226px"><tspan>┊●   </tspan><tspan class="fg-blue bold">6</tspan><tspan class="dimmed">43ade3</tspan><tspan> add only-on-local</tspan>
+    <tspan x="10px" y="226px"><tspan>┊●   </tspan><tspan class="fg-magenta">s</tspan><tspan class="dimmed">mn</tspan><tspan> add only-on-local</tspan>
 </tspan>
-    <tspan x="10px" y="244px"><tspan>┊│     </tspan><tspan class="fg-blue bold">6:t</tspan><tspan> A </tspan><tspan class="fg-green">only-on-local</tspan>
+    <tspan x="10px" y="244px"><tspan>┊│     </tspan><tspan class="fg-blue bold">smn:t</tspan><tspan> A </tspan><tspan class="fg-green">only-on-local</tspan>
 </tspan>
     <tspan x="10px" y="262px"><tspan>├╯</tspan>
 </tspan>

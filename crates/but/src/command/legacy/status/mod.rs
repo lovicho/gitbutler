@@ -377,9 +377,8 @@ fn build_status_context<'a>(
                     ..
                 } = segment;
                 for local_commit in commits {
-                    if let Some(change_id) = &local_commit.inner.change_id {
-                        commit_id_to_change_id.insert(local_commit.id, change_id.clone());
-                    }
+                    commit_id_to_change_id
+                        .insert(local_commit.id, local_commit.change_id().into_owned());
                     local_commits_by_id.insert(local_commit.id, local_commit);
                 }
                 for remote_commit in commits_on_remote {

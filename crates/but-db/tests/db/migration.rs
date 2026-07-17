@@ -468,6 +468,14 @@ CREATE TABLE `claude_sessions`(
 	`updated_at` TIMESTAMP NOT NULL
 , in_gui BOOLEAN NOT NULL DEFAULT FALSE, session_ids TEXT NOT NULL DEFAULT '[]', approved_permissions TEXT NOT NULL DEFAULT '[]', denied_permissions TEXT NOT NULL DEFAULT '[]');
 
+-- table fetch_status
+CREATE TABLE `fetch_status`(
+	`singleton` INTEGER NOT NULL PRIMARY KEY CHECK (`singleton` = 1),
+	`last_attempted_ms` INTEGER NOT NULL,
+	`last_successful_ms` INTEGER,
+	`last_error` TEXT
+);
+
 -- table file_write_locks
 CREATE TABLE `file_write_locks`(
 	`path` TEXT NOT NULL PRIMARY KEY,
@@ -656,6 +664,7 @@ Text("20260618093000")
 Text("20260624170000")
 Text("20260626120000")
 Text("20260626120100")
+Text("20260715120000")
 
 Table: hunk_assignments
 hunk_header | path | path_bytes | stack_id | id | branch_ref
@@ -701,6 +710,9 @@ stack_id | remote_name | branch_name | remote_url | sha | push_remote_name
 
 Table: branch_order
 branch_ref_name | parent_ref_name
+
+Table: fetch_status
+singleton | last_attempted_ms | last_successful_ms | last_error
 
 
 "#]]

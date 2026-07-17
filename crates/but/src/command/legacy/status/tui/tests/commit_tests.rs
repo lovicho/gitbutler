@@ -68,7 +68,7 @@ fn commiting_with_no_uncommitted_changes() {
     tui.input('c').assert_current_line_eq(str!["┊╭┄g0 [A]"]);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊●   9477ae7 add A"])
+        .assert_current_line_eq(str!["┊●   tpm add A"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/commiting_with_no_uncommitted_changes_001.svg"
         ]);
@@ -252,7 +252,7 @@ fn commit_mode_shows_commit_below_on_commit_rows() {
         .assert_current_line_eq(str!["╭┄<< source >> << noop >> zz [uncommitted]"]);
 
     tui.input([KeyCode::Down, KeyCode::Down])
-        .assert_current_line_eq(str!["┊●   9477ae7 add A"])
+        .assert_current_line_eq(str!["┊●   tpm add A"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/commit_mode_shows_commit_below_on_commit_rows_final.svg"
         ]);
@@ -281,7 +281,7 @@ fn commit_to_commit_above_creates_commit_visible_in_tui() {
         .assert_current_line_eq(str!["╭┄<< source >> << noop >> zz [uncommitted]"]);
 
     tui.input([KeyCode::Down, KeyCode::Down])
-        .assert_current_line_eq(str!["┊●   9477ae7 add A"])
+        .assert_current_line_eq(str!["┊●   tpm add A"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/commit_to_commit_above_creates_commit_visible_in_tui_final_001.svg"
         ]);
@@ -325,7 +325,7 @@ fn commit_to_commit_below_creates_commit_visible_in_tui() {
         .assert_current_line_eq(str!["╭┄<< source >> << noop >> zz [uncommitted]"]);
 
     tui.input([KeyCode::Down, KeyCode::Down])
-        .assert_current_line_eq(str!["┊●   9477ae7 add A"])
+        .assert_current_line_eq(str!["┊●   tpm add A"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/commit_to_commit_below_creates_commit_visible_in_tui_001.svg"
         ])
@@ -362,7 +362,7 @@ fn commit_mode_from_staged_changes_stays_within_current_stack() {
         .assert_current_line_eq(str!["┊   << source >> << noop >> v A test.txt"]);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊●   << amend >> 9477ae7 add A"]);
+        .assert_current_line_eq(str!["┊●   << amend >> tpm add A"]);
 
     tui.input(KeyCode::Enter)
         .assert_current_line_eq(str!["┊●   tpm add A"]);
@@ -581,7 +581,7 @@ fn cannot_select_uncommitted_files_with_commits_marked() {
     tui.input('j');
     tui.input('j');
     tui.input(' ')
-        .assert_current_line_eq(str![["┊✔︎   9477ae7 add A"]]);
+        .assert_current_line_eq(str!["┊✔︎   tpm add A"]);
 
     // moving up selects the branch
     tui.input('k').assert_current_line_eq(str![["┊╭┄g0 [A]"]]);
@@ -606,11 +606,11 @@ fn cannot_select_committed_files_with_commits_marked() {
     tui.input('j');
     tui.input('j');
     tui.input(' ')
-        .assert_current_line_eq(str![["┊✔︎   9477ae7 add A"]]);
+        .assert_current_line_eq(str!["┊✔︎   tpm add A"]);
 
     // cannot open the file list with marked commits
     tui.input('f')
-        .assert_current_line_eq(str![["┊✔︎   9477ae7 add A"]]);
+        .assert_current_line_eq(str!["┊✔︎   tpm add A"]);
 }
 
 #[test]
@@ -629,13 +629,13 @@ fn cannot_select_committed_files_from_global_listing_with_commits_marked() {
     tui.input('j');
     tui.input('j');
     tui.input(' ')
-        .assert_current_line_eq(str![["┊✔︎   9477ae7 add A"]]);
+        .assert_current_line_eq(str!["┊✔︎   tpm add A"]);
 
     tui.input((KeyModifiers::SHIFT, 'F'))
-        .assert_current_line_eq(str![["┊✔︎   9477ae7 add A"]]);
+        .assert_current_line_eq(str!["┊✔︎   tpm add A"]);
 
     tui.input('j')
-        .assert_current_line_eq(str![["┊✔︎   9477ae7 add A"]])
+        .assert_current_line_eq(str!["┊✔︎   tpm add A"])
         .assert_rendered_term_svg_eq(file!["snapshots/cannot_select_committed_files_from_global_listing_with_commits_marked_showing_global_file_list.svg"]);
 
     // the global file list can be closed with f

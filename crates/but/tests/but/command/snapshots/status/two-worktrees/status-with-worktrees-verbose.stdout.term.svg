@@ -5,6 +5,7 @@
     .fg-blue { fill: #0000AA }
     .fg-cyan { fill: #00AAAA }
     .fg-green { fill: #00AA00 }
+    .fg-magenta { fill: #AA00AA }
     .fg-yellow { fill: #AA5500 }
     .container {
       padding: 0 10px;
@@ -38,7 +39,7 @@
 </tspan>
     <tspan x="10px" y="154px"><tspan>┊-</tspan>
 </tspan>
-    <tspan x="10px" y="172px"><tspan>┊● </tspan><tspan class="fg-blue bold">4</tspan><tspan class="dimmed">c4624e</tspan><tspan> author </tspan><tspan class="dimmed">2000-01-01 00:00:00 +0000</tspan><tspan class="dimmed"> (no changes)</tspan>
+    <tspan x="10px" y="172px"><tspan>┊● </tspan><tspan class="fg-magenta">q</tspan><tspan class="dimmed">pv</tspan><tspan> author </tspan><tspan class="dimmed">2000-01-01 00:00:00 +0000</tspan><tspan class="dimmed"> (sha 4c4624e)</tspan><tspan class="dimmed"> (no changes)</tspan>
 </tspan>
     <tspan x="10px" y="190px"><tspan>┊│     A </tspan>
 </tspan>
@@ -48,7 +49,7 @@
 </tspan>
     <tspan x="10px" y="244px"><tspan>┊╭┄</tspan><tspan class="fg-blue bold">h0</tspan><tspan> [</tspan><tspan class="fg-green">B</tspan><tspan> 📁 gitbutler/worktrees/B]</tspan>
 </tspan>
-    <tspan x="10px" y="262px"><tspan>┊● </tspan><tspan class="fg-blue bold">3</tspan><tspan class="dimmed">e01e28</tspan><tspan> author </tspan><tspan class="dimmed">2000-01-01 00:00:00 +0000</tspan><tspan class="dimmed"> (no changes)</tspan>
+    <tspan x="10px" y="262px"><tspan>┊● </tspan><tspan class="fg-magenta">u</tspan><tspan class="dimmed">zk</tspan><tspan> author </tspan><tspan class="dimmed">2000-01-01 00:00:00 +0000</tspan><tspan class="dimmed"> (sha 3e01e28)</tspan><tspan class="dimmed"> (no changes)</tspan>
 </tspan>
     <tspan x="10px" y="280px"><tspan>┊│     B </tspan>
 </tspan>

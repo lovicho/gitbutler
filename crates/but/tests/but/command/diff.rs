@@ -332,13 +332,13 @@ fn json_target_committed_file() {
 ┊●   1 committed-file-target
 ┊│     1:k A committed-other.txt
 ┊│     1:w A committed-target.txt
-┊●   9477ae7 add A
-┊│     9:t A A
+┊●   tpm add A
+┊│     tpm:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
-┊●   d3e2ba3 add B
-┊│     d:p A B
+┊●   lrm add B
+┊│     lrm:p A B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -427,13 +427,13 @@ fn json_target_commit() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9477ae7 add A
-┊│     9:t A A
+┊●   tpm add A
+┊│     tpm:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
-┊●   d3e2ba3 add B
-┊│     d:p A B
+┊●   lrm add B
+┊│     lrm:p A B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -442,9 +442,9 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    let commit_id = "94";
+    let change_id = "tpm";
 
-    env.but(format!("diff --format json {commit_id}"))
+    env.but(format!("diff --format json {change_id}"))
         .allow_json()
         .assert()
         .success()
@@ -535,13 +535,13 @@ fn json_target_stack() {
 ┊  │ s A assigned.txt
 ┊  │
 ┊╭┄g0 [A]
-┊●   9477ae7 add A
-┊│     9:t A A
+┊●   tpm add A
+┊│     tpm:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
-┊●   d3e2ba3 add B
-┊│     d:p A B
+┊●   lrm add B
+┊│     lrm:p A B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -619,13 +619,13 @@ fn json_commit_target_tree_change_statuses() -> anyhow::Result<()> {
 ┊│     1#1:n A deleted.txt
 ┊│     1#1:u A modified.txt
 ┊│     1#1:z A renamed-before.txt
-┊●   9477ae7 add A
-┊│     9:t A A
+┊●   tpm add A
+┊│     tpm:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
-┊●   d3e2ba3 add B
-┊│     d3:p A B
+┊●   lrm add B
+┊│     lrm:p A B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M

@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { lastFetched as getLastFetched } from "$lib/baseBranch/baseBranch";
 	import { BASE_BRANCH_SERVICE } from "$lib/baseBranch/baseBranchService.svelte";
 	import { BRANCH_SERVICE } from "$lib/branches/branchService.svelte";
 	import { FORGE_INFO_SERVICE } from "$lib/forge/forgeInfo.svelte";
@@ -17,6 +16,7 @@
 	const baseBranchService = inject(BASE_BRANCH_SERVICE);
 	const branchService = inject(BRANCH_SERVICE);
 	const baseBranch = $derived(baseBranchService.baseBranch(projectId));
+	const fetchStatus = $derived(baseBranchService.fetchStatus(projectId));
 
 	const listingService = inject(LISTING_SERVICE);
 	const forgeInfoService = inject(FORGE_INFO_SERVICE);
@@ -29,7 +29,9 @@
 	);
 
 	const lastFetched = $derived(
-		baseBranch.result.data ? getLastFetched(baseBranch.result.data) : undefined,
+		fetchStatus.response?.lastSuccessfulMs
+			? new Date(fetchStatus.response.lastSuccessfulMs)
+			: undefined,
 	);
 
 	let loading = $state(false);
@@ -52,6 +54,7 @@
 			await baseBranchService.fetchFromRemotes(projectId, "modal");
 			await Promise.all([
 				...(canListReviews ? [listingService.refresh(projectId)] : []),
+				fetchStatus.result?.refetch(),
 				baseBranch.result?.refetch(),
 				branchService.refresh(),
 			]);

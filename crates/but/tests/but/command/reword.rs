@@ -18,8 +18,8 @@ fn reword_commit_with_message_flag() {
 
     env.setup_metadata(&["A"]);
 
-    // Use reword with -m flag to change commit message (using commit ID)
-    env.but("reword 9477ae7 -m 'Updated commit message'")
+    // Use reword with -m flag to change commit message.
+    env.but("reword tpm -m 'Updated commit message'")
         .assert()
         .success()
         .stdout_eq(str![[r#"
@@ -73,7 +73,7 @@ fn reword_commit_with_multiline_message() -> anyhow::Result<()> {
     env.setup_metadata(&["A"]);
 
     // Use reword with multiline message
-    env.but("reword 9477ae7 -m 'First line\n\n\tSecond paragraph with details'")
+    env.but("reword tpm -m 'First line\n\n\tSecond paragraph with details'")
         .assert()
         .success()
         .stdout_eq(str![[r#"
@@ -215,7 +215,7 @@ fn reword_commit_with_same_message_succeeds_as_noop() {
     env.setup_metadata(&["A"]);
 
     // Try to reword with the same message
-    env.but("reword 9477ae7 -m 'add A'")
+    env.but("reword tpm -m 'add A'")
         .assert()
         .success()
         .stdout_eq(str![[r#"
@@ -240,7 +240,7 @@ fn reword_commit_with_json_flag() {
     env.setup_metadata(&["A"]);
 
     // Use reword with -m flag to change commit message (using commit ID)
-    env.but("reword 9477ae7 -m 'Updated commit message' --format json")
+    env.but("reword tpm -m 'Updated commit message' --format json")
         .assert()
         .success()
         .stdout_eq(str![[r#"{

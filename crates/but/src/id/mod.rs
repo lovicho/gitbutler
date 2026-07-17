@@ -858,13 +858,15 @@ impl IdMap {
                     let change_id = but_core::commit::Headers::try_from_commit_headers(|| {
                         commit.extra_headers()
                     })
-                    .and_then(|headers| headers.change_id);
-                    Ok::<(gix::ObjectId, Option<ChangeId>), anyhow::Error>((commit_id, change_id))
+                    .and_then(|headers| headers.change_id)
+                    .unwrap_or_else(|| {
+                        but_core::commit::Headers::synthetic_change_id_from_commit_id(commit_id)
+                    });
+                    Ok::<(gix::ObjectId, ChangeId), anyhow::Error>((commit_id, change_id))
                 })();
 
                 match result {
-                    Ok((commit_id, Some(change_id))) => Some((commit_id, change_id)),
-                    Ok((_, None)) => None,
+                    Ok((commit_id, change_id)) => Some((commit_id, change_id)),
                     Err(err) => {
                         tracing::error!(
                             ?commit_id,

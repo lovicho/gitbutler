@@ -5,6 +5,7 @@
     .fg-blue { fill: #0000AA }
     .fg-cyan { fill: #00AAAA }
     .fg-green { fill: #00AA00 }
+    .fg-magenta { fill: #AA00AA }
     .fg-red { fill: #AA0000 }
     .container {
       padding: 0 10px;
@@ -28,7 +29,7 @@
 </tspan>
     <tspan x="10px" y="64px"><tspan>┊╭┄</tspan><tspan class="fg-blue bold">g0</tspan><tspan> [</tspan><tspan class="fg-green">A</tspan><tspan>]</tspan><tspan class="fg-red"> [⚠ upstream conflicts]</tspan>
 </tspan>
-    <tspan x="10px" y="82px"><tspan>┊●   </tspan><tspan class="fg-blue bold">9</tspan><tspan class="dimmed">283fc1</tspan><tspan> A-change</tspan>
+    <tspan x="10px" y="82px"><tspan>┊●   </tspan><tspan class="fg-magenta">n</tspan><tspan class="dimmed">yo</tspan><tspan> A-change</tspan>
 </tspan>
     <tspan x="10px" y="100px"><tspan>├╯</tspan>
 </tspan>

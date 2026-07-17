@@ -24,10 +24,10 @@
     <text x="226 234 242" y="78" style="fill:#FFFFFF;font-weight:bold;opacity:0.75;">(no</text>
     <text x="258 266 274 282 290 298 306 314" y="78" style="fill:#FFFFFF;font-weight:bold;opacity:0.75;">changes)</text>
     <text x="10 18" y="96" style="fill:#CCCCCC;">┊●</text>
-    <text x="50" y="96" style="fill:#0000AA;font-weight:bold;">9</text>
-    <text x="58 66 74 82 90 98" y="96" style="fill:#CCCCCC;opacity:0.75;">477ae7</text>
-    <text x="114 122 130" y="96" style="fill:#CCCCCC;">add</text>
-    <text x="146" y="96" style="fill:#CCCCCC;">A</text>
+    <text x="50" y="96" style="fill:#AA00AA;">t</text>
+    <text x="58 66" y="96" style="fill:#CCCCCC;opacity:0.75;">pm</text>
+    <text x="82 90 98" y="96" style="fill:#CCCCCC;">add</text>
+    <text x="114" y="96" style="fill:#CCCCCC;">A</text>
     <text x="10 18" y="114" style="fill:#CCCCCC;">├╯</text>
     <text x="10" y="132" style="fill:#CCCCCC;">┊</text>
     <text x="10" y="150" style="fill:#CCCCCC;">┴</text>

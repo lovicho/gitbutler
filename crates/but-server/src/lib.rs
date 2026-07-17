@@ -899,6 +899,14 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
             "/workspace_integrate_upstream",
             but_post(workspace::workspace_integrate_upstream_cmd),
         )
+        .route(
+            "/workspace_fetch_from_remotes",
+            but_post(workspace::workspace_fetch_from_remotes_cmd),
+        )
+        .route(
+            "/workspace_fetch_status",
+            but_post(workspace::workspace_fetch_status_cmd),
+        )
         .route("/build_type", but_post(platform::build_type_cmd));
 
     // IRC commands — only registered when the `irc` feature is enabled.

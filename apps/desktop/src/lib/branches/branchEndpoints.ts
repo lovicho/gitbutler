@@ -8,7 +8,7 @@ import {
 import { createEntityAdapter, type EntityState } from "@reduxjs/toolkit";
 import type { ForgeProvider, RemoteBranchInfo } from "$lib/baseBranch/baseBranch";
 import type { BackendEndpointBuilder } from "$lib/state/backendApi";
-import type { BaseBranch } from "@gitbutler/but-sdk";
+import type { BaseBranch, WorkspaceFetchStatus } from "@gitbutler/but-sdk";
 import type { BranchListing, BranchListingDetails } from "@gitbutler/but-sdk";
 
 export function buildBranchEndpoints(build: BackendEndpointBuilder) {
@@ -24,13 +24,22 @@ export function buildBranchEndpoints(build: BackendEndpointBuilder) {
 			query: (args) => args,
 			providesTags: [providesType(ReduxTag.BaseBranchData)],
 		}),
-		fetchFromRemotes: build.mutation<void, { projectId: string; action?: string }>({
-			extraOptions: { command: "fetch_from_remotes" },
+		workspaceFetchStatus: build.query<WorkspaceFetchStatus, { projectId: string }>({
+			extraOptions: { command: "workspace_fetch_status" },
+			query: (args) => args,
+			providesTags: [providesType(ReduxTag.WorkspaceFetchStatus)],
+		}),
+		workspaceFetchFromRemotes: build.mutation<void, { projectId: string; action?: string }>({
+			extraOptions: { command: "workspace_fetch_from_remotes" },
 			query: ({ projectId, action }) => ({
 				projectId,
 				action: action ?? "auto",
 			}),
-			invalidatesTags: [invalidatesList(ReduxTag.Stacks), invalidatesList(ReduxTag.StackDetails)],
+			invalidatesTags: [
+				invalidatesType(ReduxTag.WorkspaceFetchStatus),
+				invalidatesList(ReduxTag.Stacks),
+				invalidatesList(ReduxTag.StackDetails),
+			],
 		}),
 		setTarget: build.mutation<
 			BaseBranch,

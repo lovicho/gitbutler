@@ -17,8 +17,9 @@
     <text x="66" y="60" style="fill:#00AA00;">A</text>
     <text x="74" y="60" style="fill:#CCCCCC;">]</text>
     <text x="10 18" y="78" style="fill:#FFFFFF;font-weight:bold;">┊●</text>
-    <text x="50" y="78" style="fill:#0000AA;font-weight:bold;">9</text>
-    <text x="58 66 74 82 90 98" y="78" style="fill:#FFFFFF;font-weight:bold;opacity:0.75;">477ae7</text>
+    <text x="50" y="78" style="fill:#AA00AA;font-weight:bold;">t</text>
+    <text x="58 66" y="78" style="fill:#FFFFFF;font-weight:bold;opacity:0.75;">pm</text>
+    <text x="90 98" y="78" style="fill:#FFFFFF;font-weight:bold;">so</text>
     <text x="114 122 130" y="78" style="fill:#FFFFFF;font-weight:bold;">the</text>
     <text x="146 154 162 170 178 186 194" y="78" style="fill:#FFFFFF;font-weight:bold;">details</text>
     <text x="210 218 226 234" y="78" style="fill:#FFFFFF;font-weight:bold;">pane</text>

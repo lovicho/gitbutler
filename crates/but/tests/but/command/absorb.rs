@@ -317,13 +317,13 @@ n:5 a.txt│
 ┊│     1#2:n M a.txt
 ┊●   1#3 a.txt
 ┊│     1#3:n A a.txt
-┊●   9477ae7 add A
-┊│     9:t A A
+┊●   tpm add A
+┊│     tpm:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
-┊●   d3e2ba3 add B
-┊│     d:p A B
+┊●   lrm add B
+┊│     lrm:p A B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -368,13 +368,13 @@ Hint: you can run `but undo` to undo these changes
 ┊│     1#2:n M a.txt
 ┊●   1#3 a.txt
 ┊│     1#3:n A a.txt
-┊●   9477ae7 add A
-┊│     9:t A A
+┊●   tpm add A
+┊│     tpm:t A A
 ├╯
 ┊
 ┊╭┄h0 [B]
-┊●   d3e2ba3 add B
-┊│     d:p A B
+┊●   lrm add B
+┊│     lrm:p A B
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M

@@ -99,14 +99,9 @@ function handleDeepLinkUrls(urls: string[], handlers: DeepLinkHandlers) {
 	// We don't care about the previous URLs, only the last one.
 	const url = urls[urls.length - 1];
 	if (!url) return;
-	if (!isValidDeepLinkUrl(url)) {
-		console.warn("Received invalid deep link URL:", url);
-		return;
-	}
-
 	const result = parseDeepLinkUrl(url);
 	if (!result) {
-		console.warn("Failed to parse deep link URL:", url);
+		console.warn("Received invalid deep link URL:", url);
 		return;
 	}
 
@@ -149,41 +144,34 @@ function handleTopLevel(
 	}
 }
 
-const DEEP_LINK_SCHMES = ["but", "but-dev", "but-nightly"] as const;
-type DeepLinkScheme = (typeof DEEP_LINK_SCHMES)[number];
+const DEEP_LINK_SCHEMES = ["but", "but-dev", "but-nightly"] as const;
 
 const DEEP_LINK_TOP_LEVEL_PATHS = ["open", "login"] as const;
 type DeepLinkTopLevelPath = (typeof DEEP_LINK_TOP_LEVEL_PATHS)[number];
-
-type DeepLinkUrl = `${DeepLinkScheme}://${DeepLinkTopLevelPath}${string}`;
 
 function isValidDeepLinkTopLevelPath(path: string): path is DeepLinkTopLevelPath {
 	return DEEP_LINK_TOP_LEVEL_PATHS.includes(path as DeepLinkTopLevelPath);
 }
 
-export function isValidDeepLinkUrl(url: string): url is DeepLinkUrl {
-	const correctScheme = DEEP_LINK_SCHMES.some((scheme) => url.startsWith(`${scheme}://`));
-	if (!correctScheme) return false;
-	const pathPart = url.split("://")[1];
-	if (!pathPart) return false;
-	const correctPath = DEEP_LINK_TOP_LEVEL_PATHS.some((path) => pathPart.startsWith(path));
-	if (!correctPath) return false;
-	return true;
+export function isValidDeepLinkUrl(url: string): boolean {
+	return parseDeepLinkUrl(url) !== null;
 }
 
-export function parseDeepLinkUrl(url: DeepLinkUrl): [DeepLinkTopLevelPath, URLSearchParams] | null {
-	const pathPart = url.split("://")[1];
-	if (!pathPart) return null;
-	const [path, queryString] = pathPart.split("?");
-	if (!path) return null;
-	if (!isValidDeepLinkTopLevelPath(path)) return null;
-	const searchParams = parseSearchParams(queryString ?? "");
+export function parseDeepLinkUrl(url: string): [DeepLinkTopLevelPath, URLSearchParams] | null {
+	let parsedUrl: URL;
+	try {
+		parsedUrl = new URL(url);
+	} catch {
+		return null;
+	}
 
-	return [path, searchParams];
-}
+	const scheme = parsedUrl.protocol.slice(0, -1);
+	if (!DEEP_LINK_SCHEMES.some((validScheme) => validScheme === scheme)) return null;
+	if (!isValidDeepLinkTopLevelPath(parsedUrl.hostname)) return null;
+	if (parsedUrl.pathname !== "" && parsedUrl.pathname !== "/") return null;
+	if (parsedUrl.username || parsedUrl.password || parsedUrl.port || parsedUrl.hash) return null;
 
-function parseSearchParams(queryString: string): URLSearchParams {
-	return new URLSearchParams(queryString);
+	return [parsedUrl.hostname, parsedUrl.searchParams];
 }
 class TauriDiskStore implements DiskStore {
 	constructor(private store: Store) {}

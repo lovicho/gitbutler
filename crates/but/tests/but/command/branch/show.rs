@@ -59,7 +59,7 @@ fn show_works_for_unapplied_branches() {
         .stdout_eq(snapbox::str![[r#"
 Branch: A (1 commits ahead)
 
-9477ae7 add A
+tpm add A
     2000-01-02 00:00:00 by author
     1 file changed, 1 insertion, 0 deletions
 
@@ -97,7 +97,7 @@ fn supports_short_codes() {
         .stdout_eq(snapbox::str![[r#"
 Branch: A (1 commits ahead)
 
-9477ae7 add A
+tpm add A
     2000-01-02 00:00:00 by author
     1 file changed, 1 insertion, 0 deletions
 
@@ -157,13 +157,13 @@ fn showing_branch_that_isnt_top_of_stack() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [C]
-┊●   aebb090 add C
+┊●   wlx add C
 ┊│
 ┊├┄h0 [B]
-┊●   582f37b add B
+┊●   wwm add B
 ┊│
 ┊├┄i0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -178,15 +178,15 @@ Hint: run `but help` for all commands
         .stdout_eq(snapbox::str![[r#"
 Branch: C (3 commits ahead)
 
-aebb090 add C
+wlx add C
     2000-01-02 00:00:00 by author
     1 file changed, 1 insertion, 0 deletions
 
-582f37b add B
+wwm add B
     2000-01-02 00:00:00 by author
     1 file changed, 1 insertion, 0 deletions
 
-9477ae7 add A
+tpm add A
     2000-01-02 00:00:00 by author
     1 file changed, 1 insertion, 0 deletions
 
@@ -198,11 +198,11 @@ aebb090 add C
         .stdout_eq(snapbox::str![[r#"
 Branch: B (2 commits ahead)
 
-582f37b add B
+wwm add B
     2000-01-02 00:00:00 by author
     1 file changed, 1 insertion, 0 deletions
 
-9477ae7 add A
+tpm add A
     2000-01-02 00:00:00 by author
     1 file changed, 1 insertion, 0 deletions
 
@@ -214,7 +214,7 @@ Branch: B (2 commits ahead)
         .stdout_eq(snapbox::str![[r#"
 Branch: A (1 commits ahead)
 
-9477ae7 add A
+tpm add A
     2000-01-02 00:00:00 by author
     1 file changed, 1 insertion, 0 deletions
 
@@ -235,13 +235,13 @@ fn checking_merge_status_of_branch_that_isnt_top_of_stack() {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [C]
-┊●   aebb090 add C
+┊●   wlx add C
 ┊│
 ┊├┄h0 [B]
-┊●   582f37b add B
+┊●   wwm add B
 ┊│
 ┊├┄i0 [A]
-┊●   9477ae7 add A
+┊●   tpm add A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M

@@ -5,6 +5,7 @@
     .fg-blue { fill: #0000AA }
     .fg-cyan { fill: #00AAAA }
     .fg-green { fill: #00AA00 }
+    .fg-magenta { fill: #AA00AA }
     .fg-yellow { fill: #AA5500 }
     .container {
       padding: 0 10px;
@@ -36,7 +37,7 @@
 </tspan>
     <tspan x="10px" y="136px"><tspan>┊-</tspan>
 </tspan>
-    <tspan x="10px" y="154px"><tspan>┊●   </tspan><tspan class="fg-blue bold">4</tspan><tspan class="dimmed">c4624e</tspan><tspan> A</tspan><tspan class="dimmed"> (no changes)</tspan>
+    <tspan x="10px" y="154px"><tspan>┊●   </tspan><tspan class="fg-magenta">q</tspan><tspan class="dimmed">pv</tspan><tspan> A</tspan><tspan class="dimmed"> (no changes)</tspan>
 </tspan>
     <tspan x="10px" y="172px"><tspan>├╯</tspan>
 </tspan>
@@ -44,7 +45,7 @@
 </tspan>
     <tspan x="10px" y="208px"><tspan>┊╭┄</tspan><tspan class="fg-blue bold">h0</tspan><tspan> [</tspan><tspan class="fg-green">B</tspan><tspan> 📁 gitbutler/worktrees/B]</tspan>
 </tspan>
-    <tspan x="10px" y="226px"><tspan>┊●   </tspan><tspan class="fg-blue bold">3</tspan><tspan class="dimmed">e01e28</tspan><tspan> B</tspan><tspan class="dimmed"> (no changes)</tspan>
+    <tspan x="10px" y="226px"><tspan>┊●   </tspan><tspan class="fg-magenta">u</tspan><tspan class="dimmed">zk</tspan><tspan> B</tspan><tspan class="dimmed"> (no changes)</tspan>
 </tspan>
     <tspan x="10px" y="244px"><tspan>├╯</tspan>
 </tspan>

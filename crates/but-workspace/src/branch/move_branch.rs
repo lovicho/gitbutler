@@ -224,10 +224,11 @@ pub(super) mod function {
     ///
     /// In single-branch (ad-hoc) mode there is no workspace commit, and the tip-to-base order of
     /// branches lives in the `branch_order` metadata table rather than in workspace metadata. Empty
-    /// branches can therefore move through metadata alone, while branches with commits also require
-    /// a graph rewrite. The reordered chain is returned in [`Outcome::branch_stack_order`] for the
-    /// caller to persist (via [`RefMetadata::set_branch_stack_order`]) rather than being written
-    /// here, so callers can skip persistence for dry-run previews.
+    /// branches can therefore move through metadata alone when their refs already share a target,
+    /// while branches with commits or empty branches crossing commits also require a graph rewrite.
+    /// The reordered chain is returned in [`Outcome::branch_stack_order`] for the caller to persist
+    /// (via [`RefMetadata::set_branch_stack_order`]) rather than being written here, so callers can
+    /// skip persistence for dry-run previews.
     fn move_branch_in_single_branch_mode<'ws, 'meta, M: RefMetadata>(
         mut successful_rebase: SuccessfulRebase<'ws, 'meta, M>,
         workspace: but_graph::Workspace,
@@ -245,6 +246,12 @@ pub(super) mod function {
         if !subject_segment.commits.is_empty() && !same_stack(source_stack, destination_stack) {
             bail!("Moving a non-empty branch in single-branch mode is not yet supported");
         }
+        // Reordering same-target empty refs only changes which empty segment is displayed first.
+        // If their targets differ, however, the subject crosses commit-owning segments and its ref
+        // must move with it or those commits would be projected as belonging to the empty branch.
+        let move_requires_graph_update = !subject_segment.commits.is_empty()
+            || successful_rebase.reference_target(subject_branch_name)?
+                != successful_rebase.reference_target(target_branch_name)?;
         let existing_order = {
             let (_repo, meta) = successful_rebase.repo_and_meta_mut();
             if !meta.can_persist_branch_stack_order() {
@@ -292,7 +299,7 @@ pub(super) mod function {
             });
         }
 
-        if !subject_segment.commits.is_empty() {
+        if move_requires_graph_update {
             let (_, target_segment) = destination;
             let target_segment_ref_name = target_segment
                 .ref_name()

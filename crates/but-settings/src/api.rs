@@ -19,6 +19,7 @@ pub struct FeatureFlagsUpdate {
     pub unapply_v3_pgm: Option<bool>,
     pub single_branch: Option<bool>,
     pub irc: Option<bool>,
+    pub worktree_manipulation: Option<bool>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -117,6 +118,7 @@ impl AppSettingsWithDiskSync {
             unapply_v3_pgm,
             single_branch,
             irc,
+            worktree_manipulation,
         }: FeatureFlagsUpdate,
     ) -> Result<()> {
         let mut settings = self.get_mut_enforce_save()?;
@@ -128,6 +130,9 @@ impl AppSettingsWithDiskSync {
         }
         if let Some(irc) = irc {
             settings.feature_flags.irc = irc;
+        }
+        if let Some(worktree_manipulation) = worktree_manipulation {
+            settings.feature_flags.worktree_manipulation = worktree_manipulation;
         }
         settings.save()
     }
@@ -364,6 +369,7 @@ mod tests {
                 unapply_v3_pgm: Some(true),
                 single_branch: None,
                 irc: None,
+                worktree_manipulation: None,
             })
             .unwrap();
 

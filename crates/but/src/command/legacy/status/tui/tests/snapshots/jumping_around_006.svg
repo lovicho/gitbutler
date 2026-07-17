@@ -31,10 +31,10 @@
     <text x="66" y="132" style="fill:#00AA00;">A</text>
     <text x="74" y="132" style="fill:#CCCCCC;">]</text>
     <text x="10 18" y="150" style="fill:#CCCCCC;">┊●</text>
-    <text x="50" y="150" style="fill:#0000AA;font-weight:bold;">9</text>
-    <text x="58 66 74 82 90 98" y="150" style="fill:#CCCCCC;opacity:0.75;">477ae7</text>
-    <text x="114 122 130" y="150" style="fill:#CCCCCC;">add</text>
-    <text x="146" y="150" style="fill:#CCCCCC;">A</text>
+    <text x="50 58" y="150" style="fill:#AA00AA;">tp</text>
+    <text x="66" y="150" style="fill:#CCCCCC;opacity:0.75;">m</text>
+    <text x="82 90 98" y="150" style="fill:#CCCCCC;">add</text>
+    <text x="114" y="150" style="fill:#CCCCCC;">A</text>
     <text x="10 18" y="168" style="fill:#CCCCCC;">├╯</text>
     <text x="10" y="186" style="fill:#CCCCCC;">┊</text>
     <text x="10 18 26" y="204" style="fill:#CCCCCC;">┊╭┄</text>
@@ -43,10 +43,10 @@
     <text x="66" y="204" style="fill:#00AA00;">C</text>
     <text x="74" y="204" style="fill:#CCCCCC;">]</text>
     <text x="10 18" y="222" style="fill:#CCCCCC;">┊●</text>
-    <text x="50" y="222" style="fill:#0000AA;font-weight:bold;">3</text>
-    <text x="58 66 74 82 90 98" y="222" style="fill:#CCCCCC;opacity:0.75;">842fc0</text>
-    <text x="114 122 130" y="222" style="fill:#CCCCCC;">add</text>
-    <text x="146" y="222" style="fill:#CCCCCC;">C</text>
+    <text x="50" y="222" style="fill:#AA00AA;">x</text>
+    <text x="58 66" y="222" style="fill:#CCCCCC;opacity:0.75;">wn</text>
+    <text x="82 90 98" y="222" style="fill:#CCCCCC;">add</text>
+    <text x="114" y="222" style="fill:#CCCCCC;">C</text>
     <text x="10 18" y="240" style="fill:#CCCCCC;">┊│</text>
     <text x="10 18 26" y="258" style="fill:#CCCCCC;">┊├┄</text>
     <text x="34 42" y="258" style="fill:#0000AA;font-weight:bold;">i0</text>
@@ -54,10 +54,10 @@
     <text x="66" y="258" style="fill:#00AA00;">B</text>
     <text x="74" y="258" style="fill:#CCCCCC;">]</text>
     <text x="10 18" y="276" style="fill:#CCCCCC;">┊●</text>
-    <text x="50" y="276" style="fill:#0000AA;font-weight:bold;">d</text>
-    <text x="58 66 74 82 90 98" y="276" style="fill:#CCCCCC;opacity:0.75;">3e2ba3</text>
-    <text x="114 122 130" y="276" style="fill:#CCCCCC;">add</text>
-    <text x="146" y="276" style="fill:#CCCCCC;">B</text>
+    <text x="50" y="276" style="fill:#AA00AA;">l</text>
+    <text x="58 66" y="276" style="fill:#CCCCCC;opacity:0.75;">rm</text>
+    <text x="82 90 98" y="276" style="fill:#CCCCCC;">add</text>
+    <text x="114" y="276" style="fill:#CCCCCC;">B</text>
     <text x="10 18" y="294" style="fill:#CCCCCC;">├╯</text>
     <text x="10" y="312" style="fill:#CCCCCC;">┊</text>
     <text x="10" y="330" style="fill:#CCCCCC;">┴</text>

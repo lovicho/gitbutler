@@ -174,6 +174,41 @@ test("can move the checked-out top branch down within its stack", async ({ page,
 	await assertCommitSubjects(["B: first commit", "C: first commit", "A: first commit"], localClone);
 });
 
+test("keeps an empty top branch empty when moving it below a commit-owning branch", async ({
+	page,
+	gitbutler,
+}) => {
+	const localClone = await setupThreeBranchStackProject(gitbutler, page, "C", true);
+	const bTipBefore = branchTip("B", localClone);
+	const aTipBefore = branchTip("A", localClone);
+
+	await expect(getByTestId(page, "branch-card")).toHaveCount(3);
+	await expectCurrentBranchChip(page, "C");
+	await expectBranchHeaderOrder(page, ["C", "B", "A"]);
+	expect(branchTip("C", localClone)).toBe(bTipBefore);
+
+	const bCard = getByTestId(page, "branch-card").filter({ has: branchHeader(page, "B") });
+	const cCard = getByTestId(page, "branch-card").filter({ has: branchHeader(page, "C") });
+	await expect(
+		bCard.getByTestId("commit-row").filter({ hasText: "B: first commit" }),
+	).toBeVisible();
+	await expect(cCard.getByTestId("commit-row")).toHaveCount(0);
+
+	// Moving C below B drops it immediately above A. C must move to A's tip so B keeps its commit.
+	await dragBranchToInsertionDropzone(page, "C", 1);
+
+	await expectBranchHeaderOrder(page, ["B", "C", "A"]);
+	await expectCurrentBranchChip(page, "B");
+	await assertBranch("B", localClone);
+	expect(branchTip("B", localClone)).toBe(bTipBefore);
+	expect(branchTip("C", localClone)).toBe(aTipBefore);
+	await expect(
+		bCard.getByTestId("commit-row").filter({ hasText: "B: first commit" }),
+	).toBeVisible();
+	await expect(cCard.getByTestId("commit-row")).toHaveCount(0);
+	await assertCommitSubjects(["B: first commit", "A: first commit"], localClone);
+});
+
 test("can move a bottom non-empty branch above the checked-out middle branch", async ({
 	page,
 	gitbutler,
@@ -198,8 +233,12 @@ async function setupThreeBranchStackProject(
 	gitbutler: GitButler,
 	page: Page,
 	headBranch = "C",
+	emptyTopBranch = false,
 ): Promise<string> {
-	await gitbutler.runScript("project-in-single-branch-three-branch-stack.sh", [headBranch]);
+	await gitbutler.runScript("project-in-single-branch-three-branch-stack.sh", [
+		headBranch,
+		emptyTopBranch.toString(),
+	]);
 	const localClone = gitbutler.pathInWorkdir("local-clone");
 	await openSingleBranchWorkspace(page);
 	return localClone;

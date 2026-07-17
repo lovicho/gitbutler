@@ -22,7 +22,7 @@ fn pull_prunes_integrated_stack_and_keeps_remaining_stack_parent() -> anyhow::Re
 ├╯
 ┊
 ┊╭┄h0 [B]
-┊●   d3e2ba3 add B
+┊●   lrm add B
 ├╯
 ┊
 ┊● 26ecc90 (upstream) ⏫ 2 commits
@@ -92,10 +92,10 @@ fn pull_prunes_integrated_branch_from_partial_stack() -> anyhow::Result<()> {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   99cf923 add A
+┊●   ozt add A
 ┊│
 ┊├┄h0 [C] (merged upstream)
-┊●   e5378e0 add C
+┊●   rkq add C
 ├╯
 ┊
 ┊● d4cb681 (upstream) ⏫ 2 commits
@@ -176,10 +176,10 @@ fn pull_check_uses_workspace_dry_run_for_partial_stack() -> anyhow::Result<()> {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   99cf923 add A
+┊●   ozt add A
 ┊│
 ┊├┄h0 [C] (merged upstream)
-┊●   e5378e0 add C
+┊●   rkq add C
 ├╯
 ┊
 ┊● d4cb681 (upstream) ⏫ 2 commits
@@ -222,10 +222,10 @@ Run `but pull` to update your branches
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   99cf923 add A
+┊●   ozt add A
 ┊│
 ┊├┄h0 [C] (merged upstream)
-┊●   e5378e0 add C
+┊●   rkq add C
 ├╯
 ┊
 ┊● d4cb681 (upstream) ⏫ 2 commits (checked [..])
@@ -248,7 +248,7 @@ fn pull_check_reports_conflicted_branches_as_rebasable() -> anyhow::Result<()> {
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   9283fc1 A-change
+┊●   nyo A-change
 ├╯
 ┊
 ┊● bdfcf28 (upstream) ⏫ 1 commit
@@ -400,7 +400,7 @@ fn pull_does_not_report_branch_rebase_conflicts_as_worktree_conflicts() -> anyho
 ┊   o M shared.txt
 ┊
 ┊╭┄g0 [A]
-┊●   ba99744 local change
+┊●   vun local change
 ├╯
 ┊
 ┊● 7f73771 (upstream) ⏫ 1 commit
@@ -459,7 +459,7 @@ fn pull_json_reports_branch_rebase_conflicts_as_successful_integration() -> anyh
 ╭┄zz [uncommitted] (no changes)
 ┊
 ┊╭┄g0 [A]
-┊●   ba99744 local change
+┊●   vun local change
 ├╯
 ┊
 ┊● 7f73771 (upstream) ⏫ 1 commit

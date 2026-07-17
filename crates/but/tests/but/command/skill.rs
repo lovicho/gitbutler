@@ -284,18 +284,21 @@ fn agent_skill_notice_reports_a_stale_local_skill_despite_a_current_global_copy(
 }
 
 #[test]
-fn agent_skill_notice_repairs_a_stale_global_skill() {
+fn agent_skill_notice_repairs_another_agents_stale_global_skill() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
     env.setup_metadata(&[]);
     env.but("skill install")
         .env("AI_AGENT", "codex")
         .assert()
         .success();
-    std::fs::write(
-        env.home_dir().join(".codex/skills/gitbutler/SKILL.md"),
-        "---\nname: but\nversion: old\n---\n",
-    )
-    .unwrap();
+    env.but("skill install")
+        .env("AI_AGENT", "claude-code")
+        .assert()
+        .success();
+
+    let claude_skill_path = env.home_dir().join(".claude/skills/gitbutler/SKILL.md");
+    let expected = std::fs::read_to_string(&claude_skill_path).unwrap();
+    std::fs::write(&claude_skill_path, "---\nname: but\nversion: old\n---\n").unwrap();
 
     let output = env
         .but("alias list")
@@ -307,7 +310,80 @@ fn agent_skill_notice_repairs_a_stale_global_skill() {
     assert!(
         stdout.contains("was out of date and was updated")
             && !stdout.contains("but skill check --update"),
-        "a stale global skill should be repaired before a read-only command, got: {stdout}"
+        "another agent's stale global skill should be repaired before a read-only command, got: {stdout}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&claude_skill_path).unwrap(),
+        expected,
+        "the detected agent should refresh other agents' global GitButler skill installations"
+    );
+}
+
+#[test]
+fn unrelated_update_failure_does_not_hide_missing_skill_hint() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+    env.but("skill install")
+        .env("AI_AGENT", "claude-code")
+        .assert()
+        .success();
+
+    let claude_skill_dir = env.home_dir().join(".claude/skills/gitbutler");
+    std::fs::write(
+        claude_skill_dir.join("SKILL.md"),
+        "---\nname: but\nversion: old\n---\n",
+    )
+    .unwrap();
+    let concepts_path = claude_skill_dir.join("references/concepts.md");
+    std::fs::remove_file(&concepts_path).unwrap();
+    std::fs::create_dir(&concepts_path).unwrap();
+
+    let output = env
+        .but("alias list")
+        .env("AI_AGENT", "codex")
+        .output()
+        .expect("alias list runs");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(
+        stdout.contains("Install the GitButler skill before continuing")
+            && !stdout.contains("auto-update failed"),
+        "another agent's update failure must not hide the caller's missing skill hint, got: {stdout}"
+    );
+
+    env.but("skill install")
+        .env("AI_AGENT", "codex")
+        .assert()
+        .success();
+    let codex_skill_path = env.home_dir().join(".codex/skills/gitbutler/SKILL.md");
+    let expected = std::fs::read_to_string(&codex_skill_path).unwrap();
+    std::fs::write(&codex_skill_path, "---\nname: but\nversion: old\n---\n").unwrap();
+
+    let output = env
+        .but("alias list")
+        .env("AI_AGENT", "codex")
+        .output()
+        .expect("alias list runs");
+    assert_eq!(
+        std::fs::read_to_string(&codex_skill_path).unwrap(),
+        expected,
+        "a failed Claude update should not prevent a later Codex update"
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("auto-update failed"),
+        "an unrelated failure should still be reported after other updates finish, got: {stdout}"
+    );
+
+    let output = env
+        .but("alias list")
+        .env("AI_AGENT", "claude-code")
+        .output()
+        .expect("alias list runs");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("auto-update failed"),
+        "an installed caller's update failure should retain its actionable details, got: {stdout}"
     );
 }
 

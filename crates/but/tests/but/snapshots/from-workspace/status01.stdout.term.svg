@@ -5,6 +5,7 @@
     .fg-blue { fill: #0000AA }
     .fg-cyan { fill: #00AAAA }
     .fg-green { fill: #00AA00 }
+    .fg-magenta { fill: #AA00AA }
     .container {
       padding: 0 10px;
       line-height: 18px;
@@ -27,7 +28,7 @@
 </tspan>
     <tspan x="10px" y="64px"><tspan>┊╭┄</tspan><tspan class="fg-blue bold">g0</tspan><tspan> [</tspan><tspan class="fg-green">A</tspan><tspan>]</tspan>
 </tspan>
-    <tspan x="10px" y="82px"><tspan>┊●   </tspan><tspan class="fg-blue bold">9</tspan><tspan class="dimmed">477ae7</tspan><tspan> add A</tspan>
+    <tspan x="10px" y="82px"><tspan>┊●   </tspan><tspan class="fg-magenta">t</tspan><tspan class="dimmed">pm</tspan><tspan> add A</tspan>
 </tspan>
     <tspan x="10px" y="100px"><tspan>├╯</tspan>
 </tspan>
@@ -35,7 +36,7 @@
 </tspan>
     <tspan x="10px" y="136px"><tspan>┊╭┄</tspan><tspan class="fg-blue bold">h0</tspan><tspan> [</tspan><tspan class="fg-green">B</tspan><tspan>]</tspan>
 </tspan>
-    <tspan x="10px" y="154px"><tspan>┊●   </tspan><tspan class="fg-blue bold">d</tspan><tspan class="dimmed">3e2ba3</tspan><tspan> add B</tspan>
+    <tspan x="10px" y="154px"><tspan>┊●   </tspan><tspan class="fg-magenta">l</tspan><tspan class="dimmed">rm</tspan><tspan> add B</tspan>
 </tspan>
     <tspan x="10px" y="172px"><tspan>├╯</tspan>
 </tspan>

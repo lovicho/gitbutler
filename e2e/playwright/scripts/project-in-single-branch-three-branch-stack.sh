@@ -7,6 +7,7 @@ echo "DATA DIR $E2E_TEST_APP_DATA_DIR"
 echo "BUT $BUT"
 
 head_branch="${1:-C}"
+empty_top_branch="${2:-false}"
 
 # Setup a remote project. GitButler currently requires projects to have a remote.
 mkdir remote-project
@@ -38,9 +39,11 @@ git add B.txt
 git commit -m "B: first commit"
 
 git checkout -b C
-echo "C" > C.txt
-git add C.txt
-git commit -m "C: first commit"
+if [ "$empty_top_branch" != "true" ]; then
+  echo "C" > C.txt
+  git add C.txt
+  git commit -m "C: first commit"
+fi
 
 python3 - .git/gitbutler/but.sqlite <<'PYTHON'
 import sqlite3

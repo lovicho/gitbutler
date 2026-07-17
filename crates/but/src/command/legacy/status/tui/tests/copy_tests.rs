@@ -143,7 +143,7 @@ fn copies_every_committed_file_value() {
     tui.input(KeyCode::Down);
 
     tui.input(COPY_MORE);
-    tui.input(KeyCode::Enter).assert_copied_text_eq("9:t");
+    tui.input(KeyCode::Enter).assert_copied_text_eq("t:t");
 
     tui.input(COPY_MORE);
     tui.input(KeyCode::Down);

@@ -55,6 +55,25 @@
 		</CardGroup.Item>
 	{/if}
 
+	<CardGroup.Item labelFor="worktree-manipulation">
+		{#snippet title()}
+			Worktree manipulation
+		{/snippet}
+		{#snippet caption()}
+			Enable experimental support for working with linked git worktrees.
+		{/snippet}
+		{#snippet actions()}
+			<Toggle
+				id="worktree-manipulation"
+				checked={$settingsStore?.featureFlags.worktreeManipulation}
+				onclick={() =>
+					settingsService.updateFeatureFlags({
+						worktreeManipulation: !$settingsStore?.featureFlags.worktreeManipulation,
+					})}
+			/>
+		{/snippet}
+	</CardGroup.Item>
+
 	<CardGroup.Item labelFor="irc">
 		{#snippet title()}
 			IRC integration

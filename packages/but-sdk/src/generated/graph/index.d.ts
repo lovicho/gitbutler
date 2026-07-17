@@ -570,6 +570,24 @@ export declare function workspaceBranchAndAncestorsPush(projectId: string, withF
 export declare function workspaceCheckout(projectId: string): Promise<BranchCheckoutResult>
 
 /**
+ * Fetch all configured remotes and persist the outcome for [`workspace_fetch_status()`].
+ *
+ * Fetching continues after an individual remote fails so every configured remote gets an attempt.
+ * If any fetch fails, all errors are persisted and returned together. Credential prompts are
+ * associated with `action`, which defaults to `"unknown"`.
+ */
+export declare function workspaceFetchFromRemotes(projectId: string, action: string | null): Promise<void>
+
+/**
+ * Return the persisted status of fetches performed through
+ * [`workspace_fetch_from_remotes()`].
+ *
+ * A project that hasn't used the workspace fetch API returns an empty status. Legacy fetch state
+ * is intentionally not imported.
+ */
+export declare function workspaceFetchStatus(projectId: string): Promise<WorkspaceFetchStatus>
+
+/**
  * Integrate upstream changes into the current workspace and record an oplog
  * snapshot on success.
  *
@@ -1510,6 +1528,8 @@ export type FeatureFlags = {
   writeCommitEvolution: boolean;
   /** Show the experimental file browser in the TUI. */
   tuiFileBrowser: boolean;
+  /** Enable experimental worktree manipulation support. */
+  worktreeManipulation: boolean;
 };
 
 export type Fetch = {
@@ -2859,6 +2879,16 @@ export type WatcherWorkspaceActivityPayload = null;
 export type WatcherWorktreeChangesPayload = {
   /** The file changes in the repository. */
   changes: WorktreeChanges;
+};
+
+/** The persisted status of fetches performed through [`workspace_fetch_from_remotes()`]. */
+export type WorkspaceFetchStatus = {
+  /** When the most recent fetch attempt finished, in milliseconds since the Unix epoch. */
+  lastAttemptedMs: number | null;
+  /** When the most recent successful fetch finished, in milliseconds since the Unix epoch. */
+  lastSuccessfulMs: number | null;
+  /** The error produced by the most recent attempt, or `None` if it succeeded. */
+  lastError: string | null;
 };
 
 /** JSON transport type returned by upstream integration. */
