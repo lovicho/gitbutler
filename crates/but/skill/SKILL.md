@@ -126,7 +126,7 @@ Edge case: if wanted and unwanted edits are in the same diff hunk, GitButler can
 
 1. `but status -fv` (or `but show <branch-id>`)
 2. Locate file/hunk IDs and target commit ID.
-3. `but amend <commit-id> --changes <file-or-hunk-id>,<file-or-hunk-id>`; use one command for multiple files/hunks that belong in the same commit. To amend into several different commits, run the amends in sequence — change-ID refs from one status read survive each amend, but take fresh refs from the returned status whenever a ref is sha-based or `#N`-suffixed.
+3. `but amend <commit-id> --changes <file-or-hunk-id>,<file-or-hunk-id>`; use one command for multiple files/hunks that belong in the same commit. To amend into several different commits, chain the amends with `&&` in one shell call when every target is a change-ID ref — those survive each amend, so one status read is enough (e.g. `but amend <id1> --changes <a> && but amend <id2> --changes <b> && but amend <id3> --changes <c>`). If any target is sha-based or `#N`-suffixed, run the amends one at a time and take fresh refs from each returned status — those refs go stale after every history edit.
 
 ### Split an existing commit
 
