@@ -1,5 +1,5 @@
 import { classes } from "#ui/components/classes.ts";
-import { Checkbox as BaseCheckbox } from "@base-ui/react/checkbox";
+import { Checkbox as BaseCheckbox } from "@base-ui/react";
 import { ComponentProps, FC } from "react";
 import styles from "./Checkbox.module.css";
 

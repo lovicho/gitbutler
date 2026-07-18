@@ -1,5 +1,7 @@
 import { useUnapplyStack, useWorkspaceIntegrateUpstream } from "#ui/api/mutations.ts";
 import { Icon } from "#ui/components/Icon.tsx";
+import { TooltipPopup } from "#ui/components/Tooltip.tsx";
+import { classes } from "#ui/components/classes.ts";
 import { outlineHotkeys, toElectronAccelerator } from "#ui/hotkeys.ts";
 import {
 	nativeMenuItem,
@@ -11,12 +13,13 @@ import {
 import { projectSlice } from "#ui/projects/state.ts";
 import { useAppSelector } from "#ui/store.ts";
 import { stackBottomRelativeTo } from "#ui/api/stack.ts";
-import { Toolbar } from "@base-ui/react/toolbar";
+import { Tooltip, Toolbar } from "@base-ui/react";
 import { BottomUpdate, Stack } from "@gitbutler/but-sdk";
 import { ComponentProps, FC } from "react";
 import { getRowButtonClassName } from "../Row-utils.ts";
-import { Row, RowLabelContainer, RowToolbar } from "../Row.tsx";
+import { Row, RowToolbar } from "../Row.tsx";
 import { assert } from "#ui/assert.ts";
+import styles from "./StackRow.module.css";
 
 export const StackRow: FC<
 	{
@@ -74,21 +77,44 @@ export const StackRow: FC<
 				void showNativeContextMenu(event, menuItems);
 			}}
 		>
-			<RowLabelContainer />
-
-			{isDefaultMode && (
-				<Toolbar.Root aria-label="Stack actions" render={<RowToolbar forceVisible />}>
-					<Toolbar.Button
-						aria-label="Stack menu"
-						onClick={(event) => {
-							void showNativeMenuFromTrigger(event.currentTarget, menuItems);
-						}}
+			<Toolbar.Root
+				aria-label="Stack actions"
+				render={<RowToolbar forceVisible className={styles.toolbar} />}
+			>
+				<Tooltip.Root>
+					<Tooltip.Trigger
+						aria-label="Collapse stack branches"
 						className={getRowButtonClassName({ iconOnly: true })}
+						render={<Toolbar.Button focusableWhenDisabled disabled />}
 					>
-						<Icon name="kebab" />
-					</Toolbar.Button>
-				</Toolbar.Root>
-			)}
+						<Icon name="collapse-vertical" />
+					</Tooltip.Trigger>
+					<Tooltip.Portal>
+						<Tooltip.Positioner sideOffset={4}>
+							<Tooltip.Popup render={<TooltipPopup />}>Collapse stack branches</Tooltip.Popup>
+						</Tooltip.Positioner>
+					</Tooltip.Portal>
+				</Tooltip.Root>
+
+				<span
+					aria-hidden
+					data-disabled={!isDefaultMode || undefined}
+					className={classes(getRowButtonClassName({ iconOnly: true }), styles.moveIndicator)}
+				>
+					<Icon name="drag-square" />
+				</span>
+
+				<Toolbar.Button
+					aria-label="Stack menu"
+					disabled={!isDefaultMode}
+					onClick={(event) => {
+						void showNativeMenuFromTrigger(event.currentTarget, menuItems);
+					}}
+					className={getRowButtonClassName({ iconOnly: true })}
+				>
+					<Icon name="kebab" />
+				</Toolbar.Button>
+			</Toolbar.Root>
 		</Row>
 	);
 };

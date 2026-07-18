@@ -13,7 +13,7 @@ import { uncommittedChangesOperand, type Operand } from "#ui/operands.ts";
 import { projectSlice } from "#ui/projects/state.ts";
 import { focusSelectionScope } from "#ui/selection-scopes.ts";
 import { useAppDispatch, useAppSelector } from "#ui/store.ts";
-import { Toolbar } from "@base-ui/react/toolbar";
+import { Toolbar } from "@base-ui/react";
 import { AbsorptionTarget, TreeChange, UnifiedPatch } from "@gitbutler/but-sdk";
 import { FC } from "react";
 import { getRowButtonClassName } from "../Row-utils.ts";

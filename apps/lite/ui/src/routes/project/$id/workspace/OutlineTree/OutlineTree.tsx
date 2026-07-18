@@ -15,17 +15,18 @@ import {
 	operandEquals,
 } from "#ui/operands.ts";
 import { projectSlice } from "#ui/projects/state.ts";
+import { getTransferTarget } from "#ui/outline/mode.ts";
 import { OperationSourceC } from "#ui/routes/project/$id/workspace/OperationSourceC.tsx";
 import {
-	ActiveOperation,
-	OperationTarget,
+	OperationTarget as OperationTarget_,
 	OperationTargetOutline,
 } from "#ui/routes/project/$id/workspace/OperationTarget.tsx";
+import { useOperationDropTarget } from "#ui/routes/project/$id/workspace/useOperationDropTarget.ts";
 import { NavigationIndexContext } from "#ui/routes/project/$id/workspace/OutlineNavigationIndexContext.ts";
 import { useAppDispatch, useAppSelector, useAppStore } from "#ui/store.ts";
 import { classes } from "#ui/components/classes.ts";
 import { navigationIndexIncludes, type NavigationIndex } from "#ui/workspace/navigation-index.ts";
-import { mergeProps, useRender } from "@base-ui/react";
+import { mergeProps, Tooltip, useRender } from "@base-ui/react";
 import {
 	BranchReference,
 	RelativeTo,
@@ -40,7 +41,7 @@ import { ComponentProps, createContext, FC, Fragment, use, useRef } from "react"
 import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panels";
 import styles from "./OutlineTree.module.css";
 import { Row, RowLabel, RowLabelContainer } from "../Row.tsx";
-import { getOperation, useDryRunOperation } from "#ui/operations/operation.ts";
+import { getOperation, OperationType, useDryRunOperation } from "#ui/operations/operation.ts";
 import { GraphSegment, GraphSegmentStatus } from "#ui/components/GraphSegment.tsx";
 import { segmentBottomRelativeTo } from "#ui/api/stack.ts";
 import { assert } from "#ui/assert.ts";
@@ -58,6 +59,7 @@ import {
 	type DownstackPushStatus,
 } from "#ui/segment.ts";
 import { checkedRange, navigationIndexRange } from "#ui/checking.ts";
+import { TooltipPopup } from "#ui/components/Tooltip.tsx";
 
 const DryRunWorkspaceContext = createContext<WorkspaceState | null>(null);
 
@@ -92,22 +94,25 @@ const TreeItem: FC<
 	});
 };
 
-const OperandC: FC<
+const OperationTarget: FC<
 	{
-		projectId: string;
+		enabled: boolean;
 		operand: Operand;
+		projectId: string;
 		outline: OperationTargetOutline;
-	} & useRender.ComponentProps<"div">
-> = ({ projectId, operand, outline, render, ...props }) => {
+	} & useRender.ComponentProps<"button">
+> = ({ enabled, operand, projectId, outline, render, ...props }) => {
+	const dropRef = useOperationDropTarget({ enabled, target: operand, projectId });
+
 	const absorptionTargetCommitIds = assert(use(AbsorptionTargetCommitIdsContext));
 	const navigationIndex = assert(use(NavigationIndexContext));
 
+	type ActiveOperation = { operationType: OperationType; tooltip?: string | undefined };
 	const activeOperation = useAppSelector((state) => {
-		const isSelected = projectSlice.selectors.selectIsSelectedOutline(
+		const selection = projectSlice.selectors.selectSelectionOutline(
 			state,
 			projectId,
 			navigationIndex,
-			operand,
 		);
 		const outlineMode = projectSlice.selectors.selectOutlineModeState(state, projectId);
 
@@ -123,12 +128,8 @@ const OperandC: FC<
 				Transfer: ({ value: mode }): ActiveOperation | null => {
 					if (mode.operationType === null) return null;
 
-					const isActive = Match.value(mode).pipe(
-						Match.tagsExhaustive({
-							Pointer: (mode) => mode.target !== null && operandEquals(mode.target, operand),
-							Keyboard: () => isSelected,
-						}),
-					);
+					const target = getTransferTarget(mode, selection);
+					const isActive = target !== null && operandEquals(target, operand);
 					if (!isActive) return null;
 
 					return {
@@ -145,6 +146,39 @@ const OperandC: FC<
 		);
 	});
 
+	return (
+		<Tooltip.Root open={activeOperation?.tooltip !== undefined} disableHoverablePopup>
+			<Tooltip.Trigger
+				{...props}
+				render={
+					<OperationTarget_
+						ref={(el) => {
+							dropRef.current = el;
+						}}
+						operationType={activeOperation?.operationType}
+						outline={outline}
+						render={render}
+					/>
+				}
+			/>
+			<Tooltip.Portal>
+				<Tooltip.Positioner sideOffset={8} side="right">
+					<Tooltip.Popup render={<TooltipPopup />}>{activeOperation?.tooltip}</Tooltip.Popup>
+				</Tooltip.Positioner>
+			</Tooltip.Portal>
+		</Tooltip.Root>
+	);
+};
+
+const OperandC: FC<
+	{
+		projectId: string;
+		operand: Operand;
+		outline: OperationTargetOutline;
+	} & useRender.ComponentProps<"div">
+> = ({ projectId, operand, outline, render, ...props }) => {
+	const navigationIndex = assert(use(NavigationIndexContext));
+
 	return useRender({
 		render: (
 			<OperationSourceC
@@ -155,8 +189,7 @@ const OperandC: FC<
 					<OperationTarget
 						enabled={navigationIndexIncludes(navigationIndex, operand, operandIdentityKey)}
 						projectId={projectId}
-						target={operand}
-						activeOperation={activeOperation}
+						operand={operand}
 						outline={outline}
 						render={render}
 					/>
@@ -543,12 +576,7 @@ const Stacks: FC<{
 				Transfer: ({ value: mode }) => {
 					if (mode.operationType === null) return;
 
-					const target = Match.value(mode).pipe(
-						Match.tagsExhaustive({
-							Pointer: (mode) => mode.target,
-							Keyboard: () => selection,
-						}),
-					);
+					const target = getTransferTarget(mode, selection);
 					if (!target) return;
 
 					return getOperation({

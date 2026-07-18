@@ -17,8 +17,7 @@ import { nativeMenuItem, showNativeMenuFromTrigger, type NativeMenuItem } from "
 import { projectSlice } from "#ui/projects/state.ts";
 import { focusSelectionScope } from "#ui/selection-scopes.ts";
 import { useAppDispatch, useAppSelector } from "#ui/store.ts";
-import { Button, Tooltip } from "@base-ui/react";
-import { Combobox } from "@base-ui/react/combobox";
+import { Button, Combobox, Tooltip } from "@base-ui/react";
 import type { RelativeTo } from "@gitbutler/but-sdk";
 import { useHotkey, useHotkeys } from "@tanstack/react-hotkeys";
 import { useQuery } from "@tanstack/react-query";

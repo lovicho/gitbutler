@@ -18,16 +18,19 @@ import { projectSlice } from "#ui/projects/state.ts";
 import { operandLabel, operandsLabel } from "#ui/routes/project/$id/workspace/operandLabel.ts";
 import { focusSelectionScope } from "#ui/selection-scopes.ts";
 import { useAppDispatch, useAppSelector } from "#ui/store.ts";
-import { Button, Tooltip } from "@base-ui/react";
-import { Toggle } from "@base-ui/react/toggle";
-import { ToggleGroup } from "@base-ui/react/toggle-group";
+import { Button, Toggle, ToggleGroup, Tooltip } from "@base-ui/react";
 import { useHotkeys, type UseHotkeyDefinition } from "@tanstack/react-hotkeys";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
 import { Match } from "effect";
 import { FC, type ReactNode } from "react";
 import styles from "./OperationControls.module.css";
-import { AbsorbMode, KeyboardTransferMode } from "#ui/outline/mode.ts";
+import {
+	AbsorbMode,
+	getTransferTarget,
+	KeyboardTransferMode,
+	keyboardTransferMode,
+} from "#ui/outline/mode.ts";
 import { NavigationIndex } from "#ui/workspace/navigation-index.ts";
 
 const Container: FC<{ children: ReactNode }> = ({ children }) => (
@@ -296,9 +299,8 @@ const TransferKeyboardOperationControls: FC<{
 	const dispatch = useAppDispatch();
 	const { mutate: runOperation } = useRunOperation();
 
-	if (!selection) return null;
-
-	const target = selection;
+	const target = getTransferTarget(keyboardTransferMode(mode), selection);
+	if (!target) return null;
 
 	const operations = getOperations(mode.sources, target);
 	const operation = operations[mode.operationType];

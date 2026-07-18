@@ -61,6 +61,14 @@ export const pointerTransferMode = ({
 	operationType,
 });
 
+export const getTransferTarget = (mode: TransferMode, selection: Operand | null): Operand | null =>
+	Match.value(mode).pipe(
+		Match.tagsExhaustive({
+			Pointer: (mode) => mode.target,
+			Keyboard: () => selection,
+		}),
+	);
+
 /** @public */
 export const absorbOutlineMode = ({
 	source,

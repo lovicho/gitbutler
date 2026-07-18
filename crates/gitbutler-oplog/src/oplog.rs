@@ -746,6 +746,9 @@ fn restore_snapshot(
 
     let before_restore_snapshot_tree_id =
         prepare_snapshot(ctx, exclusive_access.read_permission())?;
+    let before_restore_snapshot_workdir_tree_id =
+        get_v3_workdir_tree(repo.find_tree(before_restore_snapshot_tree_id)?)?
+            .context("Could not get workdir tree of snapshot created before the restore")?;
     let snapshot_commit = repo.find_commit(snapshot_commit_id)?;
 
     let snapshot_tree = snapshot_commit.tree()?;
@@ -830,7 +833,17 @@ fn restore_snapshot(
     but_core::worktree::safe_checkout_from_head(
         workdir_tree_id,
         &gix_repo,
-        but_core::worktree::checkout::Options::default(),
+        but_core::worktree::checkout::Options {
+            // `workdir_tree_id` is the restored snapshot's full workdir tree, so it already
+            // contains the uncommitted changes captured at that point. `safe_checkout_from_head`
+            // otherwise re-applies the current uncommitted changes on top via a 3-way merge whose
+            // base is `HEAD^{tree}`, which makes those changes collide with the identical ones
+            // already in the destination. Using the pre-restore workdir tree as the merge base
+            // means the current uncommitted changes equal the base and cancel out, so the restored
+            // tree is checked out as-is.
+            merge_base_override: Some(before_restore_snapshot_workdir_tree_id),
+            ..Default::default()
+        },
     )?;
 
     // Tracked content now matches the snapshot (untracked files outside the restored diff are

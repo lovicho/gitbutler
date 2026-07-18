@@ -13,8 +13,7 @@ import {
 	listReviewsQueryOptions,
 } from "#ui/api/queries.ts";
 import { decodeBytes } from "#ui/api/bytes.ts";
-import { Button, Toast, Tooltip } from "@base-ui/react";
-import { Toolbar } from "@base-ui/react/toolbar";
+import { Button, Toast, Toolbar, Tooltip } from "@base-ui/react";
 import { BranchReference, InsertSide, PushStatus, RelativeTo } from "@gitbutler/but-sdk";
 import { useQuery } from "@tanstack/react-query";
 import { Match } from "effect";
