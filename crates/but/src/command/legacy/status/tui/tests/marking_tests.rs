@@ -71,6 +71,62 @@ fn marking_uncommitted_toggles_all_uncommitted_files() {
 }
 
 #[test]
+fn marking_middle_row_uses_neighbor_states() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.file("a.txt", "content");
+    env.file("b.txt", "content");
+    env.file("c.txt", "content");
+
+    let mut tui = test_tui(env);
+
+    tui.reload();
+    tui.input([KeyCode::Down, KeyCode::Down]);
+
+    // Opposite to both neighbors: move down.
+    tui.input(' ').assert_current_line_eq(str!["[..]c.txt"]);
+
+    tui.input([KeyCode::Up, KeyCode::Up]);
+    tui.input(' ').assert_current_line_eq(str!["[..]a.txt"]);
+    tui.input(KeyCode::Down);
+
+    // Same as the next neighbor: move to the previous one.
+    tui.input(' ').assert_current_line_eq(str!["[..]a.txt"]);
+
+    tui.input([KeyCode::Down, KeyCode::Down]);
+    tui.input(' ').assert_current_line_eq(str!["[..]b.txt"]);
+
+    // Same as both neighbors: stay put.
+    tui.input(' ').assert_current_line_eq(str!["[..]b.txt"]);
+
+    tui.input(KeyCode::Up);
+    tui.input(' ').assert_current_line_eq(str!["[..]b.txt"]);
+
+    // Same as the previous neighbor: move to the next one.
+    tui.input(' ').assert_current_line_eq(str!["[..]c.txt"]);
+}
+
+#[test]
+fn marking_section_edge_moves_only_when_neighbor_differs() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    let mut tui = test_tui(env);
+
+    tui.input('b');
+    for message in ["one", "two"] {
+        tui.input('n');
+        tui.input(KeyCode::Enter);
+        tui.input(message);
+        tui.input(KeyCode::Enter);
+    }
+
+    tui.input(' ').assert_current_line_eq(str!["[..]one[..]"]);
+    tui.input(' ').assert_current_line_eq(str!["[..]one[..]"]);
+    tui.input(' ').assert_current_line_eq(str!["[..]two[..]"]);
+    tui.input(' ').assert_current_line_eq(str!["[..]two[..]"]);
+}
+
+#[test]
 fn multi_squash_marked_commits_into_selected_marked_target() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
     env.setup_metadata(&["A", "B"]);

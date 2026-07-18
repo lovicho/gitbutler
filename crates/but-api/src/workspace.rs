@@ -13,6 +13,7 @@ use but_core::{
     DryRun, RefMetadata, extract_remote_name_and_short_name, is_workspace_ref_name,
     sync::{RepoExclusive, RepoShared},
 };
+use but_error::AnyhowContextExt as _;
 use but_forge::ForgeReview;
 use but_oplog::legacy::{OperationKind, SnapshotDetails};
 use but_rebase::graph_rebase::mutate::RelativeTo;
@@ -58,12 +59,17 @@ impl TryFrom<but_db::FetchStatus> for WorkspaceFetchStatus {
 /// Fetching continues after an individual remote fails so every configured remote gets an attempt.
 /// If any fetch fails, all errors are persisted and returned together. Credential prompts are
 /// associated with `action`, which defaults to `"unknown"`.
+///
+/// The network fetch runs without any repository lock so other operations stay responsive while
+/// remotes are contacted; exclusive access is only acquired afterwards for the bookkeeping that
+/// reacts to updated remote refs. Within this process, overlapping fetch calls for the same
+/// repository serialize among themselves so concurrent `git fetch` runs cannot trip over Git's
+/// per-ref locks; fetches from other processes are not affected.
 #[but_api(napi)]
 #[instrument(skip_all, err(Debug))]
 pub fn workspace_fetch_from_remotes(
-    ctx: &but_ctx::Context,
+    ctx: &mut but_ctx::Context,
     action: Option<String>,
-    _perm: &mut RepoExclusive,
 ) -> anyhow::Result<()> {
     let askpass_action = Some(action.unwrap_or_else(|| "unknown".to_owned()));
     let fetch_result = (|| {
@@ -75,19 +81,45 @@ pub fn workspace_fetch_from_remotes(
                 .map(|name| name.to_str().map(str::to_owned))
                 .collect::<Result<Vec<_>, _>>()?
         };
-        let errors = remotes
+        // Overlapping `git fetch` runs of the same repository can fail on Git's per-ref locks,
+        // so fetches wait for each other while other operations stay unblocked.
+        let repo_fetch_lock = fetch_lock(&ctx.gitdir);
+        let _fetch_guard = repo_fetch_lock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let failures = remotes
             .iter()
             .filter_map(|remote| {
                 gitbutler_git::fetch_with_askpass(&repo_path, remote, askpass_action.clone())
                     .err()
-                    .map(|err| format!("{remote}: {err}"))
+                    .map(|err| (remote, err))
             })
             .collect::<Vec<_>>();
 
-        if errors.is_empty() {
-            Ok(())
-        } else {
-            Err(anyhow::anyhow!(errors.join("\n")))
+        // Keep the failure's own error context (e.g. the `ProjectGitAuth` code and its
+        // user-facing message) intact whenever possible: return a single failure as-is, and
+        // reapply the first failure's code when several failures collapse into one message.
+        match failures.len() {
+            0 => Ok(()),
+            1 => {
+                let (remote, err) = failures.into_iter().next().expect("length checked above");
+                Err(err.context(format!("fetching remote `{remote}` failed")))
+            }
+            _ => {
+                let code = failures
+                    .iter()
+                    .find_map(|(_, err)| err.custom_context().map(|ctx| ctx.code));
+                let joined = failures
+                    .iter()
+                    .map(|(remote, err)| format!("{remote}: {err}"))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                let err = anyhow::anyhow!(joined);
+                Err(match code {
+                    Some(code) => err.context(code),
+                    None => err,
+                })
+            }
         }
     })();
 
@@ -97,6 +129,7 @@ pub fn workspace_fetch_from_remotes(
         .as_millis()
         .try_into()
         .map_err(|err| anyhow::anyhow!("fetch timestamp does not fit in the database: {err}"))?;
+    let _guard = ctx.exclusive_worktree_access();
     match &fetch_result {
         Ok(()) => ctx
             .db
@@ -114,6 +147,18 @@ pub fn workspace_fetch_from_remotes(
     ctx.invalidate_workspace_cache()?;
     prune_missing_branch_stack_order(ctx)?;
     fetch_result
+}
+
+/// Return the in-process lock that serializes network fetches for the repository at `gitdir`,
+/// so overlapping fetches wait for each other without blocking other repository operations.
+fn fetch_lock(gitdir: &std::path::Path) -> std::sync::Arc<std::sync::Mutex<()>> {
+    static FETCH_LOCKS: std::sync::Mutex<
+        std::collections::BTreeMap<std::path::PathBuf, std::sync::Arc<std::sync::Mutex<()>>>,
+    > = std::sync::Mutex::new(std::collections::BTreeMap::new());
+    let mut map = FETCH_LOCKS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    std::sync::Arc::clone(map.entry(gitdir.to_owned()).or_default())
 }
 
 /// Reconcile branch-order metadata against the current local branch refs.
@@ -627,10 +672,8 @@ mod tests {
             .args(["branch", "-D", "feature"])
             .run();
 
-        let mut guard = ctx.exclusive_worktree_access();
-        workspace_fetch_from_remotes(&ctx, None, guard.write_permission())
+        workspace_fetch_from_remotes(&mut ctx, None)
             .expect_err("the configured origin does not exist");
-        drop(guard);
 
         assert!(
             ctx.meta()?.branch_stack_order(main.as_ref())?.is_none(),

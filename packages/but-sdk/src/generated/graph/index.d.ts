@@ -575,6 +575,12 @@ export declare function workspaceCheckout(projectId: string): Promise<BranchChec
  * Fetching continues after an individual remote fails so every configured remote gets an attempt.
  * If any fetch fails, all errors are persisted and returned together. Credential prompts are
  * associated with `action`, which defaults to `"unknown"`.
+ *
+ * The network fetch runs without any repository lock so other operations stay responsive while
+ * remotes are contacted; exclusive access is only acquired afterwards for the bookkeeping that
+ * reacts to updated remote refs. Within this process, overlapping fetch calls for the same
+ * repository serialize among themselves so concurrent `git fetch` runs cannot trip over Git's
+ * per-ref locks; fetches from other processes are not affected.
  */
 export declare function workspaceFetchFromRemotes(projectId: string, action: string | null): Promise<void>
 

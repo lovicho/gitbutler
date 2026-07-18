@@ -12,7 +12,7 @@ use crate::{
             Mode, NormalMode, PickChangesMode, SelectAfterReload,
             app::{
                 CommitSource,
-                mark::{Marks, MarksRef},
+                mark::{MarkableRef, Marks, MarksRef},
                 prefix_match,
             },
             mode::ModeRef,
@@ -507,6 +507,32 @@ impl Cursor {
             .take(next_section_start.saturating_sub(self.0 + 1))
             .find(|(idx, _)| is_cursor_selectable_at_index(*idx, lines, mode, show_files))?;
         Some(Self(idx))
+    }
+
+    #[must_use]
+    pub fn move_after_mark(
+        self,
+        lines: &[StatusOutputLine],
+        mode: &Mode,
+        show_files: FilesStatusFlag,
+    ) -> Option<Self> {
+        let mark_state = |cursor: Self| {
+            cursor
+                .selected_line(lines)
+                .and_then(|line| line.data.cli_id())
+                .and_then(|id| {
+                    MarkableRef::try_from_cli_id(id).map(|_| mode.marks_ref().contains_cli_id(id))
+                })
+        };
+        let current_is_marked = mark_state(self)?;
+        let is_opposite = |cursor| mark_state(cursor) == Some(!current_is_marked);
+
+        self.move_down_within_section(lines, mode, show_files)
+            .filter(|next| is_opposite(*next))
+            .or_else(|| {
+                self.move_up(lines, mode, show_files)
+                    .filter(|previous| is_opposite(*previous))
+            })
     }
 
     /// Moves the cursor to the first selectable row in the next section.

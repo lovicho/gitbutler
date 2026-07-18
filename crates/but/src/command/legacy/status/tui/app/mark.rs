@@ -583,7 +583,7 @@ impl App {
                     selection,
                     self.mode
                         .get_mut_without_updating_backstack_and_i_promise_not_to_change_state(),
-                )? && let Some(new_cursor) = self.cursor.move_down_within_section(
+                )? && let Some(new_cursor) = self.cursor.move_after_mark(
                     &self.status_lines,
                     &self.mode,
                     self.flags.show_files,
