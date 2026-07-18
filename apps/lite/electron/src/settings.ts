@@ -13,6 +13,7 @@ import path from "node:path";
 
 const guiSettingsV1 = type({
 	version: "1",
+	"autoFetchFrequency?": "string",
 	"diffBackground?": "boolean",
 	"diffFontFamily?": "string",
 	"diffFontSize?": "number",

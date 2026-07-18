@@ -31,6 +31,7 @@ import type {
 	UnifiedPatch,
 	WatcherEvent,
 	WorktreeChanges,
+	WorkspaceFetchStatus,
 	WorkspaceIntegrateUpstreamOutcome,
 	UncommitResult,
 	Snapshot,
@@ -202,6 +203,10 @@ const api: LiteElectronApi = {
 	treeChangeDiffs: (params) =>
 		ipcRenderer.invoke("workspace:tree-change-diffs", params) as Promise<UnifiedPatch | null>,
 	unapplyStack: (params) => ipcRenderer.invoke("workspace:unapply-stack", params) as Promise<void>,
+	workspaceFetchFromRemotes: (params) =>
+		ipcRenderer.invoke("workspace:fetch-from-remotes", params) as Promise<void>,
+	workspaceFetchStatus: (projectId) =>
+		ipcRenderer.invoke("workspace:fetch-status", projectId) as Promise<WorkspaceFetchStatus>,
 	workspaceIntegrateUpstream: (params) =>
 		ipcRenderer.invoke(
 			"workspace:integrate-upstream",

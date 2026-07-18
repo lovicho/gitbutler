@@ -48,6 +48,7 @@ import type {
 	UnifiedPatch,
 	WatcherEvent,
 	WorktreeChanges,
+	WorkspaceFetchStatus,
 	WorkspaceIntegrateUpstreamOutcome,
 	UncommitResult,
 	ReviewState,
@@ -353,6 +354,11 @@ export interface WorkspaceIntegrateUpstreamParams {
 	dryRun: boolean;
 }
 
+export interface WorkspaceFetchFromRemotesParams {
+	projectId: string;
+	action: string | null;
+}
+
 export interface UpdateBranchNameParams {
 	projectId: string;
 	stackId: string;
@@ -486,6 +492,8 @@ export interface LiteElectronApi {
 	showNativeMenu: (params: ShowNativeMenuParams) => Promise<string | null>;
 	treeChangeDiffs: (params: TreeChangeDiffParams) => Promise<UnifiedPatch | null>;
 	unapplyStack: (params: UnapplyStackParams) => Promise<void>;
+	workspaceFetchFromRemotes: (params: WorkspaceFetchFromRemotesParams) => Promise<void>;
+	workspaceFetchStatus: (projectId: string) => Promise<WorkspaceFetchStatus>;
 	workspaceIntegrateUpstream: (
 		params: WorkspaceIntegrateUpstreamParams,
 	) => Promise<WorkspaceIntegrateUpstreamOutcome>;
@@ -567,6 +575,8 @@ export const liteIpcChannels = {
 	showNativeMenu: "lite:show-native-menu",
 	treeChangeDiffs: "workspace:tree-change-diffs",
 	unapplyStack: "workspace:unapply-stack",
+	workspaceFetchFromRemotes: "workspace:fetch-from-remotes",
+	workspaceFetchStatus: "workspace:fetch-status",
 	workspaceIntegrateUpstream: "workspace:integrate-upstream",
 	updateReviewFooters: "workspace:update-review-footers",
 	warmCiChecksCache: "workspace:warm-ci-checks-cache",

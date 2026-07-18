@@ -107,6 +107,10 @@ export const workspaceHotkeys = {
 		hotkey: "Mod+N",
 		meta: { group: "Workspace", name: "Add new branch" },
 	},
+	fetchFromRemotes: {
+		hotkey: "Alt+Shift+F",
+		meta: { group: "Workspace", name: "Fetch" },
+	},
 	updateWorkspace: {
 		hotkey: "Alt+Shift+R",
 		meta: {

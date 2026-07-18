@@ -3,6 +3,7 @@ import { useApply } from "#ui/api/mutations.ts";
 import { getHeadInfoIndex } from "#ui/api/ref-info.ts";
 import { headInfoQueryOptions, listBranchesQueryOptions } from "#ui/api/queries.ts";
 import { PickerDialog, type PickerDialogGroup } from "#ui/components/PickerDialog.tsx";
+import { formatRelativeTime } from "#ui/time.ts";
 import { BranchListing } from "@gitbutler/but-sdk";
 import { useQuery } from "@tanstack/react-query";
 import { type FC, useState } from "react";
@@ -18,27 +19,6 @@ type Props = {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	projectId: string;
-};
-
-const relativeTimeFormatter = new Intl.RelativeTimeFormat(undefined, {
-	numeric: "auto",
-	style: "short",
-});
-
-const formatRelativeTime = (timestamp: number, now = Date.now()) => {
-	const seconds = Math.round((timestamp - now) / 1000);
-	const absSeconds = Math.abs(seconds);
-
-	if (absSeconds < 60) return relativeTimeFormatter.format(seconds, "seconds");
-	if (absSeconds < 60 * 60)
-		return relativeTimeFormatter.format(Math.round(seconds / 60), "minutes");
-	if (absSeconds < 60 * 60 * 24)
-		return relativeTimeFormatter.format(Math.round(seconds / 60 / 60), "hours");
-	if (absSeconds < 60 * 60 * 24 * 30)
-		return relativeTimeFormatter.format(Math.round(seconds / 60 / 60 / 24), "days");
-	if (absSeconds < 60 * 60 * 24 * 365)
-		return relativeTimeFormatter.format(Math.round(seconds / 60 / 60 / 24 / 30), "months");
-	return relativeTimeFormatter.format(Math.round(seconds / 60 / 60 / 24 / 365), "years");
 };
 
 const branchListingToApplyBranchPickerOptions = (

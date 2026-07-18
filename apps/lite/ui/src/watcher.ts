@@ -9,6 +9,9 @@ export const handleWatcher = (
 ): void => {
 	switch (event.payload.type) {
 		case "gitFetch":
+			void client.invalidateQueries({
+				queryKey: ["workspaceFetchStatus" satisfies QueryKey, projectId],
+			});
 			void client.invalidateQueries({ queryKey: ["reviews" satisfies QueryKey, projectId] });
 			break;
 		case "gitActivity":

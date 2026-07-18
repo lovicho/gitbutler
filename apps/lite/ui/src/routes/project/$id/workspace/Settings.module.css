@@ -58,5 +58,12 @@
 }
 
 .label {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
 	color: var(--text-2);
+}
+
+.inferredValue {
+	color: var(--text-3);
 }

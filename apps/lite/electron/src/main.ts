@@ -54,6 +54,7 @@ import {
 	type SetReviewTemplateParams,
 	type SetTargetRefAndInitProjectParams,
 	type PeelRestoreSnapshotParams,
+	type WorkspaceFetchFromRemotesParams,
 	type WorkspaceIntegrateUpstreamParams,
 	type UpdateReviewFootersParams,
 } from "./ipc.js";
@@ -121,6 +122,8 @@ import {
 	peelRestoreSnapshot,
 	updateReviewFooters,
 	warmCiChecksCache,
+	workspaceFetchFromRemotes,
+	workspaceFetchStatus,
 	workspaceIntegrateUpstream,
 	askpassInit,
 	askpassSubmitPromptResponse,
@@ -696,6 +699,14 @@ const registerIpcHandlers = (): void => {
 	senderValidatingHandle(
 		liteIpcChannels.unapplyStack,
 		(_e, { projectId, stackId }: UnapplyStackParams) => unapplyStack(projectId, stackId),
+	);
+	senderValidatingHandle(
+		liteIpcChannels.workspaceFetchFromRemotes,
+		(_e, { projectId, action }: WorkspaceFetchFromRemotesParams) =>
+			workspaceFetchFromRemotes(projectId, action),
+	);
+	senderValidatingHandle(liteIpcChannels.workspaceFetchStatus, (_e, projectId: string) =>
+		workspaceFetchStatus(projectId),
 	);
 	senderValidatingHandle(
 		liteIpcChannels.workspaceIntegrateUpstream,

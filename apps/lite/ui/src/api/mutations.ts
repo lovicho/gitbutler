@@ -18,6 +18,7 @@ import {
 import { commitOperand, type BranchOperand } from "#ui/operands.ts";
 import { projectSlice } from "#ui/projects/state.ts";
 import { type AppDispatch, useAppDispatch } from "#ui/store.ts";
+import { formatRelativeTime } from "#ui/time.ts";
 import { Toast } from "@base-ui/react";
 import {
 	type CommitAbsorption,
@@ -738,16 +739,12 @@ export const useRestoreSnapshot = ({ projectId }: { projectId: string }) => {
 			// TODO: We should map this to something user-friendly.
 			const op = snapshot.details?.operation;
 
-			// TODO: We should use dynamic units.
-			const minsAgo = new Intl.RelativeTimeFormat(undefined, { style: "short" }).format(
-				Math.ceil((snapshot.createdAt - Date.now()) / 1000 / 60),
-				"minutes",
-			);
+			const relativeTime = formatRelativeTime(snapshot.createdAt);
 
 			toastManager.add({
 				type: "info",
 				title,
-				description: `Restored to ${shortCommitId(snapshot.commitId)} (${op !== undefined ? `${op}, ` : ""}${minsAgo})`,
+				description: `Restored to ${shortCommitId(snapshot.commitId)} (${op !== undefined ? `${op}, ` : ""}${relativeTime})`,
 			});
 		},
 		onError: (error, direction) => {

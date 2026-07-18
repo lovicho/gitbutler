@@ -10,8 +10,10 @@ import type {
 	TreeChangeDiffParams,
 } from "#electron/ipc.ts";
 import { aggregateCIChecks } from "#ui/ci.ts";
+import { clampAutoFetch, defaultSettings } from "#ui/settings.ts";
 import type { ForgeReview } from "@gitbutler/but-sdk";
 import { queryOptions } from "@tanstack/react-query";
+import * as ms from "ms";
 
 export type QueryKey =
 	| "branchDetails"
@@ -30,7 +32,9 @@ export type QueryKey =
 	| "treeChangeDiffs"
 	| "absorptionPlan"
 	| "dryRun"
-	| "guiSettings";
+	| "guiSettings"
+	| "workspaceFetch"
+	| "workspaceFetchStatus";
 
 export const branchDetailsQueryOptions = ({ projectId, ...params }: BranchDetailsParams) =>
 	queryOptions({
@@ -70,6 +74,41 @@ export const headInfoQueryOptions = (projectId: string) =>
 		queryKey: ["headInfo" satisfies QueryKey, projectId],
 		queryFn: () => window.lite.headInfo(projectId),
 	});
+
+export const workspaceFetchStatusQueryOptions = (projectId: string) =>
+	queryOptions({
+		queryKey: ["workspaceFetchStatus" satisfies QueryKey, projectId],
+		queryFn: () => window.lite.workspaceFetchStatus(projectId),
+	});
+
+export const workspaceFetchQueryOptions = (
+	projectId: string,
+	autoFetchFrequency = defaultSettings.autoFetchFrequency,
+) => {
+	// Throws on empty and large strings.
+	let autoFetchFrequencyMs: number;
+	try {
+		autoFetchFrequencyMs = ms.parse(autoFetchFrequency);
+	} catch {
+		autoFetchFrequencyMs = Number.NaN;
+	}
+
+	return queryOptions({
+		queryKey: ["workspaceFetch" satisfies QueryKey, projectId],
+		queryFn: () =>
+			window.lite.workspaceFetchFromRemotes({ projectId, action: null }).then(
+				// RQ treats undefined results in queries as errors.
+				() => null,
+			),
+		refetchInterval: Number.isNaN(autoFetchFrequencyMs)
+			? false
+			: clampAutoFetch(autoFetchFrequencyMs),
+		refetchIntervalInBackground: true,
+		retry: false,
+		// Don't fetch on first mount, simplifying the no polling scenario.
+		initialData: null,
+	});
+};
 
 export const getReviewQueryOptions = ({ projectId, reviewId }: GetReviewParams) =>
 	queryOptions({

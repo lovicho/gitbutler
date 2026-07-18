@@ -1,9 +1,15 @@
 import { useBranchCreate, useWorkspaceIntegrateUpstream } from "#ui/api/mutations.ts";
-import { headInfoQueryOptions } from "#ui/api/queries.ts";
+import {
+	guiSettingsQueryOptions,
+	headInfoQueryOptions,
+	workspaceFetchQueryOptions,
+	workspaceFetchStatusQueryOptions,
+} from "#ui/api/queries.ts";
 import { getHeadInfoIndex } from "#ui/api/ref-info.ts";
 import { stackBottomRelativeTo } from "#ui/api/stack.ts";
 import { getButtonClassName } from "#ui/components/Button.tsx";
 import { classes } from "#ui/components/classes.ts";
+import { errorMessageForToast } from "#ui/errors.ts";
 import { Icon } from "#ui/components/Icon.tsx";
 import { TooltipPopup } from "#ui/components/Tooltip.tsx";
 import { globalHotkeys, workspaceHotkeys } from "#ui/hotkeys.ts";
@@ -11,13 +17,14 @@ import { branchOperand, type BranchOperand, type Operand } from "#ui/operands.ts
 import { projectSlice } from "#ui/projects/state.ts";
 import { focusSelectionScope, type SelectionScope } from "#ui/selection-scopes.ts";
 import { useAppDispatch, useAppSelector } from "#ui/store.ts";
+import { formatRelativeTime } from "#ui/time.ts";
 import type { NavigationIndex } from "#ui/workspace/navigation-index.ts";
-import { Button, Toggle, ToggleGroup, Tooltip } from "@base-ui/react";
+import { Button, Toast, Toggle, ToggleGroup, Tooltip } from "@base-ui/react";
 import { BottomUpdate, ProjectForFrontend } from "@gitbutler/but-sdk";
 import { useIsFetching, useIsMutating, useQuery } from "@tanstack/react-query";
 import { useHotkeys } from "@tanstack/react-hotkeys";
 import { Match } from "effect";
-import { type ComponentProps, type FC } from "react";
+import { type ComponentProps, type FC, useState } from "react";
 import { ToggleGroupStyles, ToggleStyles } from "#ui/components/ToggleGroup.tsx";
 import {
 	buildCommitTargetComboboxItems,
@@ -45,6 +52,43 @@ const ActivitySpinner: FC = () => {
 	return status !== null && <Icon name="spinner" aria-label={status} />;
 };
 
+const FetchFromRemotesButton: FC<{
+	canFetch: boolean;
+	isPending: boolean;
+	lastSuccessfulMs?: number | null;
+	onFetch: () => void;
+}> = (p) => {
+	const [tooltipNow, setTooltipNow] = useState(() => Date.now());
+
+	return (
+		<Tooltip.Root
+			onOpenChange={(open) => {
+				if (open) setTooltipNow(Date.now());
+			}}
+		>
+			<Tooltip.Trigger
+				aria-label={workspaceHotkeys.fetchFromRemotes.meta.name}
+				className={getButtonClassName({ iconOnly: true })}
+				onClick={p.onFetch}
+				// We pass `disabled` here because we want to disable the button, not
+				// the tooltip.
+				render={<Button focusableWhenDisabled disabled={!p.canFetch} />}
+			>
+				<Icon name={p.isPending ? "spinner" : "refresh"} />
+			</Tooltip.Trigger>
+			<Tooltip.Portal>
+				<Tooltip.Positioner sideOffset={4}>
+					<Tooltip.Popup render={<TooltipPopup kbd={workspaceHotkeys.fetchFromRemotes.hotkey} />}>
+						{workspaceHotkeys.fetchFromRemotes.meta.name}
+						{p.lastSuccessfulMs != null &&
+							` (${formatRelativeTime(p.lastSuccessfulMs, tooltipNow)})`}
+					</Tooltip.Popup>
+				</Tooltip.Positioner>
+			</Tooltip.Portal>
+		</Tooltip.Root>
+	);
+};
+
 export const Outline: FC<
 	{
 		absorptionTargetCommitIds: ReadonlySet<string>;
@@ -54,6 +98,7 @@ export const Outline: FC<
 	} & ComponentProps<"div">
 > = ({ absorptionTargetCommitIds, navigationIndex, project, projectId, ...restProps }) => {
 	const dispatch = useAppDispatch();
+	const toastManager = Toast.useToastManager();
 	const isDefaultMode = useAppSelector(
 		(state) => projectSlice.selectors.selectOutlineModeState(state, projectId)._tag === "Default",
 	);
@@ -97,6 +142,8 @@ export const Outline: FC<
 	};
 
 	const { data: headInfo } = useQuery(headInfoQueryOptions(projectId));
+	const { data: guiSettings } = useQuery(guiSettingsQueryOptions);
+	const { data: workspaceFetchStatus } = useQuery(workspaceFetchStatusQueryOptions(projectId));
 	const headInfoIndex = headInfo ? getHeadInfoIndex(headInfo) : undefined;
 	const commitTargetState = useAppSelector((state) =>
 		projectSlice.selectors.selectCommitTarget(state, projectId),
@@ -117,6 +164,22 @@ export const Outline: FC<
 		}) ?? [];
 	const { isPending: isWorkspaceIntegrateUpstreamPending, mutate: workspaceIntegrateUpstream } =
 		useWorkspaceIntegrateUpstream();
+	const { isFetching: isWorkspaceFetchFromRemotesPending, refetch: workspaceFetchFromRemotes } =
+		useQuery(workspaceFetchQueryOptions(projectId, guiSettings?.autoFetchFrequency));
+	const fetchFromRemotes = () => {
+		void workspaceFetchFromRemotes().then(({ error }) => {
+			if (!error) return;
+
+			// oxlint-disable-next-line no-console
+			console.error(error);
+			toastManager.add({
+				type: "error",
+				title: "Failed to fetch",
+				description: errorMessageForToast(error),
+				priority: "high",
+			});
+		});
+	};
 	const updateWorkspace = () => {
 		workspaceIntegrateUpstream({ projectId, updates: rebaseUpdates, dryRun: false });
 	};
@@ -126,6 +189,7 @@ export const Outline: FC<
 	// https://linear.app/gitbutler/issue/GB-1560/add-information-about-the-relation-to-the-upstream-to-the-head-info
 	const canUpdateWorkspace =
 		isDefaultMode && rebaseUpdates.length > 0 && !isWorkspaceIntegrateUpstreamPending;
+	const canFetchFromRemotes = isDefaultMode && !isWorkspaceFetchFromRemotesPending;
 
 	const canCreateIndependentBranch = isDefaultMode && !isBranchCreatePending;
 
@@ -151,6 +215,14 @@ export const Outline: FC<
 				enabled: canCreateIndependentBranch,
 				meta: workspaceHotkeys.createIndependentBranch.meta,
 				requireReset: true,
+			},
+		},
+		{
+			hotkey: workspaceHotkeys.fetchFromRemotes.hotkey,
+			callback: fetchFromRemotes,
+			options: {
+				enabled: canFetchFromRemotes,
+				meta: workspaceHotkeys.fetchFromRemotes.meta,
 			},
 		},
 		{
@@ -192,6 +264,13 @@ export const Outline: FC<
 					</div>
 
 					<div className={styles.workspaceControlsActions}>
+						<FetchFromRemotesButton
+							canFetch={canFetchFromRemotes}
+							isPending={isWorkspaceFetchFromRemotesPending}
+							lastSuccessfulMs={workspaceFetchStatus?.lastSuccessfulMs}
+							onFetch={fetchFromRemotes}
+						/>
+
 						<Tooltip.Root>
 							<Tooltip.Trigger
 								aria-label={workspaceHotkeys.updateWorkspace.meta.name}
