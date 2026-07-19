@@ -325,7 +325,7 @@ but discard <hunk-id>         # Discard hunk changes
 
 ## Conflict Resolution
 
-When commits have conflicts (shown in `but status` — look for commits marked as conflicted):
+When commits have conflicts (the `but pull` summary lists them; `but status` marks them as conflicted):
 
 ### `but resolve <commit>`
 
@@ -362,12 +362,10 @@ but resolve cancel --force
 
 **Workflow:**
 
-1. `but status` — identify conflicted commits (marked as conflicted in the output)
-2. `but resolve <commit-id>` — enter resolution mode for the conflicted commit
-3. Edit the conflicted files — remove `<<<<<<<`, `=======`, `>>>>>>>` markers and keep the correct content
-4. `but resolve status` — verify no conflicts remain
-5. `but resolve finish` — finalize and return to normal mode
-6. If multiple commits are conflicted, repeat steps 2-5 for each one
+1. `but resolve <commit-id>` — enter resolution mode using the commit ID from the `but pull` summary (or `but status`); the conflict regions are printed with line numbers
+2. Edit the conflicted files — remove `<<<<<<<`, `=======`, `>>>>>>>` markers and keep the correct content (`but resolve status` re-lists what remains when several files are conflicted)
+3. `but resolve finish` — finalize and return to normal mode; the output reports leftover markers and the surviving uncommitted changes, so no follow-up status is needed
+4. If multiple commits are conflicted, repeat steps 1-3 for each one, oldest commit first — finishing a lower commit rebases the ones above it
 
 **Important:** Never use `git add`, `git commit`, or other git write commands during conflict resolution. Only use `but resolve` commands and edit files directly.
 

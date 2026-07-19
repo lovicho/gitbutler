@@ -29,7 +29,42 @@ fn resolve_status_and_finish_work_in_edit_mode() -> anyhow::Result<()> {
     env.but("resolve finish")
         .assert()
         .success()
-        .stderr_eq(str![""]);
+        .stderr_eq(str![""])
+        .stdout_eq(str![[r#"
+✓ Conflict resolution finalized successfully!
+The commit has been updated with your resolved changes.
+No conflict markers remain in the resolved files.
+Workspace restored; uncommitted changes intact: test-file.txt
+
+"#]]);
+
+    assert_eq!(current_branch_name(&env)?, "gitbutler/workspace");
+    Ok(())
+}
+
+#[test]
+fn resolve_finish_reports_leftover_markers_and_uncommitted_paths() -> anyhow::Result<()> {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    enter_edit_mode_with_conflicted_commit(&env)?;
+
+    // A "resolution" that leaves conflict markers behind.
+    env.file(
+        "test-file.txt",
+        "<<<<<<< ours\nline 2\n=======\nline two\n>>>>>>> theirs\n",
+    );
+    env.invoke_git("add test-file.txt");
+
+    env.but("resolve finish")
+        .assert()
+        .success()
+        .stderr_eq(str![""])
+        .stdout_eq(str![[r#"
+✓ Conflict resolution finalized successfully!
+The commit has been updated with your resolved changes.
+✗ test-file.txt still contains conflict markers — resolve it again if that was not intentional
+Workspace restored; uncommitted changes intact: test-file.txt
+
+"#]]);
 
     assert_eq!(current_branch_name(&env)?, "gitbutler/workspace");
     Ok(())

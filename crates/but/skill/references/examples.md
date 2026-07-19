@@ -202,42 +202,35 @@ but commit bv -m "Add dialog component" --changes <id> # To frontend
 but pull
 
 # Output:
-# Conflict in commit nn on branch feature-x
+# Summary
+# ────────
+#   feature-x - conflicted
+#       nn Add validation
 
-# 2. Check status
-but status -fv
-
-# Output:
-# Branch: feature-x (bu)
-#   nn: Add validation (CONFLICTED)
-
-# 3. Enter resolution mode
+# 2. Enter resolution mode using the commit ID from the pull output
 but resolve nn
 
 # Output:
-# Entering resolution mode for commit nn
-# Fix conflicts in: api/users.js, api/validation.js
+# Checking out conflicted commit nn
+# Conflicted files remaining:
+#   ✗ api/users.js
+#      12│<<<<<<< New base: ...
+#      ...conflict regions with line numbers...
 
-# 4. Read each conflicted file and edit to resolve
+# 3. Edit each conflicted file to resolve
 # IMPORTANT: You MUST edit the files — do NOT just run `but resolve finish`
 # NEVER use `git add`, `git checkout --theirs/--ours`, or any git write command — just edit the files directly with the Edit tool, then `but resolve finish`
-cat api/users.js           # Read to see conflict markers
-# (edit to remove <<<<<<< ======= >>>>>>> markers and keep correct content)
+# (edit to remove <<<<<<< ======= >>>>>>> markers and keep correct content;
+#  with several conflicted files, `but resolve status` re-lists what remains)
 
-# 5. Check progress
-but resolve status
-
-# Output:
-# Remaining conflicts:
-#   api/validation.js
-
-# 6. Continue fixing...
-# (resolve last conflict)
-
-# 7. Finalize
+# 4. Finalize
 but resolve finish
 
-# Back to normal workspace mode
+# Output:
+# ✓ Conflict resolution finalized successfully!
+# No conflict markers remain in the resolved files.
+# Workspace restored; uncommitted changes intact: ...
+# No follow-up status or marker scan needed — finish already reports both.
 ```
 
 ## Example 7: Complete Feature Development Workflow

@@ -1,4 +1,4 @@
-<svg width="1037px" height="344px" xmlns="http://www.w3.org/2000/svg">
+<svg width="1037px" height="362px" xmlns="http://www.w3.org/2000/svg">
   <style>
     .fg { fill: #AAAAAA }
     .bg { fill: #000000 }
@@ -42,7 +42,7 @@
 </tspan>
     <tspan x="10px" y="190px"><tspan>┊</tspan>
 </tspan>
-    <tspan x="10px" y="208px"><tspan>┊╭┄(upstream) ⏫ 2 commits</tspan>
+    <tspan x="10px" y="208px"><tspan>┊╭┄(upstream: origin/main) 2 new commits</tspan>
 </tspan>
     <tspan x="10px" y="226px"><tspan>┊</tspan><tspan class="fg-green">●</tspan><tspan> </tspan><tspan class="fg-cyan">9354ac4</tspan><tspan> </tspan><tspan class="dimmed">main-advance</tspan>
 </tspan>
@@ -54,9 +54,11 @@
 </tspan>
     <tspan x="10px" y="298px">
 </tspan>
-    <tspan x="10px" y="316px"><tspan class="dimmed">Hint: branches marked `(merged upstream)` have landed; run `but pull` to remove them, or start new work on another branch</tspan>
+    <tspan x="10px" y="316px"><tspan class="dimmed">Hint: origin/main moved ahead; run `but pull` to update the workspace</tspan>
 </tspan>
-    <tspan x="10px" y="334px">
+    <tspan x="10px" y="334px"><tspan class="dimmed">Hint: branches marked `(merged upstream)` have landed; run `but pull` to remove them, or start new work on another branch</tspan>
+</tspan>
+    <tspan x="10px" y="352px">
 </tspan>
   </text>
 

@@ -740,8 +740,8 @@ async fn match_subcommand(
         },
         #[cfg(feature = "legacy")]
         Subcommands::Pull { check } => {
-            let ctx = setup::init_ctx(&args, InitCtxOptions::default(), out)?;
-            command::legacy::pull::handle(&ctx, out, check)
+            let mut ctx = setup::init_ctx(&args, InitCtxOptions::default(), out)?;
+            command::legacy::pull::handle(&mut ctx, out, check)
                 .await
                 .emit_metrics(metrics_ctx)
                 .map_err(CliError::from)
@@ -757,8 +757,8 @@ async fn match_subcommand(
                     "Assuming you meant to check for upstream work, running `but pull --check`"
                 )
             )?;
-            let ctx = setup::init_ctx(&args, InitCtxOptions::default(), out)?;
-            command::legacy::pull::handle(&ctx, out, true)
+            let mut ctx = setup::init_ctx(&args, InitCtxOptions::default(), out)?;
+            command::legacy::pull::handle(&mut ctx, out, true)
                 .await
                 .emit_metrics(metrics_ctx)
                 .map_err(CliError::from)
@@ -783,7 +783,7 @@ async fn match_subcommand(
                 let mut progress = out.progress_channel();
                 writeln!(progress, "Pulling latest...")?;
                 let mut pull_out = OutputChannel::new(OutputFormat::None);
-                command::legacy::pull::handle(&ctx, &mut pull_out, false).await?;
+                command::legacy::pull::handle(&mut ctx, &mut pull_out, false).await?;
                 writeln!(progress, "Pull complete.")?;
             }
             out.begin_status_after(status_after);

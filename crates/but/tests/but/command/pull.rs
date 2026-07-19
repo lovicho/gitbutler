@@ -25,10 +25,10 @@ fn pull_prunes_integrated_stack_and_keeps_remaining_stack_parent() -> anyhow::Re
 ┊●   lrm add B
 ├╯
 ┊
-┊● 26ecc90 (upstream) ⏫ 2 commits
+┊● 26ecc90 (upstream: origin/main) 2 new commits
 ├╯ 26ecc90 (common base) 2000-01-02 add upstream
 
-Hint: run `but help` for all commands
+Hint: origin/main moved ahead; run `but pull` to update the workspace
 
 "#]]);
 
@@ -98,9 +98,10 @@ fn pull_prunes_integrated_branch_from_partial_stack() -> anyhow::Result<()> {
 ┊●   rkq add C
 ├╯
 ┊
-┊● d4cb681 (upstream) ⏫ 2 commits
+┊● d4cb681 (upstream: origin/main) 2 new commits
 ├╯ 0dc3733 (common base) 2000-01-02 add M
 
+Hint: origin/main moved ahead; run `but pull` to update the workspace
 Hint: branches marked `(merged upstream)` have landed; run `but pull` to remove them, or start new work on another branch
 
 "#]]);
@@ -182,9 +183,10 @@ fn pull_check_uses_workspace_dry_run_for_partial_stack() -> anyhow::Result<()> {
 ┊●   rkq add C
 ├╯
 ┊
-┊● d4cb681 (upstream) ⏫ 2 commits
+┊● d4cb681 (upstream: origin/main) 2 new commits
 ├╯ 0dc3733 (common base) 2000-01-02 add M
 
+Hint: origin/main moved ahead; run `but pull` to update the workspace
 Hint: branches marked `(merged upstream)` have landed; run `but pull` to remove them, or start new work on another branch
 
 "#]]);
@@ -228,9 +230,10 @@ Run `but pull` to update your branches
 ┊●   rkq add C
 ├╯
 ┊
-┊● d4cb681 (upstream) ⏫ 2 commits (checked [..])
+┊● d4cb681 (upstream: origin/main) 2 new commits (checked 0 seconds ago)
 ├╯ 0dc3733 (common base) 2000-01-02 add M
 
+Hint: origin/main moved ahead; run `but pull` to update the workspace
 Hint: branches marked `(merged upstream)` have landed; run `but pull` to remove them, or start new work on another branch
 
 "#]]);
@@ -251,10 +254,10 @@ fn pull_check_reports_conflicted_branches_as_rebasable() -> anyhow::Result<()> {
 ┊●   nyo A-change
 ├╯
 ┊
-┊● bdfcf28 (upstream) ⏫ 1 commit
+┊● bdfcf28 (upstream: origin/main) 1 new commit
 ├╯ efc9211 (common base) 2000-01-02 base
 
-Hint: run `but help` for all commands
+Hint: origin/main moved ahead; run `but pull` to update the workspace
 
 "#]]);
 
@@ -313,10 +316,10 @@ fn pull_reparents_workspace_to_target_after_all_stacks_integrate() -> anyhow::Re
 ┊╭┄h0 [B] (no commits)
 ├╯
 ┊
-┊● 7e5d4e1 (upstream) ⏫ 3 commits
+┊● 7e5d4e1 (upstream: origin/main) 3 new commits
 ├╯ 7e5d4e1 (common base) 2000-01-02 add upstream
 
-Hint: run `but help` for all commands
+Hint: origin/main moved ahead; run `but pull` to update the workspace
 
 "#]]);
 
@@ -403,9 +406,10 @@ fn pull_does_not_report_branch_rebase_conflicts_as_worktree_conflicts() -> anyho
 ┊●   vun local change
 ├╯
 ┊
-┊● 7f73771 (upstream) ⏫ 1 commit
+┊● 7f73771 (upstream: origin/main) 1 new commit
 ├╯ 7f73771 (common base) 2000-01-02 upstream change
 
+Hint: origin/main moved ahead; run `but pull` to update the workspace
 Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
 
 "#]]);
@@ -462,10 +466,10 @@ fn pull_json_reports_branch_rebase_conflicts_as_successful_integration() -> anyh
 ┊●   vun local change
 ├╯
 ┊
-┊● 7f73771 (upstream) ⏫ 1 commit
+┊● 7f73771 (upstream: origin/main) 1 new commit
 ├╯ 7f73771 (common base) 2000-01-02 upstream change
 
-Hint: run `but help` for all commands
+Hint: origin/main moved ahead; run `but pull` to update the workspace
 
 "#]]);
 
@@ -529,10 +533,10 @@ fn pull_reports_conflict_in_lower_branch_of_stack() -> anyhow::Result<()> {
 ┊●   [..] bottom change
 ├╯
 ┊
-┊● 7f73771 (upstream) ⏫ 1 commit
+┊● 7f73771 (upstream: origin/main) 1 new commit
 ├╯ 7f73771 (common base) 2000-01-02 upstream change
 
-Hint: run `but help` for all commands
+Hint: origin/main moved ahead; run `but pull` to update the workspace
 
 "#]]);
 
@@ -549,12 +553,12 @@ Summary
 ────────
   A - rebased
   B - conflicted
+      rou [conflict] bottom change
 
 To resolve conflicts:
-  1. Run `but status` to see conflicted commits
-  2. Run `but resolve <commit>` to enter resolution mode on any conflicted commit
-  3. Edit files to resolve the conflicts
-  4. Run `but resolve finish` to finalize the resolution
+  1. Run `but resolve <commit>` on a conflicted commit listed above — oldest first (they are listed bottom-up)
+  2. Edit files to resolve the conflicts
+  3. Run `but resolve finish` to finalize the resolution
 
 To undo this operation:
   Run `but undo`
@@ -597,10 +601,10 @@ fn pull_reports_conflicts_in_multiple_branches_of_stack() -> anyhow::Result<()> 
 ┊●   [..] bottom change
 ├╯
 ┊
-┊● [..] (upstream) ⏫ 1 commit
+┊● e4933d8 (upstream: origin/main) 1 new commit
 ├╯ [..] (common base) 2000-01-02 upstream change
 
-Hint: run `but help` for all commands
+Hint: origin/main moved ahead; run `but pull` to update the workspace
 
 "#]]);
 
@@ -616,13 +620,15 @@ Rebase resulted in some conflicts
 Summary
 ────────
   A - conflicted
+      trk [conflict] bottom change
+      wmr [conflict] top change
   B - conflicted
+      trk [conflict] bottom change
 
 To resolve conflicts:
-  1. Run `but status` to see conflicted commits
-  2. Run `but resolve <commit>` to enter resolution mode on any conflicted commit
-  3. Edit files to resolve the conflicts
-  4. Run `but resolve finish` to finalize the resolution
+  1. Run `but resolve <commit>` on a conflicted commit listed above — oldest first (they are listed bottom-up)
+  2. Edit files to resolve the conflicts
+  3. Run `but resolve finish` to finalize the resolution
 
 To undo this operation:
   Run `but undo`
@@ -686,14 +692,17 @@ fn pull_reports_worktree_conflict_paths() -> anyhow::Result<()> {
     // to `shared.txt` on the resulting workspace head.
     env.file("shared.txt", "dirty local\nmore local work\n");
 
-    env.but("pull").assert().success().stdout_eq(str![[r#"
+    env.but("pull").assert().failure().stdout_eq(str![[r#"
 
 Found 1 upstream commits on origin/main
    [..] upstream change
 
 There are uncommitted changes in the worktree that conflict with the updates:
   shared.txt
-Please commit or stash them and try again.
+To update anyway, park them on a temporary commit first:
+  1. Run `but commit <branch> --changes <file-id...> -m "wip"` with the files listed above (`but diff` shows their IDs)
+  2. Run `but pull` again; the parked commit may come back conflicted, ready for `but resolve`
+  3. Run `but uncommit <commit>` afterwards to make those changes uncommitted again
 
 "#]]);
 

@@ -2,6 +2,7 @@ mod json;
 
 use std::fmt::Write;
 
+use anyhow::bail;
 use bstr::ByteSlice;
 use but_core::{DryRun, RepositoryExt};
 use but_ctx::Context;
@@ -52,6 +53,15 @@ struct ConflictInfo {
     branch: String,
     files: Vec<String>,
     upstream_commit: Option<String>,
+    #[serde(default)]
+    commits: Vec<ConflictedCommitInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ConflictedCommitInfo {
+    id: String,
+    message: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -64,7 +74,7 @@ struct PullSummary {
 }
 
 pub async fn handle(
-    ctx: &Context,
+    ctx: &mut Context,
     out: &mut OutputChannel,
     check_only: bool,
 ) -> anyhow::Result<()> {
@@ -220,7 +230,7 @@ async fn handle_check(ctx: &Context, out: &mut OutputChannel) -> anyhow::Result<
     Ok(())
 }
 
-async fn handle_pull(ctx: &Context, out: &mut OutputChannel) -> anyhow::Result<()> {
+async fn handle_pull(ctx: &mut Context, out: &mut OutputChannel) -> anyhow::Result<()> {
     let t = theme::get();
     let mut pull_result = PullResult {
         status: String::new(),
@@ -364,14 +374,32 @@ async fn handle_pull(ctx: &Context, out: &mut OutputChannel) -> anyhow::Result<(
             writeln!(
                 out,
                 "{}",
-                t.attention
-                    .paint("Please commit or stash them and try again.")
+                t.important
+                    .paint("To update anyway, park them on a temporary commit first:")
+            )?;
+            writeln!(
+                out,
+                "  1. Run {} with the files listed above ({} shows their IDs)",
+                t.command_suggestion
+                    .paint("`but commit <branch> --changes <file-id...> -m \"wip\"`"),
+                t.command_suggestion.paint("`but diff`")
+            )?;
+            writeln!(
+                out,
+                "  2. Run {} again; the parked commit may come back conflicted, ready for {}",
+                t.command_suggestion.paint("`but pull`"),
+                t.command_suggestion.paint("`but resolve`")
+            )?;
+            writeln!(
+                out,
+                "  3. Run {} afterwards to make those changes uncommitted again",
+                t.command_suggestion.paint("`but uncommit <commit>`")
             )?;
         }
         if let Some(out) = out.for_json() {
             out.write_value(&pull_result)?;
         }
-        None
+        bail!("nothing was updated; uncommitted changes conflict with the incoming updates");
     } else {
         pull_result.status = "updating".to_string();
 
@@ -468,12 +496,50 @@ async fn handle_pull(ctx: &Context, out: &mut OutputChannel) -> anyhow::Result<(
                 // Set undo command
                 pull_result.undo_command = Some("but undo".to_string());
 
+                // The integration ran on its own thread-local context, so this
+                // context's cached repository and workspace still predate the
+                // rebase. Reload before rendering, or the conflicted commits
+                // fall back to sha refs that don't match what status shows.
+                if has_conflicts {
+                    let mut guard = ctx.exclusive_worktree_access();
+                    if let Err(err) =
+                        ctx.reload_repo_and_invalidate_workspace(guard.write_permission())
+                    {
+                        tracing::warn!(?err, "could not reload the workspace after integration");
+                    }
+                }
+
+                // Look up the conflicted commits so the output can name them
+                // directly instead of sending callers through `but status`.
+                let conflicted_commits = if has_conflicts {
+                    crate::command::legacy::resolve::find_conflicted_commits(ctx).unwrap_or_else(
+                        |err| {
+                            tracing::warn!(?err, "could not look up conflicted commits");
+                            Default::default()
+                        },
+                    )
+                } else {
+                    Default::default()
+                };
+
                 // Populate conflicts info
                 for branch_name in &conflicted_rebases {
                     pull_result.conflicts.push(ConflictInfo {
                         branch: branch_name.clone(),
                         files: vec![], // TODO: Get actual conflicted files
                         upstream_commit: None,
+                        commits: conflicted_commits
+                            .get(branch_name)
+                            .map(|commits| {
+                                commits
+                                    .iter()
+                                    .map(|commit| ConflictedCommitInfo {
+                                        id: commit.commit_short_id.clone(),
+                                        message: commit.commit_message.clone(),
+                                    })
+                                    .collect()
+                            })
+                            .unwrap_or_default(),
                     });
                 }
 
@@ -534,6 +600,14 @@ async fn handle_pull(ctx: &Context, out: &mut OutputChannel) -> anyhow::Result<(
                             t.local_branch.paint(branch),
                             t.error.paint("conflicted")
                         )?;
+                        for commit in conflicted_commits.get(branch).into_iter().flatten() {
+                            writeln!(
+                                out,
+                                "      {} {}",
+                                t.change_id.paint(&commit.commit_short_id),
+                                t.hint.paint(&commit.commit_message)
+                            )?;
+                        }
                     }
 
                     // Conflict resolution instructions
@@ -542,18 +616,13 @@ async fn handle_pull(ctx: &Context, out: &mut OutputChannel) -> anyhow::Result<(
                         writeln!(out, "{}", t.important.paint("To resolve conflicts:"))?;
                         writeln!(
                             out,
-                            "  1. Run {} to see conflicted commits",
-                            t.command_suggestion.paint("`but status`")
-                        )?;
-                        writeln!(
-                            out,
-                            "  2. Run {} to enter resolution mode on any conflicted commit",
+                            "  1. Run {} on a conflicted commit listed above — oldest first (they are listed bottom-up)",
                             t.command_suggestion.paint("`but resolve <commit>`")
                         )?;
-                        writeln!(out, "  3. Edit files to resolve the conflicts")?;
+                        writeln!(out, "  2. Edit files to resolve the conflicts")?;
                         writeln!(
                             out,
-                            "  4. Run {} to finalize the resolution",
+                            "  3. Run {} to finalize the resolution",
                             t.command_suggestion.paint("`but resolve finish`")
                         )?;
                     }

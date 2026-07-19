@@ -579,12 +579,12 @@ fn status_upstream_and_merge_base_messages_truncate_when_unpaged() {
 ┊●   lvx add A
 ├╯
 ┊
-┊╭┄(upstream) ⏫ 1 commit
+┊╭┄(upstream: origin/main) 1 new commit
 ┊● 67247ca add upstream-commit-message-that-is-intentionally-very-very-long-to-exc…
 ┊┊
 ├╯ 9fd740d (common base) 2000-01-02 add merge-base-message-that-is-intentio…
 
-Hint: run `but help` for all commands
+Hint: origin/main moved ahead; run `but pull` to update the workspace
 
 "#]]);
 }
@@ -628,9 +628,10 @@ fn status_marks_merged_upstream_without_upstream_flag() {
 ┊●   kyl B-change
 ├╯
 ┊
-┊● 9354ac4 (upstream) ⏫ 2 commits
+┊● 9354ac4 (upstream: origin/main) 2 new commits
 ├╯ efc9211 (common base) 2000-01-02 base
 
+Hint: origin/main moved ahead; run `but pull` to update the workspace
 Hint: branches marked `(merged upstream)` have landed; run `but pull` to remove them, or start new work on another branch
 
 "#]]);
@@ -662,9 +663,10 @@ Applied remote branch 'origin/document-but-pr-skill' to workspace
 ┊╭┄do [document-but-pr-skill] (merged upstream) (no commits)
 ├╯
 ┊
-┊● 55165db (upstream) ⏫ 1 commit
+┊● 55165db (upstream: origin/main) 1 new commit
 ├╯ 55165db (common base) 2000-01-02 merge document-but-pr-skill
 
+Hint: origin/main moved ahead; run `but pull` to update the workspace
 Hint: branches marked `(merged upstream)` have landed; run `but pull` to remove them, or start new work on another branch
 
 "#]]);
@@ -745,9 +747,10 @@ fn unmerged_empty_branch_above_merged_one_is_not_treated_as_merged() {
 ┊├┄bo [bottom] (merged upstream) (no commits)
 ├╯
 ┊
-┊● 334227d (upstream) ⏫ 1 commit
+┊● 334227d (upstream: origin/main) 1 new commit
 ├╯ 334227d (common base) 2000-01-02 merge bottom
 
+Hint: origin/main moved ahead; run `but pull` to update the workspace
 Hint: branches marked `(merged upstream)` have landed; run `but pull` to remove them, or start new work on another branch
 
 "#]]);
@@ -908,12 +911,13 @@ fn status_upstream_prunes_untracked_integrated_branch() {
 ┊●   kyl B-change
 ├╯
 ┊
-┊╭┄(upstream) ⏫ 2 commits
+┊╭┄(upstream: origin/main) 2 new commits
 ┊● 9354ac4 main-advance
 ┊● 756ee31 A-change
 ┊┊
 ├╯ efc9211 (common base) 2000-01-02 base
 
+Hint: origin/main moved ahead; run `but pull` to update the workspace
 Hint: branches marked `(merged upstream)` have landed; run `but pull` to remove them, or start new work on another branch
 
 "#]]);
@@ -953,12 +957,13 @@ fn status_upstream_prunes_metadata_tracked_integrated_branches() {
 ┊╭┄ex [extra-untracked] ○ empty (no commits)
 ├╯
 ┊
-┊╭┄(upstream) ⏫ 2 commits
+┊╭┄(upstream: origin/main) 2 new commits
 ┊● 9354ac4 main-advance
 ┊● 756ee31 A-change
 ┊┊
 ├╯ efc9211 (common base) 2000-01-02 base
 
+Hint: origin/main moved ahead; run `but pull` to update the workspace
 Hint: branches marked `(merged upstream)` have landed; run `but pull` to remove them, or start new work on another branch
 
 "#]]);
@@ -1004,12 +1009,13 @@ fn status_upstream_prunes_with_different_bases() {
 ┊●   tpp M1
 ├╯
 ┊
-┊╭┄(upstream) ⏫ 2 commits
+┊╭┄(upstream: origin/main) 2 new commits
 ┊● ba5149e M2
 ┊● 6daac93 M1
 ┊┊
 ├╯ efc9211 (common base) 2000-01-02 base
 
+Hint: origin/main moved ahead; run `but pull` to update the workspace
 Hint: branches marked `(merged upstream)` have landed; run `but pull` to remove them, or start new work on another branch
 
 "#]]);
@@ -1173,7 +1179,6 @@ This notice repeats until the skill is installed. If it still appears after inst
 
 Hint: ◐ means rewritten locally vs upstream.
 Hint: the first token on each line is the ID to use in commands.
-Hint: run `but help` for all commands
 
 "#]]);
 
@@ -1192,7 +1197,6 @@ Hint: run `but help` for all commands
 
 Hint: ◐ means rewritten locally vs upstream.
 Hint: the first token on each line is the ID to use in commands.
-Hint: run `but help` for all commands
 
 "#]]);
 }

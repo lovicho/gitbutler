@@ -102,13 +102,21 @@ but <mutation> ...
 
 For "get latest from main", "update/sync this workspace", or "pull main":
 
-1. `but status -fv`
-2. `but pull --check`
-3. If clean, `but pull`
-4. `but status -fv`
+1. `but pull --check`
+2. If clean, `but pull`
+3. If commits come back conflicted, resolve each one oldest-first (the pull output lists them in that order): `but resolve <commit>`, edit the files, then `but resolve finish`. Finishing a lower commit rebases the ones above it, so always work bottom-up.
 
 `but pull` updates applied branches onto the latest target branch (usually
-`main`). Do not use raw `git pull` or `git rebase`.
+`main`) and carries uncommitted changes along. Rebasing a branch onto the
+latest `main` IS `but pull` — it is never `move`, `config target`, `unapply`,
+or raw `git pull`/`git rebase`. The pull output already reports the resulting
+state.
+
+If `but pull` refuses because uncommitted changes conflict with the update,
+park them on a temporary commit (there is no stash, and hand-reverting files
+risks losing work): `but commit <branch> --changes <file-id...> -m "wip"`,
+pull again — the parked commit may come back conflicted for `but resolve` —
+then `but uncommit` it so the changes end up uncommitted again.
 
 ### Commit selected files or hunks
 

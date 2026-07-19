@@ -246,20 +246,23 @@ fn show_conflicted_files(ctx: &mut Context, out: &mut OutputChannel) -> Result<b
     let mut still_conflicted = Vec::new();
     let mut resolved = Vec::new();
 
+    // Contents are only needed to print conflict regions in human output;
+    // JSON output keeps just the paths.
+    let keep_content = !out.is_json();
     for (change, _) in &initially_conflicted {
         let file_path = repo_path.join(change.path.to_str_lossy().as_ref());
         if file_path.exists() {
             match std::fs::read_to_string(&file_path) {
                 Ok(content) => {
                     if has_conflict_markers(&content) {
-                        still_conflicted.push(change);
+                        still_conflicted.push((change, keep_content.then_some(content)));
                     } else {
                         resolved.push(change);
                     }
                 }
                 Err(_) => {
                     // If we can't read the file, consider it still conflicted
-                    still_conflicted.push(change);
+                    still_conflicted.push((change, None));
                 }
             }
         } else {
@@ -284,13 +287,16 @@ fn show_conflicted_files(ctx: &mut Context, out: &mut OutputChannel) -> Result<b
                 "{}:",
                 t.attention.paint("Conflicted files remaining")
             )?;
-            for change in &still_conflicted {
+            for (change, content) in &still_conflicted {
                 writeln!(
                     human_out,
                     "  {} {}",
                     t.sym().error,
                     t.attention.paint(change.path.to_str_lossy())
                 )?;
+                if let Some(content) = content {
+                    write_conflict_regions(human_out, content)?;
+                }
             }
         }
         if !resolved.is_empty() {
@@ -312,7 +318,7 @@ fn show_conflicted_files(ctx: &mut Context, out: &mut OutputChannel) -> Result<b
     if let Some(out) = out.for_json() {
         let conflicted_list: Vec<String> = still_conflicted
             .iter()
-            .map(|change| change.path.to_str_lossy().to_string())
+            .map(|(change, _)| change.path.to_str_lossy().to_string())
             .collect();
         let resolved_list: Vec<String> = resolved
             .iter()
@@ -336,6 +342,59 @@ fn has_conflict_markers(content: &str) -> bool {
     content.lines().any(|line| line.starts_with("<<<<<<<"))
 }
 
+/// Print the conflict-marker regions of a conflicted file with line numbers,
+/// so resolving does not require a separate read of the file. Large conflicts
+/// are summarized as line ranges instead of quoted in full.
+fn write_conflict_regions<W: std::fmt::Write + ?Sized>(
+    out: &mut W,
+    content: &str,
+) -> std::fmt::Result {
+    const MAX_QUOTED_LINES: usize = 60;
+    let t = theme::get();
+    let lines: Vec<&str> = content.lines().collect();
+
+    let mut regions: Vec<(usize, usize)> = Vec::new();
+    let mut start = None;
+    for (index, line) in lines.iter().enumerate() {
+        if line.starts_with("<<<<<<<") && start.is_none() {
+            start = Some(index);
+        } else if line.starts_with(">>>>>>>")
+            && let Some(from) = start.take()
+        {
+            regions.push((from, index));
+        }
+    }
+    // A start marker whose closing marker was lost (e.g. to a partial manual
+    // edit) still deserves line numbers; treat it as running to end of file.
+    if let Some(from) = start {
+        regions.push((from, lines.len().saturating_sub(1)));
+    }
+
+    let quoted_lines: usize = regions.iter().map(|(from, to)| to - from + 1).sum();
+    if quoted_lines > MAX_QUOTED_LINES {
+        let ranges = regions
+            .iter()
+            .map(|(from, to)| format!("{}-{}", from + 1, to + 1))
+            .collect::<Vec<_>>()
+            .join(", ");
+        writeln!(
+            out,
+            "      {}",
+            t.hint.paint(format!("conflicts at lines {ranges}"))
+        )?;
+        return Ok(());
+    }
+
+    for (from, to) in regions {
+        for (index, line) in lines.iter().enumerate().take(to + 1).skip(from) {
+            // The file content comes from the repository and is untrusted;
+            // strip control characters so it cannot inject terminal escapes.
+            writeln!(out, "    {:>4}│{}", index + 1, sanitize_terminal_text(line))?;
+        }
+    }
+    Ok(())
+}
+
 fn finish_resolution(ctx: &mut Context, out: &mut OutputChannel) -> Result<()> {
     let t = theme::get();
     // Check if we're in edit mode
@@ -347,6 +406,12 @@ fn finish_resolution(ctx: &mut Context, out: &mut OutputChannel) -> Result<()> {
 
     // Capture conflicted commits BEFORE the rebase
     let conflicts_before = find_conflicted_commits(ctx)?;
+
+    // Note files that still contain conflict markers, so the finish output can
+    // answer the "did I leave markers behind?" question without a re-scan.
+    // The scan may false-positive on legitimate content, so it warns rather
+    // than refusing to finalize.
+    let files_with_markers = files_with_conflict_markers(ctx)?;
 
     // Save and return to workspace, capturing the rebase output
     save_edit_and_return_to_workspace_with_output(ctx)
@@ -363,12 +428,76 @@ fn finish_resolution(ctx: &mut Context, out: &mut OutputChannel) -> Result<()> {
             human_out,
             "The commit has been updated with your resolved changes."
         )?;
+        if files_with_markers.is_empty() {
+            writeln!(
+                human_out,
+                "{}",
+                t.success
+                    .paint("No conflict markers remain in the resolved files.")
+            )?;
+        } else {
+            for path in &files_with_markers {
+                writeln!(
+                    human_out,
+                    "{} {} still contains conflict markers — resolve it again if that was not intentional",
+                    t.sym().error,
+                    t.attention.paint(sanitize_terminal_text(path))
+                )?;
+            }
+        }
+
+        let uncommitted = uncommitted_worktree_paths(ctx);
+        match uncommitted {
+            Ok(paths) if paths.is_empty() => {
+                writeln!(human_out, "Workspace restored; no uncommitted changes.")?;
+            }
+            Ok(paths) => {
+                writeln!(
+                    human_out,
+                    "Workspace restored; uncommitted changes intact: {}",
+                    paths.join(", ")
+                )?;
+            }
+            Err(_) => {}
+        }
     }
 
     // Check for new conflicts introduced during the rebase
     check_for_new_conflicts_after_rebase(ctx, out, conflicts_before)?;
 
     Ok(())
+}
+
+/// Paths of initially-conflicted files that still contain conflict markers in
+/// the edit-mode worktree.
+fn files_with_conflict_markers(ctx: &mut Context) -> Result<Vec<String>> {
+    let conflicted_files = edit_initial_index_state(ctx)?;
+    let repo = ctx.repo.get()?;
+    let repo_path = repo.workdir().context("No workdir")?;
+
+    Ok(conflicted_files
+        .iter()
+        .filter(|(_, conflict)| conflict.is_some())
+        .filter_map(|(change, _)| {
+            let path = change.path.to_str_lossy().to_string();
+            let content = std::fs::read_to_string(repo_path.join(&path)).ok()?;
+            has_conflict_markers(&content).then_some(path)
+        })
+        .collect())
+}
+
+/// Paths with uncommitted worktree changes, for the finish summary. Sorted
+/// for stable output, sanitized because paths come from the repository.
+fn uncommitted_worktree_paths(ctx: &mut Context) -> Result<Vec<String>> {
+    let repo = ctx.repo.get()?;
+    let changes = but_core::diff::worktree_changes(&repo)?;
+    let mut paths: Vec<String> = changes
+        .changes
+        .iter()
+        .map(|change| sanitize_terminal_text(&change.path.to_str_lossy()))
+        .collect();
+    paths.sort();
+    Ok(paths)
 }
 
 fn cancel_resolution(ctx: &mut Context, out: &mut OutputChannel, force: bool) -> Result<()> {
@@ -549,7 +678,7 @@ fn resolve_one_with_ai(
         )?;
         if let Some(summary) = &result.summary {
             writeln!(human_out)?;
-            writeln!(human_out, "{}", sanitize_model_text(summary))?;
+            writeln!(human_out, "{}", sanitize_terminal_text(summary))?;
         }
         writeln!(human_out)?;
         for file in &result.files {
@@ -562,7 +691,7 @@ fn resolve_one_with_ai(
             writeln!(
                 human_out,
                 "    {}",
-                t.hint.paint(sanitize_model_text(&file.reasoning))
+                t.hint.paint(sanitize_terminal_text(&file.reasoning))
             )?;
         }
         writeln!(human_out)?;
@@ -573,7 +702,10 @@ fn resolve_one_with_ai(
 
 /// Strip control characters (including ANSI escape sequences) from
 /// model-authored text before printing it to the terminal.
-fn sanitize_model_text(text: &str) -> String {
+/// Strip control characters (keeping newlines and tabs) from text that will
+/// be written to the terminal but originates outside this program - model
+/// output or repository file content.
+fn sanitize_terminal_text(text: &str) -> String {
     text.chars()
         .filter(|c| !c.is_control() || matches!(c, '\n' | '\t'))
         .collect()
@@ -581,10 +713,10 @@ fn sanitize_model_text(text: &str) -> String {
 
 /// Structure to hold information about a conflicted commit
 #[derive(Debug)]
-struct ConflictedCommit {
-    commit_oid: gix::ObjectId,
-    commit_short_id: String,
-    commit_message: String,
+pub(crate) struct ConflictedCommit {
+    pub(crate) commit_oid: gix::ObjectId,
+    pub(crate) commit_short_id: String,
+    pub(crate) commit_message: String,
 }
 
 /// Check for new conflicts introduced during rebase and report them
@@ -667,7 +799,9 @@ fn check_for_new_conflicts_after_rebase(
 }
 
 /// Find all conflicted commits across all stacks, grouped by branch
-fn find_conflicted_commits(ctx: &mut Context) -> Result<BTreeMap<String, Vec<ConflictedCommit>>> {
+pub(crate) fn find_conflicted_commits(
+    ctx: &mut Context,
+) -> Result<BTreeMap<String, Vec<ConflictedCommit>>> {
     use gix::{prelude::ObjectIdExt as _, revision::walk::Sorting};
 
     let stacks = crate::legacy::workspace::applied_stacks(ctx)?;
@@ -701,15 +835,19 @@ fn find_conflicted_commits(ctx: &mut Context) -> Result<BTreeMap<String, Vec<Con
                 let commit = repo.find_commit(oid)?;
 
                 if commit.is_conflicted() {
-                    let message = commit
-                        .message_bstr()
-                        .to_string()
-                        .lines()
-                        .next()
-                        .context("Commit has no message")?
-                        .chars()
-                        .take(50)
-                        .collect::<String>();
+                    // Commit messages can come from untrusted upstreams and
+                    // end up on the terminal (pull summary, resolve listing).
+                    let message = sanitize_terminal_text(
+                        &commit
+                            .message_bstr()
+                            .to_string()
+                            .lines()
+                            .next()
+                            .context("Commit has no message")?
+                            .chars()
+                            .take(50)
+                            .collect::<String>(),
+                    );
 
                     let conflicted = ConflictedCommit {
                         commit_oid: oid,
@@ -975,4 +1113,53 @@ fn show_workflow_help(out: &mut OutputChannel) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::write_conflict_regions;
+
+    fn render(content: &str) -> String {
+        let mut out = String::new();
+        write_conflict_regions(&mut out, content).unwrap();
+        out
+    }
+
+    #[test]
+    fn prints_terminated_regions_with_line_numbers() {
+        let out = render("context\n<<<<<<< ours\nx\n=======\ny\n>>>>>>> theirs\ntrailer\n");
+        assert!(out.contains("2│<<<<<<< ours"));
+        assert!(out.contains("6│>>>>>>> theirs"));
+        assert!(
+            !out.contains("context"),
+            "lines outside the region stay out"
+        );
+    }
+
+    #[test]
+    fn unterminated_region_runs_to_end_of_file() {
+        let out = render("<<<<<<< ours\nx\nlast line\n");
+        assert!(out.contains("1│<<<<<<< ours"));
+        assert!(out.contains("3│last line"));
+    }
+
+    #[test]
+    fn strips_control_characters_from_conflict_lines() {
+        let out = render("<<<<<<< ours\n\u{1b}[31mred\u{7}\n>>>>>>> theirs\n");
+        assert!(!out.contains('\u{1b}'));
+        assert!(!out.contains('\u{7}'));
+        assert!(out.contains("[31mred"));
+    }
+
+    #[test]
+    fn oversized_conflicts_summarize_as_line_ranges() {
+        let mut content = String::from("<<<<<<< ours\n");
+        for index in 0..70 {
+            content.push_str(&format!("line {index}\n"));
+        }
+        content.push_str(">>>>>>> theirs\n");
+        let out = render(&content);
+        assert!(out.contains("conflicts at lines 1-72"));
+        assert!(!out.contains("line 3"));
+    }
 }
