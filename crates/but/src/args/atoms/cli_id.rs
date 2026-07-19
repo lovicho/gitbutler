@@ -72,7 +72,11 @@ impl CliIdArg {
         };
         Ok(Some(match id {
             CliId::Branch { name, .. } => ResolvedCliIdArg::Branch(BranchArg(name)),
-            CliId::Commit { commit_id, .. } => ResolvedCliIdArg::Commit(commit_id),
+            CliId::Commit {
+                commit_id,
+                change_id,
+                ..
+            } => ResolvedCliIdArg::Commit(commit_id, change_id),
             CliId::UncommittedHunkOrFile(uncommitted) => {
                 ResolvedCliIdArg::UncommittedHunkOrFile(Box::new(uncommitted))
             }
@@ -372,7 +376,7 @@ impl std::fmt::Display for Purpose {
 #[derive(Debug, Clone)]
 #[expect(missing_docs)]
 pub enum ResolvedCliIdArg {
-    Commit(gix::ObjectId),
+    Commit(gix::ObjectId, Option<but_core::ChangeId>),
     Branch(BranchArg),
     UncommittedHunkOrFile(Box<UncommittedHunkOrFile>),
     CommittedFile {
@@ -391,7 +395,9 @@ impl ResolvedCliIdArg {
     /// Convert this into either a branch or a commit.
     pub fn into_branch_or_commit(self) -> CliResult<BranchOrCommit> {
         let kind = match self {
-            ResolvedCliIdArg::Commit(commit) => return Ok(BranchOrCommit::Commit(commit)),
+            ResolvedCliIdArg::Commit(commit, _change_id) => {
+                return Ok(BranchOrCommit::Commit(commit));
+            }
             ResolvedCliIdArg::Branch(branch) => return Ok(BranchOrCommit::Branch(branch)),
             ResolvedCliIdArg::UncommittedHunkOrFile(..) => "an uncommitted change",
             ResolvedCliIdArg::CommittedFile { .. } => "a committed file",
@@ -406,7 +412,7 @@ impl ResolvedCliIdArg {
 impl std::fmt::Display for ResolvedCliIdArg {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ResolvedCliIdArg::Commit(inner) => inner.to_hex_with_len(7).fmt(f),
+            ResolvedCliIdArg::Commit(commit, _change_id) => commit.to_hex_with_len(7).fmt(f),
             ResolvedCliIdArg::Branch(inner) => inner.fmt(f),
             ResolvedCliIdArg::UncommittedHunkOrFile(..) => f.write_str("uncommitted file or hunk"),
             ResolvedCliIdArg::PathPrefix => f.write_str("path"),

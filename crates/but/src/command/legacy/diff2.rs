@@ -49,9 +49,10 @@ impl CliOutputHuman for DiffOutcome<'_> {
             DiffOperation::Uncommitted => {
                 diff_rendering::render_uncommitted(ctx, theme, &mut id_gen, options, &mut writer)?;
             }
-            DiffOperation::Commit { commit } => {
+            DiffOperation::Commit { commit, change_id } => {
                 diff_rendering::render_commit(
                     commit,
+                    change_id,
                     ctx,
                     theme,
                     &mut id_gen,
@@ -201,7 +202,9 @@ fn resolve(ctx: &Context, id_map: &IdMap, args: Platform) -> CliResult<DiffOpera
 
     match resolved_target {
         ResolvedCliIdArg::Uncommitted => Ok(DiffOperation::Uncommitted),
-        ResolvedCliIdArg::Commit(commit) => Ok(DiffOperation::Commit { commit }),
+        ResolvedCliIdArg::Commit(commit, change_id) => {
+            Ok(DiffOperation::Commit { commit, change_id })
+        }
         ResolvedCliIdArg::Branch(branch) => {
             let branch = branch.resolve_local_branch_name()?;
             Ok(DiffOperation::Branch { branch })
@@ -237,6 +240,7 @@ enum DiffOperation {
     Uncommitted,
     Commit {
         commit: ObjectId,
+        change_id: Option<but_core::ChangeId>,
     },
     Branch {
         branch: FullName,

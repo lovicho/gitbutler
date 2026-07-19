@@ -598,7 +598,9 @@ fn resolve_sources(
         args.push(unresolved_source.clone());
 
         match unresolved_source.resolve_in_workspace(repo, id_map, Purpose::Source, None)? {
-            ResolvedCliIdArg::Commit(source_commit_id) => commit_sources.push(source_commit_id),
+            ResolvedCliIdArg::Commit(source_commit_id, _change_id) => {
+                commit_sources.push(source_commit_id)
+            }
             ResolvedCliIdArg::CommittedFile {
                 commit_id,
                 path,

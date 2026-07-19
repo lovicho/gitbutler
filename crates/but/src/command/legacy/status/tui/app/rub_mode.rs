@@ -13,8 +13,8 @@ use crate::{
             FilesStatusFlag,
             output::StatusOutputLineData,
             tui::{
-                App, Message, NOOP, ReloadCause, SelectAfterReload,
-                app::mark::{MarkedCommit, Marks, MarksRef},
+                App, DetailsLayoutMessage, Message, NOOP, ReloadCause, SelectAfterReload,
+                app::mark::{MarkedCommit, Marks, MarksRef, hunk_is_child_of},
                 cursor,
                 mode::Mode,
                 nonempty_from_refs, operations,
@@ -49,7 +49,15 @@ impl RubSource {
     pub fn contains(&self, other: &CliId) -> bool {
         match self {
             RubSource::Marks(marks) => marks.contains_cli_id(other),
-            RubSource::CliId(source) => &**source == other,
+            RubSource::CliId(source) => {
+                if let CliId::UncommittedHunkOrFile(source) = &**source
+                    && let CliId::UncommittedHunkOrFile(other) = other
+                {
+                    source == other || hunk_is_child_of(other, source)
+                } else {
+                    &**source == other
+                }
+            }
         }
     }
 }
@@ -63,7 +71,8 @@ impl RubMarks {
     }
 
     fn contains_cli_id(&self, other: &CliId) -> bool {
-        self.as_ref().contains_cli_id(other)
+        let marks = self.as_ref();
+        marks.contains_cli_id(other) || marks.contains_child_of(other)
     }
 
     fn to_cli_ids(&self) -> Vec<CliId> {
@@ -109,6 +118,7 @@ impl ModeRender for RubMode {
         let display = match &self.source {
             RubSource::CliId(source) => Cow::Borrowed(
                 rub_operation_display(NonEmpty::new(source), target, self.how_to_combine_messages)
+                    .or_else(|| self.source.contains(target).then_some(NOOP))
                     .unwrap_or("invalid"),
             ),
             RubSource::Marks(marks) => {
@@ -158,6 +168,7 @@ impl ModeRender for RubMode {
 #[derive(Debug)]
 pub enum RubMessage {
     Start,
+    StartWithSource(Arc<CliId>),
     StartReverse,
     UseTargetMessage,
     UseSourceMessage,
@@ -172,7 +183,10 @@ impl App {
         messages: &mut Vec<Message>,
     ) -> anyhow::Result<()> {
         match rub_message {
-            RubMessage::Start => self.handle_rub_start(),
+            RubMessage::Start => self.handle_rub_start(messages),
+            RubMessage::StartWithSource(source) => {
+                self.handle_rub_start_with_source(RubSource::CliId(source));
+            }
             RubMessage::StartReverse => {
                 self.handle_rub_start_reverse(ctx)?;
             }
@@ -188,29 +202,54 @@ impl App {
         Ok(())
     }
 
-    fn handle_rub_start(&mut self) {
-        let Mode::Normal(normal_mode) = &*self.mode else {
-            return;
-        };
-        let Some(selected_line) = self.cursor.selected_line(&self.status_lines) else {
-            return;
-        };
-        let Some(cli_id) = selected_line.data.cli_id() else {
-            return;
-        };
-        match &normal_mode.marks {
-            Marks::Empty => {
-                self.handle_rub_start_with_source(RubSource::CliId(Arc::clone(cli_id)));
+    fn handle_rub_start(&mut self, messages: &mut Vec<Message>) {
+        match &*self.mode {
+            Mode::Normal(normal_mode) => {
+                let Some(selected_line) = self.cursor.selected_line(&self.status_lines) else {
+                    return;
+                };
+                let Some(cli_id) = selected_line.data.cli_id() else {
+                    return;
+                };
+                match &normal_mode.marks {
+                    Marks::Empty => {
+                        self.handle_rub_start_with_source(RubSource::CliId(Arc::clone(cli_id)));
+                    }
+                    Marks::Hunks(hunks) => {
+                        self.handle_rub_start_with_source(RubSource::Marks(RubMarks::Hunks(
+                            hunks.clone(),
+                        )));
+                    }
+                    Marks::Commits(commits) => {
+                        self.handle_rub_start_with_source(RubSource::Marks(RubMarks::Commits(
+                            commits.clone(),
+                        )));
+                    }
+                    Marks::CommittedFiles(..) => {}
+                }
             }
-            Marks::Hunks(hunks) => {
-                self.handle_rub_start_with_source(RubSource::Marks(RubMarks::Hunks(hunks.clone())));
-            }
-            Marks::Commits(commits) => {
-                self.handle_rub_start_with_source(RubSource::Marks(RubMarks::Commits(
-                    commits.clone(),
-                )));
-            }
-            Marks::CommittedFiles(..) => {}
+            Mode::Details(details_mode) => match details_mode.return_mode.marks() {
+                MarksRef::Empty => {
+                    let Some(selection) = self.details.selected_section_cli_id() else {
+                        return;
+                    };
+                    if details_mode.full_screen {
+                        messages.push(Message::DetailsLayout(DetailsLayoutMessage::SwitchToSplit));
+                    }
+                    messages.extend([
+                        Message::UnfocusDetails,
+                        Message::Rub(RubMessage::StartWithSource(Arc::clone(selection))),
+                    ]);
+                }
+                MarksRef::Hunks { .. } => {
+                    if details_mode.full_screen {
+                        messages.push(Message::DetailsLayout(DetailsLayoutMessage::SwitchToSplit));
+                    }
+                    messages.extend([Message::UnfocusDetails, Message::Rub(RubMessage::Start)]);
+                }
+                MarksRef::Commits { .. } | MarksRef::CommittedFiles { .. } => {}
+            },
+            _ => {}
         }
     }
 
@@ -352,7 +391,7 @@ impl App {
             ..
         }) = self
             .mode
-            .get_mut_without_updating_backstack_and_i_promise_not_to_change_state()
+            .get_mut_and_i_promise_not_to_switch_to_a_different_state()
         else {
             return;
         };
@@ -370,7 +409,7 @@ impl App {
             ..
         }) = self
             .mode
-            .get_mut_without_updating_backstack_and_i_promise_not_to_change_state()
+            .get_mut_and_i_promise_not_to_switch_to_a_different_state()
         else {
             return;
         };
@@ -460,7 +499,6 @@ pub fn route_operation<'a>(
             target,
             how_to_combine_messages,
         )? {
-            op @ RubOperation::UnassignUncommitted(..) => op,
             op @ RubOperation::UncommittedToCommit(..) => op,
             op @ RubOperation::UncommittedAreaToCommit(..) => op,
             op @ RubOperation::CommitToUncommittedArea(..) => op,
@@ -473,6 +511,9 @@ pub fn route_operation<'a>(
             op @ RubOperation::StackToStack(..) => op,
             op @ RubOperation::UncommittedAreaToStack(..) => op,
             op @ RubOperation::StackToCommit(..) => op,
+
+            // dont support stack assignments
+            RubOperation::UnassignUncommitted(..) => return None,
 
             // dont allow rubbing with branches
             RubOperation::UncommittedToBranch(..)
@@ -507,7 +548,7 @@ pub fn rub_operation_display(
     how_to_combine_messages: MessageCombinationStrategy,
 ) -> Option<&'static str> {
     if sources.len() == 1 && *sources.first() == target {
-        return Some("noop");
+        return Some(NOOP);
     }
 
     let operation = route_operation(sources, target, how_to_combine_messages)?;

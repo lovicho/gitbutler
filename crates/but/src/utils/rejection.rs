@@ -36,6 +36,11 @@ pub struct RejectedChange {
     /// Empty when the rejection was not caused by a dependency, or when the
     /// dependency could not be pinpointed to a specific hunk.
     pub dependencies: Vec<HunkDependency>,
+    /// When a dependency rejection cannot be pinpointed to a hunk (adjacent
+    /// insertions, for example, do not intersect as ranges), the branches
+    /// whose workspace commits also touch this path — the likely dependency.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub suspected_branches: Vec<String>,
 }
 
 /// A hunk that depends on one or more commits in the workspace.
@@ -73,6 +78,7 @@ pub fn explain_rejections(
     repo: &gix::Repository,
     ws: &Workspace,
     rejected_specs: &[(RejectionReason, DiffSpec)],
+    target_branch: Option<&str>,
 ) -> Vec<RejectedChange> {
     let needs_dependencies = rejected_specs
         .iter()
@@ -102,10 +108,21 @@ pub fn explain_rejections(
                 }
                 _ => Vec::new(),
             };
+            // The branch being committed to never explains its own rejection,
+            // so it is excluded from the suspects.
+            let suspected_branches = if dependencies.is_empty() && is_dependency_reason(*reason) {
+                branches_touching_path(repo, ws, spec.path.as_bstr())
+                    .into_iter()
+                    .filter(|branch| Some(branch.as_str()) != target_branch)
+                    .collect()
+            } else {
+                Vec::new()
+            };
             RejectedChange {
                 path: spec.path.clone(),
                 reason: *reason,
                 dependencies,
+                suspected_branches,
             }
         })
         .collect()
@@ -138,10 +155,34 @@ pub fn write_rejection_report<W: std::fmt::Write + ?Sized>(
         rejected.len(),
         noun,
     )?;
+    write_rejection_body(out, rejected, target_branch)
+}
+
+/// The per-change lines and the stacking suggestion shared by the
+/// partial-rejection report and the hard commit-failure error.
+fn write_rejection_body<W: std::fmt::Write + ?Sized>(
+    out: &mut W,
+    rejected: &[RejectedChange],
+    target_branch: Option<&str>,
+) -> std::fmt::Result {
+    let t = theme::get();
     for change in rejected {
         writeln!(out, "  {}", change.path.to_str_lossy())?;
         if change.dependencies.is_empty() {
-            writeln!(out, "    {}", reason_summary(change.reason))?;
+            if change.suspected_branches.is_empty() {
+                writeln!(out, "    {}", reason_summary(change.reason))?;
+            } else {
+                let branches = change
+                    .suspected_branches
+                    .iter()
+                    .map(|branch| t.local_branch.paint(branch).to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                writeln!(
+                    out,
+                    "    conflicts with commits on {branches} (edits touch the same file)",
+                )?;
+            }
             continue;
         }
         for dependency in &change.dependencies {
@@ -168,7 +209,7 @@ pub fn write_rejection_report<W: std::fmt::Write + ?Sized>(
         writeln!(out)?;
         writeln!(
             out,
-            "{} you can stack {} on top of {} to apply these changes:",
+            "{} to apply these changes, stack {} on top of {} and commit them again — commits already on the branch move with it:",
             t.hint.paint("Hint:"),
             t.local_branch.paint(target),
             t.local_branch.paint(dependency),
@@ -219,21 +260,31 @@ fn is_dependency_reason(reason: RejectionReason) -> bool {
 /// resolve it), a dependency couldn't be resolved to a branch, or dependencies
 /// span more than one branch.
 fn sole_dependency_branch(rejected: &[RejectedChange]) -> Option<&str> {
-    let mut branch = None;
+    let mut branch: Option<&str> = None;
     for change in rejected {
-        // Every rejected change must be dependency-locked; otherwise a single
-        // stack command wouldn't apply all of them.
-        if change.dependencies.is_empty() {
+        // Every rejected change must point at a dependency; otherwise a single
+        // stack command wouldn't apply all of them. When no hunk-level lock
+        // exists, the path-level suspects stand in.
+        if change.dependencies.is_empty() && change.suspected_branches.is_empty() {
             return None;
         }
-        for dependency in &change.dependencies {
-            for commit in &dependency.commits {
-                let name = commit.branch.as_deref()?;
-                match branch {
-                    None => branch = Some(name),
-                    Some(existing) if existing != name => return None,
-                    _ => {}
-                }
+        let names = change
+            .dependencies
+            .iter()
+            .flat_map(|dependency| &dependency.commits)
+            .map(|commit| commit.branch.as_deref())
+            .chain(
+                change
+                    .suspected_branches
+                    .iter()
+                    .map(|name| Some(name.as_str())),
+            );
+        for name in names {
+            let name = name?;
+            match branch {
+                None => branch = Some(name),
+                Some(existing) if existing != name => return None,
+                _ => {}
             }
         }
     }
@@ -318,6 +369,66 @@ pub fn branch_of_commit(
         }
     }
     None
+}
+
+/// The short names of all branches whose workspace commits touch `path` —
+/// the dependency suspects when hunk-level locks cannot pinpoint one. Callers
+/// filter out the branch being committed to. Only runs on failure paths, so
+/// the per-commit tree diffs are acceptable.
+fn branches_touching_path(
+    repo: &gix::Repository,
+    ws: &Workspace,
+    path: &bstr::BStr,
+) -> Vec<String> {
+    let mut branches = Vec::new();
+    for stack in &ws.stacks {
+        for segment in &stack.segments {
+            let touches = segment.commits.iter().any(|commit| {
+                but_core::diff::tree_changes(repo, commit.parent_ids.first().copied(), commit.id)
+                    .map(|changes| changes.iter().any(|change| change.path == path))
+                    .unwrap_or(false)
+            });
+            if touches && let Some(ref_name) = segment.ref_name() {
+                let name = ref_name.shorten().to_string();
+                if !branches.contains(&name) {
+                    branches.push(name);
+                }
+            }
+        }
+    }
+    branches
+}
+
+/// A targeted error for a commit that failed outright (not just rejected
+/// specs): when the attempted changes conflict with commits on another
+/// workspace branch, name that branch and the stacking recovery instead of
+/// letting internal cherry-pick errors surface. Returns `None` when no other
+/// branch can be blamed, so the caller keeps the original error.
+pub fn commit_failure_error(
+    repo: &gix::Repository,
+    ws: &Workspace,
+    specs: &[DiffSpec],
+    target_branch: &str,
+) -> Option<anyhow::Error> {
+    // Every attempted change is treated as a dependency-shaped rejection and
+    // runs through the standard explanation pipeline: hunk-level locks first,
+    // path-level suspects otherwise.
+    let assumed: Vec<(RejectionReason, DiffSpec)> = specs
+        .iter()
+        .map(|spec| (RejectionReason::WorkspaceMergeConflict, spec.clone()))
+        .collect();
+    let rejected = explain_rejections(repo, ws, &assumed, Some(target_branch));
+    if rejected
+        .iter()
+        .all(|change| change.dependencies.is_empty() && change.suspected_branches.is_empty())
+    {
+        return None;
+    }
+    let mut message = format!(
+        "Cannot commit to '{target_branch}': the selected changes conflict with commits on another branch.\n"
+    );
+    write_rejection_body(&mut message, &rejected, Some(target_branch)).ok()?;
+    Some(anyhow::anyhow!(message.trim_end().to_string()))
 }
 
 /// Whether two hunks touch the same lines on the new (worktree) side, which is

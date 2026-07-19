@@ -55,7 +55,7 @@ Note: 1 change could not be applied:
   first
     line 1 depends on foo ([..])
 
-Hint: you can stack bar on top of foo to apply these changes:
+Hint: to apply these changes, stack bar on top of foo and commit them again — commits already on the branch move with it:
   but move bar foo
 
 "#]]);

@@ -115,7 +115,7 @@ Note: 1 change could not be applied:
   first
     line 1 depends on foo ([..])
 
-Hint: you can stack bar on top of foo to apply these changes:
+Hint: to apply these changes, stack bar on top of foo and commit them again — commits already on the branch move with it:
   but move bar foo
 
 "#]]);
@@ -1357,6 +1357,49 @@ Error: Invalid file ID(s):
   'A' is a branch but must be an uncommitted file or hunk
 
 "#]]);
+}
+
+#[test]
+fn commit_of_adjacent_insertion_to_independent_branch_names_the_dependency() -> anyhow::Result<()> {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    // The base owns file `M`. Branch A INSERTS a line…
+    env.file("M", "line one\nline two\nline three\n");
+    env.but("commit A -m 'baseline M' --changes M")
+        .assert()
+        .success();
+    env.file("M", "line one\ninserted by A\nline two\nline three\n");
+    env.but("commit A -m 'insert a line' --changes M")
+        .assert()
+        .success();
+
+    // …and the worktree inserts another line right next to it. Pure adjacent
+    // insertions do not intersect as hunk ranges, so no dependency lock is
+    // detected — but the two insertions still conflict when the workspace
+    // re-merges, so the change is rejected. The rejection report must name
+    // the conflicting branch and the stacking recovery, not just a vague
+    // reason.
+    env.file(
+        "M",
+        "line one\ninserted by A\ninserted in worktree\nline two\nline three\n",
+    );
+    env.but("commit api -c -m 'insert another line' --changes M")
+        .assert()
+        .success()
+        .stdout_eq(str![[r#"
+Created new independent branch 'api'
+✓ Created commit 1#0 on branch api
+Note: 1 change could not be applied:
+  M
+    conflicts with commits on A (edits touch the same file)
+
+Hint: to apply these changes, stack api on top of A and commit them again — commits already on the branch move with it:
+  but move api A
+
+"#]]);
+
+    Ok(())
 }
 
 #[test]

@@ -3,16 +3,21 @@ use std::{borrow::Cow, collections::HashMap};
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use strum::IntoEnumIterator;
 
-use crate::command::legacy::status::tui::{
-    CommandMessage, ConfirmMessage, DetailsLayoutMessage, FuzzyPickerMessage, JumpMessage, Message,
-    RubMessage, StackMessage,
-    app::{CommitMessageComposer, RewordMessage},
-    details::DetailsMessage,
-    help::HelpMessage,
-    mode::ModeDiscriminant,
+use crate::{
+    CliId,
+    command::legacy::status::tui::{
+        CommandMessage, ConfirmMessage, DetailsLayoutMessage, FuzzyPickerMessage, JumpMessage,
+        Message, RubMessage, StackMessage,
+        app::{CommitMessageComposer, RewordMessage},
+        details::DetailsMessage,
+        help::HelpMessage,
+        mode::{Mode, ModeDiscriminant},
+    },
 };
 
-use super::{CommandModeKind, CommitMessage, FilesMessage, MoveMessage, ReloadCause};
+use super::{
+    CommandModeKind, CommitMessage, FilesMessage, MoveMessage, ReloadCause, mode::DetailsReturnMode,
+};
 
 #[cfg(test)]
 mod tests;
@@ -61,14 +66,33 @@ pub fn default_key_binds() -> KeyBinds {
                 register_non_mode_specific_key_binds(&mut builder, WithFocusDetails::No);
             }
             ModeDiscriminant::Details => {
+                builder
+                    .confirm_and_quit()
+                    .condition(KeyBindCondition::DetailsReturnModeIsPickChanges)
+                    .show_only_in_normal_mode_help_section()
+                    .register();
+
                 builder.details_next_hunk().register();
                 builder.details_prev_hunk().register();
 
                 builder.details_scroll_up().register();
                 builder.details_scroll_down().register();
 
-                builder.details_mark().register();
+                builder
+                    .commit()
+                    .condition(KeyBindCondition::SelectionIsUncommitted.and(
+                        &KeyBindCondition::Not(&KeyBindCondition::DetailsReturnModeIsPickChanges),
+                    ))
+                    .register();
+                builder
+                    .rub()
+                    .condition(KeyBindCondition::SelectionIsUncommitted.and(
+                        &KeyBindCondition::Not(&KeyBindCondition::DetailsReturnModeIsPickChanges),
+                    ))
+                    .register();
                 builder.details_discard().register();
+
+                builder.details_mark().register();
 
                 builder.details_jump_up().register();
                 builder.details_jump_down().register();
@@ -97,11 +121,6 @@ pub fn default_key_binds() -> KeyBinds {
                 builder.back().register();
 
                 builder.reload().register();
-                builder
-                    .confirm_and_quit()
-                    .hide_from_hotbar()
-                    .show_only_in_normal_mode_help_section()
-                    .register();
             }
             ModeDiscriminant::InlineReword => {
                 builder.reword_confirm().register();
@@ -345,6 +364,24 @@ impl KeyBinds {
 
     pub fn iter_key_binds_available_in_mode(
         &self,
+        mode: &Mode,
+        selection: Option<&CliId>,
+    ) -> impl Iterator<Item = &KeyBind> {
+        self.mode_to_key_binds
+            .get(&ModeDiscriminant::from(mode))
+            .into_iter()
+            .flatten()
+            .copied()
+            .map(|KeyBindId(idx)| &self.all_key_binds[idx])
+            .filter(move |key_bind| {
+                key_bind
+                    .condition
+                    .is_none_or(|condition| condition.matches(selection, mode))
+            })
+    }
+
+    pub fn iter_key_binds_available_in_mode_regardless_of_conditions(
+        &self,
         mode: ModeDiscriminant,
     ) -> impl Iterator<Item = &KeyBind> {
         self.mode_to_key_binds
@@ -379,6 +416,7 @@ impl KeyBindsBuilder<'_> {
             hide_from_hotbar: false,
             show_only_in_normal_mode_help_section: false,
             always_show_in_hot_bar: false,
+            condition: None,
         }
     }
 
@@ -896,7 +934,7 @@ impl KeyBindsBuilder<'_> {
 
     fn details_scroll_up(&mut self) -> KeyBindsInModesBuilder<'_> {
         self.key_bind(
-            "up",
+            "scroll up",
             press()
                 .shift()
                 .code(KeyCode::Char('K'))
@@ -907,7 +945,7 @@ impl KeyBindsBuilder<'_> {
 
     fn details_scroll_down(&mut self) -> KeyBindsInModesBuilder<'_> {
         self.key_bind(
-            "down",
+            "scroll down",
             press()
                 .shift()
                 .code(KeyCode::Char('J'))
@@ -920,12 +958,18 @@ impl KeyBindsBuilder<'_> {
         self.key_bind("mark", press().code(KeyCode::Char(' ')), || {
             Message::Details(DetailsMessage::Mark)
         })
+        .condition(KeyBindCondition::SelectionIsUncommitted)
     }
 
     fn details_discard(&mut self) -> KeyBindsInModesBuilder<'_> {
         self.key_bind("discard", press().code(KeyCode::Char('x')), || {
             Message::Details(DetailsMessage::Discard)
         })
+        .condition(
+            KeyBindCondition::SelectionIsUncommitted.and(&KeyBindCondition::Not(
+                &KeyBindCondition::DetailsReturnModeIsPickChanges,
+            )),
+        )
     }
 
     fn details_jump_up(&mut self) -> KeyBindsInModesBuilder<'_> {
@@ -1089,6 +1133,7 @@ struct KeyBindsInModesBuilder<'a> {
     hide_from_hotbar: bool,
     show_only_in_normal_mode_help_section: bool,
     always_show_in_hot_bar: bool,
+    condition: Option<KeyBindCondition>,
 }
 
 impl KeyBindsInModesBuilder<'_> {
@@ -1126,6 +1171,11 @@ impl KeyBindsInModesBuilder<'_> {
         self
     }
 
+    fn condition(mut self, condition: KeyBindCondition) -> Self {
+        self.condition = Some(condition);
+        self
+    }
+
     fn register(self) -> KeyBindId {
         let KeyBindsInModesBuilder {
             key_binds,
@@ -1137,6 +1187,7 @@ impl KeyBindsInModesBuilder<'_> {
             hide_from_hotbar,
             show_only_in_normal_mode_help_section,
             always_show_in_hot_bar,
+            condition,
         } = self;
 
         key_binds.register(KeyBind {
@@ -1149,6 +1200,7 @@ impl KeyBindsInModesBuilder<'_> {
             hide_from_hotbar,
             show_only_in_normal_mode_help_section,
             always_show_in_hot_bar,
+            condition,
         })
     }
 }
@@ -1164,6 +1216,7 @@ pub struct KeyBind {
     hide_from_hotbar: bool,
     show_only_in_normal_mode_help_section: bool,
     always_show_in_hot_bar: bool,
+    condition: Option<KeyBindCondition>,
 }
 
 impl KeyBind {
@@ -1353,5 +1406,54 @@ fn normalize_char_for_display(ch: char, shifted: bool) -> char {
         ch.to_ascii_lowercase()
     } else {
         ch
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum KeyBindCondition {
+    SelectionIsUncommitted,
+    DetailsReturnModeIsPickChanges,
+    And {
+        lhs: &'static Self,
+        rhs: &'static Self,
+    },
+    Not(&'static Self),
+}
+
+impl KeyBindCondition {
+    fn and(&'static self, rhs: &'static Self) -> Self {
+        Self::And { lhs: self, rhs }
+    }
+
+    fn matches(self, selection: Option<&CliId>, mode: &Mode) -> bool {
+        match self {
+            KeyBindCondition::And { lhs, rhs } => {
+                lhs.matches(selection, mode) && rhs.matches(selection, mode)
+            }
+            KeyBindCondition::Not(condition) => !condition.matches(selection, mode),
+            KeyBindCondition::SelectionIsUncommitted => {
+                let Some(selection) = selection else {
+                    return false;
+                };
+                match selection {
+                    CliId::UncommittedHunkOrFile(..) | CliId::Uncommitted { .. } => true,
+                    CliId::PathPrefix { .. }
+                    | CliId::CommittedFile { .. }
+                    | CliId::Branch { .. }
+                    | CliId::Commit { .. }
+                    | CliId::Stack { .. } => false,
+                }
+            }
+            KeyBindCondition::DetailsReturnModeIsPickChanges => {
+                if let Mode::Details(details_mode) = mode {
+                    match details_mode.return_mode {
+                        DetailsReturnMode::Normal(..) => false,
+                        DetailsReturnMode::PickChanges(..) => true,
+                    }
+                } else {
+                    false
+                }
+            }
+        }
     }
 }

@@ -450,7 +450,7 @@ fn resolve_target(
         )
         .with_hint(|| hint.clone())?
     {
-        ResolvedCliIdArg::Commit(object_id) => {
+        ResolvedCliIdArg::Commit(object_id, _change_id) => {
             let reword =
                 resolve_reword(message, no_message, use_target_message, use_source_message);
             Ok(SquashTarget::Commit {
@@ -682,7 +682,7 @@ struct CommittedFile {
 impl Squashable {
     fn try_from_resolved_id(id: ResolvedCliIdArg) -> CliResult<Self> {
         let kind = match id {
-            ResolvedCliIdArg::Commit(commit) => return Ok(Self::Commit(commit)),
+            ResolvedCliIdArg::Commit(commit, _change_id) => return Ok(Self::Commit(commit)),
             ResolvedCliIdArg::Branch(branch) => return Ok(Self::Branch(branch)),
             ResolvedCliIdArg::UncommittedHunkOrFile(hunk) => {
                 return Ok(Self::UncommittedHunkOrFile(hunk));

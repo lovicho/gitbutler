@@ -74,9 +74,8 @@ fn rub_api_uncommitted_to_commit_preserves_global_file_list() {
         ]);
 }
 
-// Tests RubOperation::UnassignUncommitted.
 #[test]
-fn rub_api_unassign_uncommitted_operation() {
+fn rub_api_cannot_unassign_uncommitted_operation() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
     env.setup_metadata(&["A", "B"]);
 
@@ -94,7 +93,7 @@ fn rub_api_unassign_uncommitted_operation() {
         .assert_current_line_eq(str!["┊   << source >> << noop >> v A test.txt"]);
 
     tui.input(KeyCode::Up)
-        .assert_current_line_eq(str!["╭┄<< unassign hunks >> zz [uncommitted]"]);
+        .assert_current_line_eq(str!["┊   << source >> << noop >> v A test.txt"]);
 }
 
 // Tests RubOperation::UncommittedToCommit.

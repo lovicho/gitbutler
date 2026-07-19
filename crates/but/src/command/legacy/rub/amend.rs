@@ -30,7 +30,8 @@ pub(crate) fn uncommitted_to_commit_with_perm(
         (builder.into_diff_specs(), target_branch)
     };
 
-    let (new_commit, rejected) = amend_diff_specs(ctx, diff_specs, oid, perm)?;
+    let (new_commit, rejected) =
+        amend_diff_specs(ctx, diff_specs, oid, target_branch.as_deref(), perm)?;
     update_workspace_commit(ctx, false)?;
     if let Some(out) = out.for_human() {
         let new_commit = theme::new_commit_ref_with_perm(ctx, perm.read_permission(), new_commit)?;
@@ -50,6 +51,7 @@ fn amend_diff_specs(
     ctx: &mut Context,
     diff_specs: Vec<DiffSpec>,
     oid: ObjectId,
+    target_branch: Option<&str>,
     perm: &mut RepoExclusive,
 ) -> anyhow::Result<(Option<ObjectId>, Vec<rejection::RejectedChange>)> {
     let mut meta = ctx.meta()?;
@@ -74,6 +76,6 @@ fn amend_diff_specs(
 
     // `materialize()` released the workspace borrow, so we can now look up why
     // the rejected changes were locked and to which branch each one depends on.
-    let rejected = rejection::explain_rejections(&repo, &ws, &rejected_specs);
+    let rejected = rejection::explain_rejections(&repo, &ws, &rejected_specs, target_branch);
     Ok((new_commit, rejected))
 }

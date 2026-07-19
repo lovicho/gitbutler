@@ -56,6 +56,10 @@ iterating on a test where snapshots would cause too much churn.
 Read `crates/but/src/command/legacy/status/tui/tests/utils.rs` for more
 specialized assertions.
 
+You're not allowed to add new kinds of assertions to
+`crates/but/src/command/legacy/status/tui/tests/utils.rs`. Rely entirely on the
+existing assertions.
+
 ## Running tests
 
 - `cargo test -p but <test-name>` to run one test.

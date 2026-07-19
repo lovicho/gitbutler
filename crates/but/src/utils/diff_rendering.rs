@@ -419,6 +419,7 @@ pub struct Options {
 
 pub fn render_commit(
     commit: ObjectId,
+    change_id: Option<but_core::ChangeId>,
     ctx: &Context,
     theme: &'static Theme,
     id_gen: &mut IdGen<'_>,
@@ -442,10 +443,7 @@ pub fn render_commit(
                 Span::styled(commit.to_hex().to_string(), theme.commit_id),
             ]),
         )?;
-        if let Some(change_id) =
-            but_core::commit::Headers::try_from_commit(&commit_details.commit.inner)
-                .and_then(|headers| headers.change_id)
-        {
+        if let Some(change_id) = change_id {
             out.write_selectable_text(
                 header_id,
                 None,

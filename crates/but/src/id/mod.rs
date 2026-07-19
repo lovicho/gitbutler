@@ -1418,8 +1418,16 @@ pub struct UncommittedHunkOrFile {
 
 impl PartialEq for UncommittedHunkOrFile {
     fn eq(&self, other: &Self) -> bool {
-        self.hunk_assignments == other.hunk_assignments
-            && self.is_entire_file == other.is_entire_file
+        let Self {
+            hunk_assignments,
+            is_entire_file,
+            // Intentionally dont compare the short id since it depends on what other hunks exist
+            // and thus doesn't change the identity of this hunk specifically.
+            //
+            // `fn synthetic_hunk` relies on this.
+            id: _,
+        } = self;
+        hunk_assignments == &other.hunk_assignments && *is_entire_file == other.is_entire_file
     }
 }
 
@@ -1511,10 +1519,7 @@ pub enum CliId {
 impl PartialEq for CliId {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (
-                Self::UncommittedHunkOrFile(UncommittedHunkOrFile { id: l_id, .. }),
-                Self::UncommittedHunkOrFile(UncommittedHunkOrFile { id: r_id, .. }),
-            ) => l_id == r_id,
+            (Self::UncommittedHunkOrFile(l), Self::UncommittedHunkOrFile(r)) => l == r,
             (
                 Self::CommittedFile {
                     id: l_id,
@@ -1578,6 +1583,15 @@ impl CliId {
             | CliId::CommittedFile { .. }
             | CliId::Commit { .. }
             | CliId::Uncommitted { .. } => None,
+        }
+    }
+
+    /// Try to convert the id into a hunk.
+    pub fn as_uncommitted_hunk_or_file(&self) -> Option<&UncommittedHunkOrFile> {
+        if let Self::UncommittedHunkOrFile(hunk) = self {
+            Some(hunk)
+        } else {
+            None
         }
     }
 }

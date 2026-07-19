@@ -94,7 +94,7 @@ Rebasing applied branches onto the latest target IS `but pull` — never `move`,
 1. `but diff` — shows file and hunk IDs for uncommitted changes. Do not run plain `but status` first.
 2. Use file IDs when whole files belong in the commit; use hunk IDs (`<file-id>:<hunk-id>`) when only part of a file belongs. Omit IDs you don't want committed.
 3. New branch: `but commit <branch> -c -m "<msg>" --changes <id1>,<id2>` (no prior `but branch new` needed). Existing branch: omit `-c`.
-4. **Check the returned status** for remaining uncommitted changes. If a file you committed still shows as uncommitted, it may be dependency-locked — see "Stacked dependency / commit-lock recovery".
+4. **Check the returned status** for remaining uncommitted changes. If a file you committed still shows as uncommitted, it may be dependency-locked — see "Dependency conflict with another branch".
 
 Edge case: if wanted and unwanted edits are in the same diff hunk, GitButler cannot split that hunk by ID. Only when the task requires keeping part of that hunk uncommitted, temporarily edit the working tree to isolate the wanted lines, commit with `--changes`, then restore the leftover lines so they remain uncommitted.
 
@@ -142,15 +142,11 @@ To make one existing branch depend on another: `but move <child-branch> <parent-
 
 For stacked branches `but pr` is mandatory (it sets PR bases and stack metadata; `gh pr create` breaks that). To publish a whole stack: `but pr new <top-branch-id> -t`. Manage with `but pr auto-merge|set-draft|set-ready <selector>`. See `references/reference.md` for details.
 
-### Stacked dependency / commit-lock recovery
+### Dependency conflict with another branch
 
-A **dependency lock**: a file was originally committed on branch A, and you're committing changes to it on branch B. Symptom: `but commit` succeeds but the file still shows as uncommitted in the returned status.
+Changes that build on another branch's commits cannot land on an independent branch. `but commit` either creates the commit but reports the change as "could not be applied", or refuses outright — both name the branch the changes depend on and print the exact recovery command.
 
-Recovery: stack your branch on the dependency branch, then commit:
-
-1. `but status -fv` — identify which branch's commits own the file.
-2. `but move <your-branch-name> <dependency-branch-name>` (full branch **names**).
-3. Commit the file: `but commit <branch> -m "<msg>" --changes <id>`.
+Recovery: run the printed `but move <your-branch> <dependency-branch>` (full branch **names**) to stack the branches, then commit again with the same `--changes` IDs.
 
 If that `but move` fails, do NOT try `uncommit`, `squash`, or `undo` as a workaround — re-run `but status -fv` to confirm both branches exist and are applied, then retry with exact branch names.
 

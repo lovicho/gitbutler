@@ -657,15 +657,43 @@ pub(crate) fn commit(
         commit_message
     };
 
-    let outcome = commit_create(
+    let outcome = match commit_create(
         ctx,
         relative_to,
         insert_side,
-        diff_specs,
+        diff_specs.clone(),
         final_commit_message,
         DryRun::No,
         guard.write_permission(),
-    )?;
+    ) {
+        Ok(outcome) => outcome,
+        Err(err) => {
+            // When the workspace re-merge trips over changes that build on
+            // another branch's commits (adjacent insertions evade hunk-level
+            // lock detection), name the branch and the stacking recovery
+            // instead of surfacing cherry-pick internals. Any other failure
+            // passes through untouched — the marker strings are but-rebase's
+            // two re-merge conflict errors.
+            let remerge_conflict = err.chain().any(|cause| {
+                let cause = cause.to_string();
+                cause.contains("Failed to merge bases while cherry picking")
+                    || cause.contains("merge could not be repeated without conflicts")
+            });
+            let explained = remerge_conflict
+                .then(|| ctx.workspace_and_db_with_perm(guard.read_permission()).ok())
+                .flatten()
+                .and_then(|(repo, ws, _db)| {
+                    rejection::commit_failure_error(&repo, &ws, &diff_specs, &target_branch.name)
+                });
+            return Err(match explained {
+                Some(explained) => {
+                    tracing::debug!(?err, "commit failed; reporting dependency conflict instead");
+                    explained.into()
+                }
+                None => err.into(),
+            });
+        }
+    };
 
     let rejected = if outcome.rejected_specs.is_empty() {
         Vec::new()
@@ -679,7 +707,12 @@ pub(crate) fn commit(
         // projection (or a rejected hunk could resolve to it). This relies on
         // `commit_create` not invalidating the cached workspace.
         let (repo, ws, _db) = ctx.workspace_and_db_with_perm(guard.read_permission())?;
-        rejection::explain_rejections(&repo, &ws, &outcome.rejected_specs)
+        rejection::explain_rejections(
+            &repo,
+            &ws,
+            &outcome.rejected_specs,
+            Some(&target_branch.name),
+        )
     };
 
     if let Some(out) = out.for_human() {

@@ -306,6 +306,7 @@ impl<'a> UncommittedToCommitOperation<'a> {
             let (_guard, repo, ws, mut db) = ctx.workspace_and_db_mut()?;
             let mut builder = DiffSpecBuilder::new(&mut db, &repo, &ws, context_lines);
             builder.push_hunk_assignments(self.hunk_assignments.iter().copied().cloned())?;
+            builder.reconcile_worktree_diff_specs()?;
             builder.into_diff_specs()
         };
         but_api::commit::amend::commit_amend(ctx, self.oid, changes, DryRun::No)
