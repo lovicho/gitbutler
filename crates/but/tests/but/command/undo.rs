@@ -4,8 +4,12 @@ use crate::{
 };
 
 mod undo_commit;
+#[cfg(feature = "but-2")]
+mod undo_move2;
 mod undo_redo;
 mod undo_rub;
+#[cfg(feature = "but-2")]
+mod undo_squash2;
 mod undo_uncommit;
 
 #[test]

@@ -90,7 +90,7 @@ pub struct RefInfo {
     /// These are carried along so UI conversions can resolve remote-tracking references
     /// without needing repository access. That is, they can know if `refs/remotes/name/foo/bar`
     /// has the symbolic remote `name/foo` or just `name`.
-    pub symbolic_remote_names: gix::remote::Names<'static>,
+    pub symbolic_remote_names: gix::remote::Names,
     /// The stacks visible in the current workspace.
     ///
     /// This is an empty array if the `HEAD` is unborn.

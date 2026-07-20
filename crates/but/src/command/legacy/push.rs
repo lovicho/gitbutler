@@ -228,7 +228,7 @@ fn handle_dry_run(
                     )
                     .transpose()?
                 {
-                    Some(remote_ref) => remote_ref.into_owned(),
+                    Some(remote_ref) => remote_ref,
                     None => dry_run_remote_ref(&branch_detail.name, &fallback_remote)?,
                 };
                 let (remote, _) =

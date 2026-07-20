@@ -1566,7 +1566,7 @@ fn maybe_set_secret(handle: &str, secret_value: Option<Sensitive<String>>) -> Re
 fn edit_ai_git_config(
     repo: Option<&gix::Repository>,
     scope: AiScope,
-    edit: impl FnOnce(&mut gix::config::File<'static>) -> Result<()>,
+    edit: impl FnOnce(&mut gix::config::File) -> Result<()>,
 ) -> Result<()> {
     match scope {
         AiScope::Global => {
@@ -1582,7 +1582,7 @@ fn edit_ai_git_config(
 }
 
 fn set_optional_config_value(
-    config: &mut gix::config::File<'static>,
+    config: &mut gix::config::File,
     key: &str,
     value: Option<String>,
 ) -> Result<()> {

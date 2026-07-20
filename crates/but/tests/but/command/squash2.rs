@@ -1,4 +1,48 @@
-use crate::utils::Sandbox;
+use snapbox::str;
+
+use crate::{
+    command::util::{
+        branch_commit_cli_id_for_file, branch_commit_cli_ids,
+        commit_file_with_worktree_changes_as_two_hunks, commit_two_files_as_two_hunks_each,
+        status_json_with_files as status_json,
+    },
+    utils::{CommandExt, Sandbox},
+};
+
+fn uncommitted_contains_file(status: &serde_json::Value, file_path: &str) -> bool {
+    status["uncommittedChanges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|change| change["filePath"].as_str().unwrap() == file_path)
+}
+
+fn uncommitted_cli_id_for_file(status: &serde_json::Value, file_path: &str) -> Option<String> {
+    status["uncommittedChanges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find_map(|change| {
+            (change["filePath"].as_str().unwrap() == file_path)
+                .then(|| change["cliId"].as_str().unwrap().to_string())
+        })
+}
+
+fn branch_commits_contain_file(
+    status: &serde_json::Value,
+    branch_name: &str,
+    file_path: &str,
+) -> bool {
+    status["stacks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|stack| stack["branches"].as_array().unwrap().iter())
+        .filter(|branch| branch["name"].as_str().unwrap() == branch_name)
+        .flat_map(|branch| branch["commits"].as_array().unwrap().iter())
+        .flat_map(|commit| commit["changes"].as_array().unwrap().iter())
+        .any(|change| change["filePath"].as_str().unwrap() == file_path)
+}
 
 fn one_branch_three_commits() -> Sandbox {
     let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
@@ -1485,6 +1529,719 @@ fn cannot_use_source_message_when_moving_committed_files() {
         .failure()
         .stderr_eq(snapbox::str![[r#"
 Error: --use-source-message cannot be used when moving committed changes
+
+"#]]);
+}
+
+#[test]
+fn committed_file_to_uncommitted_area() -> anyhow::Result<()> {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+
+    env.setup_metadata(&["A", "B"]);
+    commit_two_files_as_two_hunks_each(&env, "A", "a.txt", "b.txt", "first commit");
+    commit_two_files_as_two_hunks_each(&env, "A", "a.txt", "b.txt", "second commit");
+
+    env.but("--format json status -f")
+        .allow_json()
+        .assert()
+        .success()
+        // .stderr_eq(snapbox::str![""])
+        .stdout_eq(snapbox::str![[r#"
+...
+{
+  "uncommittedChanges": [],
+  "stacks": [
+    {
+      "cliId": "i0",
+      "assignedChanges": [],
+      "branches": [
+        {
+          "cliId": "g0",
+          "name": "A",
+          "commits": [
+            {
+...
+              "changes": [
+                {
+                  "cliId": "1#0:n",
+                  "filePath": "a.txt",
+                  "changeType": "modified"
+                },
+                {
+                  "cliId": "1#0:p",
+                  "filePath": "b.txt",
+                  "changeType": "modified"
+                }
+              ]
+            },
+            {
+...
+              "changes": [
+                {
+                  "cliId": "1#1:n",
+                  "filePath": "a.txt",
+                  "changeType": "added"
+                },
+                {
+                  "cliId": "1#1:p",
+                  "filePath": "b.txt",
+                  "changeType": "added"
+                }
+              ]
+            },
+            {
+...
+              "changes": [
+                {
+                  "cliId": "t:t",
+                  "filePath": "A",
+                  "changeType": "added"
+                }
+              ]
+            }
+...
+
+"#]]);
+
+    env.but("_squash2 1#0:p -t zz").assert().success();
+
+    // Verify that `status` reflects the move.
+    env.but("--format json status -f")
+        .allow_json()
+        .assert()
+        .success()
+        .stderr_eq(snapbox::str![""])
+        .stdout_eq(snapbox::str![[r#"
+{
+  "uncommittedChanges": [
+    {
+      "cliId": "p",
+      "filePath": "b.txt",
+      "changeType": "modified"
+    }
+  ],
+  "stacks": [
+    {
+      "cliId": "j0",
+      "assignedChanges": [],
+      "branches": [
+        {
+          "cliId": "g0",
+          "name": "A",
+          "commits": [
+            {
+...
+              "changes": [
+                {
+                  "cliId": "1#0:n",
+                  "filePath": "a.txt",
+                  "changeType": "modified"
+                }
+              ]
+            },
+            {
+...
+              "changes": [
+                {
+                  "cliId": "1#1:n",
+                  "filePath": "a.txt",
+                  "changeType": "added"
+                },
+                {
+                  "cliId": "1#1:p",
+                  "filePath": "b.txt",
+                  "changeType": "added"
+                }
+              ]
+            },
+            {
+...
+              "changes": [
+                {
+                  "cliId": "t:t",
+                  "filePath": "A",
+                  "changeType": "added"
+                }
+...
+    },
+    {
+      "cliId": "k0",
+      "assignedChanges": [],
+      "branches": [
+        {
+          "cliId": "h0",
+          "name": "B",
+          "commits": [
+            {
+...
+              "changes": [
+                {
+                  "cliId": "l:p",
+                  "filePath": "B",
+                  "changeType": "added"
+                }
+              ]
+            }
+...
+
+"#]]);
+
+    Ok(())
+}
+
+#[test]
+fn uncommitted_hunk_to_commit() -> anyhow::Result<()> {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+
+    // Must set metadata to match the scenario
+    env.setup_metadata(&["A", "B"]);
+
+    commit_file_with_worktree_changes_as_two_hunks(&env, "A", "a.txt");
+
+    let target_cli_id = branch_commit_cli_ids(&status_json(&env)?, "A")[0].clone();
+    // The amended commit is identified by its change ID, from a freshly built
+    // map that knows the post-amend workspace.
+    env.but(format!("_squash2 zz:a.txt:#0 -t {target_cli_id} -u"))
+        .assert()
+        .success();
+
+    // Verify that only one hunk was assigned ("a.txt" still appears in the
+    // uncommitted area because there is one hunk still unassigned).
+    env.but("--format json status -f")
+        .allow_json()
+        .assert()
+        .success()
+        .stderr_eq(snapbox::str![])
+        .stdout_eq(snapbox::str![[r#"
+{
+  "uncommittedChanges": [
+    {
+      "cliId": "n",
+      "filePath": "a.txt",
+      "changeType": "modified"
+    }
+  ],
+...
+
+"#]]);
+
+    // Verify that the commit indeed received the hunk.
+    snapbox::assert_data_eq!(
+        env.open_repo()
+            .rev_parse_single("A:a.txt")?
+            .object()?
+            .try_into_blob()?
+            .take_data(),
+        str![[r#"
+firsta
+line
+line
+line
+line
+line
+line
+line
+last
+
+"#]],
+    );
+
+    Ok(())
+}
+
+// Regression: filenames with dashes should not be misinterpreted as ranges.
+// Before the fix, "my-file.txt" would be split on '-' and treated as a range
+// from "my" to "file.txt", which would fail.
+
+#[test]
+fn uncommitted_hunk_to_commit_smoke() -> anyhow::Result<()> {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+    env.setup_metadata(&["A", "B"]);
+
+    env.file("uncommitted-to-commit.txt", "content\n");
+
+    let before = status_json(&env)?;
+    let target_cli_id = branch_commit_cli_ids(&before, "A")[0].clone();
+
+    env.but(format!(
+        "_squash2 uncommitted-to-commit.txt -t {target_cli_id} -u"
+    ))
+    .assert()
+    .success();
+
+    let after = status_json(&env)?;
+    assert!(
+        !uncommitted_contains_file(&after, "uncommitted-to-commit.txt"),
+        "file should no longer be uncommitted"
+    );
+    assert!(
+        branch_commits_contain_file(&after, "A", "uncommitted-to-commit.txt"),
+        "file should appear in commits on branch A"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn uncommitted_area_to_commit_smoke() -> anyhow::Result<()> {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+    env.setup_metadata(&["A", "B"]);
+
+    env.file("zz-to-commit.txt", "content\n");
+
+    let before = status_json(&env)?;
+    let target_cli_id = branch_commit_cli_ids(&before, "A")[0].clone();
+
+    env.but(format!("_squash2 zz -t {target_cli_id} -u"))
+        .assert()
+        .success();
+
+    let after = status_json(&env)?;
+    assert!(
+        !uncommitted_contains_file(&after, "zz-to-commit.txt"),
+        "file should no longer be uncommitted"
+    );
+    assert!(
+        branch_commits_contain_file(&after, "A", "zz-to-commit.txt"),
+        "file should appear in commits on branch A"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn uncommitted_to_commit_consumes_renames() -> anyhow::Result<()> {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+    env.setup_metadata(&["A", "B"]);
+
+    let original = (1..=120)
+        .map(|line| line.to_string())
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    env.file("rename-source.txt", &original);
+    env.but("commit A -m 'seed rename source'")
+        .assert()
+        .success();
+
+    std::fs::rename(
+        env.projects_root().join("rename-source.txt"),
+        env.projects_root().join("rename-target.txt"),
+    )?;
+    env.file(
+        "rename-target.txt",
+        original.replace("40\n41\n42\n", "40\nchanged\n42\n"),
+    );
+
+    let before = status_json(&env)?;
+    let target_cli_id = branch_commit_cli_ids(&before, "A")[0].clone();
+
+    env.but(format!("_squash2 zz -t {target_cli_id} -u"))
+        .assert()
+        .success();
+
+    let after = status_json(&env)?;
+    assert!(
+        !uncommitted_contains_file(&after, "rename-target.txt"),
+        "renamed file should no longer be uncommitted"
+    );
+    assert_eq!(
+        env.invoke_git("status --porcelain"),
+        "",
+        "expected all zz changes to be committed"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn uncommitted_file_to_commit_consumes_renames() -> anyhow::Result<()> {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+    env.setup_metadata(&["A", "B"]);
+
+    let original = (1..=120)
+        .map(|line| line.to_string())
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    env.file("rename-source-single.txt", &original);
+    env.but("commit A -m 'seed rename source single'")
+        .assert()
+        .success();
+
+    std::fs::rename(
+        env.projects_root().join("rename-source-single.txt"),
+        env.projects_root().join("rename-target-single.txt"),
+    )?;
+    env.file(
+        "rename-target-single.txt",
+        original.replace("70\n71\n72\n", "70\nchanged\n72\n"),
+    );
+
+    let before = status_json(&env)?;
+    let source_file_cli_id = uncommitted_cli_id_for_file(&before, "rename-target-single.txt")
+        .expect("renamed uncommitted file should be present in status");
+    let target_cli_id = branch_commit_cli_ids(&before, "A")[0].clone();
+
+    env.but(format!(
+        "_squash2 {source_file_cli_id} -t {target_cli_id} -u"
+    ))
+    .assert()
+    .success();
+
+    let after = status_json(&env)?;
+    assert!(
+        !uncommitted_contains_file(&after, "rename-target-single.txt"),
+        "renamed file should no longer be uncommitted"
+    );
+
+    let remaining = env.invoke_git("status --porcelain");
+    assert_eq!(
+        remaining, "",
+        "expected selected renamed file to be committed; remaining status:\n{remaining}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn uncommitted_deleted_file_to_commit_keeps_unrelated_deleted_file() -> anyhow::Result<()> {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+    env.setup_metadata(&["A", "B"]);
+
+    env.file("a.txt", "a\n");
+    env.file("b.txt", "b\n");
+    env.file("c.txt", "c\n");
+    env.but("commit A -m 'Add a.txt, b.txt, and c.txt'")
+        .assert()
+        .success();
+
+    std::fs::remove_file(env.projects_root().join("a.txt"))?;
+    std::fs::remove_file(env.projects_root().join("b.txt"))?;
+
+    let before = status_json(&env)?;
+    let source_file_cli_id = uncommitted_cli_id_for_file(&before, "a.txt")
+        .expect("a.txt deletion should be present in the uncommitted area");
+    let target_cli_id = branch_commit_cli_ids(&before, "A")[0].clone();
+    assert!(
+        uncommitted_contains_file(&before, "b.txt"),
+        "b.txt deletion should start in the uncommitted area"
+    );
+
+    env.but(format!(
+        "_squash2 {source_file_cli_id} -t {target_cli_id} -u"
+    ))
+    .assert()
+    .success();
+
+    let after = status_json(&env)?;
+    assert!(
+        !uncommitted_contains_file(&after, "a.txt"),
+        "selected a.txt deletion should be amended into the target commit"
+    );
+    assert!(
+        uncommitted_contains_file(&after, "b.txt"),
+        "unrelated b.txt deletion should remain uncommitted"
+    );
+    assert!(
+        !env.projects_root().join("a.txt").exists(),
+        "selected a.txt deletion should stay applied to the worktree"
+    );
+    assert!(
+        !env.projects_root().join("b.txt").exists(),
+        "unrelated b.txt deletion should stay applied to the worktree"
+    );
+    assert!(
+        env.projects_root().join("c.txt").exists(),
+        "untouched c.txt should stay in the worktree"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn commit_to_uncommitted_smoke() -> anyhow::Result<()> {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+    env.setup_metadata(&["A", "B"]);
+
+    commit_two_files_as_two_hunks_each(&env, "A", "a.txt", "b.txt", "first commit");
+
+    let before = status_json(&env)?;
+    let commit_cli_ids_before = branch_commit_cli_ids(&before, "A");
+    let source_cli_id = commit_cli_ids_before[0].clone();
+
+    env.but(format!("_squash2 {source_cli_id} -t zz"))
+        .assert()
+        .success();
+
+    let after = status_json(&env)?;
+    let commit_cli_ids_after = branch_commit_cli_ids(&after, "A");
+
+    assert_eq!(
+        commit_cli_ids_after.len() + 1,
+        commit_cli_ids_before.len(),
+        "uncommitting a commit should remove that commit from branch history"
+    );
+    assert!(
+        !commit_cli_ids_after.contains(&source_cli_id),
+        "source commit should no longer be present after uncommit"
+    );
+
+    assert!(
+        uncommitted_contains_file(&after, "a.txt") && uncommitted_contains_file(&after, "b.txt"),
+        "uncommitting a commit should move its changes into uncommitted"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn commit_to_commit_smoke() -> anyhow::Result<()> {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+    env.setup_metadata(&["A", "B"]);
+
+    commit_two_files_as_two_hunks_each(&env, "A", "a.txt", "b.txt", "first commit");
+    commit_two_files_as_two_hunks_each(&env, "A", "a.txt", "b.txt", "second commit");
+
+    let before = status_json(&env)?;
+    let commit_cli_ids_before = branch_commit_cli_ids(&before, "A");
+    let source_cli_id = commit_cli_ids_before[0].clone();
+    let target_cli_id = commit_cli_ids_before[1].clone();
+
+    env.but(format!("_squash2 {source_cli_id} -t {target_cli_id} -u"))
+        .assert()
+        .success();
+
+    let after = status_json(&env)?;
+    let commit_cli_ids_after = branch_commit_cli_ids(&after, "A");
+    assert_eq!(
+        commit_cli_ids_after.len() + 1,
+        commit_cli_ids_before.len(),
+        "squashing should reduce commit count by one"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn commit_without_message_to_commit() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    env.file("one.txt", "one.txt contents");
+    env.but("_commit2 -m 'add one.txt' one.txt")
+        .assert()
+        .success();
+
+    env.but("status --no-hint")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted] (no changes)
+┊
+┊╭┄g0 [A]
+┊●   1 add one.txt
+┊●   tpm add A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+"#]]);
+
+    env.but("_commit2 --empty --no-message").assert().success();
+
+    env.but("status --no-hint")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted] (no changes)
+┊
+┊╭┄g0 [A]
+┊●   1#0 (no commit message) (no changes)
+┊●   1#1 add one.txt
+┊●   tpm add A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+"#]]);
+
+    env.but("_squash2 1#0 -t 1#1 -u").assert().success();
+
+    env.but("status --no-hint")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted] (no changes)
+┊
+┊╭┄g0 [A]
+┊●   1 add one.txt
+┊●   tpm add A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+"#]]);
+}
+
+#[test]
+fn commit_to_commit_without_message() -> anyhow::Result<()> {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    env.file("one.txt", "one.txt contents");
+    env.but("_commit2 -m 'add one.txt' one.txt")
+        .assert()
+        .success();
+    env.but("_commit2 --empty --no-message").assert().success();
+
+    env.but("_squash2 1#1 -t 1#0 --use-source-message")
+        .assert()
+        .success();
+
+    let status = status_json(&env)?;
+    let branch = status["stacks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|stack| stack["branches"].as_array().unwrap().iter())
+        .find(|branch| branch["name"].as_str().unwrap() == "A")
+        .unwrap();
+    let commit_messages = branch["commits"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|commit| commit["message"].as_str().unwrap().trim_end_matches('\n'))
+        .collect::<Vec<_>>();
+
+    assert_eq!(commit_messages, vec!["add one.txt", "add A"]);
+
+    Ok(())
+}
+
+#[test]
+fn committed_file_to_commit_smoke() -> anyhow::Result<()> {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    commit_two_files_as_two_hunks_each(&env, "A", "source-a.txt", "source-b.txt", "source commit");
+    commit_two_files_as_two_hunks_each(&env, "A", "target-a.txt", "target-b.txt", "target commit");
+
+    let before = status_json(&env)?;
+    let source_cli_id = branch_commit_cli_id_for_file(&before, "A", "source-a.txt")
+        .expect("source commit with file");
+    let target_cli_id = branch_commit_cli_id_for_file(&before, "A", "target-a.txt")
+        .expect("target commit with file");
+
+    env.but(format!(
+        "_squash2 {source_cli_id}:source-a.txt -t {target_cli_id} -u"
+    ))
+    .assert()
+    .success();
+
+    let after = status_json(&env)?;
+    let branch = after["stacks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|stack| stack["branches"].as_array().unwrap().iter())
+        .find(|branch| branch["name"].as_str() == Some("A"))
+        .expect("branch A should remain in status");
+    let commit_contains_file = |message: &str, file_path: &str| {
+        branch["commits"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|commit| {
+                commit["message"]
+                    .as_str()
+                    .is_some_and(|actual| actual.trim_end_matches('\n') == message)
+            })
+            .unwrap_or_else(|| panic!("commit '{message}' should remain in branch A"))["changes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|change| change["filePath"].as_str() == Some(file_path))
+    };
+    assert!(
+        !commit_contains_file("create source-a.txt and source-b.txt", "source-a.txt"),
+        "moved file should be absent from the rewritten source commit"
+    );
+    assert!(
+        commit_contains_file("create target-a.txt and target-b.txt", "source-a.txt"),
+        "moved file should be present in the rewritten target commit"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn squash_amending_modified_and_renamed_file() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.file("file", "content");
+    env.file("file-2", "content-2");
+
+    env.but("commit -m 'add files'").assert().success();
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted] (no changes)
+┊
+┊╭┄br [a-branch-1]
+┊●   1 add files
+┊│     1:q A file
+┊│     1:k A file-2
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    env.file("file-2", "new content");
+    env.rename_file("file-2", "file");
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted]
+┊   q M file
+┊   k D file-2
+┊
+┊╭┄br [a-branch-1]
+┊●   1 add files
+┊│     1:q A file
+┊│     1:k A file-2
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
+
+"#]]);
+
+    env.but("_squash2 zz -t 1 -u").assert().success();
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted] (no changes)
+┊
+┊╭┄br [a-branch-1]
+┊●   1 add files
+┊│     1:q A file
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
 
 "#]]);
 }

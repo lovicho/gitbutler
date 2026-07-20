@@ -142,7 +142,7 @@ pub fn is_workspace_ref_name(ref_name: &FullNameRef) -> bool {
 /// and as such are sorted in ascending order by length.
 pub fn extract_remote_name_and_short_name(
     ref_name: &gix::refs::FullNameRef,
-    remote_names: &gix::remote::Names<'_>,
+    remote_names: &gix::remote::Names,
 ) -> Option<(String, BString)> {
     let (category, shorthand_name) = ref_name.category_and_short_name()?;
     if !matches!(category, gix::refs::Category::RemoteBranch) {

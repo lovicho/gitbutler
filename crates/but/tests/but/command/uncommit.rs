@@ -8,7 +8,13 @@
 
 use snapbox::str;
 
-use crate::{command::util::status_json_with_files as status_json, utils::Sandbox};
+use crate::{
+    command::util::{
+        branch_commit_cli_ids, commit_file_with_worktree_changes_as_two_hunks,
+        commit_two_files_as_two_hunks_each, status_json_with_files as status_json,
+    },
+    utils::{CommandExt, Sandbox},
+};
 
 /// Return the committed-file CLI id (e.g. `e8:nk`) for `file_path` in the commit
 /// at `commit_index` (newest-first) on `branch_name`.
@@ -58,6 +64,51 @@ fn commit_file_content(env: &Sandbox, revspec: &str) -> Option<String> {
 /// Read the contents of a file in the working directory.
 fn worktree_file_content(env: &Sandbox, path: &str) -> String {
     std::fs::read_to_string(env.projects_root().join(path)).expect("worktree file should exist")
+}
+
+fn branch_commits_contain_file(
+    status: &serde_json::Value,
+    branch_name: &str,
+    file_path: &str,
+) -> bool {
+    status["stacks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|stack| stack["branches"].as_array().unwrap().iter())
+        .filter(|branch| branch["name"].as_str().unwrap() == branch_name)
+        .flat_map(|branch| branch["commits"].as_array().unwrap().iter())
+        .flat_map(|commit| commit["changes"].as_array().unwrap().iter())
+        .any(|change| change["filePath"].as_str().unwrap() == file_path)
+}
+
+fn committed_file_cli_id_for_file(
+    status: &serde_json::Value,
+    branch_name: &str,
+    file_path: &str,
+) -> Option<String> {
+    status["stacks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|stack| stack["branches"].as_array().unwrap().iter())
+        .find(|branch| branch["name"].as_str().unwrap() == branch_name)
+        .and_then(|branch| {
+            branch["commits"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find_map(|commit| {
+                    commit["changes"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .find_map(|change| {
+                            (change["filePath"].as_str().unwrap() == file_path)
+                                .then(|| change["cliId"].as_str().unwrap().to_string())
+                        })
+                })
+        })
 }
 
 #[test]
@@ -478,6 +529,362 @@ Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "mes
     assert_eq!(commit_file_content(&env, "B:fb.txt"), None);
     assert_eq!(worktree_file_content(&env, "fa.txt"), "a content\n");
     assert_eq!(worktree_file_content(&env, "fb.txt"), "b content\n");
+
+    Ok(())
+}
+
+#[test]
+fn uncommit_command_on_commit() -> anyhow::Result<()> {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+
+    env.setup_metadata(&["A", "B"]);
+    commit_two_files_as_two_hunks_each(&env, "A", "a.txt", "b.txt", "first commit");
+
+    // Get the commit ID from status
+    let status_output = env.but("--format json status").allow_json().output()?;
+    let status_json: serde_json::Value = serde_json::from_slice(&status_output.stdout)?;
+    let commit_cli_id = status_json["stacks"][0]["branches"][0]["commits"][0]["cliId"]
+        .as_str()
+        .unwrap();
+
+    // Test uncommit command
+    env.but(format!("uncommit {commit_cli_id}"))
+        .assert()
+        .success();
+
+    // Verify the files are now uncommitted
+    env.but("--format json status -f")
+        .allow_json()
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+{
+  "uncommittedChanges": [
+    {
+      "cliId": "n",
+      "filePath": "a.txt",
+      "changeType": "added"
+    },
+    {
+      "cliId": "p",
+      "filePath": "b.txt",
+      "changeType": "added"
+    }
+  ],
+  "stacks": [
+    {
+      "cliId": "k0",
+      "assignedChanges": [],
+      "branches": [
+...
+
+"#]]);
+
+    Ok(())
+}
+
+#[test]
+fn uncommit_diff_json_keeps_mutation_result_and_diff() -> anyhow::Result<()> {
+    fn run(agent: bool) -> anyhow::Result<()> {
+        let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+
+        env.setup_metadata(&["A", "B"]);
+        commit_two_files_as_two_hunks_each(&env, "A", "a.txt", "b.txt", "first commit");
+
+        let before = status_json(&env)?;
+        let commit_cli_id = branch_commit_cli_ids(&before, "A")[0].clone();
+        let command = format!("--format json uncommit {commit_cli_id} --diff");
+        let output = if agent {
+            env.but(command)
+                .env("AI_AGENT", "codex")
+                .allow_json()
+                .output()?
+        } else {
+            env.but(command).allow_json().output()?
+        };
+        assert!(
+            output.status.success(),
+            "uncommit --diff failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        let json: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+        let result = if agent { &json["result"] } else { &json };
+        assert_eq!(result["ok"], true);
+
+        let changes = result["diff"]["changes"]
+            .as_array()
+            .expect("diff changes should be an array");
+        assert!(
+            changes
+                .iter()
+                .any(|change| change["path"].as_str() == Some("a.txt")),
+            "diff output should include the uncommitted files"
+        );
+
+        if agent {
+            assert!(
+                json.get("status").is_some(),
+                "agent JSON output should still include status"
+            );
+        }
+
+        Ok(())
+    }
+
+    run(false)?;
+    run(true)?;
+    Ok(())
+}
+
+#[test]
+fn uncommit_command_validation() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+
+    env.setup_metadata(&["A", "B"]);
+    commit_file_with_worktree_changes_as_two_hunks(&env, "A", "a.txt");
+
+    // Test that uncommit rejects uncommitted files
+    env.but("uncommit a.txt")
+        .assert()
+        .failure()
+        .stderr_eq(str![[r#"
+Failed to uncommit. Cannot uncommit a.txt - it is an uncommitted file or hunk. Only commits and files-in-commits can be uncommitted.
+
+"#]]);
+
+    // Test that uncommit rejects branches
+    env.but("uncommit A").assert().failure().stderr_eq(str![[r#"
+Failed to uncommit. Cannot uncommit A - it is a branch. Only commits and files-in-commits can be uncommitted.
+
+"#]]);
+}
+
+#[test]
+fn uncommit_command_with_discard_on_commit() -> anyhow::Result<()> {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+
+    env.setup_metadata(&["A", "B"]);
+    commit_two_files_as_two_hunks_each(&env, "A", "a.txt", "b.txt", "first commit");
+
+    let before = status_json(&env)?;
+    let commit_cli_ids_before = branch_commit_cli_ids(&before, "A");
+    let source_cli_id = commit_cli_ids_before[0].clone();
+
+    env.but("stf")
+        .assert()
+        .success()
+        .stderr_eq(snapbox::str![])
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted] (no changes)
+┊
+┊╭┄g0 [A]
+┊●   1 create a.txt and b.txt
+┊│     1:n A a.txt
+┊│     1:p A b.txt
+┊●   tpm add A
+┊│     tpm:t A A
+├╯
+┊
+┊╭┄h0 [B]
+┊●   lrm add B
+┊│     lrm:p A B
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    env.but(format!("uncommit {source_cli_id} --discard"))
+        .assert()
+        .success();
+
+    let after = status_json(&env)?;
+    let commit_cli_ids_after = branch_commit_cli_ids(&after, "A");
+
+    assert_eq!(
+        commit_cli_ids_after.len() + 1,
+        commit_cli_ids_before.len(),
+        "discarding a commit via uncommit should remove that commit from branch history"
+    );
+    assert!(
+        !commit_cli_ids_after.contains(&source_cli_id),
+        "source commit should no longer be present after discard"
+    );
+    assert!(
+        !uncommitted_contains_file(&after, "a.txt") && !uncommitted_contains_file(&after, "b.txt"),
+        "discarding a commit should not move its changes into uncommitted"
+    );
+
+    env.but("stf")
+        .assert()
+        .success()
+        .stderr_eq(snapbox::str![])
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted] (no changes)
+┊
+┊╭┄g0 [A]
+┊●   tpm add A
+┊│     tpm:t A A
+├╯
+┊
+┊╭┄h0 [B]
+┊●   lrm add B
+┊│     lrm:p A B
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    Ok(())
+}
+
+#[test]
+fn uncommit_command_with_discard_on_committed_file() -> anyhow::Result<()> {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+
+    env.setup_metadata(&["A", "B"]);
+    commit_two_files_as_two_hunks_each(&env, "A", "a.txt", "b.txt", "first commit");
+
+    let before = status_json(&env)?;
+    let committed_file_cli_id = committed_file_cli_id_for_file(&before, "A", "b.txt")
+        .expect("b.txt committed-file id should exist");
+
+    env.but("stf")
+        .assert()
+        .success()
+        .stderr_eq(snapbox::str![])
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted] (no changes)
+┊
+┊╭┄g0 [A]
+┊●   1 create a.txt and b.txt
+┊│     1:n A a.txt
+┊│     1:p A b.txt
+┊●   tpm add A
+┊│     tpm:t A A
+├╯
+┊
+┊╭┄h0 [B]
+┊●   lrm add B
+┊│     lrm:p A B
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    env.but(format!("uncommit {committed_file_cli_id} -d"))
+        .assert()
+        .success();
+
+    let after = status_json(&env)?;
+    assert!(
+        !uncommitted_contains_file(&after, "b.txt"),
+        "discarded committed file changes should not end up uncommitted"
+    );
+    assert!(
+        !branch_commits_contain_file(&after, "A", "b.txt"),
+        "discarded committed file changes should no longer be in commit history"
+    );
+    assert!(
+        branch_commits_contain_file(&after, "A", "a.txt"),
+        "other committed file changes should remain in history"
+    );
+
+    env.but("stf")
+        .assert()
+        .success()
+        .stderr_eq(snapbox::str![])
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted] (no changes)
+┊
+┊╭┄g0 [A]
+┊●   1 create a.txt and b.txt
+┊│     1:n A a.txt
+┊●   tpm add A
+┊│     tpm:t A A
+├╯
+┊
+┊╭┄h0 [B]
+┊●   lrm add B
+┊│     lrm:p A B
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    Ok(())
+}
+
+#[test]
+fn uncommit_help_mentions_discard_flag() -> anyhow::Result<()> {
+    let env = Sandbox::empty();
+
+    let output = env.but("uncommit --help").output()?;
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout)?;
+
+    assert!(
+        stdout.contains("-d, --discard"),
+        "expected uncommit help to list the discard flag"
+    );
+    assert!(
+        stdout.contains("Discard the selected committed changes"),
+        "expected uncommit help to describe discard behavior"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn agent_uncommit_discard_multiple_sources_writes_single_json_with_status() -> anyhow::Result<()> {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+
+    env.setup_metadata(&["A", "B"]);
+    commit_two_files_as_two_hunks_each(&env, "A", "a.txt", "b.txt", "first commit");
+    commit_two_files_as_two_hunks_each(&env, "A", "a.txt", "b.txt", "second commit");
+
+    let before = status_json(&env)?;
+    let commit_cli_ids_before = branch_commit_cli_ids(&before, "A");
+    let source_cli_ids = format!("{},{}", commit_cli_ids_before[0], commit_cli_ids_before[1]);
+
+    let output = env
+        .but(format!("--format json uncommit {source_cli_ids} --discard"))
+        .env("AI_AGENT", "codex")
+        .allow_json()
+        .output()?;
+    assert!(output.status.success());
+
+    let parsed: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+    assert_eq!(parsed["result"]["ok"], serde_json::json!(true));
+    assert!(
+        parsed.get("status").is_some(),
+        "agent JSON wrapper should include status"
+    );
+
+    let after = status_json(&env)?;
+    let commit_cli_ids_after = branch_commit_cli_ids(&after, "A");
+
+    assert_eq!(
+        commit_cli_ids_after.len() + 2,
+        commit_cli_ids_before.len(),
+        "discarding two commit sources should remove both from branch history"
+    );
+    assert!(
+        !uncommitted_contains_file(&after, "a.txt") && !uncommitted_contains_file(&after, "b.txt"),
+        "discarded commits should not move their changes into uncommitted"
+    );
 
     Ok(())
 }

@@ -34,4 +34,10 @@ puts "\nA distant door unlocks."
         .stdout_eq(snapbox::file![
             "snapshots/diff2/uncommitted.stdout.term.svg"
         ]);
+
+    env.but("_diff2")
+        .with_color_for_svg()
+        .assert()
+        .success()
+        .stdout_eq(snapbox::file!["snapshots/diff2/uncommitted.stdout"].raw());
 }

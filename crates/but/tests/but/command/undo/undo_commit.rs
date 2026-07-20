@@ -106,7 +106,7 @@ fn can_undo_but_commit_dash_dash_only() {
     env.setup_metadata_at_target(&["A"], "origin/main");
 
     env.file("assigned.txt", "assigned content");
-    env.but("rub assigned.txt A").assert().success();
+    env.but("stage assigned.txt A").assert().success();
 
     env.file("uncommitted.txt", "uncommitted content");
 

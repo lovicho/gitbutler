@@ -70,7 +70,7 @@ impl OpenAIClientProvider for OllamaProvider {
 }
 
 impl LLMClient for OllamaProvider {
-    fn from_git_config(config: &gix::config::File<'static>) -> Option<Self>
+    fn from_git_config(config: &gix::config::File) -> Option<Self>
     where
         Self: Sized,
     {

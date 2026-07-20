@@ -2,6 +2,7 @@ use std::{path::Path, sync::Mutex};
 
 use anyhow::{Result, bail};
 use base64::engine::Engine as _;
+use bstr::ByteSlice as _;
 use but_core::commit::sign_buffer;
 use but_core::git_config::{edit_repo_config, ensure_config_value};
 use but_ctx::Context;
@@ -222,7 +223,7 @@ impl RepoCommands for Context {
         repo.remote_names()
             .iter()
             .map(|name| -> Result<_> {
-                let remote = repo.find_remote(name.as_ref())?;
+                let remote = repo.find_remote(name)?;
                 Ok(GitRemote::from_gix(name.to_string(), &remote))
             })
             .collect()
@@ -240,7 +241,7 @@ impl RepoCommands for Context {
         if let Some(remote_name) = repo
             .remote_names()
             .iter()
-            .filter_map(|name| repo.find_remote(name.as_ref()).ok())
+            .filter_map(|name| repo.find_remote(name).ok())
             .find_map(|remote| {
                 remote
                     .url(gix::remote::Direction::Fetch)
@@ -260,7 +261,7 @@ impl RepoCommands for Context {
 
         edit_repo_config(&repo, gix::config::Source::Local, |config| {
             let mut section = config.section_mut_or_create_new("remote", Some(name.into()))?;
-            section.push("url".try_into()?, Some(url.into()));
+            section.push("url", Some(url.as_bytes().as_bstr()))?;
             ensure_config_value(
                 config,
                 &format!("remote.{name}.fetch"),

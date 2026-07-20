@@ -233,7 +233,9 @@ impl<'repo> OverlayRepo<'repo> {
             gix::repository::branch_remote_tracking_ref_name::Error,
         >,
     > {
-        self.inner.branch_remote_tracking_ref_name(name, direction)
+        self.inner
+            .branch_remote_tracking_ref_name(name, direction)
+            .map(|result| result.map(Cow::Owned))
     }
 
     pub fn find_commit(&self, id: gix::ObjectId) -> anyhow::Result<gix::Commit<'repo>> {
@@ -248,7 +250,7 @@ impl<'repo> OverlayRepo<'repo> {
         self.inner
     }
 
-    pub fn remote_names(&self) -> gix::remote::Names<'repo> {
+    pub fn remote_names(&self) -> gix::remote::Names {
         self.inner.remote_names()
     }
 

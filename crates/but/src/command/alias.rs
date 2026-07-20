@@ -186,7 +186,7 @@ fn get_all_aliases(repo: &gix::Repository) -> Result<Vec<AliasEntry>> {
         let subsection = header.subsection_name().map(|s| s.to_str_lossy());
 
         for value_name in section.value_names() {
-            let vn = value_name.as_ref();
+            let vn = value_name;
 
             // Normalize to a dotted key we can prefix-test: "but.alias.<rest>"
             let dotted = match &subsection {
@@ -327,19 +327,17 @@ pub fn remove(
     Ok(())
 }
 
-fn remove_alias(config: &mut gix::config::File<'_>, name: &str) {
+fn remove_alias(config: &mut gix::config::File, name: &str) {
     config
         .section_mut("but", Some("alias".into()))
         .ok()
         .and_then(|mut section| section.remove(name));
 }
 
-fn set_alias(config: &mut gix::config::File<'static>, name: &str, value: &str) -> Result<()> {
+fn set_alias(config: &mut gix::config::File, name: &str, value: &str) -> Result<()> {
     let mut section = config.section_mut_or_create_new("but", Some("alias".into()))?;
-    section.set(
-        gix::config::parse::section::ValueName::try_from(name.to_owned())
-            .with_context(|| format!("invalid alias name for git config: {name}"))?,
-        value.into(),
-    );
+    section
+        .set(name, value)
+        .with_context(|| format!("invalid alias name for git config: {name}"))?;
     Ok(())
 }

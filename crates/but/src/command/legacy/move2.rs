@@ -28,6 +28,7 @@ use crate::{
 pub enum MoveOutcome {
     Commits {
         sources: NonEmpty<gix::ObjectId>,
+        moved_commits: NonEmpty<gix::ObjectId>,
         target: Option<MoveTarget>,
         new_branch_name: Option<FullName>,
     },
@@ -52,6 +53,7 @@ impl CliOutputHuman for MoveOutcome {
         match self {
             Self::Commits {
                 sources,
+                moved_commits: _,
                 target,
                 new_branch_name,
             } => {
@@ -110,6 +112,7 @@ impl CliOutputHuman for MoveOutcome {
     }
 }
 
+#[cfg_attr(not(feature = "but-2"), expect(dead_code))]
 pub fn r#move(
     ctx: &mut Context,
     _out: IntermediateChannel<'_>,
@@ -121,11 +124,11 @@ pub fn r#move(
 
     let move_op = resolve(ctx, guard.write_permission(), args, &id_map)?;
 
-    run(ctx, &mut meta, guard.write_permission(), move_op)
+    Ok(run(ctx, &mut meta, guard.write_permission(), move_op)?)
 }
 
 #[derive(Clone)]
-enum MoveOperation {
+pub enum MoveOperation {
     CommitsRelativeTo(MoveCommitsRelativeToOperation),
     CommitsToNewBranch(MoveCommitsToNewBranchOperation),
     ChangesRelativeTo(MoveChangesRelativeToOperation),
@@ -135,9 +138,9 @@ enum MoveOperation {
 }
 
 #[derive(Clone)]
-struct MoveCommitsRelativeToOperation {
-    sources: NonEmpty<gix::ObjectId>,
-    target: MoveTarget,
+pub struct MoveCommitsRelativeToOperation {
+    pub sources: NonEmpty<gix::ObjectId>,
+    pub target: MoveTarget,
 }
 
 impl MoveCommitsRelativeToOperation {
@@ -175,9 +178,9 @@ impl MoveCommitsRelativeToOperation {
 }
 
 #[derive(Clone)]
-struct MoveCommitsToNewBranchOperation {
-    sources: NonEmpty<gix::ObjectId>,
-    branch_name: Option<FullName>,
+pub struct MoveCommitsToNewBranchOperation {
+    pub sources: NonEmpty<gix::ObjectId>,
+    pub branch_name: Option<FullName>,
 }
 
 impl MoveCommitsToNewBranchOperation {
@@ -203,10 +206,10 @@ impl MoveCommitsToNewBranchOperation {
 }
 
 #[derive(Clone)]
-struct MoveChangesRelativeToOperation {
-    source_commit_id: gix::ObjectId,
-    changes: NonEmpty<DiffSpec>,
-    target: MoveTarget,
+pub struct MoveChangesRelativeToOperation {
+    pub source_commit_id: gix::ObjectId,
+    pub changes: NonEmpty<DiffSpec>,
+    pub target: MoveTarget,
 }
 
 impl MoveChangesRelativeToOperation {
@@ -253,10 +256,10 @@ impl MoveChangesRelativeToOperation {
 }
 
 #[derive(Clone)]
-struct MoveChangesToNewBranchOperation {
-    source_commit_id: gix::ObjectId,
-    changes: NonEmpty<DiffSpec>,
-    branch_name: Option<FullName>,
+pub struct MoveChangesToNewBranchOperation {
+    pub source_commit_id: gix::ObjectId,
+    pub changes: NonEmpty<DiffSpec>,
+    pub branch_name: Option<FullName>,
 }
 
 impl MoveChangesToNewBranchOperation {
@@ -294,9 +297,9 @@ impl MoveChangesToNewBranchOperation {
 }
 
 #[derive(Clone)]
-struct StackBranchOnOperation {
-    source_branch: FullName,
-    target_branch: FullName,
+pub struct StackBranchOnOperation {
+    pub source_branch: FullName,
+    pub target_branch: FullName,
 }
 
 impl StackBranchOnOperation {
@@ -306,8 +309,8 @@ impl StackBranchOnOperation {
 }
 
 #[derive(Clone)]
-struct UnstackBranchOperation {
-    source_branch: FullName,
+pub struct UnstackBranchOperation {
+    pub source_branch: FullName,
 }
 
 impl UnstackBranchOperation {
@@ -678,12 +681,12 @@ fn resolve_sources(
     }
 }
 
-fn run(
+pub fn run(
     ctx: &mut Context,
     meta: &mut impl RefMetadata,
     perm: &mut RepoExclusive,
     move_op: MoveOperation,
-) -> CliResult<MoveOutcome> {
+) -> anyhow::Result<MoveOutcome> {
     let snapshot_details = match &move_op {
         MoveOperation::CommitsRelativeTo(_) | MoveOperation::CommitsToNewBranch(_) => {
             SnapshotDetails::new(OperationKind::MoveCommit)
@@ -702,16 +705,33 @@ fn run(
         DryRun::No,
         |mut tx| {
             let outcome = match move_op {
-                MoveOperation::CommitsRelativeTo(op) => MoveOutcome::Commits {
-                    sources: op.sources.clone(),
-                    target: Some(op.target.clone()),
-                    new_branch_name: op.execute(&mut tx)?,
-                },
-                MoveOperation::CommitsToNewBranch(op) => MoveOutcome::Commits {
-                    sources: op.sources.clone(),
-                    target: None,
-                    new_branch_name: Some(op.execute(&mut tx)?),
-                },
+                MoveOperation::CommitsRelativeTo(op) => {
+                    let sources = op.sources.clone();
+                    let target = op.target.clone();
+                    let new_branch_name = op.execute(&mut tx)?;
+                    let moved_commits = sources
+                        .clone()
+                        .map(|source| tx.get_mapped_commit(source).unwrap_or(source));
+                    MoveOutcome::Commits {
+                        sources,
+                        moved_commits,
+                        target: Some(target),
+                        new_branch_name,
+                    }
+                }
+                MoveOperation::CommitsToNewBranch(op) => {
+                    let sources = op.sources.clone();
+                    let new_branch_name = op.execute(&mut tx)?;
+                    let moved_commits = sources
+                        .clone()
+                        .map(|source| tx.get_mapped_commit(source).unwrap_or(source));
+                    MoveOutcome::Commits {
+                        sources,
+                        moved_commits,
+                        target: None,
+                        new_branch_name: Some(new_branch_name),
+                    }
+                }
                 MoveOperation::ChangesRelativeTo(op) => {
                     let target = op.target.clone();
                     let num_changes = op.changes.len();

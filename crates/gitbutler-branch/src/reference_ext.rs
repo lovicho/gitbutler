@@ -1,7 +1,5 @@
-use std::{borrow::Cow, collections::BTreeSet};
-
 use anyhow::{Context as _, Result};
-use bstr::{BStr, ByteSlice};
+use bstr::{BStr, ByteSlice as _};
 use gix::refs::Category;
 
 use crate::BranchIdentity;
@@ -16,11 +14,11 @@ pub trait ReferenceExtGix {
     /// `refs/heads/my-branch` -> `my-branch`
     /// `refs/remotes/origin/my-branch` -> `my-branch`
     /// `refs/remotes/Byron/gitbutler/my-branch` -> `my-branch` (where the remote is `Byron/gitbutler`)
-    fn identity(&self, remotes: &BTreeSet<Cow<'_, BStr>>) -> Result<BranchIdentity>;
+    fn identity(&self, remotes: &gix::remote::Names) -> Result<BranchIdentity>;
 }
 
 impl ReferenceExtGix for &gix::refs::FullNameRef {
-    fn identity(&self, remotes: &BTreeSet<Cow<'_, BStr>>) -> Result<BranchIdentity> {
+    fn identity(&self, remotes: &gix::remote::Names) -> Result<BranchIdentity> {
         let (category, shorthand_name) = self
             .category_and_short_name()
             .context("Branch could not be categorized")?;

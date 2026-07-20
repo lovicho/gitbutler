@@ -15,12 +15,12 @@ fn config_path(repo: Option<&gix::Repository>, source: gix::config::Source) -> R
             format!("determining the {source:?} git config location requires a repository")
         })?;
         if source == gix::config::Source::Local {
-            repo.common_dir().join(path.as_ref())
+            repo.common_dir().join(&path)
         } else {
-            repo.git_dir().join(path.as_ref())
+            repo.git_dir().join(&path)
         }
     } else {
-        path.into_owned()
+        path
     };
     Ok(path)
 }
@@ -32,7 +32,7 @@ fn config_path(repo: Option<&gix::Repository>, source: gix::config::Source) -> R
 pub fn open_config_for_editing(
     repo: Option<&gix::Repository>,
     source: gix::config::Source,
-) -> Result<(gix::config::File<'static>, gix::lock::File)> {
+) -> Result<(gix::config::File, gix::lock::File)> {
     let path = config_path(repo, source)?;
     std::fs::create_dir_all(path.parent().context("git config path has no parent")?)?;
     let lock = gix::lock::File::acquire_to_update_resource(
@@ -53,9 +53,7 @@ pub fn open_config_for_editing(
 /// processes are observed.
 ///
 /// If the config file doesn't exist yet, an empty in-memory config is returned.
-pub fn open_repo_local_config_for_reading(
-    repo: &gix::Repository,
-) -> Result<gix::config::File<'static>> {
+pub fn open_repo_local_config_for_reading(repo: &gix::Repository) -> Result<gix::config::File> {
     let source = gix::config::Source::Local;
     let path = config_path(Some(repo), source)?;
     if !path.exists() {
@@ -70,7 +68,7 @@ pub fn open_repo_local_config_for_reading(
 /// Open the user-global Git config for reading without acquiring a write lock.
 ///
 /// If the config file doesn't exist yet, an empty in-memory config is returned.
-pub fn open_global_config_for_reading() -> Result<gix::config::File<'static>> {
+pub fn open_global_config_for_reading() -> Result<gix::config::File> {
     let path = config_path(None, gix::config::Source::User)?;
     if !path.exists() {
         return Ok(gix::config::File::new(gix::config::file::Metadata::from(
@@ -82,10 +80,7 @@ pub fn open_global_config_for_reading() -> Result<gix::config::File<'static>> {
 }
 
 /// Serialize a Git `config` file back to disk at `lock`.
-pub fn write_locked_config(
-    config: &gix::config::File<'_>,
-    mut lock: gix::lock::File,
-) -> Result<()> {
+pub fn write_locked_config(config: &gix::config::File, mut lock: gix::lock::File) -> Result<()> {
     let path = lock.resource_path();
     config
         .write_to(&mut lock)
@@ -104,7 +99,7 @@ pub fn write_locked_config(
 pub fn edit_config(
     repo: Option<&gix::Repository>,
     source: gix::config::Source,
-    edit: impl FnOnce(&mut gix::config::File<'static>) -> Result<()>,
+    edit: impl FnOnce(&mut gix::config::File) -> Result<()>,
 ) -> Result<bool> {
     let (mut config, lock) = open_config_for_editing(repo, source)?;
     let previous_contents = config.to_bstring();
@@ -121,7 +116,7 @@ pub fn edit_config(
 pub fn edit_repo_config(
     repo: &gix::Repository,
     source: gix::config::Source,
-    edit: impl FnOnce(&mut gix::config::File<'static>) -> Result<()>,
+    edit: impl FnOnce(&mut gix::config::File) -> Result<()>,
 ) -> Result<bool> {
     if matches!(
         source,
@@ -134,41 +129,28 @@ pub fn edit_repo_config(
 
 /// Set the entry in `config` identified by the dotted `key` (like `section.value` or `section.subsection.value`) to `value`.
 /// This will create sections as needed, and remove all previous values under the same section with the same name.
-pub fn set_config_value(
-    config: &mut gix::config::File<'static>,
-    key: &str,
-    value: &str,
-) -> Result<()> {
+pub fn set_config_value(config: &mut gix::config::File, key: &str, value: &str) -> Result<()> {
     remove_config_value(config, key)?;
     let key = key
         .try_as_key()
         .with_context(|| format!("invalid git config key: {key}"))?;
     config
         .section_mut_or_create_new(key.section_name, key.subsection_name)?
-        .set(
-            gix::config::parse::section::ValueName::try_from(key.value_name.to_owned())?,
-            value.into(),
-        );
+        .set(key.value_name, value)?;
     Ok(())
 }
 
 /// Ensure `value` is present in `config` for the multi-valued Git entry identified by `key`.
 ///
 /// Returns `true` if the config was changed.
-pub fn ensure_config_value(
-    config: &mut gix::config::File<'static>,
-    key: &str,
-    value: &str,
-) -> Result<bool> {
+pub fn ensure_config_value(config: &mut gix::config::File, key: &str, value: &str) -> Result<bool> {
     let key = key
         .try_as_key()
         .with_context(|| format!("invalid git config key: {key}"))?;
     let value = value.as_bytes().as_bstr();
     let already_present =
         match config.raw_values_by(key.section_name, key.subsection_name, key.value_name) {
-            Ok(values) => values
-                .into_iter()
-                .any(|existing| existing.as_ref() == value),
+            Ok(values) => values.into_iter().any(|existing| existing == value),
             Err(_) => false,
         };
     if already_present {
@@ -176,17 +158,14 @@ pub fn ensure_config_value(
     }
     config
         .section_mut_or_create_new(key.section_name, key.subsection_name)?
-        .push(
-            gix::config::parse::section::ValueName::try_from(key.value_name.to_owned())?,
-            Some(value),
-        );
+        .push(key.value_name, Some(value))?;
     Ok(true)
 }
 
 /// Remove the Git entry in `config` identified by the dotted `key`
 /// (like `section.value` or `section.subsection.value`) if it exists.
 /// It's no error if it doesn't exist.
-pub fn remove_config_value(config: &mut gix::config::File<'static>, key: &str) -> Result<()> {
+pub fn remove_config_value(config: &mut gix::config::File, key: &str) -> Result<()> {
     let key = key
         .try_as_key()
         .with_context(|| format!("invalid git config key: {key}"))?;

@@ -46,7 +46,7 @@ pub fn save_author_if_unset_in_repo<'a, 'b>(
             repo.git_dir().join(config_path)
         }
     } else {
-        config_path.into_owned()
+        config_path
     };
 
     if !config_path.exists() {

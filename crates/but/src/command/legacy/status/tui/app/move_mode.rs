@@ -3,23 +3,31 @@ use std::sync::Arc;
 use but_core::ref_metadata::StackId;
 use but_ctx::Context;
 use but_rebase::graph_rebase::mutate::InsertSide;
+use gix::refs::Category;
 use nonempty::NonEmpty;
 use ratatui::prelude::Span;
 
 use crate::{
     CliId,
-    command::legacy::status::{
-        output::StatusOutputLineData,
-        tui::{
-            App, Message, Mode, ReloadCause, SelectAfterReload,
-            app::mark::MarkedCommit,
-            operations,
-            render::{
-                ModeRender, RenderSingleLineSpans, render_move_operation_target_marker, source_span,
+    command::legacy::{
+        move2::{
+            self, MoveCommitsRelativeToOperation, MoveOperation,
+            MoveOutcome as MoveOperationOutcome, StackBranchOnOperation, UnstackBranchOperation,
+        },
+        status::{
+            output::StatusOutputLineData,
+            tui::{
+                App, Message, Mode, ReloadCause, SelectAfterReload,
+                app::mark::MarkedCommit,
+                render::{
+                    ModeRender, RenderSingleLineSpans, render_move_operation_target_marker,
+                    source_span,
+                },
             },
         },
     },
     id::ShortId,
+    utils::targeting,
 };
 
 #[derive(Debug, Clone)]
@@ -302,88 +310,41 @@ impl App {
             }
         };
 
-        let selection_after_reload = match &**source {
-            MoveSource::Commit {
-                commit_id: source_commit_id,
-                ..
-            } => {
-                let commit_move_result = match target {
-                    MoveTarget::Branch { name } => operations::move_commit_to_branch(
-                        ctx,
-                        Vec::from([*source_commit_id]),
-                        name,
-                    )?,
-                    MoveTarget::Commit {
-                        commit_id: target_commit_id,
-                    } => operations::move_commit_to_commit(
-                        ctx,
-                        Vec::from([*source_commit_id]),
-                        target_commit_id,
-                        *insert_side,
-                    )?,
-                    MoveTarget::MergeBase => return Ok(()),
-                };
-
-                commit_move_result
-                    .workspace
-                    .replaced_commits
-                    .get(source_commit_id)
-                    .copied()
-                    .map(SelectAfterReload::Commit)
+        let move_op = match &**source {
+            MoveSource::Commit { commit_id, .. } => {
+                MoveOperation::CommitsRelativeTo(MoveCommitsRelativeToOperation {
+                    sources: NonEmpty::new(*commit_id),
+                    target: move_target(target, *insert_side)?,
+                })
             }
             MoveSource::Marks(commits) => {
-                let sources = commits
-                    .iter()
-                    .map(|commit| commit.commit_id)
-                    .collect::<Vec<_>>();
-
-                let commit_move_result = match target {
-                    MoveTarget::Branch { name } => {
-                        operations::move_commit_to_branch(ctx, sources.clone(), name)?
-                    }
-                    MoveTarget::Commit {
-                        commit_id: target_commit_id,
-                    } => operations::move_commit_to_commit(
-                        ctx,
-                        sources.clone(),
-                        target_commit_id,
-                        *insert_side,
-                    )?,
-                    MoveTarget::MergeBase => return Ok(()),
-                };
-
-                sources
-                    .iter()
-                    .find_map(|source| {
-                        commit_move_result
-                            .workspace
-                            .replaced_commits
-                            .get(source)
-                            .copied()
-                    })
-                    .map(SelectAfterReload::Commit)
+                MoveOperation::CommitsRelativeTo(MoveCommitsRelativeToOperation {
+                    sources: commits.clone().map(|commit| commit.commit_id),
+                    target: move_target(target, *insert_side)?,
+                })
             }
             MoveSource::Branch {
                 name: source_branch_name,
                 ..
-            } => match target {
-                MoveTarget::Branch {
-                    name: target_branch_name,
-                } => {
-                    operations::move_branch_onto_branch(
-                        ctx,
-                        source_branch_name,
-                        target_branch_name,
-                    )?;
-                    Some(SelectAfterReload::Branch(source_branch_name.to_owned()))
+            } => {
+                let source_branch =
+                    Category::LocalBranch.to_full_name(source_branch_name.as_str())?;
+                match target {
+                    MoveTarget::Branch {
+                        name: target_branch_name,
+                    } => MoveOperation::StackBranch(StackBranchOnOperation {
+                        source_branch,
+                        target_branch: Category::LocalBranch.to_full_name(target_branch_name)?,
+                    }),
+                    MoveTarget::MergeBase => {
+                        MoveOperation::UnstackBranch(UnstackBranchOperation { source_branch })
+                    }
+                    MoveTarget::Commit { .. } => return Ok(()),
                 }
-                MoveTarget::MergeBase => {
-                    operations::tear_off_branch(ctx, source_branch_name)?;
-                    Some(SelectAfterReload::Branch(source_branch_name.to_owned()))
-                }
-                MoveTarget::Commit { .. } => return Ok(()),
-            },
+            }
         };
+
+        let selection_after_reload = move_with(ctx, move_op)?;
 
         messages.extend([
             Message::EnterNormalModeAfterConfirmingOperation,
@@ -392,4 +353,42 @@ impl App {
 
         Ok(())
     }
+}
+
+fn move_target(
+    target: MoveTarget<'_>,
+    insert_side: InsertSide,
+) -> anyhow::Result<move2::MoveTarget> {
+    Ok(match target {
+        MoveTarget::Branch { name } => move2::MoveTarget::BranchTip {
+            name: Category::LocalBranch.to_full_name(name)?,
+        },
+        MoveTarget::Commit { commit_id } => move2::MoveTarget::Commit {
+            commit_id,
+            side: targeting::Side::from(insert_side),
+        },
+        MoveTarget::MergeBase => anyhow::bail!("commits cannot be moved to the merge base"),
+    })
+}
+
+fn move_with(
+    ctx: &mut Context,
+    move_op: MoveOperation,
+) -> anyhow::Result<Option<SelectAfterReload>> {
+    let mut guard = ctx.exclusive_worktree_access();
+    let mut meta = ctx.meta()?;
+    let outcome = move2::run(ctx, &mut meta, guard.write_permission(), move_op)?;
+
+    Ok(match outcome {
+        MoveOperationOutcome::Commits { moved_commits, .. } => {
+            Some(SelectAfterReload::Commit(moved_commits.head))
+        }
+        MoveOperationOutcome::Changes { new_commit_id, .. } => {
+            Some(SelectAfterReload::Commit(new_commit_id))
+        }
+        MoveOperationOutcome::StackBranch { source_branch, .. }
+        | MoveOperationOutcome::UnstackBranch { source_branch } => Some(SelectAfterReload::Branch(
+            source_branch.shorten().to_string(),
+        )),
+    })
 }

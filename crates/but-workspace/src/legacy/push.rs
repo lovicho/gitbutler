@@ -190,7 +190,7 @@ fn gerrit_push_args(
 /// Derive the target branch name while tolerating stale target remotes.
 fn target_branch_name_from_ref_name(
     target_ref_name: &gix::refs::FullNameRef,
-    remote_names: &gix::remote::Names<'_>,
+    remote_names: &gix::remote::Names,
 ) -> Result<BString> {
     let (category, shorthand_name) = target_ref_name
         .category_and_short_name()

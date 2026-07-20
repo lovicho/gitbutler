@@ -387,7 +387,7 @@ struct CommitInfo {
 fn generate_branch_summary(
     branch_name: &str,
     commits: &[CommitInfo],
-    git_config: &gix::config::File<'static>,
+    git_config: &gix::config::File,
 ) -> anyhow::Result<String> {
     use but_llm::LLMProvider;
 

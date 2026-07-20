@@ -508,9 +508,9 @@ impl ProjectMeta {
     /// isn't a remote tracking branch, or a target commit id that isn't a valid object id, are
     /// ignored with a warning so one bad hand-edited value doesn't make the project unusable.
     /// Errors only surface where a target is actually required, like [`Self::target_ref_or_err()`].
-    pub fn try_from_config(config: &gix::config::File<'_>) -> anyhow::Result<Self> {
+    pub fn try_from_config(config: &gix::config::File) -> anyhow::Result<Self> {
         let target_ref = config.string(PROJECT_TARGET_REF).and_then(|value| {
-            match gix::refs::FullName::try_from(value.as_ref()) {
+            match gix::refs::FullName::try_from(value.as_bstr()) {
                 Ok(name) if name.category() == Some(gix::refs::Category::RemoteBranch) => {
                     Some(name)
                 }
@@ -531,7 +531,7 @@ impl ProjectMeta {
         let target_commit_id = config
             .string(PROJECT_TARGET_COMMIT_ID)
             .and_then(
-                |value| match gix::ObjectId::from_hex(value.as_ref()) {
+                |value| match gix::ObjectId::from_hex(value.as_slice()) {
                     Ok(id) => Some(id),
                     Err(err) => {
                         tracing::warn!(
@@ -555,8 +555,8 @@ impl ProjectMeta {
     }
 
     /// Return whether project metadata has already been ported to Git config.
-    pub fn is_ported(config: &gix::config::File<'_>) -> bool {
-        matches!(config.boolean(PROJECT_PORTED_META), Some(Ok(true)))
+    pub fn is_ported(config: &gix::config::File) -> bool {
+        matches!(config.boolean(PROJECT_PORTED_META), Ok(Some(true)))
     }
 
     /// Return whether project metadata has already been ported to the repository-local
@@ -636,7 +636,7 @@ impl ProjectMeta {
 }
 
 fn set_or_remove(
-    config: &mut gix::config::File<'static>,
+    config: &mut gix::config::File,
     key: &str,
     value: Option<impl AsRef<str>>,
 ) -> anyhow::Result<()> {

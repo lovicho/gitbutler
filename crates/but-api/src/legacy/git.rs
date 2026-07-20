@@ -106,7 +106,7 @@ pub fn git_get_global_config(key: String) -> Result<Option<String>> {
     Ok(get_config_string(&config, &key))
 }
 
-fn get_config_string(config: &gix::config::File<'_>, key: &str) -> Option<String> {
+fn get_config_string(config: &gix::config::File, key: &str) -> Option<String> {
     config.string(key).map(|s| s.to_string())
 }
 

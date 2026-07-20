@@ -57,6 +57,8 @@ mod squash;
 #[cfg(all(feature = "legacy", feature = "but-2"))]
 mod squash2;
 #[cfg(feature = "legacy")]
+mod stage;
+#[cfg(feature = "legacy")]
 mod status;
 mod r#switch;
 #[cfg(feature = "legacy")]
@@ -65,6 +67,8 @@ mod teardown;
 mod uncommit;
 #[cfg(feature = "legacy")]
 mod undo;
+#[cfg(feature = "legacy")]
+mod unstage;
 #[cfg(feature = "legacy")]
 mod worktree;
 
@@ -154,6 +158,7 @@ mod util {
     }
 
     /// Return the CLI ID of the commit on `branch_name` containing `file_path` in `status` output.
+    #[cfg(feature = "but-2")]
     pub fn branch_commit_cli_id_for_file(
         status: &serde_json::Value,
         branch_name: &str,

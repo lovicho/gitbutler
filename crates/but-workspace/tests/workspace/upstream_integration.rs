@@ -3187,8 +3187,8 @@ fn workspace_parent_count(repo: &gix::Repository) -> Result<usize> {
 
 fn force_prefixless_canned_branch_name(repo: &mut gix::Repository) -> Result<()> {
     let mut config = repo.config_snapshot_mut();
-    config.raw_values_mut(&"author.name")?.delete_all();
-    config.raw_values_mut(&"author.email")?.delete_all();
+    config.raw_values_mut("author.name")?.delete_all();
+    config.raw_values_mut("author.email")?.delete_all();
     Ok(())
 }
 

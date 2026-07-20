@@ -10,7 +10,7 @@ boolean_enums::gen_boolean_enum!(pub EditGlobalConfig);
 pub(crate) fn edit_git_config(
     repo: &gix::Repository,
     global: EditGlobalConfig,
-    edit: impl FnOnce(&mut gix::config::File<'static>) -> Result<()>,
+    edit: impl FnOnce(&mut gix::config::File) -> Result<()>,
 ) -> Result<bool> {
     let source = if global.into() {
         gix::config::Source::User

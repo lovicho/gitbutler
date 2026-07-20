@@ -174,67 +174,6 @@ pub fn reword_commit_legacy(
         .map(Some)
 }
 
-pub fn move_commit_to_branch(
-    ctx: &mut Context,
-    subject_commit_ids: Vec<gix::ObjectId>,
-    branch_name: &str,
-) -> anyhow::Result<but_api::commit::types::CommitMoveResult> {
-    let repo = ctx.repo.get()?;
-    let target_branch_name = repo
-        .find_reference(branch_name)
-        .context("failed to find reference")?
-        .name()
-        .to_owned();
-    drop(repo);
-    but_api::commit::move_commit::commit_move(
-        ctx,
-        subject_commit_ids,
-        RelativeTo::Reference(target_branch_name),
-        InsertSide::Below,
-        DryRun::No,
-    )
-    .context("failed to move commit")
-}
-
-pub fn move_commit_to_commit(
-    ctx: &mut Context,
-    subject_commit_ids: Vec<gix::ObjectId>,
-    target_commit_id: gix::ObjectId,
-    insert_side: InsertSide,
-) -> anyhow::Result<but_api::commit::types::CommitMoveResult> {
-    but_api::commit::move_commit::commit_move(
-        ctx,
-        subject_commit_ids,
-        RelativeTo::Commit(target_commit_id),
-        insert_side,
-        DryRun::No,
-    )
-    .context("failed to move commit")
-}
-
-pub fn move_branch_onto_branch(
-    ctx: &mut Context,
-    source_branch_name: &str,
-    target_branch_name: &str,
-) -> anyhow::Result<()> {
-    let repo = ctx.repo.get()?;
-    let source_ref = repo.find_reference(source_branch_name)?.name().to_owned();
-    let target_ref = repo.find_reference(target_branch_name)?.name().to_owned();
-    drop(repo);
-    but_api::branch::move_branch(ctx, source_ref.as_ref(), target_ref.as_ref(), DryRun::No)
-        .context("failed to move branch")?;
-    Ok(())
-}
-
-pub fn tear_off_branch(ctx: &mut Context, source_branch_name: &str) -> anyhow::Result<()> {
-    let repo = ctx.repo.get()?;
-    let source_ref = repo.find_reference(source_branch_name)?.name().to_owned();
-    drop(repo);
-    but_api::branch::tear_off_branch(ctx, source_ref.as_ref(), DryRun::No)
-        .context("failed to unstack branch")?;
-    Ok(())
-}
-
 pub fn create_branch_anchored_legacy(
     ctx: &mut Context,
     short_name: String,

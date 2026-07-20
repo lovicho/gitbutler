@@ -19,7 +19,6 @@ pub mod discard;
 pub mod forge;
 pub mod land;
 pub mod mcp;
-#[cfg(all(feature = "legacy", feature = "but-2"))]
 pub mod move2;
 pub mod oplog;
 pub mod pick;

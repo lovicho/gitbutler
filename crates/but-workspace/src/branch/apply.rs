@@ -1,3 +1,4 @@
+use bstr::ByteSlice as _;
 use but_core::{
     WORKSPACE_REF_NAME,
     ref_metadata::{StackId, StackKind},
@@ -966,7 +967,7 @@ fn setup_local_tracking_configuration(
     repo: &gix::Repository,
     local_tracking_ref: &FullNameRef,
     remote_tracking_ref: &FullNameRef,
-) -> anyhow::Result<Option<(gix::config::File<'static>, gix::lock::File, gix::ObjectId)>> {
+) -> anyhow::Result<Option<(gix::config::File, gix::lock::File, gix::ObjectId)>> {
     let remote_tracking_commit_id = repo
         .find_reference(remote_tracking_ref)?
         .peel_to_commit()?
@@ -985,13 +986,13 @@ fn setup_local_tracking_configuration(
     {
         section
             .push(
-                gix::config::tree::Branch::REMOTE.name.try_into()?,
-                Some(remote_name.as_str().into()),
-            )
+                gix::config::tree::Branch::REMOTE.name,
+                Some(remote_name.as_bytes().as_bstr()),
+            )?
             .push(
-                gix::config::tree::Branch::MERGE.name.try_into()?,
+                gix::config::tree::Branch::MERGE.name,
                 Some(local_tracking_ref.as_bstr()),
-            );
+            )?;
     }
     Ok(Some((config, lock, remote_tracking_commit_id.into())))
 }
@@ -1027,7 +1028,7 @@ fn persist_metadata_and_gitconfig<T: RefMetadata>(
     branches_to_apply: &[gix::refs::FullName],
     ws_md: &T::Handle<Workspace>,
     config_and_ref: Option<(
-        gix::config::File<'static>,
+        gix::config::File,
         gix::lock::File,
         (gix::refs::FullName, &gix::refs::FullNameRef, gix::Id),
     )>,

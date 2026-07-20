@@ -5,7 +5,7 @@ use std::{
     time::Instant,
 };
 
-use bstr::ByteSlice;
+use bstr::{BStr, ByteSlice};
 use but_ctx::Context;
 use crossterm::event::Event;
 use gitbutler_operating_modes::OperatingMode;
@@ -107,6 +107,28 @@ pub struct App {
     pub file_browser: Option<FileBrowser>,
     pub head_sha: String,
     pub clipboard: Clipboard,
+}
+
+pub(super) fn changed_paths_affect_uncommitted_details<'a>(
+    changed_paths: &[std::path::PathBuf],
+    previous_uncommitted_paths: impl IntoIterator<Item = &'a BStr>,
+    current_uncommitted_paths: impl IntoIterator<Item = &'a BStr>,
+) -> bool {
+    if changed_paths.is_empty() {
+        // An empty path list means the index changed, so there is no path-level signal to use.
+        return true;
+    }
+
+    previous_uncommitted_paths
+        .into_iter()
+        .chain(current_uncommitted_paths)
+        .any(|status_path| {
+            status_path.to_path().map_or(true, |status_path| {
+                changed_paths
+                    .iter()
+                    .any(|changed_path| status_path.starts_with(changed_path))
+            })
+        })
 }
 
 impl App {
@@ -805,7 +827,11 @@ impl App {
                     ));
                 }
             }
-            gitbutler_watcher::Change::WorktreeChanges { changed_paths, .. } => {
+            gitbutler_watcher::Change::WorktreeChanges {
+                changes,
+                changed_paths,
+                ..
+            } => {
                 if self.is_details_visible
                     && let Some(selection) = self.details.selection()
                 {
@@ -827,10 +853,57 @@ impl App {
                             ));
                         }
                         CliId::Uncommitted { .. } => {
+                            let previous_uncommitted_paths = self
+                                .status_lines
+                                .iter()
+                                .filter_map(|line| match &line.data {
+                                    StatusOutputLineData::UncommittedFile { cli_id } => {
+                                        match &**cli_id {
+                                            CliId::UncommittedHunkOrFile(uncommitted) => {
+                                                Some(&uncommitted.hunk_assignments)
+                                            }
+                                            CliId::PathPrefix { .. }
+                                            | CliId::CommittedFile { .. }
+                                            | CliId::Branch { .. }
+                                            | CliId::Commit { .. }
+                                            | CliId::Stack { .. }
+                                            | CliId::Uncommitted { .. } => None,
+                                        }
+                                    }
+                                    StatusOutputLineData::UpdateNotice
+                                    | StatusOutputLineData::Connector
+                                    | StatusOutputLineData::BetweenStacks
+                                    | StatusOutputLineData::StagedChanges { .. }
+                                    | StatusOutputLineData::StagedFile { .. }
+                                    | StatusOutputLineData::UncommittedChanges { .. }
+                                    | StatusOutputLineData::Branch { .. }
+                                    | StatusOutputLineData::Commit { .. }
+                                    | StatusOutputLineData::CommitMessage
+                                    | StatusOutputLineData::EmptyCommitMessage
+                                    | StatusOutputLineData::File { .. }
+                                    | StatusOutputLineData::MergeBase
+                                    | StatusOutputLineData::UpstreamChanges
+                                    | StatusOutputLineData::Warning
+                                    | StatusOutputLineData::Hint
+                                    | StatusOutputLineData::NoAssignmentsUnstaged => None,
+                                })
+                                .flat_map(|assignments| assignments.iter())
+                                .map(|assignment| assignment.path_bytes.as_ref());
+                            let current_uncommitted_paths = changes
+                                .worktree_changes
+                                .changes
+                                .iter()
+                                .map(|change| change.path_bytes.as_ref());
+                            let details_selection_changed =
+                                changed_paths_affect_uncommitted_details(
+                                    &changed_paths,
+                                    previous_uncommitted_paths,
+                                    current_uncommitted_paths,
+                                );
                             messages.push(Message::Reload(
                                 None,
                                 ReloadCause::Watcher {
-                                    details_selection_changed: true,
+                                    details_selection_changed,
                                 },
                             ));
                         }

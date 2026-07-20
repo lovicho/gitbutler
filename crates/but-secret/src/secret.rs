@@ -148,7 +148,7 @@ pub mod git_credentials {
     };
     use tracing::instrument;
 
-    pub(super) struct Store(gix::config::File<'static>);
+    pub(super) struct Store(gix::config::File);
 
     impl Store {
         /// Create an instance by resolving the global environment just well enough.
@@ -170,7 +170,7 @@ pub mod git_credentials {
         ) -> Result<(
             gix::credentials::helper::Cascade,
             gix::credentials::helper::Action,
-            gix::prompt::Options<'static>,
+            gix::prompt::Options,
         )> {
             let url = gix::Url::from_parts(
                 gix::url::Scheme::Https,

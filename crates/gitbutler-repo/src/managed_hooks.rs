@@ -198,7 +198,8 @@ pub(crate) fn get_hooks_dir(repo: &gix::Repository) -> PathBuf {
         repo.workdir().unwrap_or(repo.git_dir()),
         repo.config_snapshot()
             .trusted_path("core.hooksPath")
-            .and_then(|path| path.ok().map(std::borrow::Cow::into_owned)),
+            .ok()
+            .flatten(),
     )
 }
 

@@ -1,14 +1,13 @@
 use core::fmt;
 use std::{
-    borrow::Cow,
     cmp::max,
-    collections::{BTreeSet, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     fmt::Debug,
     vec,
 };
 
 use anyhow::{Context as _, Result, bail};
-use bstr::{BStr, BString, ByteSlice};
+use bstr::{BString, ByteSlice};
 use but_core::{
     RepositoryExt, WORKSPACE_REF_NAME, extract_remote_name_and_short_name, ref_metadata::StackId,
 };
@@ -256,7 +255,7 @@ fn combine_branches(
 /// unambiguous.
 fn target_identity_from_ref_name(
     target_ref_name: &gix::refs::FullNameRef,
-    remotes: &BTreeSet<Cow<'_, BStr>>,
+    remotes: &gix::remote::Names,
 ) -> Result<BranchIdentity> {
     if let Ok(identity) = target_ref_name.identity(remotes) {
         return Ok(identity);
@@ -272,7 +271,7 @@ fn branch_group_to_branch(
     group_branches: Vec<GroupBranch>,
     repo: &gix::Repository,
     packed: Option<&gix::refs::packed::Buffer>,
-    remotes: &BTreeSet<Cow<'_, BStr>>,
+    remotes: &gix::remote::Names,
     target_branch_identity: &BranchIdentity,
 ) -> Result<Option<BranchListing>> {
     let (local_branches, remote_branches, mut vbranches) =
@@ -505,7 +504,7 @@ impl GroupBranch<'_> {
     /// A name identifier for the branch. When multiple branches (e.g. virtual, local, remote) have the same identity,
     /// they are grouped together under the same `Branch` entry.
     /// `None` means an identity could not be obtained, which makes this branch odd enough to ignore.
-    fn identity(&self, remotes: &BTreeSet<Cow<'_, BStr>>) -> Option<BranchIdentity> {
+    fn identity(&self, remotes: &gix::remote::Names) -> Option<BranchIdentity> {
         match self {
             GroupBranch::Local(branch) | GroupBranch::Remote(branch) => {
                 branch.name().identity(remotes).ok()
@@ -899,14 +898,13 @@ but_schemars::register_sdk_type!(BranchListingDetails);
 #[cfg(test)]
 mod tests {
     use super::target_identity_from_ref_name;
-    use std::borrow::Cow;
 
     use bstr::ByteSlice;
 
-    fn remote_names(names: &[&str]) -> gix::remote::Names<'static> {
+    fn remote_names(names: &[&str]) -> gix::remote::Names {
         names
             .iter()
-            .map(|name| Cow::Owned(name.as_bytes().as_bstr().to_owned()))
+            .map(|name| name.as_bytes().as_bstr().to_owned())
             .collect()
     }
 

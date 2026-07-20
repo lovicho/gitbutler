@@ -21,6 +21,8 @@ use crate::{
     },
 };
 
+const CLEAR_TO_END_OF_LINE: &str = "\x1b[0K";
+
 #[derive(Debug)]
 pub struct DiffOutcome<'a> {
     ctx: &'a mut Context,
@@ -147,6 +149,9 @@ impl DiffLineWriter for DiffWriter<'_> {
                 for span in syntax_highlighted_line {
                     let rendered = line_style.patch(span.style).paint(&span.content);
                     write!(self.out, "{rendered}")?;
+                }
+                if line_style.bg.is_some() && colored::control::SHOULD_COLORIZE.should_colorize() {
+                    write!(self.out, "{}", line_style.paint(CLEAR_TO_END_OF_LINE))?;
                 }
                 writeln!(self.out)?;
             }

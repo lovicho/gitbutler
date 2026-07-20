@@ -536,7 +536,7 @@ fn setup_local_remote(repo: &gix::Repository, out: &mut OutputChannel) -> anyhow
 
     edit_repo_config(repo, gix::config::Source::Local, |config| {
         let mut section = config.section_mut_or_create_new("remote", Some("gb-local".into()))?;
-        section.push("url".try_into()?, Some(repo_url.into()));
+        section.push("url", repo_url)?;
         Ok(())
     })?;
 

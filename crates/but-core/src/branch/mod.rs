@@ -31,7 +31,7 @@ pub fn resolve_tracking_branch_ref_name<'a>(
             .try_find_reference(upstream_ref_name.as_ref())?
             .is_some()
     {
-        return Ok(upstream_ref_name);
+        return Ok(Cow::Owned(upstream_ref_name));
     }
 
     let branch_name = ref_name.shorten();

@@ -1,9 +1,9 @@
 /// A module to bundle configuration we *write* per repository, but read as normal.
 pub mod git {
-    use std::{borrow::Cow, ffi::OsString};
+    use std::ffi::OsString;
 
     use anyhow::Result;
-    use bstr::{BStr, BString, ByteSlice, ByteVec};
+    use bstr::{BString, ByteSlice, ByteVec};
 
     use crate::git_config::{edit_repo_config, remove_config_value};
 
@@ -148,27 +148,25 @@ pub mod git {
     impl GitConfigSettings {
         /// Read all settings from the given snapshot.
         pub fn try_from_snapshot(config: &gix::config::Snapshot<'_>) -> anyhow::Result<Self> {
-            fn string_or_ignore(v: Cow<'_, BStr>) -> Option<String> {
-                Vec::from(v.into_owned()).into_string().ok()
+            fn string_or_ignore(v: BString) -> Option<String> {
+                Vec::from(v).into_string().ok()
             }
             let gitbutler_sign_commits = config
                 .boolean(GITBUTLER_SIGN_COMMITS)
                 .or_else(|| config.boolean(GIT_SIGN_COMMITS))
                 .or(Some(false));
             let gitbutler_gerrit_mode = config.boolean(GITBUTLER_GERRIT_MODE).or(Some(false));
-            let gitbutler_forge_review_template_path = config
-                .string(GITBUTLER_FORGE_TEMPLATE_PATH)
-                .map(Cow::into_owned);
+            let gitbutler_forge_review_template_path = config.string(GITBUTLER_FORGE_TEMPLATE_PATH);
             let gitbutler_gitlab_project_id = config
                 .string(GITBUTLER_GITLAB_PROJECT_ID)
                 .and_then(string_or_ignore);
             let gitbutler_gitlab_upstream_project_id = config
                 .string(GITBUTLER_GITLAB_UPSTREAM_PROJECT_ID)
                 .and_then(string_or_ignore);
-            let signing_key = config.string(SIGNING_KEY).map(Cow::into_owned);
-            let signing_format = config.string(SIGNING_FORMAT).map(Cow::into_owned);
-            let gpg_program = config.trusted_program(GPG_PROGRAM).map(Cow::into_owned);
-            let gpg_ssh_program = config.trusted_program(GPG_SSH_PROGRAM).map(Cow::into_owned);
+            let signing_key = config.string(SIGNING_KEY);
+            let signing_format = config.string(SIGNING_FORMAT);
+            let gpg_program = config.trusted_program(GPG_PROGRAM);
+            let gpg_ssh_program = config.trusted_program(GPG_SSH_PROGRAM);
             Ok(GitConfigSettings {
                 gitbutler_sign_commits,
                 gitbutler_gerrit_mode,

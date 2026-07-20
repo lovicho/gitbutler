@@ -28,7 +28,7 @@ fn normalize_project_repo(
         .string_filter("extensions.refStorage", |metadata| {
             metadata.source == gix::config::Source::Local
         })
-        .is_some_and(|value| value.as_ref().eq_ignore_ascii_case(b"reftable"))
+        .is_some_and(|value| value.as_slice().eq_ignore_ascii_case(b"reftable"))
     {
         return Err(AddProjectOutcome::ReftableRefFormatUnsupported);
     }

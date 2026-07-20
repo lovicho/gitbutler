@@ -17,6 +17,7 @@ const DEFAULT_PAGER: &str = "less";
 /// - `R`: Recognize ANSI color escape sequences and use them verbatim to *keep* styling.
 const DEFAULT_PAGER_ARGS: &str = "FXR"; // Do not put S in here. Like, really. Don't.
 const DEFAULT_PAGER_ENV_VAR: &str = "LESS";
+const LESS_ANSI_END_CHARS_ENV_VAR: &str = "LESSANSIENDCHARS";
 
 /// Attempt to initialize a new pager.
 ///
@@ -78,6 +79,8 @@ fn try_spawn_external_pager() -> Option<(std::process::Child, std::process::Chil
         // tend to have some rather exotic configuration for less which messes with our intended
         // experience, we'll just set our own preference here.
         cmd.env(DEFAULT_PAGER_ENV_VAR, DEFAULT_PAGER_ARGS);
+        // `K` terminates the erase-to-end-of-line sequence used to extend diff backgrounds.
+        cmd.env(LESS_ANSI_END_CHARS_ENV_VAR, "mK");
     }
 
     match cmd.spawn() {

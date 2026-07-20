@@ -30,7 +30,7 @@ impl Default for LMStudioConfig {
 }
 
 impl LMStudioConfig {
-    fn from_git_config(config: &gix::config::File<'static>) -> Self {
+    fn from_git_config(config: &gix::config::File) -> Self {
         let api_base = config
             .string(AI_LMSTUDIO_ENDPOINT_KEY)
             .map(|v| v.to_string())
@@ -68,7 +68,7 @@ impl OpenAIClientProvider for LMStudioProvider {
 }
 
 impl LLMClient for LMStudioProvider {
-    fn from_git_config(config: &gix::config::File<'static>) -> Option<Self>
+    fn from_git_config(config: &gix::config::File) -> Option<Self>
     where
         Self: Sized,
     {

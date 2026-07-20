@@ -79,7 +79,7 @@ pub trait RepositoryExt: Sized {
     /// racing the read-modify-write cycle.
     fn local_common_config_for_editing(
         &self,
-    ) -> anyhow::Result<(gix::config::File<'static>, gix::lock::File)>;
+    ) -> anyhow::Result<(gix::config::File, gix::lock::File)>;
     /// Write the given `local_config` to the file at `lock` of the while consuming
     /// the lock previously acquired with [`Self::local_common_config_for_editing()`].
     /// Note that only local configuraiton is written, so it's safe to use it with `repo.config_snapshot_mut()`.
@@ -194,7 +194,7 @@ impl RepositoryExt for gix::Repository {
 
     fn local_common_config_for_editing(
         &self,
-    ) -> anyhow::Result<(gix::config::File<'static>, gix::lock::File)> {
+    ) -> anyhow::Result<(gix::config::File, gix::lock::File)> {
         let local_config_path = self.common_dir().join("config");
         let lock = gix::lock::File::acquire_to_update_resource(
             &local_config_path,

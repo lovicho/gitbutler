@@ -174,7 +174,7 @@ impl LLMProvider {
     /// - The `gitbutler.aiModelProvider` setting is not present
     /// - The configured provider is not supported
     /// - Provider-specific initialization fails (e.g., missing credentials)
-    pub fn from_git_config(config: &gix::config::File<'static>) -> Option<Self> {
+    pub fn from_git_config(config: &gix::config::File) -> Option<Self> {
         let provider_str = config
             .string(AI_MODEL_PROVIDER_KEY)
             .map(|v| v.to_string())?;

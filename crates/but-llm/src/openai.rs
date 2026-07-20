@@ -28,7 +28,7 @@ pub enum CredentialsKind {
 }
 
 impl CredentialsKind {
-    fn from_git_config(config: &gix::config::File<'static>) -> Option<Self> {
+    fn from_git_config(config: &gix::config::File) -> Option<Self> {
         let key_option_str = config
             .string(AI_OPENAI_KEY_OPTION_KEY)
             .map(|v| v.to_string())?;
@@ -158,7 +158,7 @@ impl OpenAIClientProvider for OpenAiProvider {
 }
 
 impl LLMClient for OpenAiProvider {
-    fn from_git_config(config: &gix::config::File<'static>) -> Option<Self>
+    fn from_git_config(config: &gix::config::File) -> Option<Self>
     where
         Self: Sized,
     {

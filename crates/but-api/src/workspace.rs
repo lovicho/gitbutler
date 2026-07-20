@@ -1,7 +1,6 @@
 //! Functions that operate on the workspace.
 
 use std::{
-    borrow::Cow,
     collections::HashSet,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -390,7 +389,7 @@ fn target_branch_name(
     symbolic_remote_names.sort_by_key(|name| name.len());
     let remote_names = symbolic_remote_names
         .iter()
-        .map(|name| Cow::Borrowed(name.as_str().into()))
+        .map(|name| name.as_bytes().as_bstr().to_owned())
         .collect();
     Some(
         extract_remote_name_and_short_name(target_ref.as_ref(), &remote_names)

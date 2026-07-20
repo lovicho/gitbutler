@@ -154,7 +154,7 @@ fn does_not_remove_branch_with_assigned_changes() {
 
     // Assign a file change to this branch's stack
     env.file("new-file.txt", "content");
-    env.but("rub new-file.txt my-branch").assert().success();
+    env.but("stage new-file.txt my-branch").assert().success();
 
     // my-branch has assigned changes, should not be cleaned
     env.but("clean").assert().success().stdout_eq(str![[r#"

@@ -1,4 +1,10 @@
-use crate::utils::Sandbox;
+use crate::{
+    command::util::{
+        branch_commit_cli_ids, commit_two_files_as_two_hunks_each,
+        status_json_with_files as status_json,
+    },
+    utils::Sandbox,
+};
 
 #[test]
 fn move_commit_above_other_commit() {
@@ -2531,4 +2537,45 @@ Hint: run `but help` for all commands
 Error: Expected a commit or a branch, got uncommitted changes
 
 "#]]);
+}
+
+#[test]
+fn move_commit_to_branch_smoke() -> anyhow::Result<()> {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+    env.setup_metadata(&["A", "B"]);
+
+    commit_two_files_as_two_hunks_each(&env, "A", "a.txt", "b.txt", "first commit");
+
+    let before = status_json(&env)?;
+    let branch_a_commits_before = branch_commit_cli_ids(&before, "A");
+    let source_cli_id = branch_a_commits_before[0].clone();
+    let branch_b_count_before = branch_commit_cli_ids(&before, "B").len();
+
+    env.but(format!("_move2 {source_cli_id} --branch B"))
+        .assert()
+        .success();
+
+    let after = status_json(&env)?;
+    let branch_a_commits_after = branch_commit_cli_ids(&after, "A");
+    let branch_b_commits_after = branch_commit_cli_ids(&after, "B");
+    assert_eq!(
+        branch_a_commits_after.len() + 1,
+        branch_a_commits_before.len(),
+        "moving one commit should decrease branch A's commit count by one"
+    );
+    assert_eq!(
+        branch_b_commits_after.len(),
+        branch_b_count_before + 1,
+        "moving one commit should increase branch B's commit count by one"
+    );
+    assert!(
+        !branch_a_commits_after.contains(&source_cli_id),
+        "moved commit should no longer be present on branch A"
+    );
+    assert!(
+        branch_b_commits_after.contains(&source_cli_id),
+        "moved commit should be present on branch B"
+    );
+
+    Ok(())
 }

@@ -1,30 +1,10 @@
 use crate::{
     command::{
         undo::run_mutate_undo_roundtrip_test,
-        util::{
-            branch_commit_cli_id_for_file, branch_commit_cli_ids,
-            commit_two_files_as_two_hunks_each, status_json, status_json_with_files,
-        },
+        util::{branch_commit_cli_ids, commit_two_files_as_two_hunks_each, status_json},
     },
     utils::Sandbox,
 };
-
-// RubOperation::SquashCommits
-#[test]
-fn undo_squash_commits() {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack-two-commits");
-    env.setup_metadata(&["A"]);
-
-    run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but("rub")
-            .arg("y")
-            .arg("z")
-            .assert()
-            .success()
-            .stdout_eq("Squashed ywx → zll\n")
-            .stderr_eq("");
-    });
-}
 
 // RubOperation::UnassignUncommitted
 #[test]
@@ -40,23 +20,6 @@ fn undo_unassign_uncommitted() {
             .assert()
             .success()
             .stdout_eq("Unstaged the only hunk in unassign-uncommitted.txt in a stack\n")
-            .stderr_eq("");
-    });
-}
-
-// RubOperation::UncommittedToCommit
-#[test]
-fn undo_uncommitted_hunk_to_commit() {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
-    env.setup_metadata(&["A", "B"]);
-    env.file("uncommitted-to-commit.txt", "content\n");
-    let target_cli_id = branch_commit_cli_ids(&status_json(&env).unwrap(), "A")[0].clone();
-
-    run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but(format!("rub uncommitted-to-commit.txt {target_cli_id}"))
-            .assert()
-            .success()
-            .stdout_eq("Amended [..] → [..]\n")
             .stderr_eq("");
     });
 }
@@ -169,23 +132,6 @@ fn undo_stack_to_commit() {
     });
 }
 
-// RubOperation::UncommittedAreaToCommit
-#[test]
-fn undo_uncommitted_area_to_commit() {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
-    env.setup_metadata(&["A", "B"]);
-    env.file("uncommitted-to-commit.txt", "content\n");
-    let target_cli_id = branch_commit_cli_ids(&status_json(&env).unwrap(), "A")[0].clone();
-
-    run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but(format!("rub zz {target_cli_id}"))
-            .assert()
-            .success()
-            .stdout_eq("Amended uncommitted files → [..]\n")
-            .stderr_eq("");
-    });
-}
-
 // RubOperation::UncommittedAreaToBranch
 #[test]
 #[ignore = "undo currently does not restore hunk assignment metadata for rub operations that only move changes between uncommitted, branch, and stack buckets. https://linear.app/gitbutler/issue/GB-1435/cannot-undo-rub-operations-that-deal-with-uncommitted-changes"]
@@ -220,29 +166,6 @@ fn undo_uncommitted_area_to_stack() {
     });
 }
 
-// RubOperation::CommitToUncommittedArea
-#[test]
-fn undo_commit_to_uncommitted_area() {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
-    env.setup_metadata(&["A", "B"]);
-    commit_two_files_as_two_hunks_each(
-        &env,
-        "A",
-        "commit-to-zz-a.txt",
-        "commit-to-zz-b.txt",
-        "first",
-    );
-    let source_cli_id = branch_commit_cli_ids(&status_json(&env).unwrap(), "A")[0].clone();
-
-    run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but(format!("rub {source_cli_id} zz"))
-            .assert()
-            .success()
-            .stdout_eq("Uncommitted [..]\n")
-            .stderr_eq("");
-    });
-}
-
 // RubOperation::CommitToStack
 #[test]
 fn undo_commit_to_stack() {
@@ -262,29 +185,6 @@ fn undo_commit_to_stack() {
             .assert()
             .success()
             .stdout_eq("Uncommitted [..] to [B]\n")
-            .stderr_eq("");
-    });
-}
-
-// RubOperation::MoveCommitToBranch
-#[test]
-fn undo_move_commit_to_branch() {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
-    env.setup_metadata(&["A", "B"]);
-    commit_two_files_as_two_hunks_each(
-        &env,
-        "A",
-        "commit-to-branch-a.txt",
-        "commit-to-branch-b.txt",
-        "first",
-    );
-    let source_cli_id = branch_commit_cli_ids(&status_json(&env).unwrap(), "A")[0].clone();
-
-    run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but(format!("rub {source_cli_id} B"))
-            .assert()
-            .success()
-            .stdout_eq("Moved [..] → [B]\n")
             .stderr_eq("");
     });
 }
@@ -379,43 +279,6 @@ fn undo_committed_file_to_branch() {
 
     run_mutate_undo_roundtrip_test(&env, |env| {
         env.but(format!("rub {source_cli_id}:file-to-branch-a.txt B"))
-            .assert()
-            .success()
-            .stdout_eq("Uncommitted changes\n")
-            .stderr_eq("");
-    });
-}
-
-// RubOperation::CommittedFileToCommit
-#[test]
-fn undo_committed_file_to_commit() {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    env.setup_metadata(&["A"]);
-    commit_two_files_as_two_hunks_each(&env, "A", "source-a.txt", "source-b.txt", "source");
-    commit_two_files_as_two_hunks_each(&env, "A", "target-a.txt", "target-b.txt", "target");
-    let status = status_json_with_files(&env).unwrap();
-    let source_cli_id = branch_commit_cli_id_for_file(&status, "A", "source-a.txt").unwrap();
-    let target_cli_id = branch_commit_cli_id_for_file(&status, "A", "target-a.txt").unwrap();
-
-    run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but(format!("rub {source_cli_id}:source-a.txt {target_cli_id}"))
-            .assert()
-            .success()
-            .stdout_eq("Moved files between commits!\n")
-            .stderr_eq("");
-    });
-}
-
-// RubOperation::CommittedFileToUncommittedArea
-#[test]
-fn undo_committed_file_to_uncommitted_area() {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
-    env.setup_metadata(&["A", "B"]);
-    commit_two_files_as_two_hunks_each(&env, "A", "file-to-zz-a.txt", "file-to-zz-b.txt", "first");
-    let source_cli_id = branch_commit_cli_ids(&status_json(&env).unwrap(), "A")[0].clone();
-
-    run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but(format!("rub {source_cli_id}:file-to-zz-a.txt zz"))
             .assert()
             .success()
             .stdout_eq("Uncommitted changes\n")

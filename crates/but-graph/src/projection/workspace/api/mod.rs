@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use anyhow::Context;
 use bstr::BStr;
 use but_core::{RefMetadata, extract_remote_name_and_short_name, ref_metadata::StackId};
@@ -90,7 +88,7 @@ impl Workspace {
                 .graph
                 .symbolic_remote_names
                 .iter()
-                .map(|name| Cow::Borrowed(name.as_str().into()))
+                .map(|name| name.as_str().into())
                 .collect();
             extract_remote_name_and_short_name(tr.ref_name.as_ref(), &remote_names)
                 .map(|(remote_name, _)| remote_name)

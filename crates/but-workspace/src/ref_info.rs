@@ -571,11 +571,7 @@ pub fn graph_to_ref_info(
     let is_entrypoint = graph.entrypoint()?.segment.id == *id;
     let mut info = RefInfo {
         workspace_ref_info: workspace_ref_info.cloned(),
-        symbolic_remote_names: repo
-            .remote_names()
-            .into_iter()
-            .map(|n| n.into_owned().into())
-            .collect(),
+        symbolic_remote_names: repo.remote_names().into_iter().collect(),
         lower_bound: *lower_bound_segment_id,
         stacks: stacks
             .iter()

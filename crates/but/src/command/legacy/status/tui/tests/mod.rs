@@ -1,4 +1,7 @@
+use std::path::PathBuf;
+
 use anyhow::anyhow;
+use bstr::BStr;
 use but_testsupport::Sandbox;
 use crossterm::event::*;
 use snapbox::{ToDebug, file, str};
@@ -24,6 +27,43 @@ mod move_tests;
 mod rub_tests;
 mod stack_tests;
 mod utils;
+
+#[test]
+fn directory_watcher_paths_affect_nested_uncommitted_details() {
+    assert!(
+        super::app::changed_paths_affect_uncommitted_details(
+            &[PathBuf::from("old")],
+            [BStr::new(b"old/file.txt")],
+            std::iter::empty(),
+        ),
+        "a directory event affects uncommitted files nested below it"
+    );
+}
+
+#[test]
+fn unrelated_watcher_paths_do_not_affect_uncommitted_details() {
+    assert!(
+        !super::app::changed_paths_affect_uncommitted_details(
+            &[PathBuf::from("scenario.lock")],
+            [BStr::new(b"old/file.txt")],
+            [BStr::new(b"new/file.txt")],
+        ),
+        "an unrelated watcher path cannot change uncommitted details"
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn native_windows_watcher_paths_match_git_paths() {
+    assert!(
+        super::app::changed_paths_affect_uncommitted_details(
+            &[PathBuf::from(r"dir\file.txt")],
+            std::iter::empty(),
+            [BStr::new(b"dir/file.txt")],
+        ),
+        "native Windows separators match separators in Git paths"
+    );
+}
 
 #[test]
 fn git_activity_only_reloads_for_a_new_head() {

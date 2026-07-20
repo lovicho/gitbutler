@@ -265,13 +265,13 @@ pub fn create(
             Err(err) => {
                 tracing::warn!("Commit signing failed with sign_commit={sign_commit:?}");
                 if sign_commit == SignCommit::IfSignCommitsEnabled {
-                    if repo
-                        .config_snapshot()
-                        .boolean_filter("gitbutler.signCommits", |md| {
-                            md.source != gix::config::Source::Local
-                        })
-                        .is_none()
-                    {
+                    if matches!(
+                        repo.config_snapshot()
+                            .boolean_filter("gitbutler.signCommits", |md| {
+                                md.source != gix::config::Source::Local
+                            }),
+                        Ok(None)
+                    ) {
                         repo.set_git_settings(&GitConfigSettings {
                             gitbutler_sign_commits: Some(false),
                             ..GitConfigSettings::default()
@@ -322,7 +322,7 @@ pub fn sign_buffer(repo: &gix::Repository, buffer: &[u8]) -> anyhow::Result<BStr
 
     fn signing_key(repo: &gix::Repository) -> anyhow::Result<BString> {
         if let Some(key) = repo.config_snapshot().string("user.signingkey") {
-            return Ok(key.into_owned());
+            return Ok(key);
         }
         tracing::info!("Falling back to committer identity as user.signingKey isn't configured.");
         let mut buf = Vec::<u8>::new();
@@ -338,20 +338,20 @@ pub fn sign_buffer(repo: &gix::Repository, buffer: &[u8]) -> anyhow::Result<BStr
     let config = repo.config_snapshot();
     let signing_key = signing_key(repo)?;
     let sign_format = config.string("gpg.format");
-    let is_ssh = sign_format.is_some_and(|value| value.as_ref() == "ssh");
+    let is_ssh = sign_format.is_some_and(|value| value == "ssh");
 
     if is_ssh {
         let mut signature_storage = tempfile::NamedTempFile::new()?;
         signature_storage.write_all(buffer)?;
         let buffer_file_to_sign_path = signature_storage.into_temp_path();
 
-        let gpg_program = match config.trusted_path("gpg.ssh.program").transpose()? {
+        let gpg_program = match config.trusted_path("gpg.ssh.program")? {
             Some(program) if !program.as_os_str().is_empty() => program,
             _ => Path::new("ssh-keygen").into(),
         };
 
-        let mut signing_cmd = prepare_with_shell_on_windows(gpg_program.into_owned())
-            .args(["-Y", "sign", "-n", "git", "-f"]);
+        let mut signing_cmd =
+            prepare_with_shell_on_windows(gpg_program).args(["-Y", "sign", "-n", "git", "-f"]);
 
         let _key_storage;
         signing_cmd = if let Some(signing_key) = as_literal_key(signing_key.as_bstr()) {
@@ -375,11 +375,10 @@ pub fn sign_buffer(repo: &gix::Repository, buffer: &[u8]) -> anyhow::Result<BStr
                 .arg(buffer_file_to_sign_path.to_path_buf())
         } else {
             let signing_key = config
-                .trusted_path("user.signingkey")
-                .transpose()?
-                .with_context(|| format!("Didn't trust 'ssh.signingKey': {signing_key}"))?;
+                .trusted_path("user.signingkey")?
+                .with_context(|| format!("Didn't trust 'user.signingKey': {signing_key}"))?;
             signing_cmd
-                .arg(signing_key.into_owned())
+                .arg(signing_key)
                 .arg(buffer_file_to_sign_path.to_path_buf())
         };
         let output = into_command(signing_cmd)
@@ -398,13 +397,13 @@ pub fn sign_buffer(repo: &gix::Repository, buffer: &[u8]) -> anyhow::Result<BStr
             bail!("Failed to sign SSH: {stdout} {stderr}");
         }
     } else {
-        let gpg_program = match config.trusted_path("gpg.program").transpose()? {
+        let gpg_program = match config.trusted_path("gpg.program")? {
             Some(program) if !program.as_os_str().is_empty() => program,
             _ => Path::new("gpg").into(),
         };
 
         let mut cmd = into_command(
-            prepare_with_shell_on_windows(gpg_program.as_ref())
+            prepare_with_shell_on_windows(&gpg_program)
                 .args(["--status-fd=2", "-bsau"])
                 .arg(gix::path::from_bstring(signing_key))
                 .arg("-"),

@@ -32,11 +32,9 @@ pub fn gitbutler_storage_path_for_channel(
     let storage_key = storage_path_config_key_for_channel(&channel);
 
     match repo.config_snapshot().trusted_path(storage_key) {
-        Some(Ok(path)) => resolve_configured_storage_path(git_dir, path.as_ref()),
-        Some(Err(err)) => {
-            Err(err).with_context(|| format!("{storage_key} contains an invalid path"))
-        }
-        None => Ok(git_dir.join(DEFAULT_STORAGE_DIR_NAME)),
+        Ok(Some(path)) => resolve_configured_storage_path(git_dir, path.as_ref()),
+        Err(err) => Err(err).with_context(|| format!("{storage_key} contains an invalid path")),
+        Ok(None) => Ok(git_dir.join(DEFAULT_STORAGE_DIR_NAME)),
     }
 }
 

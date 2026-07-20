@@ -347,7 +347,7 @@ fn ensure_review_remote(
 
 fn find_remote_by_url(repo: &gix::Repository, remote_url: &str) -> Result<Option<String>> {
     for name in repo.remote_names().iter() {
-        let remote = repo.find_remote(name.as_ref())?;
+        let remote = repo.find_remote(name)?;
         let Some(url) = remote.url(gix::remote::Direction::Fetch) else {
             continue;
         };
@@ -405,7 +405,7 @@ fn unique_remote_name(repo: &gix::Repository, base: &str) -> Result<String> {
 fn add_remote_to_config(repo: &gix::Repository, name: &str, remote_url: &str) -> Result<()> {
     edit_repo_config(repo, gix::config::Source::Local, |config| {
         let mut section = config.section_mut_or_create_new("remote", Some(name.into()))?;
-        section.push("url".try_into()?, Some(remote_url.into()));
+        section.push("url", remote_url)?;
         ensure_config_value(
             config,
             &format!("remote.{name}.fetch"),
