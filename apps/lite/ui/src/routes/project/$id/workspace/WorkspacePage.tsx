@@ -6,8 +6,9 @@ import {
 } from "#ui/api/queries.ts";
 import { useRestoreSnapshot } from "#ui/api/mutations.ts";
 import {
-	focusAdjacentSelectionScope,
+	focusHorizontalSelectionScope,
 	focusSelectionScope,
+	focusVerticalSelectionScope,
 	getFocusedSelectionScope,
 	SelectionScope,
 } from "#ui/selection-scopes.ts";
@@ -38,7 +39,6 @@ import {
 	type BranchOperand,
 	type Operand,
 	uncommittedChangesFileParent,
-	uncommittedChangesOperand,
 } from "#ui/operands.ts";
 import { Details } from "./Details.tsx";
 import styles from "./WorkspacePage.module.css";
@@ -66,8 +66,11 @@ const useWorkspaceHotkeys = (projectId: string) => {
 	const dialog = useAppSelector((state) =>
 		projectSlice.selectors.selectDialogState(state, projectId),
 	);
-	const filesVisible = useAppSelector((state) =>
+	const filesVisibleState = useAppSelector((state) =>
 		projectSlice.selectors.selectFilesVisible(state, projectId),
+	);
+	const canShowFiles = useAppSelector((state) =>
+		projectSlice.selectors.selectCanShowFiles(state, projectId),
 	);
 	const activeElement = useActiveElement();
 	const focusedSelectionScope = getFocusedSelectionScope(activeElement);
@@ -75,6 +78,10 @@ const useWorkspaceHotkeys = (projectId: string) => {
 		(state) => projectSlice.selectors.selectOutlineModeState(state, projectId)._tag === "Default",
 	);
 	const outlineVisible = !detailsFullWindow;
+	const outlineSelectionScope = useAppSelector((state) =>
+		projectSlice.selectors.selectDetailsSelectionScope(state, projectId),
+	);
+	const filesVisible = canShowFiles && filesVisibleState;
 
 	const { isPending: isRestoreSnapshotPending, mutate: restoreSnapshot } = useRestoreSnapshot({
 		projectId,
@@ -124,23 +131,48 @@ const useWorkspaceHotkeys = (projectId: string) => {
 			},
 			options: {
 				conflictBehavior: "allow",
+				enabled: canShowFiles,
 				meta: workspaceHotkeys.toggleFiles.meta,
 			},
 		},
 		{
-			hotkey: workspaceHotkeys.focusPreviousSelectionScope.hotkey,
+			hotkey: workspaceHotkeys.focusHorizontalSelectionScopeLeft.hotkey,
 			callback: () => {
-				focusAdjacentSelectionScope({ filesVisible, offset: -1, outlineVisible });
+				focusHorizontalSelectionScope({
+					filesVisible,
+					offset: -1,
+					outlineSelectionScope,
+					outlineVisible,
+				});
 			},
 			options: {
 				conflictBehavior: "allow",
 			},
 		},
 		{
-			hotkey: workspaceHotkeys.focusNextSelectionScope.hotkey,
+			hotkey: workspaceHotkeys.focusHorizontalSelectionScopeRight.hotkey,
 			callback: () => {
-				focusAdjacentSelectionScope({ filesVisible, offset: 1, outlineVisible });
+				focusHorizontalSelectionScope({
+					filesVisible,
+					offset: 1,
+					outlineSelectionScope,
+					outlineVisible,
+				});
 			},
+			options: {
+				conflictBehavior: "allow",
+			},
+		},
+		{
+			hotkey: workspaceHotkeys.focusVerticalSelectionScopeUp.hotkey,
+			callback: () => focusVerticalSelectionScope(-1),
+			options: {
+				conflictBehavior: "allow",
+			},
+		},
+		{
+			hotkey: workspaceHotkeys.focusVerticalSelectionScopeDown.hotkey,
+			callback: () => focusVerticalSelectionScope(1),
 			options: {
 				conflictBehavior: "allow",
 			},
@@ -153,24 +185,26 @@ const hasAnyOperation = (sources: Array<Operand>, target: Operand) => {
 	return !!operations.into || !!operations.above || !!operations.below;
 };
 
+const buildUncommittedFilesNavigationIndex = ({
+	worktreeChanges,
+}: {
+	worktreeChanges: WorktreeChanges | undefined;
+}): NavigationIndex<string> => {
+	const items = worktreeChanges?.changes.map((change) => change.path) ?? [];
+	return { items, indexByKey: buildIndexByKey(items, (path) => path) };
+};
+
 const buildOutlineNavigationIndex = ({
 	headInfo,
-	worktreeChanges,
 	outlineMode,
 	absorptionTargetCommitIds,
 }: {
 	headInfo: RefInfo | undefined;
-	worktreeChanges: WorktreeChanges | undefined;
 	outlineMode: OutlineMode;
 	absorptionTargetCommitIds: ReadonlySet<string>;
 }): NavigationIndex<Operand> => {
-	const allItems = (): Array<Operand> => [
-		uncommittedChangesOperand,
-		...(worktreeChanges?.changes.map((change) =>
-			fileOperand({ parent: uncommittedChangesFileParent, path: change.path }),
-		) ?? []),
-
-		...(headInfo?.stacks
+	const allItems = (): Array<Operand> =>
+		headInfo?.stacks
 			.toReversed()
 			.flatMap((stack) =>
 				stack.segments.flatMap(
@@ -181,8 +215,7 @@ const buildOutlineNavigationIndex = ({
 						...segment.commits.map((commit) => commitOperand({ commitId: commit.id })),
 					],
 				),
-			) ?? []),
-	];
+			) ?? [];
 
 	const filteredItems = Match.value(outlineMode).pipe(
 		Match.tagsExhaustive({
@@ -356,7 +389,6 @@ const WorkspacePage: FC = () => {
 		Match.orElse(() => null),
 	);
 	const { data: headInfo } = useQuery(headInfoQueryOptions(projectId));
-	const { data: worktreeChanges } = useQuery(changesInWorktreeQueryOptions(projectId));
 	const [absorptionPlanQuery] = useQueries({
 		queries: (absorptionPlanTarget ? [absorptionPlanTarget] : []).map((target) =>
 			absorptionPlanQueryOptions({ projectId, target }),
@@ -368,16 +400,38 @@ const WorkspacePage: FC = () => {
 
 	const outlineNavigationIndex = buildOutlineNavigationIndex({
 		headInfo,
-		worktreeChanges,
 		outlineMode,
 		absorptionTargetCommitIds,
 	});
-
 	const outlineSelection = useAppSelector((state) =>
 		projectSlice.selectors.selectSelectionOutline(state, projectId, outlineNavigationIndex),
 	);
 
-	const deferredOutlineSelection = useDeferredValue(outlineSelection);
+	const { data: worktreeChanges } = useQuery(changesInWorktreeQueryOptions(projectId));
+	const uncommittedFilesNavigationIndex = buildUncommittedFilesNavigationIndex({ worktreeChanges });
+	const uncommittedFilesSelection = useAppSelector((state) =>
+		projectSlice.selectors.selectSelectionUncommittedFiles(
+			state,
+			projectId,
+			uncommittedFilesNavigationIndex,
+		),
+	);
+
+	const detailsSelectionScope = useAppSelector((state) =>
+		projectSlice.selectors.selectDetailsSelectionScope(state, projectId),
+	);
+	const detailsSelection = Match.value(detailsSelectionScope).pipe(
+		Match.when("outline", () => outlineSelection),
+		Match.when("uncommitted-files", () =>
+			uncommittedFilesSelection === null
+				? null
+				: fileOperand({ parent: uncommittedChangesFileParent, path: uncommittedFilesSelection }),
+		),
+		Match.when(null, () => null),
+		Match.exhaustive,
+	);
+
+	const deferredDetailsSelection = useDeferredValue(detailsSelection);
 
 	const { data: projects } = useSuspenseQuery(listProjectsQueryOptions);
 
@@ -421,6 +475,7 @@ const WorkspacePage: FC = () => {
 							projectId={projectId}
 							project={selectedProject}
 							navigationIndex={outlineNavigationIndex}
+							uncommittedFilesNavigationIndex={uncommittedFilesNavigationIndex}
 							absorptionTargetCommitIds={absorptionTargetCommitIds}
 						/>
 					</Panel>
@@ -429,8 +484,8 @@ const WorkspacePage: FC = () => {
 
 				<Panel id={"details-panel" satisfies PanelId} className={styles.panel}>
 					<Details
-						key={deferredOutlineSelection ? operandIdentityKey(deferredOutlineSelection) : null}
-						outlineSelection={deferredOutlineSelection}
+						key={deferredDetailsSelection ? operandIdentityKey(deferredDetailsSelection) : null}
+						outlineSelection={deferredDetailsSelection}
 					/>
 				</Panel>
 			</Group>

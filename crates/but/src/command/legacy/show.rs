@@ -7,7 +7,9 @@ use but_ctx::access::RepoShared;
 use crate::{
     CLI_DATE, CliId, IdMap,
     theme::{self, Paint},
-    utils::{OutputChannel, shorten_object_id, time::format_relative_time},
+    utils::{
+        OutputChannel, get_change_id_for_commit, shorten_object_id, time::format_relative_time,
+    },
 };
 
 pub(crate) fn show_commit(
@@ -428,6 +430,10 @@ fn show_branch(
 
 #[derive(Debug, serde::Serialize)]
 struct BranchCommitInfo {
+    #[serde(skip)]
+    object_id: gix::ObjectId,
+    #[serde(skip)]
+    change_id: but_core::ChangeId,
     sha: String,
     short_sha: String,
     /// The stable change-ID ref shown by `but status`, when the commit has one.
@@ -447,7 +453,7 @@ impl BranchCommitInfo {
     /// The commit ref for display: the stable change-ID ref when the commit
     /// has one, its short sha otherwise.
     fn display_ref(&self) -> String {
-        theme::commit_display_ref(self.cli_id.as_deref(), &self.short_sha)
+        theme::Commit(self.object_id, Some(self.change_id.clone())).to_string()
     }
 }
 
@@ -546,6 +552,11 @@ fn get_branch_commits(
         };
 
         commits.push(BranchCommitInfo {
+            object_id: info.id,
+            change_id: match id_map.change_id_ref(info.id).map(|c| c.change_id.clone()) {
+                Some(id) => id,
+                None => get_change_id_for_commit(&repo, info.id)?,
+            },
             sha: info.id.to_string(),
             short_sha: shorten_object_id(&repo, info.id),
             cli_id: cli_id_for(info.id),
@@ -569,6 +580,8 @@ fn get_branch_commits(
         let base_message = super::commit_summary(&base_commit);
 
         Some(BranchCommitInfo {
+            object_id: merge_base,
+            change_id: crate::utils::get_change_id_for_commit(&repo, merge_base)?,
             sha: merge_base.to_string(),
             short_sha: shorten_object_id(&repo, merge_base),
             cli_id: None,

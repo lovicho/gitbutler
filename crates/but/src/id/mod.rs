@@ -23,6 +23,8 @@ use crate::id::{
     file_info::FileInfo, id_usage::UintId, stacks_info::StacksInfo,
     uncommitted_info::UncommittedInfo,
 };
+use crate::theme;
+use crate::utils::get_change_id_for_commit;
 
 mod file_info;
 mod id_usage;
@@ -276,10 +278,6 @@ pub struct ChangeIdWithShortId {
     pub short_id: ShortId,
 }
 
-/// The minimum number of change ID characters displayed for a commit, so that
-/// short IDs remain visually distinctive.
-pub(crate) const MIN_DISPLAYED_CHANGE_ID_CHARS: usize = 3;
-
 impl ChangeIdWithShortId {
     /// The short ID padded with further change ID characters to
     /// [`MIN_DISPLAYED_CHANGE_ID_CHARS`], matching how the change ID is
@@ -287,7 +285,9 @@ impl ChangeIdWithShortId {
     pub fn padded_short_id(&self) -> String {
         let mut id = self.short_id.clone();
         let full = self.change_id.to_string();
-        if let Some(padding) = full.get(id.len()..MIN_DISPLAYED_CHANGE_ID_CHARS.min(full.len())) {
+        if let Some(padding) =
+            full.get(id.len()..theme::MIN_DISPLAYED_CHANGE_ID_CHARS.min(full.len()))
+        {
             id.push_str(padding);
         }
         id
@@ -864,15 +864,7 @@ impl IdMap {
         let commit_id_to_change_id = commit_ids
             .filter_map(|commit_id| {
                 let result = (|| {
-                    let commit = repo.find_commit(commit_id)?;
-                    let commit = commit.decode()?;
-                    let change_id = but_core::commit::Headers::try_from_commit_headers(|| {
-                        commit.extra_headers()
-                    })
-                    .and_then(|headers| headers.change_id)
-                    .unwrap_or_else(|| {
-                        but_core::commit::Headers::synthetic_change_id_from_commit_id(commit_id)
-                    });
+                    let change_id = get_change_id_for_commit(&repo, commit_id)?;
                     Ok::<(gix::ObjectId, ChangeId), anyhow::Error>((commit_id, change_id))
                 })();
 

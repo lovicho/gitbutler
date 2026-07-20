@@ -9,7 +9,7 @@ use crate::{
     args::atoms::{BranchArg, CliIdArg},
     command::legacy::workspace_target,
     theme::{self, Paint},
-    utils::{OutputChannel, shorten_object_id},
+    utils::{OutputChannel, get_change_id_for_commit, shorten_object_id},
 };
 
 pub fn show(
@@ -107,6 +107,10 @@ struct ConflictingFile {
 
 #[derive(Debug, serde::Serialize)]
 struct CommitRef {
+    #[serde(skip)]
+    object_id: gix::ObjectId,
+    #[serde(skip)]
+    change_id: but_core::ChangeId,
     sha: String,
     short_sha: String,
     /// The stable change-ID ref shown by `but status`, when the commit has one.
@@ -245,6 +249,11 @@ fn find_commits_modifying_file(
         if modified_file {
             let author = commit.author()?;
             commits.push(CommitRef {
+                object_id: info.id,
+                change_id: match id_map.change_id_ref(info.id).map(|c| c.change_id.clone()) {
+                    Some(id) => id,
+                    None => get_change_id_for_commit(repo, info.id)?,
+                },
                 sha: info.id.to_string(),
                 short_sha: shorten_object_id(repo, info.id),
                 cli_id: id_map
@@ -309,6 +318,11 @@ fn get_commits_ahead(
         };
 
         commits.push(CommitInfo {
+            object_id: info.id,
+            change_id: match id_map.change_id_ref(info.id).map(|c| c.change_id.clone()) {
+                Some(id) => id,
+                None => get_change_id_for_commit(&repo, info.id)?,
+            },
             sha: info.id.to_string(),
             short_sha: shorten_object_id(&repo, info.id),
             cli_id: id_map
@@ -369,6 +383,10 @@ fn get_uncommitted_files(ctx: &mut Context, branch_arg: &BranchArg) -> anyhow::R
 
 #[derive(Debug, serde::Serialize)]
 struct CommitInfo {
+    #[serde(skip)]
+    object_id: gix::ObjectId,
+    #[serde(skip)]
+    change_id: but_core::ChangeId,
     sha: String,
     short_sha: String,
     /// The stable change-ID ref shown by `but status`, when the commit has one.
@@ -526,7 +544,7 @@ fn output_human(
             writeln!(
                 buf,
                 "{} {}",
-                theme::commit_display_ref(commit.cli_id.as_deref(), &commit.short_sha),
+                theme::Commit(commit.object_id, Some(commit.change_id.clone())),
                 commit.message
             )?;
             writeln!(
@@ -689,7 +707,7 @@ fn output_human(
                         writeln!(
                             buf,
                             "      {} {}",
-                            theme::commit_display_ref(commit.cli_id.as_deref(), &commit.short_sha),
+                            theme::Commit(commit.object_id, Some(commit.change_id.clone())),
                             commit.message
                         )?;
                         writeln!(
@@ -709,7 +727,7 @@ fn output_human(
                         writeln!(
                             buf,
                             "      {} {}",
-                            theme::commit_display_ref(commit.cli_id.as_deref(), &commit.short_sha),
+                            theme::Commit(commit.object_id, Some(commit.change_id.clone())),
                             commit.message
                         )?;
                         writeln!(

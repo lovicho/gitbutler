@@ -255,6 +255,9 @@ fn squash_commits_internal(
     let snapshot = ctx.create_snapshot(SnapshotDetails::new(OperationKind::SquashCommit), perm)?;
     let source_oids_count = source_oids.len();
     let only_source_commit = source_oids.first().copied();
+    let target_change_id = id_map
+        .change_id_ref(target_oid)
+        .map(|change_id| change_id.change_id.clone());
     let source_oids_to_squash = source_oids;
 
     let squash_result: anyhow::Result<ObjectId> = (|| {
@@ -327,19 +330,19 @@ fn squash_commits_internal(
 
     // Output message based on context
     if let Some(out) = out.for_human() {
-        let repo = ctx.repo.get()?;
-        let new_commit =
-            theme::new_commit_ref_with_perm(ctx, perm.read_permission(), final_commit_oid)?;
+        let new_commit = theme::Commit(final_commit_oid, target_change_id);
         if source_oids_count == 1 {
             // Single commit squash (for backwards compatibility with `but rub`)
+            let source = only_source_commit
+                .context("BUG: Source commits count is one, but first item is none")?;
             writeln!(
                 out,
                 "Squashed {} → {}",
-                theme::CommitRef(
-                    id_map,
-                    &repo,
-                    only_source_commit
-                        .context("BUG: Source commits count is one, but first item is none")?
+                theme::Commit(
+                    source,
+                    id_map
+                        .change_id_ref(source)
+                        .map(|change_id| change_id.change_id.clone()),
                 ),
                 new_commit
             )?

@@ -30,11 +30,17 @@ pub(crate) fn uncommitted_to_commit_with_perm(
         (builder.into_diff_specs(), target_branch)
     };
 
+    let change_id = {
+        let repo = ctx.repo.get()?;
+        crate::utils::get_change_id_for_commit(&repo, oid)?
+    };
     let (new_commit, rejected) =
         amend_diff_specs(ctx, diff_specs, oid, target_branch.as_deref(), perm)?;
     update_workspace_commit(ctx, false)?;
     if let Some(out) = out.for_human() {
-        let new_commit = theme::new_commit_ref_with_perm(ctx, perm.read_permission(), new_commit)?;
+        let new_commit = new_commit
+            .map(|id| theme::Commit(id, Some(change_id)).to_string())
+            .unwrap_or_default();
         writeln!(out, "Amended {description} → {new_commit}")?;
         rejection::write_rejection_report(out, &rejected, target_branch.as_deref())?;
     } else if let Some(out) = out.for_json() {

@@ -50,6 +50,7 @@ pub enum MoveOutcome {
 
 impl CliOutputHuman for MoveOutcome {
     fn on_human(self, out: &mut dyn WriteWithUtils, _theme: &Theme) -> anyhow::Result<()> {
+        // GB-1771 missing change ID here
         match self {
             Self::Commits {
                 sources,
@@ -57,7 +58,10 @@ impl CliOutputHuman for MoveOutcome {
                 target,
                 new_branch_name,
             } => {
-                let sources = sources.into_iter().map(theme::Commit).join(", ");
+                let sources = sources
+                    .into_iter()
+                    .map(|id| theme::Commit(id, None))
+                    .join(", ");
                 write!(out, "Moved {sources}")?;
                 if let Some(new_branch_name) = new_branch_name {
                     write!(out, " to new branch {}", theme::Branch(new_branch_name))?;
@@ -78,8 +82,8 @@ impl CliOutputHuman for MoveOutcome {
                     out,
                     "Moved {} changes from {} to new commit {}",
                     num_changes,
-                    theme::Commit(source_commit_id),
-                    theme::Commit(new_commit_id),
+                    theme::Commit(source_commit_id, None),
+                    theme::Commit(new_commit_id, None),
                 )?;
 
                 if let Some(new_branch_name) = new_branch_name {
@@ -339,7 +343,8 @@ impl Display for MoveTarget {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Commit { commit_id, side } => {
-                write!(f, "{} commit {}", side, theme::Commit(*commit_id))
+                // GB-1771 missing change ID here
+                write!(f, "{} commit {}", side, theme::Commit(*commit_id, None))
             }
             Self::BranchTip { name } => {
                 write!(f, "to the tip of branch {}", theme::Branch(name))

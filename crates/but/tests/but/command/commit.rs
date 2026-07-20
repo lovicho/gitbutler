@@ -1389,7 +1389,7 @@ fn commit_of_adjacent_insertion_to_independent_branch_names_the_dependency() -> 
         .success()
         .stdout_eq(str![[r#"
 Created new independent branch 'api'
-✓ Created commit 1#0 on branch api
+✓ Created commit 1 on branch api
 Note: 1 change could not be applied:
   M
     conflicts with commits on A (edits touch the same file)

@@ -16,7 +16,10 @@ use but_llm::{
     AI_OPENROUTER_MODEL_NAME_KEY, AI_OPENROUTER_SECRET_HANDLE, LLMProviderKind,
 };
 use but_secret::{Sensitive, secret};
-use but_settings::{AppSettingsWithDiskSync, api::TelemetryUpdate};
+use but_settings::{
+    AppSettingsWithDiskSync,
+    api::{FeatureFlagsUpdate, TelemetryUpdate},
+};
 use cfg_if::cfg_if;
 use gix::bstr::ByteSlice as _;
 use serde::Serialize;
@@ -24,8 +27,8 @@ use serde::Serialize;
 use super::git_config::edit_git_config;
 use crate::{
     args::config::{
-        AiKeyOption, AiSubcommand, ForgeSubcommand, MetricsStatus, Subcommands, UiSubcommand,
-        UserSubcommand,
+        AiKeyOption, AiSubcommand, FeatureFlag, FeatureStatus, ForgeSubcommand, MetricsStatus,
+        Subcommands, UiSubcommand, UserSubcommand,
     },
     theme::{self, Paint},
     tui,
@@ -96,6 +99,7 @@ pub async fn exec(
         Some(Subcommands::PushRemote { remote }) => push_remote_config(ctx, out, remote),
         Some(Subcommands::Forge { cmd }) => forge_config(out, cmd).await,
         Some(Subcommands::Metrics { status }) => metrics_config(out, status).await,
+        Some(Subcommands::Feature { flag, status }) => feature_config(out, flag, status),
         Some(Subcommands::Ai { local, global, cmd }) => {
             ai_config_with_repo(ctx, out, cmd, local, global)
         }
@@ -246,6 +250,11 @@ async fn show_overview(ctx: &mut Context, out: &mut OutputChannel) -> Result<()>
         )?;
         writeln!(
             out,
+            "  {} - Feature flags",
+            t.command_suggestion.paint("but config feature")
+        )?;
+        writeln!(
+            out,
             "  {}      - AI provider settings",
             t.command_suggestion.paint("but config ai")
         )?;
@@ -351,6 +360,131 @@ pub(crate) async fn metrics_config(
         }
     }
 
+    Ok(())
+}
+
+/// Handle feature flag configuration without requiring a repository context.
+pub(crate) fn feature_config(
+    out: &mut OutputChannel,
+    flag: Option<FeatureFlag>,
+    status: Option<FeatureStatus>,
+) -> Result<()> {
+    let t = theme::get();
+    let app_settings_sync = load_app_settings_sync()?;
+
+    if let Some(status) = status {
+        let flag = flag.context("A feature flag is required when setting its status")?;
+        let enabled = status.enabled();
+        app_settings_sync.update_feature_flags(feature_flag_update(flag, enabled))?;
+
+        if let Some(out) = out.for_human() {
+            writeln!(
+                out,
+                "{} Feature flag {} is now {}",
+                t.sym().success,
+                t.config_value.paint(flag.as_str()),
+                if enabled {
+                    t.success.paint("enabled")
+                } else {
+                    t.error.paint("disabled")
+                }
+            )?;
+        } else {
+            write_feature_flag_value(out, flag, enabled)?;
+        }
+        return Ok(());
+    }
+
+    let settings = app_settings_sync.get()?;
+    if let Some(flag) = flag {
+        let enabled = feature_flag_value(&settings.feature_flags, flag);
+        if let Some(out) = out.for_human() {
+            writeln!(
+                out,
+                "{}: {}",
+                t.config_value.paint(flag.as_str()),
+                if enabled {
+                    t.success.paint("enabled")
+                } else {
+                    t.hint.paint("disabled")
+                }
+            )?;
+        } else {
+            write_feature_flag_value(out, flag, enabled)?;
+        }
+        return Ok(());
+    }
+
+    let flags = [
+        (
+            FeatureFlag::UnapplyV3Pgm,
+            settings.feature_flags.unapply_v3_pgm,
+        ),
+        (
+            FeatureFlag::SingleBranch,
+            settings.feature_flags.single_branch,
+        ),
+    ];
+    if let Some(out) = out.for_human() {
+        writeln!(out, "\n{}:", t.important.paint("Feature Flags"))?;
+        writeln!(out)?;
+        for (flag, enabled) in flags {
+            writeln!(
+                out,
+                "  {}: {}",
+                t.config_value.paint(flag.as_str()),
+                if enabled {
+                    t.success.paint("enabled")
+                } else {
+                    t.hint.paint("disabled")
+                }
+            )?;
+        }
+    } else if let Some(out) = out.for_shell() {
+        for (flag, enabled) in flags {
+            writeln!(out, "{}={enabled}", flag.as_json_key())?;
+        }
+    } else if let Some(out) = out.for_json() {
+        out.write_value(serde_json::json!({
+            "unapply_v3_pgm": settings.feature_flags.unapply_v3_pgm,
+            "single_branch": settings.feature_flags.single_branch,
+        }))?;
+    }
+
+    Ok(())
+}
+
+fn feature_flag_value(flags: &but_settings::app_settings::FeatureFlags, flag: FeatureFlag) -> bool {
+    match flag {
+        FeatureFlag::UnapplyV3Pgm => flags.unapply_v3_pgm,
+        FeatureFlag::SingleBranch => flags.single_branch,
+    }
+}
+
+fn feature_flag_update(flag: FeatureFlag, enabled: bool) -> FeatureFlagsUpdate {
+    let mut update = FeatureFlagsUpdate {
+        unapply_v3_pgm: None,
+        single_branch: None,
+        irc: None,
+        worktree_manipulation: None,
+    };
+    match flag {
+        FeatureFlag::UnapplyV3Pgm => update.unapply_v3_pgm = Some(enabled),
+        FeatureFlag::SingleBranch => update.single_branch = Some(enabled),
+    }
+    update
+}
+
+fn write_feature_flag_value(
+    out: &mut OutputChannel,
+    flag: FeatureFlag,
+    enabled: bool,
+) -> Result<()> {
+    if let Some(out) = out.for_shell() {
+        writeln!(out, "{enabled}")?;
+    } else if let Some(out) = out.for_json() {
+        out.write_value(serde_json::json!({ flag.as_json_key(): enabled }))?;
+    }
     Ok(())
 }
 

@@ -16,7 +16,6 @@ import {
 } from "#ui/operations/operation.ts";
 import { projectSlice } from "#ui/projects/state.ts";
 import { operandLabel, operandsLabel } from "#ui/routes/project/$id/workspace/operandLabel.ts";
-import { focusSelectionScope } from "#ui/selection-scopes.ts";
 import { useAppDispatch, useAppSelector } from "#ui/store.ts";
 import { Button, Toggle, ToggleGroup, Tooltip } from "@base-ui/react";
 import { useHotkeys, type UseHotkeyDefinition } from "@tanstack/react-hotkeys";
@@ -141,7 +140,6 @@ const CheckedCommitOperationControls: FC<{ checkedCommitCount: number; projectId
 
 	const cancel = () => {
 		dispatch(projectSlice.actions.clearCheckedCommits({ projectId }));
-		focusSelectionScope("outline");
 	};
 
 	return (
@@ -174,14 +172,12 @@ const AbsorbOperationControls: FC<{
 
 	const run = () => {
 		dispatch(projectSlice.actions.exitMode({ projectId }));
-		focusSelectionScope("outline");
 
 		absorb(absorptionPlan);
 	};
 
 	const cancel = () => {
 		dispatch(projectSlice.actions.cancelMode({ projectId }));
-		focusSelectionScope("outline");
 	};
 
 	return (
@@ -242,7 +238,6 @@ const TransferTypeToggleGroup: FC<{
 		const nextOperationType = value[0] as OperationType;
 
 		setOperationType(nextOperationType);
-		focusSelectionScope("outline");
 	};
 
 	return (
@@ -292,6 +287,9 @@ const TransferKeyboardOperationControls: FC<{
 	mode: KeyboardTransferMode;
 	outlineNavigationIndex: NavigationIndex<Operand>;
 }> = ({ headInfoIndex, projectId, mode, outlineNavigationIndex }) => {
+	const detailsSelectionScope = useAppSelector((state) =>
+		projectSlice.selectors.selectDetailsSelectionScope(state, projectId),
+	);
 	const selection = useAppSelector((state) =>
 		projectSlice.selectors.selectSelectionOutline(state, projectId, outlineNavigationIndex),
 	);
@@ -299,7 +297,7 @@ const TransferKeyboardOperationControls: FC<{
 	const dispatch = useAppDispatch();
 	const { mutate: runOperation } = useRunOperation();
 
-	const target = getTransferTarget(keyboardTransferMode(mode), selection);
+	const target = getTransferTarget(keyboardTransferMode(mode), selection, detailsSelectionScope);
 	if (!target) return null;
 
 	const operations = getOperations(mode.sources, target);
@@ -307,7 +305,6 @@ const TransferKeyboardOperationControls: FC<{
 
 	const run = () => {
 		dispatch(projectSlice.actions.exitMode({ projectId }));
-		focusSelectionScope("outline");
 
 		if (!operation) return;
 
@@ -316,7 +313,6 @@ const TransferKeyboardOperationControls: FC<{
 
 	const cancel = () => {
 		dispatch(projectSlice.actions.cancelMode({ projectId }));
-		focusSelectionScope("outline");
 	};
 
 	return (

@@ -165,6 +165,33 @@ pub enum Subcommands {
         status: Option<MetricsStatus>,
     },
 
+    /// View and configure feature flags.
+    ///
+    /// Without arguments, displays all feature flags that can be changed through the CLI.
+    /// Specify a flag to view its current value, or add `enable` or `disable` to update it.
+    ///
+    /// ## Examples
+    ///
+    /// View all feature flags:
+    ///
+    /// ```text
+    /// but config feature
+    /// ```
+    ///
+    /// Enable single-branch mode:
+    ///
+    /// ```text
+    /// but config feature single-branch enable
+    /// ```
+    Feature {
+        /// Feature flag to view or update.
+        #[clap(value_enum)]
+        flag: Option<FeatureFlag>,
+        /// Whether the feature flag is enabled.
+        #[clap(value_enum, requires = "flag")]
+        status: Option<FeatureStatus>,
+    },
+
     /// View and configure UI preferences.
     ///
     /// Without arguments, displays current UI settings.
@@ -434,6 +461,44 @@ impl UiConfigKey {
 pub enum MetricsStatus {
     Enable,
     Disable,
+}
+
+/// Feature flags that can be managed through `but config feature`.
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+pub enum FeatureFlag {
+    /// Use the V3 unapply compatibility mode.
+    UnapplyV3Pgm,
+    /// Enable single-branch mode.
+    SingleBranch,
+}
+
+impl FeatureFlag {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            FeatureFlag::UnapplyV3Pgm => "unapply-v3-pgm",
+            FeatureFlag::SingleBranch => "single-branch",
+        }
+    }
+
+    pub fn as_json_key(self) -> &'static str {
+        match self {
+            FeatureFlag::UnapplyV3Pgm => "unapply_v3_pgm",
+            FeatureFlag::SingleBranch => "single_branch",
+        }
+    }
+}
+
+/// Values for a feature flag.
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+pub enum FeatureStatus {
+    Enable,
+    Disable,
+}
+
+impl FeatureStatus {
+    pub fn enabled(self) -> bool {
+        matches!(self, FeatureStatus::Enable)
+    }
 }
 
 impl MetricsStatus {

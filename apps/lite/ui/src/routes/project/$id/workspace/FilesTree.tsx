@@ -129,6 +129,7 @@ export const FilesTree: FC<
 		onFileSelection: (selection: string) => void;
 		navigationIndex: NavigationIndex<string>;
 		fileParent: FileParent;
+		emptyLabel?: string;
 	} & ComponentProps<"div">
 > = ({
 	items,
@@ -137,6 +138,7 @@ export const FilesTree: FC<
 	projectId,
 	navigationIndex,
 	fileParent,
+	emptyLabel = "No changes.",
 	ref: refProp,
 	...props
 }) => {
@@ -165,52 +167,50 @@ export const FilesTree: FC<
 			className={classes(props.className, styles.tree)}
 			ref={useMergedRefs(refProp, ref)}
 		>
-			<div className={styles.section}>
-				{items.length === 0 ? (
-					<Row interactive={false}>
-						<RowLabelContainer>
-							<RowLabel className={rowStyles.fadedText}>No changes.</RowLabel>
-						</RowLabelContainer>
-					</Row>
-				) : (
-					// oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- Tree items need ARIA group semantics.
-					<div role="group">
-						{items.map((item) => (
-							<TreeItem
-								key={item.path}
-								isSelected={selection !== null && selection === item.path}
-								aria-label={
-									item._tag === "Change"
-										? `${item.change.status.type} ${item.change.path}`
-										: `Conflict ${item.path}`
-								}
-								path={item.path}
-								render={
-									<OperationSourceC
-										projectId={projectId}
-										source={fileOperand({ parent: fileParent, path: item.path })}
-										outline="outside"
-										render={
-											<FileRow
-												item={item}
-												headInfoIndex={headInfoIndex}
-												inert={!navigationIndexIncludes(navigationIndex, item.path, (path) => path)}
-												isSelected={selection !== null && selection === item.path}
-												onSelect={() => onFileSelection(item.path)}
-												projectId={projectId}
-												fileParent={fileParent}
-												branchNameByCommitId={(cid) =>
-													headInfoIndex?.commitContextById(cid)?.segment.refName?.displayName
-												}
-											/>
-										}
-									/>
-								}
-							/>
-						))}
-					</div>
-				)}
-			</div>
+			{items.length === 0 ? (
+				<Row interactive={false}>
+					<RowLabelContainer>
+						<RowLabel className={rowStyles.fadedText}>{emptyLabel}</RowLabel>
+					</RowLabelContainer>
+				</Row>
+			) : (
+				// oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- Tree items need ARIA group semantics.
+				<div role="group">
+					{items.map((item) => (
+						<TreeItem
+							key={item.path}
+							isSelected={selection !== null && selection === item.path}
+							aria-label={
+								item._tag === "Change"
+									? `${item.change.status.type} ${item.change.path}`
+									: `Conflict ${item.path}`
+							}
+							path={item.path}
+							render={
+								<OperationSourceC
+									projectId={projectId}
+									source={fileOperand({ parent: fileParent, path: item.path })}
+									outline="outside"
+									render={
+										<FileRow
+											item={item}
+											headInfoIndex={headInfoIndex}
+											inert={!navigationIndexIncludes(navigationIndex, item.path, (path) => path)}
+											isSelected={selection !== null && selection === item.path}
+											onSelect={() => onFileSelection(item.path)}
+											projectId={projectId}
+											fileParent={fileParent}
+											branchNameByCommitId={(cid) =>
+												headInfoIndex?.commitContextById(cid)?.segment.refName?.displayName
+											}
+										/>
+									}
+								/>
+							}
+						/>
+					))}
+				</div>
+			)}
 		</div>
 	);
 };

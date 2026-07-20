@@ -79,7 +79,7 @@ Unapplied stack with branches 'A' from workspace
         .stdout_eq(snapbox::str![[r#"
 Branch: A (1 commits ahead)
 
-9477ae7 add A
+tpm add A
     2000-01-02 00:00:00 by author
     1 file changed, 1 insertion, 0 deletions
 
@@ -124,7 +124,7 @@ git checkout gitbutler/workspace
         .stdout_eq(snapbox::str![[r#"
 Branch: origin/remote-feature (1 commits ahead)
 
-ba02e5f Add remote feature
+uwy Add remote feature
     2000-01-02 00:00:00 by author
     0 files changed, 0 insertions, 0 deletions
 
@@ -136,7 +136,7 @@ ba02e5f Add remote feature
         .stdout_eq(snapbox::str![[r#"
 Branch: remote-feature (1 commits ahead)
 
-ba02e5f Add remote feature
+uwy Add remote feature
     2000-01-02 00:00:00 by author
     0 files changed, 0 insertions, 0 deletions
 

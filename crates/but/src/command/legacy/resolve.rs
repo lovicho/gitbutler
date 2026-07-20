@@ -82,8 +82,13 @@ fn parse_commit_id(ctx: &mut Context, commit_id_str: &str) -> Result<(gix::Objec
     // Extract the commit OID from the matched CliId
     match &matches[0] {
         CliId::Commit { commit_id, .. } => {
-            let repo = ctx.repo.get()?;
-            let commit_ref = theme::CommitRef(&id_map, &repo, *commit_id).to_string();
+            let commit_ref = theme::Commit(
+                *commit_id,
+                id_map
+                    .change_id_ref(*commit_id)
+                    .map(|change_id| change_id.change_id.clone()),
+            )
+            .to_string();
             Ok((*commit_id, commit_ref))
         }
         _ => bail!("'{commit_id_str}' does not refer to a commit"),
@@ -652,7 +657,14 @@ fn resolve_one_with_ai(
     commit_oid: gix::ObjectId,
 ) -> Result<but_api::resolve::AiResolutionResult> {
     let t = theme::get();
-    let commit_ref = theme::new_commit_ref(ctx, commit_oid)?;
+    let commit_ref = {
+        let repo = ctx.repo.get()?;
+        theme::Commit(
+            commit_oid,
+            Some(crate::utils::get_change_id_for_commit(&repo, commit_oid)?),
+        )
+        .to_string()
+    };
     {
         let mut progress = out.progress_channel();
         writeln!(
@@ -674,7 +686,16 @@ fn resolve_one_with_ai(
             t.success.paint("✓ Resolved"),
             commit_ref,
             t.success.paint("→"),
-            theme::new_commit_ref(ctx, result.new_commit)?,
+            {
+                let repo = ctx.repo.get()?;
+                theme::Commit(
+                    result.new_commit,
+                    Some(crate::utils::get_change_id_for_commit(
+                        &repo,
+                        result.new_commit,
+                    )?),
+                )
+            },
         )?;
         if let Some(summary) = &result.summary {
             writeln!(human_out)?;

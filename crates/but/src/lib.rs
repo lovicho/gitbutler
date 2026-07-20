@@ -529,6 +529,11 @@ async fn match_subcommand(
                         .emit_metrics(metrics_ctx)
                         .map_err(CliError::from)
                 }
+                Some(args::config::Subcommands::Feature { flag, status }) => {
+                    command::config::feature_config(out, *flag, *status)
+                        .emit_metrics(metrics_ctx)
+                        .map_err(CliError::from)
+                }
                 Some(args::config::Subcommands::Forge { cmd: forge_cmd }) => {
                     command::config::forge_config(out, forge_cmd.clone())
                         .await

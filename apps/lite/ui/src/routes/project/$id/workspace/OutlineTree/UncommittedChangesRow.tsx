@@ -1,7 +1,6 @@
 import { useDiscardWorktreeChanges } from "#ui/api/mutations.ts";
 import { Icon } from "#ui/components/Icon.tsx";
 import { createDiffSpec } from "#ui/operations/diff-specs.ts";
-import { outlineHotkeys, selectionOperationHotkeys, toElectronAccelerator } from "#ui/hotkeys.ts";
 import {
 	nativeMenuItem,
 	nativeMenuSeparator,
@@ -17,8 +16,14 @@ import { Toolbar } from "@base-ui/react";
 import { AbsorptionTarget, TreeChange, UnifiedPatch } from "@gitbutler/but-sdk";
 import { FC } from "react";
 import { getRowButtonClassName } from "../Row-utils.ts";
-import { RowBubble, RowBubbleGroup, RowLabel, RowLabelContainer, RowToolbar } from "../Row.tsx";
-import { ItemRow } from "./ItemRow.tsx";
+import {
+	Row,
+	RowBubble,
+	RowBubbleGroup,
+	RowLabel,
+	RowLabelContainer,
+	RowToolbar,
+} from "../Row.tsx";
 import { useQueries } from "@tanstack/react-query";
 import { treeChangeDiffsQueryOptions } from "#ui/api/queries.ts";
 
@@ -84,12 +89,10 @@ export const UncommittedChangesRow: FC<{
 			label: "Cut Changes",
 			enabled: changes.length > 0,
 			onSelect: cutChanges,
-			accelerator: toElectronAccelerator(selectionOperationHotkeys.cut.hotkey),
 		}),
 		nativeMenuSeparator,
 		nativeMenuItem({
 			label: "Absorb",
-			accelerator: toElectronAccelerator(outlineHotkeys.absorb.hotkey),
 			onSelect: absorb,
 		}),
 		nativeMenuItem({
@@ -100,12 +103,11 @@ export const UncommittedChangesRow: FC<{
 	];
 
 	return (
-		<ItemRow
-			projectId={projectId}
-			operand={operand}
+		<Row
 			onContextMenu={(event) => {
 				void showNativeContextMenu(event, menuItems);
 			}}
+			interactive={false}
 		>
 			<RowLabelContainer>
 				<RowLabel heading>Uncommitted changes</RowLabel>
@@ -137,6 +139,6 @@ export const UncommittedChangesRow: FC<{
 					</Toolbar.Button>
 				</Toolbar.Root>
 			)}
-		</ItemRow>
+		</Row>
 	);
 };

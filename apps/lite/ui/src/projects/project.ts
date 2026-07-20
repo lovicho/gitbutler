@@ -25,6 +25,7 @@ import {
 	type TransferMode,
 } from "#ui/outline/mode.ts";
 import { navigationIndexIncludes, type NavigationIndex } from "#ui/workspace/navigation-index.ts";
+import type { SelectionScope } from "#ui/selection-scopes.ts";
 import { createSelector } from "@reduxjs/toolkit";
 import type { AbsorptionTarget, RelativeTo } from "@gitbutler/but-sdk";
 import { Match } from "effect";
@@ -38,20 +39,25 @@ export type Dialog =
 	| { _tag: "Settings" };
 
 export type SelectionState = {
+	uncommittedFiles: string | null;
 	outline: Operand | null;
 	files: string | null;
 	diff: HunkOperand | null;
 };
 
+type DetailsSelectionScope = Extract<SelectionScope, "uncommitted-files" | "outline">;
+
 type WorkspaceState = {
 	checkedCommitIds: Record<string, true>;
 	commitTarget: RelativeTo | null;
+	detailsSelectionScope: DetailsSelectionScope | null;
 	highlightedCommitIds: Array<string>;
 	mode: OutlineMode;
 	selection: SelectionState;
 };
 
 const createInitialSelectionState = (): SelectionState => ({
+	uncommittedFiles: null,
 	outline: null,
 	files: null,
 	diff: null,
@@ -60,6 +66,7 @@ const createInitialSelectionState = (): SelectionState => ({
 const createInitialWorkspaceState = (): WorkspaceState => ({
 	checkedCommitIds: {},
 	commitTarget: null,
+	detailsSelectionScope: null,
 	highlightedCommitIds: [],
 	mode: defaultOutlineMode,
 	selection: createInitialSelectionState(),
@@ -92,6 +99,15 @@ const hunkOperandIdentityKey = (operand: HunkOperand): string =>
 	operandIdentityKey(hunkOperand(operand));
 
 export const projectReducers = {
+	setDetailsSelectionScope: (state: ProjectState, { scope }: { scope: DetailsSelectionScope }) => {
+		state.workspace.detailsSelectionScope = scope;
+	},
+	selectUncommittedFiles: (state: ProjectState, { selection }: { selection: string | null }) => {
+		const workspaceState = state.workspace;
+		if (workspaceState.selection.uncommittedFiles === selection) return;
+
+		workspaceState.selection.uncommittedFiles = selection;
+	},
 	selectOutline: (state: ProjectState, { selection }: { selection: Operand | null }) => {
 		const workspaceState = state.workspace;
 		if (
@@ -200,6 +216,7 @@ export const projectReducers = {
 				sources,
 				operationType: operationType ?? "into",
 				restoreSelection: {
+					uncommittedFiles: workspaceState.selection.uncommittedFiles,
 					outline: workspaceState.selection.outline,
 					files: workspaceState.selection.files,
 					diff: workspaceState.selection.diff,
@@ -215,6 +232,7 @@ export const projectReducers = {
 		workspaceState.mode = absorbOutlineMode({
 			source,
 			restoreSelection: {
+				uncommittedFiles: workspaceState.selection.uncommittedFiles,
 				outline: workspaceState.selection.outline,
 				files: workspaceState.selection.files,
 				diff: workspaceState.selection.diff,
@@ -386,8 +404,20 @@ const selectCheckedCommitOperands = createSelector(selectCheckedCommits, (checke
 
 export const projectSelectors = {
 	selectFilesVisible: (state: ProjectState) => state.filesVisible,
+	selectCanShowFiles: (state: ProjectState) =>
+		state.workspace.detailsSelectionScope !== "uncommitted-files",
 	selectDetailsFullWindow: (state: ProjectState) => state.detailsFullWindow,
+	selectDetailsSelectionScope: (state: ProjectState) => state.workspace.detailsSelectionScope,
 	selectDialogState: (state: ProjectState) => state.dialog,
+	selectSelectionUncommittedFiles: (
+		state: ProjectState,
+		navigationIndex: NavigationIndex<string>,
+	) =>
+		resolveNavigationIndexSelection(
+			navigationIndex,
+			state.workspace.selection.uncommittedFiles,
+			(path) => path,
+		),
 	selectIsSelectedOutline: (
 		state: ProjectState,
 		navigationIndex: NavigationIndex<Operand>,

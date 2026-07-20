@@ -5,7 +5,6 @@ import {
 	workspaceFetchQueryOptions,
 	workspaceFetchStatusQueryOptions,
 } from "#ui/api/queries.ts";
-import { getHeadInfoIndex } from "#ui/api/ref-info.ts";
 import { stackBottomRelativeTo } from "#ui/api/stack.ts";
 import { getButtonClassName } from "#ui/components/Button.tsx";
 import { classes } from "#ui/components/classes.ts";
@@ -15,7 +14,7 @@ import { TooltipPopup } from "#ui/components/Tooltip.tsx";
 import { globalHotkeys, workspaceHotkeys } from "#ui/hotkeys.ts";
 import { branchOperand, type BranchOperand, type Operand } from "#ui/operands.ts";
 import { projectSlice } from "#ui/projects/state.ts";
-import { focusSelectionScope, type SelectionScope } from "#ui/selection-scopes.ts";
+import { focusSelectionScope } from "#ui/selection-scopes.ts";
 import { useAppDispatch, useAppSelector } from "#ui/store.ts";
 import { formatRelativeTime } from "#ui/time.ts";
 import type { NavigationIndex } from "#ui/workspace/navigation-index.ts";
@@ -26,14 +25,9 @@ import { useHotkeys } from "@tanstack/react-hotkeys";
 import { Match } from "effect";
 import { type ComponentProps, type FC, useState } from "react";
 import { ToggleGroupStyles, ToggleStyles } from "#ui/components/ToggleGroup.tsx";
-import {
-	buildCommitTargetComboboxItems,
-	selectCommitTargetComboboxItem,
-} from "#ui/routes/project/$id/workspace/OutlineTree/commitTargetComboboxItems.ts";
 import { OutlineTree } from "#ui/routes/project/$id/workspace/OutlineTree/OutlineTree.tsx";
 import styles from "./Outline.module.css";
 import { TopLeftControls } from "#ui/routes/project/$id/workspace/TopLeftControls.tsx";
-import { CommitForm } from "#ui/routes/project/$id/workspace/CommitForm.tsx";
 
 const ActivitySpinner: FC = () => {
 	const fetchingCount = useIsFetching();
@@ -93,10 +87,18 @@ export const Outline: FC<
 	{
 		absorptionTargetCommitIds: ReadonlySet<string>;
 		navigationIndex: NavigationIndex<Operand>;
+		uncommittedFilesNavigationIndex: NavigationIndex<string>;
 		project: ProjectForFrontend;
 		projectId: string;
 	} & ComponentProps<"div">
-> = ({ absorptionTargetCommitIds, navigationIndex, project, projectId, ...restProps }) => {
+> = ({
+	absorptionTargetCommitIds,
+	navigationIndex,
+	uncommittedFilesNavigationIndex,
+	project,
+	projectId,
+	...restProps
+}) => {
 	const dispatch = useAppDispatch();
 	const toastManager = Toast.useToastManager();
 	const isDefaultMode = useAppSelector(
@@ -144,19 +146,6 @@ export const Outline: FC<
 	const { data: headInfo } = useQuery(headInfoQueryOptions(projectId));
 	const { data: guiSettings } = useQuery(guiSettingsQueryOptions);
 	const { data: workspaceFetchStatus } = useQuery(workspaceFetchStatusQueryOptions(projectId));
-	const headInfoIndex = headInfo ? getHeadInfoIndex(headInfo) : undefined;
-	const commitTargetState = useAppSelector((state) =>
-		projectSlice.selectors.selectCommitTarget(state, projectId),
-	);
-	const targetComboboxItems = buildCommitTargetComboboxItems({
-		headInfo,
-		headInfoIndex,
-		commitTargetState,
-	});
-	const commitTarget = selectCommitTargetComboboxItem({
-		items: targetComboboxItems,
-		commitTargetState,
-	});
 	const rebaseUpdates =
 		headInfo?.stacks.flatMap((stack): Array<BottomUpdate> => {
 			const relativeTo = stackBottomRelativeTo(stack);
@@ -373,29 +362,14 @@ export const Outline: FC<
 						Branches
 					</Toggle>
 				</ToggleGroup>
-
-				<CommitForm
-					projectId={projectId}
-					commitTarget={commitTarget}
-					targetComboboxItems={targetComboboxItems}
-				/>
 			</div>
 
 			<OutlineTree
 				className={styles.outlineTree}
-				data-selection-scope={"outline" satisfies SelectionScope}
 				navigationIndex={navigationIndex}
+				uncommittedFilesNavigationIndex={uncommittedFilesNavigationIndex}
 				absorptionTargetCommitIds={absorptionTargetCommitIds}
-				headInfoIndex={headInfoIndex}
 				projectId={projectId}
-				commitTarget={commitTarget?.relativeTo ?? null}
-				// Focus on page load.
-				ref={(el) => {
-					// Don't steal focus if this component is mounted later on.
-					if (document.activeElement !== document.body) return;
-
-					el?.focus({ focusVisible: false });
-				}}
 			/>
 		</div>
 	);

@@ -188,7 +188,8 @@ fn write_rejection_body<W: std::fmt::Write + ?Sized>(
         for dependency in &change.dependencies {
             let range = hunk_range_label(&dependency.hunk);
             for commit in &dependency.commits {
-                let id = theme::Commit(commit.commit_id);
+                // GB-1771 missing change ID here
+                let id = theme::Commit(commit.commit_id, None);
                 match &commit.branch {
                     Some(branch) => writeln!(
                         out,

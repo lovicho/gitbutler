@@ -79,6 +79,36 @@ origin
 }
 
 #[test]
+fn feature_config_shell_output_uses_valid_identifiers() {
+    let env = Sandbox::empty();
+
+    env.but("--format shell config feature")
+        .assert()
+        .success()
+        .stdout_eq(str![[r#"
+unapply_v3_pgm=false
+single_branch=true
+
+"#]]);
+}
+
+#[test]
+fn feature_config_json_output_uses_stable_key() {
+    let env = Sandbox::empty();
+
+    env.but("--format json config feature single-branch")
+        .allow_json()
+        .assert()
+        .success()
+        .stdout_eq(str![[r#"
+{
+  "single_branch": true
+}
+
+"#]]);
+}
+
+#[test]
 fn ai_openai_defaults_to_global_config() {
     let env = Sandbox::empty();
     env.invoke_bash("git init repo");

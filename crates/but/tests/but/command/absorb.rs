@@ -381,11 +381,11 @@ Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "mes
         .stdout_eq(snapbox::str![[r#"
 Found 1 changed file to absorb:
 
-Absorbed to commit: 1#1 partial change to a.txt 2
+Absorbed to commit: 1 partial change to a.txt 2
   (files locked to commit due to hunk range overlap)
     a.txt @1,4 +1,4
 
-Absorbed to commit: 1#0 partial change to a.txt 3
+Absorbed to commit: 1 partial change to a.txt 3
   (files locked to commit due to hunk range overlap)
     a.txt @6,4 +6,4
 

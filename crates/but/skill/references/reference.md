@@ -516,12 +516,15 @@ View and manage GitButler configuration.
 
 ```bash
 but config
-but config user               # Also: forge, target, metrics, ui, ai
+but config user               # Also: forge, target, metrics, feature, ui, ai
 but config ai openai          # Also: anthropic, ollama, lmstudio, openrouter
 but config target             # Show the current target branch
 but config target origin/main # Set the fetch target
 but config push-remote         # Show the current push remote
 but config push-remote origin  # Set the push remote without changing the target
+but config feature                         # List configurable feature flags
+but config feature single-branch           # Show a feature flag's value
+but config feature single-branch enable    # Also: disable
 ```
 
 ### `but update check`

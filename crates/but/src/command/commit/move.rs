@@ -186,6 +186,16 @@ pub fn move_commit_to_commit_with_perm(
         return Ok(());
     }
 
+    let (source_change_ids, target_change_id) = {
+        let repo = ctx.repo.get()?;
+        let source_change_ids = sources
+            .iter()
+            .map(|id| crate::utils::get_change_id_for_commit(&repo, *id))
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        let target_change_id = crate::utils::get_change_id_for_commit(&repo, target)?;
+        (source_change_ids, target_change_id)
+    };
+
     let result = but_api::commit::move_commit::commit_move_with_perm(
         ctx,
         sources.clone(),
@@ -199,24 +209,23 @@ pub fn move_commit_to_commit_with_perm(
     if let Some(out) = out.for_human() {
         let action = if after { "after" } else { "before" };
         if sources.len() == 1 {
-            let refs = theme::new_commit_refs_with_perm(
-                ctx,
-                perm.read_permission(),
-                &[
-                    post_move_id(&result.workspace, sources[0]),
-                    post_move_id(&result.workspace, target),
-                ],
-            )?;
-            writeln!(out, "Moved {} → {action} {}", refs[0], refs[1])?;
-        } else {
-            let target_ref = theme::new_commit_ref_with_perm(
-                ctx,
-                perm.read_permission(),
+            let source = theme::Commit(
+                post_move_id(&result.workspace, sources[0]),
+                Some(source_change_ids[0].clone()),
+            );
+            let target = theme::Commit(
                 post_move_id(&result.workspace, target),
-            )?;
+                Some(target_change_id),
+            );
+            writeln!(out, "Moved {source} → {action} {target}")?;
+        } else {
+            let target = theme::Commit(
+                post_move_id(&result.workspace, target),
+                Some(target_change_id),
+            );
             writeln!(
                 out,
-                "Moved {} commits → {action} {target_ref}",
+                "Moved {} commits → {action} {target}",
                 t.cli_id.paint(sources.len().to_string()),
             )?;
         }
@@ -240,6 +249,12 @@ pub fn move_commit_to_branch_with_perm(
     perm: &mut RepoExclusive,
 ) -> Result<(), anyhow::Error> {
     let target_full_name = gix::refs::FullName::try_from(format!("refs/heads/{target_branch}"))?;
+    let source_change_id = if sources.len() == 1 {
+        let repo = ctx.repo.get()?;
+        Some(crate::utils::get_change_id_for_commit(&repo, sources[0])?)
+    } else {
+        None
+    };
     let result = but_api::commit::move_commit::commit_move_with_perm(
         ctx,
         sources.clone(),
@@ -252,15 +267,14 @@ pub fn move_commit_to_branch_with_perm(
     let t = theme::get();
     if let Some(out) = out.for_human() {
         if sources.len() == 1 {
-            let source_ref = theme::new_commit_ref_with_perm(
-                ctx,
-                perm.read_permission(),
+            let source = theme::Commit(
                 post_move_id(&result.workspace, sources[0]),
-            )?;
+                source_change_id,
+            );
             writeln!(
                 out,
                 "Moved {} → {}",
-                source_ref,
+                source,
                 t.local_branch.paint(format!("[{target_branch}]"))
             )?;
         } else {

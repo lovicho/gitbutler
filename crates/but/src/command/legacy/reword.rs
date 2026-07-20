@@ -13,7 +13,7 @@ use crate::{
     CliResult, IdMap,
     args::atoms::{BranchArg, BranchOrCommit, CliIdArg, Purpose},
     bad_input, tui,
-    utils::OutputChannel,
+    utils::{OutputChannel, get_change_id_for_commit},
 };
 
 pub(crate) fn reword_target(
@@ -209,6 +209,10 @@ fn edit_commit_message_by_id_and_reword_commit(
     .filter(|new_message| should_update_commit_message(&current_message, new_message));
 
     if let Some(new_message) = new_message {
+        let change_id = {
+            let repo = ctx.repo.get()?;
+            get_change_id_for_commit(&repo, commit_oid)?
+        };
         let new_commit_oid = but_api::commit::reword::commit_reword_with_perm(
             ctx,
             commit_oid,
@@ -218,11 +222,7 @@ fn edit_commit_message_by_id_and_reword_commit(
         )?;
 
         if let Some(out) = out.for_human() {
-            let new_commit = crate::theme::new_commit_ref_with_perm(
-                ctx,
-                perm.read_permission(),
-                new_commit_oid.new_commit,
-            )?;
+            let new_commit = crate::theme::Commit(new_commit_oid.new_commit, Some(change_id));
             writeln!(out, "Updated commit message for {new_commit}")?;
         } else if let Some(out) = out.for_json() {
             out.write_value(serde_json::json!({

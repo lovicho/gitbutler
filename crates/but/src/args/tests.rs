@@ -510,6 +510,70 @@ mod config_target {
     }
 }
 
+mod config_feature {
+    use clap::Parser;
+
+    use crate::args::{
+        Args, Subcommands,
+        config::{
+            FeatureFlag, FeatureStatus, Platform as ConfigPlatform, Subcommands as ConfigCmd,
+        },
+    };
+
+    #[test]
+    fn parses_feature_list() {
+        let args = Args::try_parse_from(["but", "config", "feature"]).expect("parse feature list");
+
+        assert!(matches!(
+            args.cmd,
+            Some(Subcommands::Config(ConfigPlatform {
+                cmd: Some(ConfigCmd::Feature {
+                    flag: None,
+                    status: None,
+                }),
+            }))
+        ));
+    }
+
+    #[test]
+    fn parses_feature_update() {
+        let args = Args::try_parse_from(["but", "config", "feature", "single-branch", "enable"])
+            .expect("parse feature update");
+
+        assert!(matches!(
+            args.cmd,
+            Some(Subcommands::Config(ConfigPlatform {
+                cmd: Some(ConfigCmd::Feature {
+                    flag: Some(FeatureFlag::SingleBranch),
+                    status: Some(FeatureStatus::Enable),
+                }),
+            }))
+        ));
+    }
+
+    #[test]
+    fn rejects_feature_status_without_flag() {
+        let err = Args::try_parse_from(["but", "config", "feature", "enable"])
+            .expect_err("feature status without flag is invalid");
+
+        assert_eq!(err.kind(), clap::error::ErrorKind::InvalidValue);
+    }
+
+    #[test]
+    fn does_not_expose_irc() {
+        let err = Args::try_parse_from(["but", "config", "feature", "irc"])
+            .expect_err("IRC feature flag is intentionally hidden");
+
+        assert_eq!(err.kind(), clap::error::ErrorKind::InvalidValue);
+    }
+
+    #[test]
+    fn json_keys_use_snake_case() {
+        assert_eq!(FeatureFlag::UnapplyV3Pgm.as_json_key(), "unapply_v3_pgm");
+        assert_eq!(FeatureFlag::SingleBranch.as_json_key(), "single_branch");
+    }
+}
+
 #[test]
 fn output_format_agent_is_text_without_human_ui() {
     let format = OutputFormat::Agent;

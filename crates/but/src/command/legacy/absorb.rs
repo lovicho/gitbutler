@@ -1,5 +1,5 @@
 use crate::theme::{self, Paint};
-use but_core::{RepositoryExt, sync::RepoExclusive};
+use but_core::sync::RepoExclusive;
 use but_ctx::Context;
 use but_hunk_assignment::{
     AbsorptionTarget, CommitAbsorption, HunkAssignment, JsonAbsorbOutput, JsonCommitAbsorption,
@@ -100,10 +100,7 @@ pub(crate) fn handle(
     // Display the plan (in JSON mode for non-dry-run, collect without writing — we'll
     // combine it with the result in absorb_assignments to avoid a double-write that
     // would overwrite the plan in the JSON buffer).
-    let plan_json = {
-        let repo = ctx.repo.get()?.clone().for_commit_shortening();
-        display_absorption_plan(&absorption_plan, &id_map, &repo, out, dry_run)?
-    };
+    let plan_json = display_absorption_plan(&absorption_plan, &id_map, out, dry_run)?;
 
     if dry_run {
         // Nothing more to do
@@ -218,7 +215,6 @@ fn get_hunk_ranges(assignment: &HunkAssignment) -> Vec<String> {
 fn display_absorption_plan(
     commit_absorptions: &[CommitAbsorption],
     id_map: &IdMap,
-    repo: &gix::Repository,
     out: &mut OutputChannel,
     write_json: bool,
 ) -> anyhow::Result<Option<JsonAbsorbOutput>> {
@@ -293,7 +289,12 @@ fn display_absorption_plan(
             writeln!(
                 out,
                 "Absorbed to commit: {} {}",
-                theme::CommitRef(id_map, repo, absorption.commit_id),
+                theme::Commit(
+                    absorption.commit_id,
+                    id_map
+                        .change_id_ref(absorption.commit_id)
+                        .map(|change_id| change_id.change_id.clone()),
+                ),
                 absorption.commit_summary
             )?;
             writeln!(out, "  ({})", t.hint.paint(absorption.reason.description()))?;

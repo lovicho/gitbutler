@@ -1,6 +1,7 @@
 use std::{ffi::OsString, process::Command};
 
 use anyhow::{Context as _, anyhow};
+use but_ctx::Context;
 use crossterm::event::Event;
 use ratatui::{backend::Backend, prelude::*};
 use ratatui_textarea::{CursorMove, TextArea};
@@ -78,6 +79,7 @@ impl App {
     pub fn handle_command<T>(
         &mut self,
         message: CommandMessage,
+        ctx: &Context,
         terminal_guard: &mut T,
         out: &mut dyn TuiInputOutputChannel,
         messages: &mut Vec<Message>,
@@ -90,7 +92,7 @@ impl App {
             CommandMessage::Start(kind) => self.handle_command_start(kind),
             CommandMessage::Input(ev) => self.handle_command_input(ev),
             CommandMessage::Confirm => {
-                self.handle_command_confirm(terminal_guard, out, messages)?
+                self.handle_command_confirm(ctx, terminal_guard, out, messages)?
             }
         }
 
@@ -155,6 +157,7 @@ impl App {
 
     fn handle_command_confirm<T>(
         &mut self,
+        ctx: &Context,
         terminal_guard: &mut T,
         out: &mut dyn TuiInputOutputChannel,
         messages: &mut Vec<Message>,
@@ -208,6 +211,8 @@ impl App {
                 cmd
             }
         };
+
+        cmd.current_dir(ctx.workdir_or_fail()?);
 
         let mut child = match cmd.spawn() {
             Ok(child) => child,

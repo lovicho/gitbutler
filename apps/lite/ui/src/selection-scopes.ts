@@ -5,10 +5,9 @@ import { projectSlice } from "#ui/projects/state.ts";
 import { useAppDispatch } from "#ui/store.ts";
 import { getAdjacent, type NavigationIndex } from "#ui/workspace/navigation-index.ts";
 import { useHotkeySequences, useHotkeys } from "@tanstack/react-hotkeys";
-import { assert } from "#ui/assert.ts";
 
-export type SelectionScope = "outline" | "files" | "diff";
-const allSelectionScopes: Array<SelectionScope> = ["outline", "files", "diff"];
+export type SelectionScope = "uncommitted-files" | "outline" | "files" | "diff";
+const allSelectionScopes: Array<SelectionScope> = ["uncommitted-files", "outline", "files", "diff"];
 
 const isSelectionScope = (id: string): id is SelectionScope =>
 	allSelectionScopes.includes(id as SelectionScope);
@@ -27,19 +26,25 @@ export const focusSelectionScope = (selectionScope: SelectionScope) => {
 		?.focus({ focusVisible: false });
 };
 
-export const focusAdjacentSelectionScope = ({
+export const focusHorizontalSelectionScope = ({
 	filesVisible,
 	offset,
+	outlineSelectionScope,
 	outlineVisible,
 }: {
 	filesVisible: boolean;
 	offset: -1 | 1;
+	outlineSelectionScope: Extract<SelectionScope, "uncommitted-files" | "outline"> | null;
 	outlineVisible: boolean;
 }) => {
 	const currentSelectionScope = getFocusedSelectionScope(document.activeElement);
+	const currentOutlineSelectionScope =
+		currentSelectionScope === "uncommitted-files" || currentSelectionScope === "outline"
+			? currentSelectionScope
+			: outlineSelectionScope;
 
 	const orderedSelectionScopes: Array<SelectionScope> = [
-		...(outlineVisible ? (["outline"] satisfies Array<SelectionScope>) : []),
+		...(outlineVisible ? [currentOutlineSelectionScope ?? "outline"] : []),
 		...(filesVisible ? (["files"] satisfies Array<SelectionScope>) : []),
 		"diff",
 	];
@@ -50,14 +55,22 @@ export const focusAdjacentSelectionScope = ({
 
 		if (nextSelectionScope !== undefined) focusSelectionScope(nextSelectionScope);
 	} else {
-		const curr = orderedSelectionScopes.indexOf(currentSelectionScope);
-		// This shouldn't ever fail.
-		const nextSelectionScope = assert(
-			orderedSelectionScopes.at((curr + offset) % orderedSelectionScopes.length),
-		);
-
-		focusSelectionScope(nextSelectionScope);
+		const nextIndex = orderedSelectionScopes.indexOf(currentSelectionScope) + offset;
+		const nextSelectionScope = nextIndex < 0 ? undefined : orderedSelectionScopes.at(nextIndex);
+		if (nextSelectionScope !== undefined) focusSelectionScope(nextSelectionScope);
 	}
+};
+
+export const focusVerticalSelectionScope = (offset: -1 | 1) => {
+	const currentSelectionScope = getFocusedSelectionScope(document.activeElement);
+	const orderedSelectionScopes: Array<SelectionScope> = ["uncommitted-files", "outline"];
+	const currentIndex =
+		currentSelectionScope === null ? -1 : orderedSelectionScopes.indexOf(currentSelectionScope);
+	if (currentIndex === -1) return;
+
+	const nextIndex = currentIndex + offset;
+	const nextSelectionScope = nextIndex < 0 ? undefined : orderedSelectionScopes.at(nextIndex);
+	if (nextSelectionScope !== undefined) focusSelectionScope(nextSelectionScope);
 };
 
 export const useNavigationIndexHotkeys = <T>({

@@ -181,7 +181,7 @@ export const CommitForm: FC<{
 		},
 	]);
 
-	useHotkey("Escape", () => focusSelectionScope("outline"), {
+	useHotkey("Escape", () => focusSelectionScope("uncommitted-files"), {
 		target: commitTextareaRef,
 		conflictBehavior: "allow",
 	});

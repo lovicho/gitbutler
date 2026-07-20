@@ -18,12 +18,14 @@ use crate::{
     CliId, CliResult, IdMap,
     args::atoms::{BranchArg, BranchOrCommit, CliIdArg, Priority, Purpose, ResolvedCliIdArg},
     bad_input,
-    command::legacy::commit_message_prep::normalize_commit_message,
-    command::legacy::status::assignment::{CLIHunkAssignment, FileAssignment},
+    command::legacy::{
+        commit_message_prep::normalize_commit_message,
+        status::assignment::{CLIHunkAssignment, FileAssignment},
+    },
     legacy::workspace::{HeadInfoBranch, HeadInfoStack},
     theme::{self, Paint},
     tui,
-    utils::{InputOutputChannel, OutputChannel, diff_specs, rejection},
+    utils::{InputOutputChannel, OutputChannel, diff_specs, get_change_id_for_commit, rejection},
 };
 
 type TargetStack = (StackId, HeadInfoStack);
@@ -717,7 +719,10 @@ pub(crate) fn commit(
 
     if let Some(out) = out.for_human() {
         let commit_ref = match outcome.new_commit {
-            Some(id) => theme::new_commit_ref_with_perm(ctx, guard.read_permission(), id)?,
+            Some(id) => {
+                let repo = ctx.repo.get()?;
+                theme::Commit(id, Some(get_change_id_for_commit(&repo, id)?)).to_string()
+            }
             None => t.commit_id.paint("unknown").to_string(),
         };
         writeln!(

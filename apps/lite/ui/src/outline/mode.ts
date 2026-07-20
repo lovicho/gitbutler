@@ -6,9 +6,11 @@ import {
 	commitOperand,
 	operandEquals,
 	type Operand,
+	uncommittedChangesOperand,
 } from "#ui/operands.ts";
 import { OperationType } from "#ui/operations/operation.ts";
 import type { SelectionState } from "#ui/projects/project.ts";
+import type { SelectionScope } from "#ui/selection-scopes.ts";
 import { AbsorptionTarget } from "@gitbutler/but-sdk";
 
 /** @public */
@@ -61,11 +63,20 @@ export const pointerTransferMode = ({
 	operationType,
 });
 
-export const getTransferTarget = (mode: TransferMode, selection: Operand | null): Operand | null =>
+export const getTransferTarget = (
+	mode: TransferMode,
+	outlineSelection: Operand | null,
+	detailsSelectionScope: SelectionScope | null,
+): Operand | null =>
 	Match.value(mode).pipe(
 		Match.tagsExhaustive({
 			Pointer: (mode) => mode.target,
-			Keyboard: () => selection,
+			Keyboard: () =>
+				Match.value(detailsSelectionScope).pipe(
+					Match.when("uncommitted-files", () => uncommittedChangesOperand),
+					Match.when("outline", () => outlineSelection),
+					Match.orElse(() => null),
+				),
 		}),
 	);
 

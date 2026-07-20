@@ -53,20 +53,21 @@ impl CliOutputHuman for CommitOutcome {
             branch_name,
         } = self;
 
+        // GB-1771 missing change ID here
         match branch_name {
             Some(BranchNameTarget::New(branch_name)) => writeln!(
                 out,
                 "Created commit {} on new branch {}",
-                theme::Commit(new_commit),
+                theme::Commit(new_commit, None),
                 theme::Branch(branch_name),
             )?,
             Some(BranchNameTarget::Existing(branch_name)) => writeln!(
                 out,
                 "Created commit {} on branch {}",
-                theme::Commit(new_commit),
+                theme::Commit(new_commit, None),
                 theme::Branch(branch_name),
             )?,
-            None => writeln!(out, "Created commit {}", theme::Commit(new_commit))?,
+            None => writeln!(out, "Created commit {}", theme::Commit(new_commit, None))?,
         }
 
         Ok(())
