@@ -195,6 +195,42 @@ fn supports_json_output() {
 "#]]);
 }
 
+/// Branch short IDs are allowed to be prefixes of other short IDs. This requires us to prioritize
+/// resolving exact matches on branch short IDs over those other IDs, or we can have cases where
+/// branch short IDs simply cannot be resolved.
+#[test]
+fn exact_match_on_branch_short_id_must_prioritize_branch() {
+    let env = expand_env();
+
+    env.but("status")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted] (no changes)
+┊
+┊╭┄g0 [A]
+┊●   tpm add A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    env.but("branch new tp-branch").assert().success();
+
+    env.but("_expand tp")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+Matches: 1
+
+branch: tp tp-branch
+
+"#]]);
+}
+
 #[test]
 fn requires_exactly_one_argument() {
     let env = Sandbox::empty();

@@ -15,13 +15,13 @@ fn path_prefix() {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-────────────╮
-y:c prefix/a│
-────────────╯
+─────────────╮
+yz:c prefix/a│
+─────────────╯
      1│+we want this
-────────────╮
-u:d prefix/b│
-────────────╯
+─────────────╮
+uo:d prefix/b│
+─────────────╯
      1│+we also want this
 
 "#]]);
@@ -62,7 +62,7 @@ fn json_no_target_all_worktree_changes() {
 {
   "changes": [
     {
-      "id": "x:b",
+      "id": "xz:b",
       "path": "alpha.txt",
       "status": "modified",
       "diff": {
@@ -79,7 +79,7 @@ fn json_no_target_all_worktree_changes() {
       }
     },
     {
-      "id": "v:5",
+      "id": "vq:5",
       "path": "beta.txt",
       "status": "modified",
       "diff": {
@@ -118,7 +118,7 @@ fn json_target_uncommitted_hunk_or_file() {
 {
   "changes": [
     {
-      "id": "x:4",
+      "id": "xw:4",
       "path": "other.txt",
       "status": "modified",
       "diff": {
@@ -135,7 +135,7 @@ fn json_target_uncommitted_hunk_or_file() {
       }
     },
     {
-      "id": "p:b",
+      "id": "pk:b",
       "path": "target.txt",
       "status": "modified",
       "diff": {
@@ -167,7 +167,7 @@ fn json_target_uncommitted_hunk_or_file() {
 {
   "changes": [
     {
-      "id": "p:b",
+      "id": "pk:b",
       "path": "target.txt",
       "status": "modified",
       "diff": {
@@ -214,7 +214,7 @@ fn json_target_uncommitted_whole_file_with_multiple_hunks() {
 {
   "changes": [
     {
-      "id": "u:a",
+      "id": "ut:a",
       "path": "multi-hunk.txt",
       "status": "modified",
       "diff": {
@@ -231,7 +231,7 @@ fn json_target_uncommitted_whole_file_with_multiple_hunks() {
       }
     },
     {
-      "id": "u:6",
+      "id": "ut:6",
       "path": "multi-hunk.txt",
       "status": "modified",
       "diff": {
@@ -271,7 +271,7 @@ fn json_target_path_prefix() {
 {
   "changes": [
     {
-      "id": "y:c",
+      "id": "yz:c",
       "path": "prefix/a",
       "status": "modified",
       "diff": {
@@ -288,7 +288,7 @@ fn json_target_path_prefix() {
       }
     },
     {
-      "id": "u:d",
+      "id": "uo:d",
       "path": "prefix/b",
       "status": "modified",
       "diff": {
@@ -492,7 +492,7 @@ fn json_target_uncommitted_area() {
 {
   "changes": [
     {
-      "id": "n:4",
+      "id": "nz:4",
       "path": "unassigned.txt",
       "status": "modified",
       "diff": {
@@ -529,10 +529,10 @@ fn json_target_stack() {
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
 ╭┄zz [uncommitted]
-┊   n A unassigned.txt
+┊   nz A unassigned.txt
 ┊
 ┊  ╭┄k0 [staged to A]
-┊  │ s A assigned.txt
+┊  │ su A assigned.txt
 ┊  │
 ┊╭┄g0 [A]
 ┊●   tpm add A
@@ -561,7 +561,7 @@ Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "mes
 {
   "changes": [
     {
-      "id": "s:8",
+      "id": "su:8",
       "path": "assigned.txt",
       "status": "modified",
       "diff": {

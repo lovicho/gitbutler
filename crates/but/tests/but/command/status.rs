@@ -170,7 +170,7 @@ fn json_shows_paths_as_strings() {
 {
   "uncommittedChanges": [
     {
-      "cliId": "q",
+      "cliId": "qu",
       "filePath": "test-file.txt",
       "changeType": "added"
     }
@@ -293,12 +293,12 @@ fn uncommitted_and_committed_file_cli_ids() -> anyhow::Result<()> {
 {
   "uncommittedChanges": [
     {
-      "cliId": "n",
+      "cliId": "nk",
       "filePath": "a.txt",
       "changeType": "modified"
     },
     {
-      "cliId": "p",
+      "cliId": "pn",
       "filePath": "b.txt",
       "changeType": "modified"
     }
@@ -1366,15 +1366,15 @@ fn file_ids_are_nicely_aligned() {
         .success()
         .stdout_eq(snapbox::str![[r#"
 ╭┄zz [uncommitted]
-┊   r  A file-0.txt
-┊   k  A file-1.txt
-┊   t  A file-2.txt
-┊   v  A file-3.txt
+┊   rr A file-0.txt
+┊   kr A file-1.txt
+┊   tp A file-2.txt
+┊   vk A file-3.txt
 ┊   wx A file-4.txt
 ┊   wv A file-5.txt
 ┊   wk A file-6.txt
-┊   x  A file-7.txt
-┊   m  A file-8.txt
+┊   xx A file-7.txt
+┊   mv A file-8.txt
 ┊   zx A file-9.txt
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M

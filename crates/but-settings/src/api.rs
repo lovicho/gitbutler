@@ -22,18 +22,6 @@ pub struct FeatureFlagsUpdate {
     pub worktree_manipulation: Option<bool>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-/// Update request for [`crate::app_settings::Claude`].
-pub struct ClaudeUpdate {
-    pub executable: Option<String>,
-    pub notify_on_completion: Option<bool>,
-    pub notify_on_permission_request: Option<bool>,
-    pub dangerously_allow_all_permissions: Option<bool>,
-    pub auto_commit_after_completion: Option<bool>,
-    pub use_configured_model: Option<bool>,
-}
-
 #[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 /// Update request for [`crate::app_settings::Reviews`].
@@ -133,29 +121,6 @@ impl AppSettingsWithDiskSync {
         }
         if let Some(worktree_manipulation) = worktree_manipulation {
             settings.feature_flags.worktree_manipulation = worktree_manipulation;
-        }
-        settings.save()
-    }
-
-    pub fn update_claude(&self, update: ClaudeUpdate) -> Result<()> {
-        let mut settings = self.get_mut_enforce_save()?;
-        if let Some(executable) = update.executable {
-            settings.claude.executable = executable;
-        }
-        if let Some(notify_on_completion) = update.notify_on_completion {
-            settings.claude.notify_on_completion = notify_on_completion;
-        }
-        if let Some(notify_on_permission_request) = update.notify_on_permission_request {
-            settings.claude.notify_on_permission_request = notify_on_permission_request;
-        }
-        if let Some(dangerously_allow_all_permissions) = update.dangerously_allow_all_permissions {
-            settings.claude.dangerously_allow_all_permissions = dangerously_allow_all_permissions;
-        }
-        if let Some(auto_commit_after_completion) = update.auto_commit_after_completion {
-            settings.claude.auto_commit_after_completion = auto_commit_after_completion;
-        }
-        if let Some(use_configured_model) = update.use_configured_model {
-            settings.claude.use_configured_model = use_configured_model;
         }
         settings.save()
     }

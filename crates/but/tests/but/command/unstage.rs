@@ -33,9 +33,9 @@ Unstaged the only hunk in a.txt in a stack
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-─────────╮
-n:c a.txt│
-─────────╯
+──────────╮
+nk:c a.txt│
+──────────╯
      1│+arbitrary text
 
 "#]]);
@@ -59,17 +59,17 @@ fn shorthand_uncommitted_hunk_to_uncommitted_area() -> anyhow::Result<()> {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-─────────╮
-k:2 a.txt│
-─────────╯
+──────────╮
+km:2 a.txt│
+──────────╯
    1  │-first
      1│+firsta
    2 2│ line
    3 3│ line
    4 4│ line
-─────────╮
-k:e a.txt│
-─────────╯
+──────────╮
+km:e a.txt│
+──────────╯
     6  6│ line
     7  7│ line
     8  8│ line
@@ -97,7 +97,7 @@ Unstaged a hunk in a.txt in a stack
 {
   "uncommittedChanges": [
     {
-      "cliId": "n",
+      "cliId": "nk",
       "filePath": "a.txt",
       "changeType": "modified"
     }
@@ -107,7 +107,7 @@ Unstaged a hunk in a.txt in a stack
       "cliId": "k0",
       "assignedChanges": [
         {
-          "cliId": "k",
+          "cliId": "km",
           "filePath": "a.txt",
           "changeType": "modified"
         }
@@ -146,7 +146,7 @@ fn unstage_command() -> anyhow::Result<()> {
       "cliId": "j0",
       "assignedChanges": [
         {
-          "cliId": "k",
+          "cliId": "km",
           "filePath": "a.txt",
           "changeType": "modified"
         }
@@ -167,7 +167,7 @@ fn unstage_command() -> anyhow::Result<()> {
 {
   "uncommittedChanges": [
     {
-      "cliId": "n",
+      "cliId": "nk",
       "filePath": "a.txt",
       "changeType": "modified"
     }
@@ -226,7 +226,7 @@ fn unstage_command_with_branch() -> anyhow::Result<()> {
 {
   "uncommittedChanges": [
     {
-      "cliId": "n",
+      "cliId": "nk",
       "filePath": "a.txt",
       "changeType": "modified"
     }

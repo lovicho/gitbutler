@@ -647,10 +647,28 @@ impl IdMap {
         }
         let mut reverse_hex_short_ids: Vec<(ChangeId, Option<&mut ShortId>)> = uncommitted_files
             .iter_mut()
-            .map(|(reverse_hex, uncommitted_file)| {
-                (reverse_hex.clone(), Some(&mut uncommitted_file.short_id))
+            .flat_map(|(reverse_hex, uncommitted_file)| {
+                [
+                    // Change IDs of commits compete for the same namespace as uncommitted file
+                    // short IDs (reverse hex). Thus, creating a new commit may result in a prefix
+                    // collision with an uncommitted file, making a previously unambiguous ID
+                    // ambiguous. This risk increases the shorter we allow uncommitted file short
+                    // IDs to be, so for the moment we synthetically force them to be two characters
+                    // long by inserting a dummy collision ID containing only the first character of
+                    // the uncommitted file's short ID.
+                    //
+                    // This should be removed once we've got structured information about short IDs
+                    // to the point where we can render them independently of what the shortest
+                    // possible ID is.
+                    (
+                        ChangeId::from(BString::from(reverse_hex.get(..1).unwrap_or_default())),
+                        None,
+                    ),
+                    (reverse_hex.clone(), Some(&mut uncommitted_file.short_id)),
+                ]
             })
             .collect();
+
         // Ensure that uncommitted file revers hexes do not collide short IDs that have already been allocated
         //
         // TODO The raw filenames of the uncommitted files are in these non_hex_used_short_ids, which means
@@ -1057,6 +1075,18 @@ impl IdMap {
         element: &str,
         matches: &mut Vec<Box<dyn Node<'a> + 'a>>,
     ) {
+        // Branch short IDs are allowed to be prefixes of other IDs, so if we match any branch short
+        // ID exactly we must return immediately to prevent ambiguity. This design prevents us from
+        // needing some branch disambiguator.
+        for stack_with_id in self.indexed_stacks.borrow_owner().iter() {
+            for segment_with_id in stack_with_id.segments.iter() {
+                if segment_with_id.short_id == element {
+                    matches.push(Box::new(segment_with_id));
+                    return;
+                }
+            }
+        }
+
         // Match against commits
         let maybe_element_hex_prefix = if element
             .chars()
@@ -1125,15 +1155,6 @@ impl IdMap {
             {
                 matches.push(Box::new(stack_with_id));
                 break;
-            }
-        }
-
-        // Then try CliId matching
-        for stack_with_id in self.indexed_stacks.borrow_owner().iter() {
-            for segment_with_id in stack_with_id.segments.iter() {
-                if segment_with_id.short_id == element {
-                    matches.push(Box::new(segment_with_id));
-                }
             }
         }
     }

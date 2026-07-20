@@ -184,7 +184,7 @@ Uncommitted changes
         .stdout_eq(str![[r#"
 ╭┄zz [uncommitted]
 ┊   ls A c1.txt
-┊   w  A c2.txt
+┊   wy A c2.txt
 ┊
 ┊╭┄g0 [A]
 ┊●   1#0 add c2 (no changes)
@@ -287,7 +287,7 @@ Uncommitted changes
         .stdout_eq(str![[r#"
 ╭┄zz [uncommitted]
 ┊   ls A c1.txt
-┊   w  A c2.txt
+┊   wy A c2.txt
 ┊
 ┊╭┄g0 [A]
 ┊●   1 add c1 and c2 (no changes)
@@ -397,7 +397,7 @@ Uncommitted changes
         .stderr_eq(str![])
         .stdout_eq(str![[r#"
 ╭┄zz [uncommitted]
-┊   s A f.txt
+┊   sp A f.txt
 ┊
 ┊╭┄g0 [A]
 ┊●   1#0 write v3 (no changes)
@@ -498,8 +498,8 @@ Uncommitted changes
         .stderr_eq(str![])
         .stdout_eq(str![[r#"
 ╭┄zz [uncommitted]
-┊   s A fa.txt
-┊   q A fb.txt
+┊   sk A fa.txt
+┊   qq A fb.txt
 ┊
 ┊╭┄g0 [A]
 ┊●   1#0 add fa (no changes)
@@ -561,12 +561,12 @@ fn uncommit_command_on_commit() -> anyhow::Result<()> {
 {
   "uncommittedChanges": [
     {
-      "cliId": "n",
+      "cliId": "nk",
       "filePath": "a.txt",
       "changeType": "added"
     },
     {
-      "cliId": "p",
+      "cliId": "pn",
       "filePath": "b.txt",
       "changeType": "added"
     }
