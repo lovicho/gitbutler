@@ -1,5 +1,15 @@
 @import "@gitbutler/design-core/core";
 
+/*
+    color-scheme isn't yet respected by prefers-color-scheme, so where we can't use light-dark() we
+    can instead use this homegrown alternative. See:
+		https://issues.chromium.org/issues/498561069
+		https://github.com/w3c/csswg-drafts/issues/10577
+*/
+@function --light-dark(--light, --dark) {
+	result: if(media(prefers-color-scheme: dark): var(--dark) ; else: var(--light));
+}
+
 :root {
 	color-scheme: light dark;
 

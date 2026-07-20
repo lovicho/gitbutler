@@ -40,7 +40,7 @@ use theme::Paint;
 #[cfg(feature = "legacy")]
 use crate::command::legacy::ShowDiffInEditor;
 use crate::{
-    setup::{BackgroundSync, InitCtxOptions},
+    setup::{BackgroundSync, InitCtxOptions, TargetRequirement},
     utils::{OutputChannel, ResultErrorExt, ResultMetricsExt, envs},
 };
 
@@ -551,7 +551,11 @@ async fn match_subcommand(
                     // Other subcommands need a repo context
                     cfg_if! {
                         if #[cfg(feature = "legacy")] {
-                            let mut ctx = setup::init_ctx(&args, InitCtxOptions { background_sync: BackgroundSync::Disabled, ..Default::default() }, out)?;
+                            let mut ctx = setup::init_ctx(&args, InitCtxOptions {
+                                background_sync: BackgroundSync::Disabled,
+                                target_requirement: TargetRequirement::Optional,
+                                ..Default::default()
+                            }, out)?;
                             command::config::exec(&mut ctx, out, cmd)
                                 .await
                                 .emit_metrics(metrics_ctx).map_err(CliError::from)
@@ -693,7 +697,14 @@ async fn match_subcommand(
                     interactive,
                 }) => {
                     let status_after = args.status_after && !dry_run && !interactive;
-                    let mut ctx = but_ctx::Context::discover(&args.current_dir)?;
+                    let mut ctx = setup::init_ctx(
+                        &args,
+                        InitCtxOptions {
+                            workspace_check: setup::WorkspaceCheck::Disabled,
+                            ..Default::default()
+                        },
+                        out,
+                    )?;
                     out.begin_status_after(status_after);
                     let result = command::branch::update(
                         &mut ctx,
@@ -720,7 +731,14 @@ async fn match_subcommand(
             workspace,
             new,
         } => {
-            let mut ctx = but_ctx::Context::discover(&args.current_dir)?;
+            let mut ctx = setup::init_ctx(
+                &args,
+                InitCtxOptions {
+                    workspace_check: setup::WorkspaceCheck::Disabled,
+                    ..Default::default()
+                },
+                out,
+            )?;
             command::r#switch::handle(&mut ctx, out, target, workspace, new)
                 .emit_metrics(metrics_ctx)
         }
@@ -1365,6 +1383,7 @@ async fn match_subcommand(
                 &args,
                 InitCtxOptions {
                     workspace_check: setup::WorkspaceCheck::Disabled,
+                    target_requirement: TargetRequirement::Optional,
                     ..Default::default()
                 },
                 out,
@@ -1744,7 +1763,14 @@ async fn match_subcommand(
             after,
         } => {
             let status_after = args.status_after;
-            let mut ctx = but_ctx::Context::discover(&args.current_dir)?;
+            let mut ctx = setup::init_ctx(
+                &args,
+                InitCtxOptions {
+                    workspace_check: setup::WorkspaceCheck::Disabled,
+                    ..Default::default()
+                },
+                out,
+            )?;
             out.begin_status_after(status_after);
             let result = command::r#move::handle(&mut ctx, out, &source, &target, after)
                 .emit_metrics(metrics_ctx);

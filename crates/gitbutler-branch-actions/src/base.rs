@@ -109,18 +109,12 @@ pub fn bootstrap_default_target_if_missing(ctx: &Context) -> Result<bool> {
         return Ok(false);
     }
 
-    let Some(remote_name) = repo.remote_default_name(gix::remote::Direction::Push) else {
-        return Ok(false);
-    };
-    let remote_name = remote_name.to_string();
-
-    let target = match inferred_default_target(&repo, &remote_name) {
+    let target = match inferred_default_target(&repo) {
         Ok(Some(target)) => target,
         Ok(None) => return Ok(false),
         Err(err) => {
             tracing::debug!(
                 error = ?err,
-                remote_name,
                 "failed to infer default target; leaving default target uninitialized"
             );
             return Ok(false);
@@ -411,14 +405,16 @@ pub(crate) fn target_to_base_branch(
 }
 
 /// Infer the default target from the Git repository without mutating workspace refs.
-///
-/// Preference order:
-/// 1. `refs/remotes/<remote>/HEAD`
-/// 2. `refs/remotes/<remote>/main`
-/// 3. `refs/remotes/<remote>/master`
-fn inferred_default_target(repo: &gix::Repository, remote_name: &str) -> Result<Option<Target>> {
+fn inferred_default_target(repo: &gix::Repository) -> Result<Option<Target>> {
+    let Some(target_ref) = but_workspace::init::infer_default_target_ref(repo)? else {
+        return Ok(None);
+    };
+    let remote_names = repo.remote_names();
+    let (remote_name, _) =
+        but_core::extract_remote_name_and_short_name(target_ref.as_ref(), &remote_names)
+            .with_context(|| format!("failed to determine remote for branch '{target_ref}'"))?;
     let remote_url = repo
-        .find_remote(remote_name)
+        .find_remote(remote_name.as_str())
         .ok()
         .and_then(|remote| {
             remote
@@ -427,48 +423,17 @@ fn inferred_default_target(repo: &gix::Repository, remote_name: &str) -> Result<
         })
         .map(|url| url.to_bstring().to_string())
         .unwrap_or_default();
-
-    let remote_head_ref = format!("refs/remotes/{remote_name}/HEAD");
-    if let Ok(mut head_ref) = repo.find_reference(remote_head_ref.as_str())
-        && let Some(branch_name) = head_ref
-            .target()
-            .try_name()
-            .map(|name| name.as_bstr().to_string())
-    {
-        let branch = branch_name
-            .parse()
-            .with_context(|| format!("Remote HEAD resolved to invalid ref '{branch_name}'"))?;
-        let sha = head_ref
-            .peel_to_commit()
-            .context("Remote HEAD did not point to a commit")?
-            .id;
-        return Ok(Some(Target {
-            branch,
-            remote_url,
-            sha,
-            push_remote_name: Some(remote_name.to_owned()),
-        }));
-    }
-
-    for branch_name in ["main", "master"] {
-        let full_name = format!("refs/remotes/{remote_name}/{branch_name}");
-        if let Ok(mut reference) = repo.find_reference(&full_name) {
-            let sha = reference
-                .peel_to_commit()
-                .with_context(|| {
-                    format!("Fallback target '{full_name}' did not point to a commit")
-                })?
-                .id;
-            return Ok(Some(Target {
-                branch: full_name.parse()?,
-                remote_url,
-                sha,
-                push_remote_name: Some(remote_name.to_owned()),
-            }));
-        }
-    }
-
-    Ok(None)
+    let sha = repo
+        .find_reference(target_ref.as_ref())?
+        .peel_to_commit()
+        .with_context(|| format!("inferred target '{target_ref}' did not point to a commit"))?
+        .id;
+    Ok(Some(Target {
+        branch: target_ref.to_string().parse()?,
+        remote_url,
+        sha,
+        push_remote_name: Some(remote_name),
+    }))
 }
 
 fn first_parent_commit_ids_with_limit(

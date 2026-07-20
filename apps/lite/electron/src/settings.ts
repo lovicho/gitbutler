@@ -25,6 +25,7 @@ const guiSettingsV1 = type({
 		"light?": "string",
 		"dark?": "string",
 	},
+	"theme?": "'light' | 'dark' | 'system'",
 });
 
 type LegacyGUISettings = typeof guiSettingsV1.infer;

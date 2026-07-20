@@ -46,6 +46,131 @@ fn stored_meta(repo: &gix::Repository, meta: &VirtualBranchesTomlMetadata) -> Pr
     ProjectMeta::resolve(repo, meta).expect("project metadata is readable")
 }
 
+fn create_remote_branch(repo: &gix::Repository, name: &str) -> anyhow::Result<()> {
+    repo.reference(
+        name,
+        repo.head_id()?.detach(),
+        PreviousValue::Any,
+        "test remote branch",
+    )?;
+    Ok(())
+}
+
+fn set_remote_head(repo: &gix::Repository, target: &str) -> anyhow::Result<()> {
+    repo.edit_reference(gix::refs::transaction::RefEdit {
+        change: gix::refs::transaction::Change::Update {
+            log: gix::refs::transaction::LogChange {
+                mode: gix::refs::transaction::RefLog::AndReference,
+                force_create_reflog: false,
+                message: "test remote HEAD".into(),
+            },
+            expected: PreviousValue::Any,
+            new: gix::refs::Target::Symbolic(target.try_into()?),
+        },
+        name: "refs/remotes/origin/HEAD".try_into()?,
+        deref: false,
+    })?;
+    Ok(())
+}
+
+fn inferred_target(repo: &gix::Repository) -> anyhow::Result<Option<String>> {
+    Ok(but_workspace::init::infer_default_target_ref(repo)?.map(|name| name.to_string()))
+}
+
+#[test]
+fn infers_symbolic_remote_head_first() -> anyhow::Result<()> {
+    let (repo, _meta, _tmp) = scenario();
+    create_remote_branch(&repo, "refs/remotes/origin/trunk")?;
+    set_remote_head(&repo, "refs/remotes/origin/trunk")?;
+
+    assert_eq!(
+        inferred_target(&repo)?,
+        Some("refs/remotes/origin/trunk".into()),
+        "a valid symbolic remote HEAD has the highest priority"
+    );
+    Ok(())
+}
+
+#[test]
+fn malformed_remote_head_falls_back_to_main() -> anyhow::Result<()> {
+    let (repo, _meta, _tmp) = scenario();
+    create_remote_branch(&repo, "refs/remotes/fork/trunk")?;
+    set_remote_head(&repo, "refs/remotes/fork/trunk")?;
+
+    assert_eq!(
+        inferred_target(&repo)?,
+        Some("refs/remotes/origin/main".into()),
+        "a symbolic HEAD pointing at another remote must not change the selected remote"
+    );
+    Ok(())
+}
+
+#[test]
+fn infers_main_without_symbolic_remote_head() -> anyhow::Result<()> {
+    let (repo, _meta, _tmp) = scenario();
+    assert_eq!(
+        inferred_target(&repo)?,
+        Some("refs/remotes/origin/main".into()),
+        "main is the first fallback when remote HEAD is absent"
+    );
+    Ok(())
+}
+
+#[test]
+fn infers_master_when_main_is_absent() -> anyhow::Result<()> {
+    let (repo, _meta, _tmp) = scenario();
+    repo.find_reference("refs/remotes/origin/main")?.delete()?;
+    create_remote_branch(&repo, "refs/remotes/origin/master")?;
+
+    assert_eq!(
+        inferred_target(&repo)?,
+        Some("refs/remotes/origin/master".into()),
+        "master is used only after remote HEAD and main"
+    );
+    Ok(())
+}
+
+#[test]
+fn returns_none_without_a_candidate_branch() -> anyhow::Result<()> {
+    let (repo, _meta, _tmp) = scenario();
+    repo.find_reference("refs/remotes/origin/main")?.delete()?;
+
+    assert_eq!(
+        inferred_target(&repo)?,
+        None,
+        "a default remote without HEAD, main, or master has no inferred target"
+    );
+    Ok(())
+}
+
+#[test]
+fn returns_none_without_an_unambiguous_default_remote() -> anyhow::Result<()> {
+    let tmp = but_testsupport::gix_testtools::tempfile::TempDir::new()?;
+    let repo = gix::init(tmp.path())?;
+    edit_config(Some(&repo), gix::config::Source::Local, |config| {
+        set_config_value(
+            config,
+            "remote.upstream.url",
+            "https://example.com/upstream",
+        )?;
+        set_config_value(config, "remote.fork.url", "https://example.com/fork")?;
+        Ok(())
+    })?;
+    let repo = but_testsupport::open_repo(tmp.path())?;
+
+    assert_eq!(
+        repo.remote_default_name(gix::remote::Direction::Push),
+        None,
+        "two non-origin remotes have no implicit default"
+    );
+    assert_eq!(
+        inferred_target(&repo)?,
+        None,
+        "target inference requires a default remote"
+    );
+    Ok(())
+}
+
 /// Create an empty commit on top of `parent` without updating any reference.
 fn empty_commit_on_top(
     repo: &gix::Repository,

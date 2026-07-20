@@ -355,6 +355,10 @@ const DiffContents: FC<{
 		...guiSettingsQueryOptions,
 		select: (cfg) => cfg.diffTabSize,
 	});
+	const { data: theme } = useQuery({
+		...guiSettingsQueryOptions,
+		select: (cfg) => cfg.theme,
+	});
 	const { mutate: openInEditor } = useOpenInEditor();
 
 	const diffSelection = useAppSelector((state) =>
@@ -543,7 +547,7 @@ const DiffContents: FC<{
 				diffStyle: diffStyle ?? diffDefaults.diffStyle,
 				disableBackground: !(diffBackgrounds ?? diffDefaults.diffBackground),
 				overflow: diffOverflow ?? diffDefaults.diffOverflow,
-				themeType: "system",
+				themeType: theme ?? defaultSettings.theme,
 				stickyHeaders: true,
 				enableLineSelection: true,
 				layout: {

@@ -64,6 +64,10 @@
 	color: var(--text-2);
 }
 
+.unstretchedValue {
+	justify-self: end;
+}
+
 .inferredValue {
 	color: var(--text-3);
 }

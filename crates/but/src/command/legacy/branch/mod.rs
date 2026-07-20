@@ -5,7 +5,7 @@ use gitbutler_oplog::entry::{OperationKind, SnapshotDetails};
 
 use crate::{
     CliResult, IdMap,
-    args::atoms::{BranchArg, BranchOrCommit, CliIdArg, Purpose},
+    args::atoms::{BranchArg, BranchOrCommit, CliIdArg, Purpose, ResolvedCliIdArg},
     theme::{self, Paint},
     utils::OutputChannel,
 };
@@ -59,7 +59,6 @@ pub fn new(
     branch_name_arg: Option<BranchArg>,
     anchor_arg: Option<CliIdArg>,
 ) -> CliResult<()> {
-    let t = theme::get();
     let mut guard = ctx.exclusive_worktree_access();
 
     let branch_name = if let Some(branch_name_arg) = branch_name_arg {
@@ -85,6 +84,32 @@ pub fn new(
             })
             .transpose()?
     };
+
+    if resolved_anchor.is_none()
+        && ctx.settings.feature_flags.single_branch
+        && gitbutler_operating_modes::in_outside_workspace_mode(ctx, guard.read_permission())?
+    {
+        let head_name = ctx
+            .repo
+            .get()?
+            .head()?
+            .referent_name()
+            .filter(|name| name.category() == Some(gix::refs::Category::LocalBranch))
+            .context("single-branch branch creation requires HEAD to be a local branch")?
+            .to_owned();
+        let new_ref: gix::refs::FullName = format!("refs/heads/{branch_name}").try_into()?;
+        but_api::branch::branch_create_with_perm(
+            ctx,
+            Some(new_ref),
+            but_api::branch::json::BranchCreatePlacement::Dependent {
+                relative_to: but_api::commit::json::RelativeTo::Reference(head_name),
+                side: but_rebase::graph_rebase::mutate::InsertSide::Above,
+            },
+            guard.write_permission(),
+        )?;
+        write_new_branch_output(out, &branch_name, None, anchor_arg)?;
+        return Ok(());
+    }
 
     let anchor = resolved_anchor
         .clone()
@@ -115,6 +140,18 @@ pub fn new(
         guard.write_permission(),
     )?;
 
+    write_new_branch_output(out, &branch_name, resolved_anchor.as_ref(), anchor_arg)?;
+
+    Ok(())
+}
+
+fn write_new_branch_output(
+    out: &mut OutputChannel,
+    branch_name: &str,
+    resolved_anchor: Option<&ResolvedCliIdArg>,
+    anchor_arg: Option<CliIdArg>,
+) -> CliResult<()> {
+    let t = theme::get();
     if let Some(out) = out.for_human() {
         if let Some(resolved_anchor) = resolved_anchor {
             writeln!(
@@ -136,7 +173,7 @@ pub fn new(
         writeln!(out, "{branch_name}")?;
     } else if let Some(out) = out.for_json() {
         let value = json::BranchNewOutput {
-            branch: branch_name.clone(),
+            branch: branch_name.to_owned(),
             anchor: anchor_arg,
         };
         out.write_value(value)?;

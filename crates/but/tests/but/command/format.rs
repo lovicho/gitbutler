@@ -54,7 +54,7 @@ fn default_command_respects_c_flag_for_setup_checks() -> anyhow::Result<()> {
     env.but("-C repo")
         .assert()
         .stderr_eq(snapbox::str![[r#"
-Error: Setup required: No GitButler project found at repo - run `but setup` to configure the project
+Error: No target branch is configured and none could be inferred. Run `but config target <remote>/<branch>` to configure one.
 
 "#]])
         .failure();
@@ -75,7 +75,7 @@ git config but.alias.default "-C repo status"
     );
 
     env.but("").assert().failure().stderr_eq(snapbox::str![[r#"
-Error: Setup required: No GitButler project found at repo - run `but setup` to configure the project
+Error: No target branch is configured and none could be inferred. Run `but config target <remote>/<branch>` to configure one.
 
 "#]]);
 
@@ -99,7 +99,7 @@ git config but.alias.default "-C repo status"
         .assert()
         .failure()
         .stderr_eq(snapbox::str![[r#"
-Error: Setup required: No GitButler project found at repo2 - run `but setup` to configure the project
+Error: No target branch is configured and none could be inferred. Run `but config target <remote>/<branch>` to configure one.
 
 "#]]);
 

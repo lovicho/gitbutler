@@ -593,14 +593,14 @@ fn build_status_output(
     print_upstream_state(ctx, status_ctx, output)?;
     print_common_merge_base_summary(status_ctx, output)?;
     print_conflicted_files_warning(status_ctx, output)?;
-    let not_on_workspace = matches!(
+    let warn_about_outside_workspace = matches!(
         status_ctx.mode,
         gitbutler_operating_modes::OperatingMode::OutsideWorkspace(_)
-    );
-    print_outside_workspace_warning(not_on_workspace, output)?;
+    ) && !ctx.settings.feature_flags.single_branch;
+    print_outside_workspace_warning(warn_about_outside_workspace, output)?;
     print_hint(
         status_ctx,
-        not_on_workspace,
+        warn_about_outside_workspace,
         has_merged_upstream_branch,
         output,
     )?;

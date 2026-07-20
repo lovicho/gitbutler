@@ -1,6 +1,7 @@
 import type { BundledTheme } from "shiki";
 import type { GUISettings } from "#electron/settings.ts";
 
+// [tag:lite_default_settings]
 export const defaultSettings = {
 	autoFetchFrequency: "15 min",
 	diffBackground: true,
@@ -16,6 +17,7 @@ export const defaultSettings = {
 		light: "github-light-default" satisfies BundledTheme,
 		dark: "github-dark-default" satisfies BundledTheme,
 	},
+	theme: "system",
 } satisfies Partial<GUISettings>;
 
 export const clampAutoFetch = (ms: number): number =>

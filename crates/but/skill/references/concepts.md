@@ -164,7 +164,7 @@ The uncommitted change **depends on** C1 (because it calls `foo()`).
 **Implications:**
 
 1. Can't commit this change to a stack that doesn't contain C1
-2. `but absorb` will automatically amend it into C1 (or a commit after C1)
+2. When amending it into history, it belongs in C1 (or a commit after C1)
 3. If you try to move the change, GitButler prevents invalid operations
 
 ### Why This Matters

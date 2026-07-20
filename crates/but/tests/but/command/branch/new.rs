@@ -163,6 +163,56 @@ fn with_json_output() {
 }
 
 #[test]
+fn single_branch_outputs_created_branch_for_all_formats() -> anyhow::Result<()> {
+    let env = Sandbox::open_with_default_settings("one-fork");
+
+    env.but("branch new human-feature")
+        .assert()
+        .success()
+        .stderr_eq(str![])
+        .stdout_eq(str![[r#"
+✓ Created branch human-feature
+
+"#]]);
+
+    env.but("--format shell branch new shell-feature")
+        .assert()
+        .success()
+        .stderr_eq(str![])
+        .stdout_eq(str![[r#"
+shell-feature
+
+"#]]);
+
+    env.but("--format json branch new json-feature")
+        .allow_json()
+        .assert()
+        .success()
+        .stderr_eq(str![])
+        .stdout_eq(str![[r#"
+{
+  "branch": "json-feature"
+}
+
+"#]]);
+
+    let repo = env.open_repo();
+    for branch_name in ["human-feature", "shell-feature", "json-feature"] {
+        let reference_name = format!("refs/heads/{branch_name}");
+        assert!(
+            repo.try_find_reference(reference_name.as_str())?.is_some(),
+            "single-branch creation writes the branch reference"
+        );
+    }
+    assert!(
+        repo.try_find_reference(but_core::WORKSPACE_REF_NAME)?
+            .is_none(),
+        "single-branch creation does not create a managed workspace reference"
+    );
+    Ok(())
+}
+
+#[test]
 fn handles_path_prefix_collision() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
     env.setup_metadata(&["A"]);

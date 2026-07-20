@@ -83,6 +83,29 @@ fn unborn() {
         .assert()
         .failure()
         .stderr_eq(snapbox::str![[r#"
+Error: No target branch is configured and none could be inferred. Run `but config target <remote>/<branch>` to configure one.
+
+"#]]);
+}
+
+#[cfg(feature = "legacy")]
+#[test]
+fn disabled_single_branch_mode_requires_setup_for_unregistered_repository() {
+    let env = Sandbox::open_with_default_settings("one-fork");
+    env.but("config feature single-branch disable")
+        .assert()
+        .success()
+        .stderr_eq(snapbox::str![])
+        .stdout_eq(snapbox::str![[r#"
+✓ Feature flag single-branch is now disabled
+
+"#]]);
+
+    env.but("status")
+        .assert()
+        .failure()
+        .stdout_eq(snapbox::str![])
+        .stderr_eq(snapbox::str![[r#"
 Error: Setup required: No GitButler project found at . - run `but setup` to configure the project
 
 "#]]);
@@ -104,7 +127,7 @@ fn first_commit_no_workspace() {
         .assert()
         .failure()
         .stderr_eq(snapbox::str![[r#"
-Error: Setup required: No GitButler project found at . - run `but setup` to configure the project
+Error: No target branch is configured and none could be inferred. Run `but config target <remote>/<branch>` to configure one.
 
 "#]]);
 }

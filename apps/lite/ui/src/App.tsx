@@ -17,7 +17,7 @@ const workerFactory = (): Worker =>
 	});
 
 // Must be mounted under the worker pool provider.
-const ThemeSync: FC = () => {
+const SyntaxThemeSync: FC = () => {
 	const workerPool = useWorkerPool();
 	const { data: theme } = useQuery({
 		...guiSettingsQueryOptions,
@@ -50,7 +50,7 @@ export const App: FC<{
 							poolOptions={{ workerFactory }}
 							highlighterOptions={{ preferredHighlighter: "shiki-wasm" }}
 						>
-							<ThemeSync />
+							<SyntaxThemeSync />
 							<RouterProvider router={router} />
 							<AskpassPromptDialog />
 							<Toasts />
