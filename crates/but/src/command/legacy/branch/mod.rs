@@ -77,11 +77,7 @@ pub fn new(
         let repo = ctx.repo.get()?;
         anchor_arg
             .clone()
-            .and_then(|anchor| {
-                anchor
-                    .try_resolve(&repo, &id_map, Purpose::Anchor, None)
-                    .transpose()
-            })
+            .map(|anchor| anchor.resolve_in_workspace(&repo, &id_map, Purpose::Anchor, None))
             .transpose()?
     };
 

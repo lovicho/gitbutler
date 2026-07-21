@@ -37,6 +37,23 @@ fn outputs_branch_name() {
 }
 
 #[test]
+fn rejects_anchor_outside_workspace() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+    env.but("unapply A").assert().success();
+
+    env.but("branch new --anchor A new-branch")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: Could not find anchor: 'A'
+
+Hint: Run `but status` for applicable targets.
+
+"#]]);
+}
+
+#[test]
 fn rejects_head() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
     env.setup_metadata(&["A"]);
