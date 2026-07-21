@@ -646,6 +646,9 @@ export declare function askpassSubmitPromptResponse(id: string, response?: strin
 /** The target node of this link line is the child of this column. */
 export const CHILD: number
 
+/** Get the application settings. */
+export declare function getAppSettings(): Promise<AppSettings>
+
 /** This cell contains a horizontal line that connects to an ancestor. */
 export const HORIZ_ANCESTOR: number
 
@@ -690,6 +693,30 @@ export const RIGHT_MERGE_ANCESTOR: number
 
 /** The child of this cell is linked to parents on the right. */
 export const RIGHT_MERGE_PARENT: number
+
+/** Update feature flags; unset fields are left unchanged. */
+export declare function updateFeatureFlags(update: FeatureFlagsUpdate): Promise<void>
+
+/** Update fetch settings; unset fields are left unchanged. */
+export declare function updateFetch(update: FetchUpdate): Promise<void>
+
+/** Update IRC settings; unset fields are left unchanged. */
+export declare function updateIrc(update: IrcUpdate): Promise<void>
+
+/** Set whether onboarding has been completed. */
+export declare function updateOnboardingComplete(update: boolean): Promise<void>
+
+/** Update review settings; unset fields are left unchanged. */
+export declare function updateReviews(update: ReviewsUpdate): Promise<void>
+
+/** Update telemetry settings; unset fields are left unchanged. */
+export declare function updateTelemetry(update: TelemetryUpdate): Promise<void>
+
+/** Set the telemetry distinct id; passing `null` or omitting the argument clears it. */
+export declare function updateTelemetryDistinctId(appDistinctId?: string | undefined | null): Promise<void>
+
+/** Update UI settings; unset fields are left unchanged. */
+export declare function updateUi(update: UiUpdate): Promise<void>
 
 /** The descendant of this cell is connected to an ancestor. */
 export const VERT_ANCESTOR: number
@@ -1538,9 +1565,22 @@ export type FeatureFlags = {
   worktreeManipulation: boolean;
 };
 
+/** Update request for [`crate::app_settings::FeatureFlags`]. */
+export type FeatureFlagsUpdate = {
+  unapplyV3Pgm?: boolean | null;
+  singleBranch?: boolean | null;
+  irc?: boolean | null;
+  worktreeManipulation?: boolean | null;
+};
+
 export type Fetch = {
   /** The frequency at which the app will automatically fetch. A negative value (e.g. -1) disables auto fetching. */
   autoFetchIntervalMinutes: number;
+};
+
+/** Update request for [`crate::app_settings::Fetch`]. */
+export type FetchUpdate = {
+  autoFetchIntervalMinutes?: number | null;
 };
 
 /** Information about a file being absorbed */
@@ -2103,11 +2143,33 @@ export type IrcConnectionSettings = {
   realname: string | null;
 };
 
+/**
+ * Update request for [`crate::app_settings::IrcConnectionSettings`].
+ * Used for connection updates.
+ */
+export type IrcConnectionUpdate = {
+  enabled?: boolean | null;
+  /** Pass `null` to clear the stored value; omit the field to leave it unchanged. */
+  nickname?: string | null;
+  /** Pass `null` to clear the stored value; omit the field to leave it unchanged. */
+  serverPassword?: string | null;
+  /** Pass `null` to clear the stored value; omit the field to leave it unchanged. */
+  saslPassword?: string | null;
+  /** Pass `null` to clear the stored value; omit the field to leave it unchanged. */
+  realname?: string | null;
+};
+
 export type IrcServerSettings = {
   /** IRC server hostname (e.g., "irc.gitbutler.com") */
   host: string;
   /** IRC server port (default: 6697 for TLS) */
   port: number;
+};
+
+/** Update request for [`crate::app_settings::IrcServerSettings`]. */
+export type IrcServerUpdate = {
+  host?: string | null;
+  port?: number | null;
 };
 
 export type IrcSettings = {
@@ -2123,6 +2185,15 @@ export type IrcSettings = {
   projectChannel: string | null;
   /** IRC connection settings */
   connection: IrcConnectionSettings;
+};
+
+/** Update request for [`crate::app_settings::IrcSettings`]. */
+export type IrcUpdate = {
+  server?: IrcServerUpdate | null;
+  autoShare?: boolean | null;
+  /** Pass `null` to clear the stored value; omit the field to leave it unchanged. */
+  projectChannel?: string | null;
+  connection?: IrcConnectionUpdate | null;
 };
 
 /** Line statistics obtained from diffing the blobs of one or more [TreeChange](crate::TreeChange). */
@@ -2463,6 +2534,11 @@ export type Reviews = {
   autoFillPrDescriptionFromCommit: boolean;
 };
 
+/** Update request for [`crate::app_settings::Reviews`]. */
+export type ReviewsUpdate = {
+  autoFillPrDescriptionFromCommit?: boolean | null;
+};
+
 /** A segment of a commit graph, representing a set of commits exclusively. */
 export type Segment = {
   /**
@@ -2674,6 +2750,12 @@ export type TelemetrySettings = {
   migratedFromLegacy: boolean;
 };
 
+/** Update request for [`crate::app_settings::TelemetrySettings`]. */
+export type TelemetryUpdate = {
+  appMetricsEnabled?: boolean | null;
+  appErrorReportingEnabled?: boolean | null;
+};
+
 export type Trailer = {
   key: string;
   value: string;
@@ -2754,6 +2836,12 @@ export type UiSettings = {
    * New code should use `appUpdatesCheckIntervalSec` instead, which will control update checks for both CLI and GUI.
    */
   checkForUpdatesIntervalInSeconds: number;
+};
+
+/** Update request for [`crate::app_settings::UiSettings`]. */
+export type UiUpdate = {
+  useNativeTitleBar?: boolean | null;
+  noShadow?: boolean | null;
 };
 
 /** A grouped source that could not be uncommitted. */

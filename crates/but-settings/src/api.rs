@@ -4,16 +4,35 @@ use serde::{Deserialize, Serialize};
 use crate::AppSettingsWithDiskSync;
 use crate::app_settings::IrcConnectionSettings;
 
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
+/// Deserialize an explicit `null` as `Some(None)` (clear the value), while a
+/// missing field stays `None` (leave unchanged). Plain `Option<Option<T>>`
+/// cannot make that distinction because serde folds explicit `null` into the
+/// outer `None`.
+fn double_option<'de, T, D>(deserializer: D) -> std::result::Result<Option<Option<T>>, D::Error>
+where
+    T: serde::Deserialize<'de>,
+    D: serde::Deserializer<'de>,
+{
+    serde::Deserialize::deserialize(deserializer).map(Some)
+}
+
+#[derive(
+    Copy, Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, schemars::JsonSchema,
+)]
+#[serde(rename_all = "camelCase", default)]
+#[schemars(extend("x-input" = true))]
 /// Update request for [`crate::app_settings::TelemetrySettings`].
 pub struct TelemetryUpdate {
     pub app_metrics_enabled: Option<bool>,
     pub app_error_reporting_enabled: Option<bool>,
 }
+but_schemars::register_sdk_type!(TelemetryUpdate);
 
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
+#[derive(
+    Copy, Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, schemars::JsonSchema,
+)]
+#[serde(rename_all = "camelCase", default)]
+#[schemars(extend("x-input" = true))]
 /// Update request for [`crate::app_settings::FeatureFlags`].
 pub struct FeatureFlagsUpdate {
     pub unapply_v3_pgm: Option<bool>,
@@ -21,59 +40,88 @@ pub struct FeatureFlagsUpdate {
     pub irc: Option<bool>,
     pub worktree_manipulation: Option<bool>,
 }
+but_schemars::register_sdk_type!(FeatureFlagsUpdate);
 
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
+#[derive(
+    Copy, Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, schemars::JsonSchema,
+)]
+#[serde(rename_all = "camelCase", default)]
+#[schemars(extend("x-input" = true))]
 /// Update request for [`crate::app_settings::Reviews`].
 pub struct ReviewsUpdate {
     pub auto_fill_pr_description_from_commit: Option<bool>,
 }
+but_schemars::register_sdk_type!(ReviewsUpdate);
 
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
+#[derive(
+    Copy, Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, schemars::JsonSchema,
+)]
+#[serde(rename_all = "camelCase", default)]
+#[schemars(extend("x-input" = true))]
 /// Update request for [`crate::app_settings::Fetch`].
 pub struct FetchUpdate {
     pub auto_fetch_interval_minutes: Option<isize>,
 }
+but_schemars::register_sdk_type!(FetchUpdate);
 
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
+#[derive(
+    Copy, Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, schemars::JsonSchema,
+)]
+#[serde(rename_all = "camelCase", default)]
+#[schemars(extend("x-input" = true))]
 /// Update request for [`crate::app_settings::UiSettings`].
 pub struct UiUpdate {
     pub use_native_title_bar: Option<bool>,
     pub no_shadow: Option<bool>,
     // Note that the CLI related information cannot be set - it's set at compile time.
 }
+but_schemars::register_sdk_type!(UiUpdate);
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase", default)]
+#[schemars(extend("x-input" = true))]
 /// Update request for [`crate::app_settings::IrcSettings`].
 pub struct IrcUpdate {
     pub server: Option<IrcServerUpdate>,
     pub auto_share: Option<bool>,
+    /// Pass `null` to clear the stored value; omit the field to leave it unchanged.
+    #[serde(deserialize_with = "double_option")]
     pub project_channel: Option<Option<String>>,
     pub connection: Option<IrcConnectionUpdate>,
 }
+but_schemars::register_sdk_type!(IrcUpdate);
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase", default)]
+#[schemars(extend("x-input" = true))]
 /// Update request for [`crate::app_settings::IrcServerSettings`].
 pub struct IrcServerUpdate {
     pub host: Option<String>,
     pub port: Option<u16>,
 }
+but_schemars::register_sdk_type!(IrcServerUpdate);
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase", default)]
+#[schemars(extend("x-input" = true))]
 /// Update request for [`crate::app_settings::IrcConnectionSettings`].
 /// Used for connection updates.
 pub struct IrcConnectionUpdate {
     pub enabled: Option<bool>,
+    /// Pass `null` to clear the stored value; omit the field to leave it unchanged.
+    #[serde(deserialize_with = "double_option")]
     pub nickname: Option<Option<String>>,
+    /// Pass `null` to clear the stored value; omit the field to leave it unchanged.
+    #[serde(deserialize_with = "double_option")]
     pub server_password: Option<Option<String>>,
+    /// Pass `null` to clear the stored value; omit the field to leave it unchanged.
+    #[serde(deserialize_with = "double_option")]
     pub sasl_password: Option<Option<String>>,
+    /// Pass `null` to clear the stored value; omit the field to leave it unchanged.
+    #[serde(deserialize_with = "double_option")]
     pub realname: Option<Option<String>>,
 }
+but_schemars::register_sdk_type!(IrcConnectionUpdate);
 
 /// Mutation, immediately followed by writing everything to disk.
 impl AppSettingsWithDiskSync {
@@ -366,6 +414,29 @@ mod tests {
             Some(true),
             "the API payload should map unapplyV3Pgm to the settings update"
         );
+    }
+
+    #[test]
+    fn irc_update_distinguishes_null_from_missing() {
+        let update: IrcUpdate =
+            serde_json::from_value(serde_json::json!({ "projectChannel": null })).unwrap();
+        assert_eq!(
+            update.project_channel,
+            Some(None),
+            "explicit null must clear the value"
+        );
+
+        let update: IrcUpdate = serde_json::from_value(serde_json::json!({})).unwrap();
+        assert_eq!(
+            update.project_channel, None,
+            "missing field must leave the value unchanged"
+        );
+
+        let update: IrcConnectionUpdate =
+            serde_json::from_value(serde_json::json!({ "nickname": null, "enabled": true }))
+                .unwrap();
+        assert_eq!(update.nickname, Some(None));
+        assert_eq!(update.sasl_password, None);
     }
 
     #[test]

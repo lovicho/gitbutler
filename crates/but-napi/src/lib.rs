@@ -28,6 +28,8 @@ use but_api::{
     },
 };
 
+pub mod settings;
+
 type EventCallback = ThreadsafeFunction<WatcherEvent>;
 
 /// This cell contains a horizontal line that connects to a parent.

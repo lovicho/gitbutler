@@ -64,9 +64,15 @@ fn print_human_output(writer: &mut dyn std::fmt::Write, status: &CheckUpdateStat
             {
                 "Install it with your package manager"
             }
-            #[cfg(not(feature = "packaged-but-distribution"))]
+            // `but update install` only exists on Unix (see `args::update::Subcommands`), so only
+            // suggest it there. On other platforms (e.g. Windows) point at the download instead.
+            #[cfg(all(unix, not(feature = "packaged-but-distribution")))]
             {
                 "Install it with 'but update install'"
+            }
+            #[cfg(all(not(unix), not(feature = "packaged-but-distribution")))]
+            {
+                "Download it from https://gitbutler.com/downloads"
             }
         };
 

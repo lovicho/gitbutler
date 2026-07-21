@@ -43,6 +43,7 @@ but-settings.workspace = true
 gitbutler-watcher.workspace = true
 napi = { version = "3", features = ["serde-json", "tokio_rt"] }
 napi-derive = "3"
+serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
 

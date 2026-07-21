@@ -529,11 +529,21 @@ fn schema_to_ts(schema: &serde_json::Value, indent: usize) -> String {
                             "".to_string()
                         };
                         let ts_type = schema_to_ts(value, next_indent);
-                        let optional = if required.contains(key) || is_nullable(value) {
-                            ""
-                        } else {
-                            "?"
-                        };
+                        // Output types render nullable fields as required
+                        // (serde always serializes them, as `T | null`).
+                        // Types marked `x-input` (via schemars `extend`) are
+                        // caller-supplied, where a non-required field may be
+                        // omitted entirely — render it optional.
+                        let input_type = obj
+                            .get("x-input")
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(false);
+                        let optional =
+                            if required.contains(key) || (!input_type && is_nullable(value)) {
+                                ""
+                            } else {
+                                "?"
+                            };
                         fields.push(format!("{doc}{padding}{key}{optional}: {ts_type};"));
                     }
 

@@ -579,7 +579,7 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { absorb, absorptionPlan, apply, applyBranchIntegration, assignHunk, branchCheckout, branchCheckoutNew, branchCreate, branchDetails, branchDiff, branchLand, branchRemove, branchRename, changesInWorktree, changesInWorktreeWithPerm, commitAmend, commitCreate, commitDetailsWithLineStats, commitDiscard, commitDiscardChanges, commitInsertBlank, commitMove, commitMoveChangesBetween, commitReword, commitSquash, commitUncommit, commitUncommitChanges, commitUncommitChangesFromCommits, discardWorktreeChanges, forgeCompareBranchUrl, forgeInfo, forgeProvider, getInitialBranchIntegration, getRedoTargetSnapshot, getRepoInfo, getReview, getReviewBaseRepoUrl, getReviewMergeStatus, getUndoTargetSnapshot, getWorkspace, headInfo, initApplicationNamespace, listAvailableReviewTemplates, listBranches, listCiChecks, listEditors, listProjectsStateless, listReviews, listReviewsForBranch, mergeReview, moveBranch, openInEditor, peelRestoreSnapshot, publishReview, removeBranch, restoreSnapshotWithKind, reviewApply, reviewTemplate, setPushRemote, setReviewAutoMerge, setReviewDraftiness, setReviewTemplate, setTargetRefAndInitProject, tearOffBranch, treeChangeDiffs, unapplyStack, updateBranchName, updateReview, updateReviewFooters, warmCiChecksCache, workspaceBranchAndAncestorsPush, workspaceCheckout, workspaceFetchFromRemotes, workspaceFetchStatus, workspaceIntegrateUpstream, WatcherHandle, ANY_FORK, ANY_FORK_OR_MERGE, ANY_MERGE, askpassInit, askpassSubmitPromptResponse, CHILD, HORIZ_ANCESTOR, HORIZ_PARENT, HORIZONTAL, LEFT_FORK, LEFT_FORK_ANCESTOR, LEFT_FORK_PARENT, LEFT_MERGE, LEFT_MERGE_ANCESTOR, LEFT_MERGE_PARENT, RIGHT_FORK, RIGHT_FORK_ANCESTOR, RIGHT_FORK_PARENT, RIGHT_MERGE, RIGHT_MERGE_ANCESTOR, RIGHT_MERGE_PARENT, VERT_ANCESTOR, VERT_PARENT, VERTICAL, watcherStart } = nativeBinding
+const { absorb, absorptionPlan, apply, applyBranchIntegration, assignHunk, branchCheckout, branchCheckoutNew, branchCreate, branchDetails, branchDiff, branchLand, branchRemove, branchRename, changesInWorktree, changesInWorktreeWithPerm, commitAmend, commitCreate, commitDetailsWithLineStats, commitDiscard, commitDiscardChanges, commitInsertBlank, commitMove, commitMoveChangesBetween, commitReword, commitSquash, commitUncommit, commitUncommitChanges, commitUncommitChangesFromCommits, discardWorktreeChanges, forgeCompareBranchUrl, forgeInfo, forgeProvider, getInitialBranchIntegration, getRedoTargetSnapshot, getRepoInfo, getReview, getReviewBaseRepoUrl, getReviewMergeStatus, getUndoTargetSnapshot, getWorkspace, headInfo, initApplicationNamespace, listAvailableReviewTemplates, listBranches, listCiChecks, listEditors, listProjectsStateless, listReviews, listReviewsForBranch, mergeReview, moveBranch, openInEditor, peelRestoreSnapshot, publishReview, removeBranch, restoreSnapshotWithKind, reviewApply, reviewTemplate, setPushRemote, setReviewAutoMerge, setReviewDraftiness, setReviewTemplate, setTargetRefAndInitProject, tearOffBranch, treeChangeDiffs, unapplyStack, updateBranchName, updateReview, updateReviewFooters, warmCiChecksCache, workspaceBranchAndAncestorsPush, workspaceCheckout, workspaceFetchFromRemotes, workspaceFetchStatus, workspaceIntegrateUpstream, WatcherHandle, ANY_FORK, ANY_FORK_OR_MERGE, ANY_MERGE, askpassInit, askpassSubmitPromptResponse, CHILD, getAppSettings, HORIZ_ANCESTOR, HORIZ_PARENT, HORIZONTAL, LEFT_FORK, LEFT_FORK_ANCESTOR, LEFT_FORK_PARENT, LEFT_MERGE, LEFT_MERGE_ANCESTOR, LEFT_MERGE_PARENT, RIGHT_FORK, RIGHT_FORK_ANCESTOR, RIGHT_FORK_PARENT, RIGHT_MERGE, RIGHT_MERGE_ANCESTOR, RIGHT_MERGE_PARENT, updateFeatureFlags, updateFetch, updateIrc, updateOnboardingComplete, updateReviews, updateTelemetry, updateTelemetryDistinctId, updateUi, VERT_ANCESTOR, VERT_PARENT, VERTICAL, watcherStart } = nativeBinding
 export { absorb }
 export { absorptionPlan }
 export { apply }
@@ -662,6 +662,7 @@ export { ANY_MERGE }
 export { askpassInit }
 export { askpassSubmitPromptResponse }
 export { CHILD }
+export { getAppSettings }
 export { HORIZ_ANCESTOR }
 export { HORIZ_PARENT }
 export { HORIZONTAL }
@@ -677,6 +678,14 @@ export { RIGHT_FORK_PARENT }
 export { RIGHT_MERGE }
 export { RIGHT_MERGE_ANCESTOR }
 export { RIGHT_MERGE_PARENT }
+export { updateFeatureFlags }
+export { updateFetch }
+export { updateIrc }
+export { updateOnboardingComplete }
+export { updateReviews }
+export { updateTelemetry }
+export { updateTelemetryDistinctId }
+export { updateUi }
 export { VERT_ANCESTOR }
 export { VERT_PARENT }
 export { VERTICAL }
