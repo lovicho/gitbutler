@@ -399,13 +399,22 @@ impl ResolvedCliIdArg {
                 return Ok(BranchOrCommit::Commit(commit));
             }
             ResolvedCliIdArg::Branch(branch) => return Ok(BranchOrCommit::Branch(branch)),
-            ResolvedCliIdArg::UncommittedHunkOrFile(..) => "an uncommitted change",
-            ResolvedCliIdArg::CommittedFile { .. } => "a committed file",
-            ResolvedCliIdArg::PathPrefix => "a path",
-            ResolvedCliIdArg::Uncommitted => "uncommitted changes",
-            ResolvedCliIdArg::Stack => "a stack",
+            other => other.kind_for_humans(),
         };
         Err(bad_input(format!("Expected a commit or a branch, got {kind}")).into())
+    }
+
+    /// Returns a human-readable description of the entity type.
+    pub fn kind_for_humans(&self) -> &'static str {
+        match self {
+            ResolvedCliIdArg::UncommittedHunkOrFile { .. } => "an uncommitted file or hunk",
+            ResolvedCliIdArg::PathPrefix => "a path prefix",
+            ResolvedCliIdArg::CommittedFile { .. } => "a committed file",
+            ResolvedCliIdArg::Branch { .. } => "a branch",
+            ResolvedCliIdArg::Commit { .. } => "a commit",
+            ResolvedCliIdArg::Uncommitted => "uncommitted changes",
+            ResolvedCliIdArg::Stack => "a stack",
+        }
     }
 }
 

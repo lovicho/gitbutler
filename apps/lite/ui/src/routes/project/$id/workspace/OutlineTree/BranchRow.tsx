@@ -14,7 +14,7 @@ import {
 } from "#ui/api/queries.ts";
 import { decodeBytes } from "#ui/api/bytes.ts";
 import { Button, Toast, Toolbar, Tooltip } from "@base-ui/react";
-import { BranchReference, InsertSide, PushStatus, RelativeTo } from "@gitbutler/but-sdk";
+import type { BranchReference, InsertSide, PushStatus, RelativeTo } from "@gitbutler/but-sdk";
 import { useQuery } from "@tanstack/react-query";
 import { Match } from "effect";
 import { type ComponentProps, type FC, type MouseEvent, useOptimistic, useTransition } from "react";
@@ -38,7 +38,7 @@ import { useAppDispatch, useAppSelector } from "#ui/store.ts";
 import { prForgeUrl } from "#ui/pr.ts";
 import {
 	RowBubble,
-	RowBubbleVariant,
+	type RowBubbleVariant,
 	RowLabel,
 	RowLabelContainer,
 	RowLabelFooter,

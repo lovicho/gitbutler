@@ -49,6 +49,8 @@ pub fn stack_details(ctx: &Context) -> Vec<(StackId, StackDetails)> {
             &repo,
             &meta,
             &ctx.project_meta().unwrap(),
+            ctx.graph_options(but_graph::init::Options::limited())
+                .unwrap(),
             StacksFilter::default(),
             None,
         )
@@ -66,6 +68,8 @@ pub fn stack_details(ctx: &Context) -> Vec<(StackId, StackDetails)> {
                     &repo,
                     &meta,
                     &ctx.project_meta().unwrap(),
+                    ctx.graph_options(but_graph::init::Options::limited())
+                        .unwrap(),
                 )
             }
             .unwrap();

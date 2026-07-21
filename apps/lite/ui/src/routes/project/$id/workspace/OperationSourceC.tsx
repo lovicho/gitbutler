@@ -1,4 +1,4 @@
-import { Operand, operandEquals } from "#ui/operands.ts";
+import { type Operand, operandEquals } from "#ui/operands.ts";
 import { getOperationSources, pointerTransferMode } from "#ui/outline/mode.ts";
 import styles from "./OperationSourceC.module.css";
 import { operandsLabel } from "./operandLabel.ts";
@@ -12,7 +12,7 @@ import { centerUnderPointer } from "@atlaskit/pragmatic-drag-and-drop/element/ce
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
 import { mergeProps, useRender } from "@base-ui/react";
 import { useQuery } from "@tanstack/react-query";
-import { FC, type ReactNode, useEffect, useEffectEvent, useRef } from "react";
+import { type FC, type ReactNode, useEffect, useEffectEvent, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import type { DragData } from "./DragData.ts";
 import { Match } from "effect";

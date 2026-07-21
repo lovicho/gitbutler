@@ -1232,11 +1232,9 @@ name = "but-feedback"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "but-core",
  "but-ctx",
  "but-graph",
  "chrono",
- "gix",
  "tempfile",
  "walkdir",
  "zip",

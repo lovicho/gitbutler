@@ -326,6 +326,7 @@ pub fn create_commit(
             &repo,
             &meta,
             &ctx.project_meta()?,
+            ctx.graph_options(but_graph::init::Options::limited())?,
             but_workspace::legacy::StacksFilter::InWorkspace,
             None,
         )?

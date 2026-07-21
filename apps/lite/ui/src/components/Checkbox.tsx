@@ -1,6 +1,6 @@
 import { classes } from "#ui/components/classes.ts";
 import { Checkbox as BaseCheckbox } from "@base-ui/react";
-import { ComponentProps, FC } from "react";
+import type { ComponentProps, FC } from "react";
 import styles from "./Checkbox.module.css";
 
 export const Checkbox: FC<Omit<ComponentProps<typeof BaseCheckbox.Root>, "children">> = (p) => (

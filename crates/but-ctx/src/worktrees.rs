@@ -24,6 +24,25 @@ pub struct WorktreeEntry {
 }
 
 impl Context {
+    /// Add active linked-worktree tips to `options` when worktree manipulation is enabled.
+    ///
+    /// Like [`Self::active_worktrees()`], this must not be called while a database
+    /// handle is borrowed.
+    pub fn graph_options(
+        &self,
+        mut options: but_graph::init::Options,
+    ) -> Result<but_graph::init::Options> {
+        options
+            .worktree_tips
+            .extend(self.active_worktrees()?.into_iter().map(|worktree| {
+                but_graph::init::WorktreeTip {
+                    ref_name: worktree.ref_name,
+                    id: worktree.head,
+                }
+            }));
+        Ok(options)
+    }
+
     /// List all usable linked worktrees with their archived state and resolved `HEAD`s.
     ///
     /// This is the single home of linked-worktree state: every reader - listings, and

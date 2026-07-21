@@ -17,7 +17,7 @@ import { getTransferTarget } from "#ui/outline/mode.ts";
 import { OperationSourceC } from "#ui/routes/project/$id/workspace/OperationSourceC.tsx";
 import {
 	OperationTarget as OperationTarget_,
-	OperationTargetOutline,
+	type OperationTargetOutline,
 } from "#ui/routes/project/$id/workspace/OperationTarget.tsx";
 import { useOperationDropTarget } from "#ui/routes/project/$id/workspace/useOperationDropTarget.ts";
 import { NavigationIndexContext } from "#ui/routes/project/$id/workspace/OutlineNavigationIndexContext.ts";
@@ -25,17 +25,23 @@ import { useAppDispatch, useAppSelector, useAppStore } from "#ui/store.ts";
 import { classes } from "#ui/components/classes.ts";
 import { navigationIndexIncludes, type NavigationIndex } from "#ui/workspace/navigation-index.ts";
 import { mergeProps, Tooltip, useRender } from "@base-ui/react";
-import { BranchReference, Segment, Stack, PushStatus, WorkspaceState } from "@gitbutler/but-sdk";
+import type {
+	BranchReference,
+	Segment,
+	Stack,
+	PushStatus,
+	WorkspaceState,
+} from "@gitbutler/but-sdk";
 import uiStyles from "#ui/components/ui.module.css";
 
 import { useQuery } from "@tanstack/react-query";
 import { Match } from "effect";
-import { ComponentProps, createContext, FC, Fragment, use, useRef } from "react";
+import { type ComponentProps, createContext, type FC, Fragment, use, useRef } from "react";
 import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panels";
 import styles from "./OutlineTree.module.css";
 import { Row, RowLabel, RowLabelContainer } from "../Row.tsx";
-import { getOperation, OperationType, useDryRunOperation } from "#ui/operations/operation.ts";
-import { GraphSegment, GraphSegmentStatus } from "#ui/components/GraphSegment.tsx";
+import { getOperation, type OperationType, useDryRunOperation } from "#ui/operations/operation.ts";
+import { GraphSegment, type GraphSegmentStatus } from "#ui/components/GraphSegment.tsx";
 import { segmentBottomRelativeTo } from "#ui/api/stack.ts";
 import { assert } from "#ui/assert.ts";
 import { CommitRow } from "./CommitRow.tsx";
@@ -51,7 +57,7 @@ import {
 } from "#ui/segment.ts";
 import { checkedRange, navigationIndexRange } from "#ui/checking.ts";
 import { TooltipPopup } from "#ui/components/Tooltip.tsx";
-import { SelectionScope } from "#ui/selection-scopes.ts";
+import type { SelectionScope } from "#ui/selection-scopes.ts";
 import { FilesTree } from "#ui/routes/project/$id/workspace/FilesTree.tsx";
 import {
 	CommitForm,
@@ -63,8 +69,10 @@ import {
 } from "./commitTargetComboboxItems.ts";
 
 const DryRunWorkspaceContext = createContext<WorkspaceState | null>(null);
+DryRunWorkspaceContext.displayName = "DryRunWorkspaceContext";
 
 const AbsorptionTargetCommitIdsContext = createContext<ReadonlySet<string> | null>(null);
+AbsorptionTargetCommitIdsContext.displayName = "AbsorptionTargetCommitIdsContext";
 
 // This must be unique as to not collide with other IDs, and stable because it's
 // stored in local storage.

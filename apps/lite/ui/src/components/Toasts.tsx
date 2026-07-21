@@ -1,5 +1,5 @@
 import { Toast } from "@base-ui/react";
-import { FC } from "react";
+import type { FC } from "react";
 import { classes } from "#ui/components/classes.ts";
 import { getButtonClassName } from "#ui/components/Button.tsx";
 import styles from "./Toasts.module.css";

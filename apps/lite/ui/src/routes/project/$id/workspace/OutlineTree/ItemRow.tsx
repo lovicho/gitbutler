@@ -4,7 +4,7 @@ import { projectSlice } from "#ui/projects/state.ts";
 import { useAppDispatch, useAppSelector } from "#ui/store.ts";
 import { operandIdentityKey, type Operand } from "#ui/operands.ts";
 import { navigationIndexIncludes } from "#ui/workspace/navigation-index.ts";
-import { ComponentProps, FC, use } from "react";
+import { type ComponentProps, type FC, use } from "react";
 import { assert } from "#ui/assert.ts";
 
 export const ItemRow: FC<

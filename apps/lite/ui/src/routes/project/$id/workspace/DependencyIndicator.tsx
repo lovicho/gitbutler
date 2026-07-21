@@ -2,7 +2,7 @@ import { projectSlice } from "#ui/projects/state.ts";
 import { useAppDispatch } from "#ui/store.ts";
 import { TooltipPopup } from "#ui/components/Tooltip.tsx";
 import { Tooltip } from "@base-ui/react";
-import { ComponentProps, FC } from "react";
+import type { ComponentProps, FC } from "react";
 
 export const DependencyIndicator: FC<
 	{

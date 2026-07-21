@@ -1,9 +1,9 @@
 import styles from "./OperationTarget.module.css";
-import { type OperationType } from "#ui/operations/operation.ts";
+import type { OperationType } from "#ui/operations/operation.ts";
 import { classes } from "#ui/components/classes.ts";
 import { mergeProps, useRender } from "@base-ui/react";
 import { Match } from "effect";
-import { FC } from "react";
+import type { FC } from "react";
 
 export type OperationTargetOutline = "inside" | "outside";
 

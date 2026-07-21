@@ -14,16 +14,23 @@ import { commitForgeUrl } from "#ui/commit.ts";
 import { outlineHotkeys } from "#ui/hotkeys.ts";
 import { branchOperand, commitOperand, operandIdentityKey, type Operand } from "#ui/operands.ts";
 import { projectSlice } from "#ui/projects/state.ts";
+import { interfaceSlice } from "#ui/interface/state.ts";
 import { useNavigationIndexHotkeys } from "#ui/selection-scopes.ts";
 import { useAppDispatch, useAppSelector, useAppStore } from "#ui/store.ts";
-import { type NavigationIndex } from "#ui/workspace/navigation-index.ts";
+import type { NavigationIndex } from "#ui/workspace/navigation-index.ts";
 import { prForgeUrl } from "#ui/pr.ts";
 import { stackBottomRelativeTo } from "#ui/api/stack.ts";
-import { BranchReference, BottomUpdate, InsertSide, RelativeTo, Segment } from "@gitbutler/but-sdk";
-import { UseHotkeyDefinition, useHotkeys } from "@tanstack/react-hotkeys";
+import type {
+	BranchReference,
+	BottomUpdate,
+	InsertSide,
+	RelativeTo,
+	Segment,
+} from "@gitbutler/but-sdk";
+import { type UseHotkeyDefinition, useHotkeys } from "@tanstack/react-hotkeys";
 import { useQuery } from "@tanstack/react-query";
 import { Match } from "effect";
-import { type RefObject } from "react";
+import type { RefObject } from "react";
 import { commitMessageInputId } from "../CommitForm.tsx";
 import { selectAfterDiscardedCommit } from "./selectAfterDiscardedCommit.ts";
 import { downstackPushStatusDisabled, downstackPushStatusFromSegments } from "#ui/segment.ts";
@@ -129,7 +136,7 @@ export const useOutlineTreeHotkeys = ({
 	const { mutate: branchCreate } = useBranchCreate();
 
 	const openBranchPicker = () => {
-		dispatch(projectSlice.actions.openDialog({ projectId, dialog: { _tag: "BranchPicker" } }));
+		dispatch(interfaceSlice.actions.openDialog({ dialog: { _tag: "BranchPicker" } }));
 	};
 
 	const amendCommit = () => {

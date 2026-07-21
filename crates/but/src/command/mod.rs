@@ -16,6 +16,8 @@ pub mod gui;
 pub mod help;
 pub mod r#move;
 pub mod onboarding;
+#[cfg(feature = "but-2")]
+pub mod open;
 pub mod push;
 pub mod skill;
 pub mod r#switch;

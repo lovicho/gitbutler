@@ -1,4 +1,4 @@
-import { ButtonVariant, getButtonClassName } from "#ui/components/Button.tsx";
+import { type ButtonVariant, getButtonClassName } from "#ui/components/Button.tsx";
 import { classes } from "#ui/components/classes.ts";
 import { Match } from "effect";
 import styles from "./Row.module.css";

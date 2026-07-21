@@ -1,5 +1,5 @@
 import preview from "#storybook/preview";
-import { GraphSegmentGlyph, GraphSegment } from "./GraphSegment.tsx";
+import { type GraphSegmentGlyph, GraphSegment } from "./GraphSegment.tsx";
 
 const meta = preview.meta({
 	component: GraphSegment,

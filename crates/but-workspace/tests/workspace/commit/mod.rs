@@ -1,3 +1,4 @@
+mod cherry_pick;
 mod commit_amend;
 mod commit_create;
 mod discard_commit;

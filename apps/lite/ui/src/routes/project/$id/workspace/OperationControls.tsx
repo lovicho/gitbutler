@@ -7,7 +7,7 @@ import { Icon } from "#ui/components/Icon.tsx";
 import { Kbd } from "#ui/components/Kbd.tsx";
 import { TooltipPopup } from "#ui/components/Tooltip.tsx";
 import { operationHotkeys } from "#ui/hotkeys.ts";
-import { Operand } from "#ui/operands.ts";
+import type { Operand } from "#ui/operands.ts";
 import {
 	getOperations,
 	useRunOperation,
@@ -22,15 +22,15 @@ import { useHotkeys, type UseHotkeyDefinition } from "@tanstack/react-hotkeys";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
 import { Match } from "effect";
-import { FC, type ReactNode } from "react";
+import type { FC, ReactNode } from "react";
 import styles from "./OperationControls.module.css";
 import {
-	AbsorbMode,
+	type AbsorbMode,
 	getTransferTarget,
-	KeyboardTransferMode,
+	type KeyboardTransferMode,
 	keyboardTransferMode,
 } from "#ui/outline/mode.ts";
-import { NavigationIndex } from "#ui/workspace/navigation-index.ts";
+import type { NavigationIndex } from "#ui/workspace/navigation-index.ts";
 
 const Container: FC<{ children: ReactNode }> = ({ children }) => (
 	<div className={classes("text-14", styles.container)}>{children}</div>

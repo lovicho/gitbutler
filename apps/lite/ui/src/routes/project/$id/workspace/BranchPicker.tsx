@@ -1,10 +1,10 @@
 import { headInfoQueryOptions } from "#ui/api/queries.ts";
 import { PickerDialog } from "#ui/components/PickerDialog.tsx";
-import { type BranchOperand } from "#ui/operands.ts";
-import { Segment, Stack } from "@gitbutler/but-sdk";
+import type { BranchOperand } from "#ui/operands.ts";
+import type { Segment, Stack } from "@gitbutler/but-sdk";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
-import { type FC } from "react";
+import type { FC } from "react";
 
 type BranchPickerOption = {
 	id: string;

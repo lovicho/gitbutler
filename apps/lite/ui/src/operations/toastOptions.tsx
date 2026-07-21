@@ -1,7 +1,7 @@
 import { decodeBytes } from "#ui/api/bytes.ts";
 import type { DiffSpec, RejectionReason, RejectedChange } from "@gitbutler/but-sdk";
-import { type ToastManagerAddOptions } from "@base-ui/react";
-import { FC } from "react";
+import type { ToastManagerAddOptions } from "@base-ui/react";
+import type { FC } from "react";
 
 const listFormatter = new Intl.ListFormat(undefined, {
 	style: "long",

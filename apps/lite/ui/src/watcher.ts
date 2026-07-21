@@ -1,6 +1,6 @@
 import type { QueryKey } from "#ui/api/queries.ts";
-import { WatcherEvent } from "@gitbutler/but-sdk";
-import { QueryClient } from "@tanstack/react-query";
+import type { WatcherEvent } from "@gitbutler/but-sdk";
+import type { QueryClient } from "@tanstack/react-query";
 
 export const handleWatcher = (
 	event: WatcherEvent,

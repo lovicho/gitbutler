@@ -1,7 +1,7 @@
 import styles from "./GraphSegment.module.css";
 import { classes } from "#ui/components/classes.ts";
-import { ComponentProps, FC } from "react";
-import { CommitState } from "@gitbutler/but-sdk";
+import type { ComponentProps, FC } from "react";
+import type { CommitState } from "@gitbutler/but-sdk";
 
 const glyphPaths = {
 	parent: "M8 0V28",

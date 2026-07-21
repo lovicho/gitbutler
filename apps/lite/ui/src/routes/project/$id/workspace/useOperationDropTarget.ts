@@ -4,7 +4,7 @@ import {
 	type OperationType,
 	useRunOperation,
 } from "#ui/operations/operation.ts";
-import { type Operand } from "#ui/operands.ts";
+import type { Operand } from "#ui/operands.ts";
 import { projectSlice } from "#ui/projects/state.ts";
 import { useAppDispatch } from "#ui/store.ts";
 import { dropTargetForElements } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";

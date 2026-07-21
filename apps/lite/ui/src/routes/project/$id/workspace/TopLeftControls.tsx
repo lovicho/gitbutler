@@ -1,20 +1,16 @@
 import { getButtonClassName } from "#ui/components/Button.tsx";
 import { Icon } from "#ui/components/Icon.tsx";
 import { TooltipPopup } from "#ui/components/Tooltip.tsx";
-import { projectSlice } from "#ui/projects/state.ts";
+import { interfaceSlice } from "#ui/interface/state.ts";
 import { useAppDispatch, useAppSelector } from "#ui/store.ts";
 import { workspaceHotkeys } from "#ui/hotkeys.ts";
 import { Tooltip } from "@base-ui/react";
-import { useParams } from "@tanstack/react-router";
-import { type FC } from "react";
+import type { FC } from "react";
 import styles from "./TopLeftControls.module.css";
 
 const FullWindowButton: FC = () => {
-	const { id: projectId } = useParams({ from: "/project/$id/workspace" });
 	const dispatch = useAppDispatch();
-	const fullWindow = useAppSelector((state) =>
-		projectSlice.selectors.selectDetailsFullWindow(state, projectId),
-	);
+	const fullWindow = useAppSelector(interfaceSlice.selectors.selectDetailsFullWindow);
 
 	return (
 		<Tooltip.Root>
@@ -25,9 +21,7 @@ const FullWindowButton: FC = () => {
 						className={getButtonClassName({ iconOnly: true, variant: "ghost" })}
 						aria-label={workspaceHotkeys.toggleOutline.meta.name}
 						onClick={() =>
-							dispatch(
-								projectSlice.actions.setDetailsFullWindow({ projectId, fullWindow: !fullWindow }),
-							)
+							dispatch(interfaceSlice.actions.setDetailsFullWindow({ fullWindow: !fullWindow }))
 						}
 					>
 						{fullWindow ? <Icon name="sidebar-show" /> : <Icon name="sidebar-hide" />}

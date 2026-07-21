@@ -2,9 +2,9 @@ import {
 	changesInWorktreeQueryOptions,
 	commitDetailsWithLineStatsQueryOptions,
 } from "#ui/api/queries.ts";
-import { FileParent, Operand, operandFileParent } from "#ui/operands.ts";
+import { type FileParent, type Operand, operandFileParent } from "#ui/operands.ts";
 import { type QueryClient, useQueries, useQuery } from "@tanstack/react-query";
-import {
+import type {
 	CommitDetails,
 	DiffSpec,
 	HunkHeader,

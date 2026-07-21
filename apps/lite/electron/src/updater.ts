@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog } from "electron";
+import { app, type BrowserWindow, dialog } from "electron";
 import electronUpdater, { type AppUpdater, type UpdateDownloadedEvent } from "electron-updater";
 import { env } from "node:process";
 

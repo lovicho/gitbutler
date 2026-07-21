@@ -1,5 +1,5 @@
 import type { NativeMenuPopupItem, NativeMenuPosition } from "#electron/ipc.ts";
-import { MouseEvent } from "react";
+import type { MouseEvent } from "react";
 
 type NativeMenuAction = () => void | Promise<void>;
 

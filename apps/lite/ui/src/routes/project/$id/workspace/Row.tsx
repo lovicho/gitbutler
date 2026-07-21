@@ -1,7 +1,7 @@
 import { classes } from "#ui/components/classes.ts";
 import { Checkbox } from "#ui/components/Checkbox.tsx";
 import { useMergedRefs } from "@base-ui/utils/useMergedRefs";
-import { ComponentProps, FC, MouseEvent, useLayoutEffect, useRef } from "react";
+import { type ComponentProps, type FC, type MouseEvent, useLayoutEffect, useRef } from "react";
 import styles from "./Row.module.css";
 import { mergeProps, useRender } from "@base-ui/react";
 import { Match } from "effect";

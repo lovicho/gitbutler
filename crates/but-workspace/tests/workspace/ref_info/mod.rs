@@ -41,6 +41,7 @@ pub fn stacks_v3(
         &meta
             .workspace(WORKSPACE_REF_NAME.try_into()?)?
             .project_meta(),
+        but_graph::init::Options::limited(),
         filter,
         ref_name_override,
     )
@@ -61,6 +62,7 @@ pub fn stack_details_v3(
         &meta
             .workspace(WORKSPACE_REF_NAME.try_into()?)?
             .project_meta(),
+        but_graph::init::Options::limited(),
     )
 }
 

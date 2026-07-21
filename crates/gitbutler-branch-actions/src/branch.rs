@@ -26,6 +26,7 @@ pub fn list_branches(
     filter: Option<BranchListingFilter>,
     filter_branch_names: Option<Vec<BranchIdentity>>,
 ) -> Result<Vec<BranchListing>> {
+    let traversal = ctx.graph_options(but_graph::init::Options::limited())?;
     let mut repo = ctx.repo.get()?.clone();
     repo.object_cache_size_if_unset(1024 * 1024);
     let has_filter = filter.is_some();
@@ -77,7 +78,7 @@ pub fn list_branches(
         &meta,
         but_workspace::ref_info::Options {
             project_meta: ctx.project_meta()?,
-            traversal: but_graph::init::Options::limited(),
+            traversal,
             expensive_commit_info: false,
             gerrit_mode,
         },

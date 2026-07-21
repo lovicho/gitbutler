@@ -2,7 +2,10 @@ use but_core::{RefMetadata as _, WORKSPACE_REF_NAME, ref_metadata::ProjectMeta};
 use but_ctx::{Context, ProjectHandle};
 use but_meta::VirtualBranchesTomlMetadata;
 use but_path::AppChannel;
-use but_testsupport::{CommandExt as _, git, gix_testtools::tempfile::TempDir, open_repo};
+use but_testsupport::{
+    CommandExt as _, git, gix_testtools::tempfile::TempDir, graph_tree, open_repo,
+    writable_scenario_slow,
+};
 use snapbox::ToDebug;
 
 #[test]
@@ -1039,6 +1042,10 @@ fn worktree_state_is_unreachable_from_linked_worktree_contexts() -> anyhow::Resu
         Vec::<String>::new(),
         "with the flag off even a linked-worktree context returns nothing, without erroring"
     );
+    assert!(
+        ctx.workspace_and_db().is_ok(),
+        "with the flag off, workspace building in a linked worktree is unaffected"
+    );
     ctx.settings.feature_flags.worktree_manipulation = true;
     assert!(
         ctx.worktrees_with_state()
@@ -1046,6 +1053,19 @@ fn worktree_state_is_unreachable_from_linked_worktree_contexts() -> anyhow::Resu
             .to_string()
             .contains("main worktree"),
         "linked-worktree contexts must be refused, not given their own state"
+    );
+    // A fresh context bypasses the workspace cached by the flag-off call above.
+    // Workspace building inherits the refusal - seeding must not read diverging state.
+    let mut ctx = Context::from_repo_for_testing(open_repo(&root.path().join("wt-a"))?)?;
+    ctx.settings.feature_flags.worktree_manipulation = true;
+    snapbox::assert_data_eq!(
+        ctx.workspace_and_db()
+            .err()
+            .map(|err| err.to_string())
+            .unwrap_or_default(),
+        snapbox::str![
+            "worktree state must be read from the main worktree - a linked-worktree context has its own database, letting adoption and archived state diverge"
+        ]
     );
 
     // The same holds for worktrees of a bare repository, whose git dirs contain
@@ -1063,6 +1083,86 @@ fn worktree_state_is_unreachable_from_linked_worktree_contexts() -> anyhow::Resu
             .to_string()
             .contains("main worktree"),
         "a worktree of a bare repository is still a linked-worktree context"
+    );
+    Ok(())
+}
+
+#[test]
+fn workspace_from_head_seeds_active_worktree_tips() -> anyhow::Result<()> {
+    let (repo, _tmp) = writable_scenario_slow("worktree-seeding");
+    let workspace_graph = |ctx: &Context| -> anyhow::Result<String> {
+        let (_guard, _repo, ws, _db) = ctx.workspace_and_db()?;
+        Ok(graph_tree(&ws.graph).to_string())
+    };
+    let db_state = |ctx: &Context| -> anyhow::Result<String> {
+        let db = ctx.db.get_cache_mut()?;
+        Ok(format!(
+            "adopted: {}, rows: {:?}",
+            db.worktree_meta().adoption_ran()?,
+            db.worktree_meta()
+                .list()?
+                .into_iter()
+                .map(|row| (
+                    String::from_utf8_lossy(&row.name).into_owned(),
+                    row.archived
+                ))
+                .collect::<Vec<_>>()
+        ))
+    };
+
+    // Flag off: no tips are seeded and the database is untouched.
+    let ctx = Context::from_repo_for_testing(repo.clone())?;
+    snapbox::assert_data_eq!(
+        workspace_graph(&ctx)?,
+        snapbox::str![[r#"
+
+└── 👉►:0[0]:main[🌳]
+    └── 🏁·85efbe4 (⌂|1)
+
+"#]]
+    );
+    snapbox::assert_data_eq!(db_state(&ctx)?, snapbox::str!["adopted: false, rows: []"]);
+
+    // Flag on: the first workspace build adopts, archiving the pre-existing
+    // worktrees - archived worktrees are not seeded.
+    let mut ctx = Context::from_repo_for_testing(repo.clone())?;
+    ctx.settings.feature_flags.worktree_manipulation = true;
+    snapbox::assert_data_eq!(
+        workspace_graph(&ctx)?,
+        snapbox::str![[r#"
+
+└── 👉►:0[0]:main[🌳]
+    └── 🏁·85efbe4 (⌂|1)
+
+"#]]
+    );
+    snapbox::assert_data_eq!(
+        db_state(&ctx)?,
+        snapbox::str![[r#"adopted: true, rows: [("wt-a", true), ("wt-b", true)]"#]]
+    );
+
+    // Unarchiving makes a worktree active - like one created after adoption -
+    // and only then is it seeded; the fresh context bypasses the per-context
+    // workspace cache.
+    {
+        let mut db = ctx.db.get_cache_mut()?;
+        db.worktree_meta_mut().upsert(but_db::WorktreeMeta {
+            name: b"wt-b".to_vec(),
+            archived: false,
+        })?;
+    }
+    let mut ctx = Context::from_repo_for_testing(repo)?;
+    ctx.settings.feature_flags.worktree_manipulation = true;
+    snapbox::assert_data_eq!(
+        workspace_graph(&ctx)?,
+        snapbox::str![[r#"
+
+└── ►:1[0]:feat-b[📁wt-b]
+    └── ·7d7d38f (⌂)
+        └── 👉►:0[1]:main[🌳@repo]
+            └── 🏁·85efbe4 (⌂|1)
+
+"#]]
     );
     Ok(())
 }

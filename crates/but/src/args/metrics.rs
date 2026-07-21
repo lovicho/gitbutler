@@ -33,6 +33,7 @@ pub enum CommandName {
     Undo,
     Redo,
     Gui,
+    Open,
     BaseFetch,
     BaseCheck,
     Pull,

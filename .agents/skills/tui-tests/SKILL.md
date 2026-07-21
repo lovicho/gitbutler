@@ -32,7 +32,8 @@ Useful input examples:
 tui.input_then_render(None);                                       // render without inputs
 tui.input_then_render('j');                                        // single char input
 tui.input_then_render(KeyCode::Down);                              // special key
-tui.input_then_render((KeyModifiers::SHIFT, KeyCode::Char('J')));  // keys with modifiers
+tui.input_then_render(Shift('j'));                                 // keys with shift
+tui.input_then_render(Control('j'));                               // keys with control
 tui.input_then_render([KeyCode::Down, KeyCode::Down]);             // multiple keys from array
 tui.input_then_render("commit message text");                      // multiple keys from string
 tui.reload();                                                      // reload state after making external changes

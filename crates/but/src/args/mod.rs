@@ -969,6 +969,18 @@ pub enum Subcommands {
         path: Option<PathBuf>,
     },
 
+    /// Open files in the workspace using any defined program.
+    #[cfg(feature = "but-2")]
+    #[clap(hide = true, name = "_open")]
+    #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
+    _Open {
+        /// The thing to open.
+        id: CliIdArg,
+        /// The program to use for opening.
+        #[clap(long, short = 'p')]
+        program_id: Option<String>,
+    },
+
     /// Open a live terminal workspace for branches, commits, changes, and diffs.
     ///
     /// The GitButler TUI provides a visual experience similar to the GitButler GUI - right in your

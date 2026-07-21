@@ -1322,12 +1322,14 @@ impl App {
         }
 
         let head_info = {
+            let traversal = ctx.graph_options(Default::default())?;
             let meta = ctx.meta()?;
             but_workspace::head_info(
                 &*ctx.repo.get()?,
                 &meta,
                 but_workspace::ref_info::Options {
                     project_meta: ctx.project_meta()?,
+                    traversal,
                     ..Default::default()
                 },
             )?

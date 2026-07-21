@@ -1,4 +1,4 @@
-import { WatcherEvent, WatcherHandle, watcherStart } from "@gitbutler/but-sdk";
+import { type WatcherEvent, type WatcherHandle, watcherStart } from "@gitbutler/but-sdk";
 import { randomUUID } from "node:crypto";
 
 type ProjectWatcherState = {

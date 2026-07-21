@@ -3,7 +3,7 @@ import { RowLabel, RowLabelContainer, RowLabelFooter } from "../Row.tsx";
 import { formatForDisplaySorted } from "#ui/hotkeys.ts";
 import { useMergedRefs } from "@base-ui/utils/useMergedRefs";
 import { useHotkey } from "@tanstack/react-hotkeys";
-import { FC, useId, useRef } from "react";
+import { type FC, useId, useRef } from "react";
 import styles from "./InlineEditor.module.css";
 
 export const InlineEditor: FC<{

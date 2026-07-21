@@ -476,6 +476,18 @@ async fn match_subcommand(
                 .emit_metrics(metrics_ctx)
                 .map_err(CliError::from)
         }
+        #[cfg(feature = "but-2")]
+        Subcommands::_Open { id, program_id } => {
+            let mut ctx = setup::init_ctx(
+                &args,
+                InitCtxOptions {
+                    background_sync: BackgroundSync::Disabled,
+                    ..Default::default()
+                },
+                out,
+            )?;
+            command::open::open(&mut ctx, id, program_id).emit_metrics(metrics_ctx)
+        }
         Subcommands::Completions { shell } => command::completions::generate_completions(shell)
             .emit_metrics(metrics_ctx)
             .map_err(CliError::from),

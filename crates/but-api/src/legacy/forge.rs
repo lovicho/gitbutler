@@ -44,21 +44,23 @@ pub fn pr_templates(ctx: &but_ctx::Context, forge: ForgeName) -> Result<Vec<Stri
 /// Get the forge provider name.
 ///
 /// This is determined by the forge the base branch is pointing to.
+/// Returns no value when the project has no target yet or its target forge is unknown.
 #[but_api(napi)]
 #[instrument(err(Debug))]
 pub fn forge_provider(ctx: &Context) -> Result<Option<ForgeName>> {
-    let project_meta = ctx.project_meta()?;
-    let repo = ctx.repo.get()?;
-    let forge_repo_info = but_forge::derive_forge_repo_info(&remote_url(&project_meta, &repo)?);
-    Ok(forge_repo_info.map(|info| info.forge))
+    Ok(forge_info(ctx)?.map(|info| info.name))
 }
 
 /// Per-project forge display + URL config. Lets the renderer build
 /// commit/PR URLs and pick labels without branching on forge name.
+/// Returns no value when the project has no target yet or its target forge is unknown.
 #[but_api(napi)]
 #[instrument(err(Debug))]
 pub fn forge_info(ctx: &Context) -> Result<Option<but_forge::ForgeInfo>> {
     let project_meta = ctx.project_meta()?;
+    if project_meta.target_ref.is_none() {
+        return Ok(None);
+    }
     let repo = ctx.repo.get()?;
     Ok(but_forge::forge_info(&remote_url(&project_meta, &repo)?))
 }

@@ -1,6 +1,6 @@
 import { classes } from "#ui/components/classes.ts";
 import styles from "./Field.module.css";
-import { ComponentProps, FC, ReactNode } from "react";
+import type { ComponentProps, FC, ReactNode } from "react";
 
 /** @public */
 export const FieldRootStyles: FC<ComponentProps<"div">> = (props) => (

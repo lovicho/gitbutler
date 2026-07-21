@@ -1,8 +1,8 @@
-import { Toast, ToastManager, Tooltip } from "@base-ui/react";
+import { Toast, type ToastManager, Tooltip } from "@base-ui/react";
 import { useWorkerPool, WorkerPoolContextProvider } from "@pierre/diffs/react";
-import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { type QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-import { RegisteredRouter, RouterProvider } from "@tanstack/react-router";
+import { type RegisteredRouter, RouterProvider } from "@tanstack/react-router";
 import { type FC, StrictMode, useEffect } from "react";
 import { Provider } from "react-redux";
 import { store } from "#ui/store.ts";

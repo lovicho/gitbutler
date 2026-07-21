@@ -3,7 +3,7 @@
  */
 
 import { Autocomplete, Dialog, ScrollArea } from "@base-ui/react";
-import { ReactNode, useRef } from "react";
+import { type ReactNode, useRef } from "react";
 import styles from "./PickerDialog.module.css";
 
 /** @public */

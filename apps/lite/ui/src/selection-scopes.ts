@@ -1,6 +1,6 @@
 import { selectionOperationHotkeys, type CommandGroup } from "#ui/hotkeys.ts";
-import { type OperationType } from "#ui/operations/operation.ts";
-import { type Operand } from "#ui/operands.ts";
+import type { OperationType } from "#ui/operations/operation.ts";
+import type { Operand } from "#ui/operands.ts";
 import { projectSlice } from "#ui/projects/state.ts";
 import { useAppDispatch } from "#ui/store.ts";
 import { getAdjacent, type NavigationIndex } from "#ui/workspace/navigation-index.ts";

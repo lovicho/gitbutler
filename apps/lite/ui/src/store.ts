@@ -1,9 +1,11 @@
 import { configureStore } from "@reduxjs/toolkit";
 import { useDispatch, useSelector, useStore } from "react-redux";
+import { interfaceSlice } from "#ui/interface/state.ts";
 import { projectSlice } from "#ui/projects/state.ts";
 
 export const store = configureStore({
 	reducer: {
+		interface: interfaceSlice.reducer,
 		project: projectSlice.reducer,
 	},
 });

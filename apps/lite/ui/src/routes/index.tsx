@@ -1,5 +1,5 @@
 import { createRoute, redirect } from "@tanstack/react-router";
-import { FC } from "react";
+import type { FC } from "react";
 import { Route as rootRoute } from "#ui/routes/__root.tsx";
 import { readLastOpenedProject } from "#ui/project.ts";
 

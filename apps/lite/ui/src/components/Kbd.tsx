@@ -1,8 +1,8 @@
 import { formatForDisplaySorted } from "#ui/hotkeys.ts";
 import styles from "./Kbd.module.css";
 import { classes } from "#ui/components/classes.ts";
-import { HotkeySequence } from "@tanstack/react-hotkeys";
-import { FC } from "react";
+import type { HotkeySequence } from "@tanstack/react-hotkeys";
+import type { FC } from "react";
 
 type Props = {
 	// We can't use the `Hotkey` type because it causes type errors in Storybook. 🤷‍♂️

@@ -3,7 +3,6 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
-use but_core::RefMetadata;
 use but_ctx::{Context, ProjectHandleOrLegacyProjectId};
 
 /// A utility to keep important paths to make archival/zip-file creation easier later.
@@ -32,26 +31,18 @@ impl Archival {
         create_zip_file_from_dir(ctx.workdir_or_gitdir()?, output_file)
     }
 
-    /// Create an anonymous archive commit graph for `repo` and `meta`, such that it doesn't reveal PII.
-    pub fn zip_anonymous_graph(
-        &self,
-        repo: &gix::Repository,
-        meta: &impl RefMetadata,
-    ) -> Result<PathBuf> {
-        let project_meta = but_core::ref_metadata::ProjectMeta::resolve(repo, meta)?;
+    /// Create an anonymous archive commit graph for `ctx`, such that it doesn't reveal PII.
+    pub fn zip_anonymous_graph(&self, ctx: &Context) -> Result<PathBuf> {
+        let mut options = ctx.graph_options(Default::default())?;
+        let repo = ctx.repo.get()?;
+        let meta = ctx.meta()?;
+        let project_meta = ctx.project_meta()?;
         let mut graph =
-            but_graph::Graph::from_head(repo, meta, project_meta.clone(), Default::default())
+            but_graph::Graph::from_head(&repo, &meta, project_meta.clone(), options.clone())
                 .or_else(|_| {
-                    but_graph::Graph::from_head(
-                        repo,
-                        meta,
-                        project_meta,
-                        but_graph::init::Options {
-                            // Assume it fails because of post-processing, try again without.
-                            dangerously_skip_postprocessing_for_debugging: true,
-                            ..Default::default()
-                        },
-                    )
+                    // Assume it fails because of post-processing, try again without.
+                    options.dangerously_skip_postprocessing_for_debugging = true;
+                    but_graph::Graph::from_head(&repo, &meta, project_meta, options)
                 })?;
         let dot_file_contents = graph.anonymize(&repo.remote_names())?.dot_graph_pruned();
         let output_file = self.cache_dir.join(format!(

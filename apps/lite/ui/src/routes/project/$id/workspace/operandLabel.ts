@@ -1,7 +1,7 @@
 import type { HeadInfoIndex } from "#ui/api/ref-info.ts";
 import { commitTitle, shortCommitId } from "#ui/commit.ts";
 import { Match } from "effect";
-import { Operand } from "#ui/operands.ts";
+import type { Operand } from "#ui/operands.ts";
 import { assert } from "#ui/assert.ts";
 
 export const operandLabel = ({

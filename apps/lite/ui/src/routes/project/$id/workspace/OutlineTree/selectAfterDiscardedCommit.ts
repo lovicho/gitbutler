@@ -1,4 +1,4 @@
-import { HeadInfoIndex } from "#ui/api/ref-info.ts";
+import type { HeadInfoIndex } from "#ui/api/ref-info.ts";
 import {
 	branchOperand,
 	commitOperand,
@@ -6,7 +6,7 @@ import {
 	type CommitOperand,
 	type Operand,
 } from "#ui/operands.ts";
-import { type NavigationIndex } from "#ui/workspace/navigation-index.ts";
+import type { NavigationIndex } from "#ui/workspace/navigation-index.ts";
 
 export const selectAfterDiscardedCommit = ({
 	navigationIndex,

@@ -1,7 +1,7 @@
 import { classes } from "#ui/components/classes.ts";
 import { getButtonClassName } from "./Button.tsx";
 import styles from "./ToggleGroup.module.css";
-import { ComponentProps, FC } from "react";
+import type { ComponentProps, FC } from "react";
 
 /** @public */
 export const ToggleGroupStyles: FC<ComponentProps<"div">> = (props) => (

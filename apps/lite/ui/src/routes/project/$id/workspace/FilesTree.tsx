@@ -6,13 +6,13 @@ import {
 	listEditorsQueryOptions,
 } from "#ui/api/queries.ts";
 import { getHeadInfoIndex } from "#ui/api/ref-info.ts";
-import { uncommittedChangesFileParent, fileOperand, FileParent } from "#ui/operands.ts";
+import { uncommittedChangesFileParent, fileOperand, type FileParent } from "#ui/operands.ts";
 import { projectSlice } from "#ui/projects/state.ts";
 import { useAppDispatch, useAppSelector } from "#ui/store.ts";
 import { classes } from "#ui/components/classes.ts";
 import { mergeProps, useRender } from "@base-ui/react";
 import { useQuery } from "@tanstack/react-query";
-import { ComponentProps, FC, useRef } from "react";
+import { type ComponentProps, type FC, useRef } from "react";
 import styles from "./FilesTree.module.css";
 import { Row, RowLabel, RowLabelContainer } from "./Row.tsx";
 import { OperationSourceC } from "#ui/routes/project/$id/workspace/OperationSourceC.tsx";

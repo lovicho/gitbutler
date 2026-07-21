@@ -30,7 +30,7 @@ import { useAppDispatch, useAppSelector } from "#ui/store.ts";
 import type { Commit } from "@gitbutler/but-sdk";
 import { Toast, Toolbar, Tooltip } from "@base-ui/react";
 import { useQuery } from "@tanstack/react-query";
-import { ComponentProps, FC, use, useOptimistic, useTransition } from "react";
+import { type ComponentProps, type FC, use, useOptimistic, useTransition } from "react";
 import { RowCheckbox, RowLabel, RowLabelContainer, RowToolbar } from "../Row.tsx";
 import { getRowButtonClassName } from "../Row-utils.ts";
 import { NavigationIndexContext } from "../OutlineNavigationIndexContext.ts";

@@ -1,21 +1,21 @@
 import { Toast } from "@base-ui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Match } from "effect";
-import {
-	type CommitAmendParams,
-	type CommitCreateParams,
-	type CommitInsertBlankParams,
-	type CommitMoveParams,
-	type CommitMoveChangesBetweenParams,
-	type CommitUncommitChangesParams,
-	type MoveBranchParams,
+import type {
+	CommitAmendParams,
+	CommitCreateParams,
+	CommitInsertBlankParams,
+	CommitMoveParams,
+	CommitMoveChangesBetweenParams,
+	CommitUncommitChangesParams,
+	MoveBranchParams,
 	CommitSquashParams,
 	CommitUncommitParams,
 } from "#electron/ipc.ts";
 import type { QueryKey } from "#ui/api/queries.ts";
 import { rejectedChangesToastOptions } from "#ui/operations/toastOptions.tsx";
-import { DiffSpec, InsertSide, RelativeTo } from "@gitbutler/but-sdk";
-import { Operand, operandEquals, operandFileParent } from "#ui/operands.ts";
+import type { DiffSpec, InsertSide, RelativeTo } from "@gitbutler/but-sdk";
+import { type Operand, operandEquals, operandFileParent } from "#ui/operands.ts";
 import { resolveDiffSpecs, useResolveDiffSpecs } from "#ui/operations/diff-specs.ts";
 import { decodeBytes } from "#ui/api/bytes.ts";
 import { useAppDispatch } from "#ui/store.ts";

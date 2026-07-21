@@ -25,11 +25,7 @@ pub fn get_anonymous_graph_path(
 ) -> Result<PathBuf, Error> {
     let ctx: Context = project_id.try_into()?;
     let _guard = ctx.shared_worktree_access();
-    let repo = ctx.repo.get()?;
-    let meta = ctx.meta()?;
-    archival
-        .zip_anonymous_graph(&repo, &meta)
-        .map_err(Into::into)
+    archival.zip_anonymous_graph(&ctx).map_err(Into::into)
 }
 
 #[tauri::command(async)]

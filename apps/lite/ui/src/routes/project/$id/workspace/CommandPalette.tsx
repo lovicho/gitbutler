@@ -1,14 +1,14 @@
 import { Kbd } from "#ui/components/Kbd.tsx";
 import { PickerDialog, type PickerDialogGroup } from "#ui/components/PickerDialog.tsx";
-import { type CommandGroup } from "#ui/hotkeys.ts";
+import type { CommandGroup } from "#ui/hotkeys.ts";
 import {
 	getHotkeyManager,
 	getSequenceManager,
-	Hotkey,
-	HotkeyMeta,
-	HotkeyOptions,
-	HotkeySequence,
-	SequenceOptions,
+	type Hotkey,
+	type HotkeyMeta,
+	type HotkeyOptions,
+	type HotkeySequence,
+	type SequenceOptions,
 	useHotkeyRegistrations,
 } from "@tanstack/react-hotkeys";
 import { useState, type FC } from "react";

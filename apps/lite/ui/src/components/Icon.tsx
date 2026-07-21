@@ -1,5 +1,5 @@
 import styles from "./Icon.module.css";
-import { ComponentProps, FC } from "react";
+import type { ComponentProps, FC } from "react";
 import type { IconName } from "./iconNames";
 import { classes } from "#ui/components/classes.ts";
 import { assert } from "#ui/assert.ts";

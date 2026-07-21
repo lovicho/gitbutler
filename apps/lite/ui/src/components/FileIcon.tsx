@@ -1,7 +1,7 @@
 import styles from "./FileIcon.module.css";
 import { classes } from "#ui/components/classes.ts";
 import { symbolFileExtensionsToIcons, symbolFileNamesToIcons } from "./file-icons/typeMap.ts";
-import { ComponentProps, FC } from "react";
+import type { ComponentProps, FC } from "react";
 
 const modules = import.meta.glob<string>("./file-icons/svg/*.svg", {
 	query: "?raw",

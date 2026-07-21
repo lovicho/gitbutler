@@ -1,8 +1,8 @@
 import { classes } from "#ui/components/classes.ts";
 import styles from "./Tooltip.module.css";
 import { Kbd } from "#ui/components/Kbd.tsx";
-import { type HotkeySequence } from "@tanstack/react-hotkeys";
-import { type ComponentProps, type FC } from "react";
+import type { HotkeySequence } from "@tanstack/react-hotkeys";
+import type { ComponentProps, FC } from "react";
 
 export const TooltipPopup: FC<
 	ComponentProps<"div"> & {

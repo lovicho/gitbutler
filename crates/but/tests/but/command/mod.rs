@@ -37,6 +37,8 @@ mod r#move;
 #[cfg(all(feature = "legacy", feature = "but-2"))]
 mod move2;
 mod onboarding;
+#[cfg(feature = "but-2")]
+mod open;
 #[cfg(feature = "legacy")]
 mod pick;
 #[cfg(feature = "legacy")]

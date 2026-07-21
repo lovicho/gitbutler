@@ -1,7 +1,7 @@
 import preview from "#storybook/preview";
 import {
-	ButtonSize,
-	ButtonVariant,
+	type ButtonSize,
+	type ButtonVariant,
 	getButtonClassName,
 	type ButtonStyleProps,
 } from "#ui/components/Button.tsx";

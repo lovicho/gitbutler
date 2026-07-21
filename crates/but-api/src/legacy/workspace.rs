@@ -28,6 +28,7 @@ use crate::json::HexHash;
 #[but_api(napi, try_from = but_workspace::ui::RefInfo)]
 #[instrument(err(Debug))]
 pub fn head_info(ctx: &but_ctx::Context) -> Result<but_workspace::RefInfo> {
+    let traversal = ctx.graph_options(but_graph::init::Options::limited())?;
     let repo = ctx.clone_repo_for_merging_non_persisting()?;
     let meta = ctx.meta()?;
     let gerrit_mode_enabled = repo.git_settings()?.gitbutler_gerrit_mode.unwrap_or(false);
@@ -43,7 +44,7 @@ pub fn head_info(ctx: &but_ctx::Context) -> Result<but_workspace::RefInfo> {
         &meta,
         but_workspace::ref_info::Options {
             project_meta: ctx.project_meta()?,
-            traversal: but_graph::init::Options::limited(),
+            traversal,
             expensive_commit_info: true,
             gerrit_mode,
         },
@@ -100,24 +101,29 @@ pub(crate) fn stacks_v3_from_ctx(
     // Only prefer a workspace-like ref during edit mode. When HEAD points at
     // `gitbutler/edit`, querying stacks from HEAD would produce entries without stack IDs
     // because the edit branch itself is not part of the workspace metadata.
-    but_workspace::legacy::stacks_v3(&repo, &meta, &ctx.project_meta()?, filter, workspace_ref)
+    let traversal = match workspace_ref {
+        Some(_) => but_graph::init::Options::limited(),
+        None => ctx.graph_options(but_graph::init::Options::limited())?,
+    };
+    but_workspace::legacy::stacks_v3(
+        &repo,
+        &meta,
+        &ctx.project_meta()?,
+        traversal,
+        filter,
+        workspace_ref,
+    )
 }
 
 #[cfg(unix)]
 #[but_api]
 #[instrument(err(Debug))]
 pub fn show_graph_svg(ctx: &Context) -> Result<()> {
+    let mut options = ctx.graph_options(but_graph::init::Options::limited())?;
+    options.collect_tags = true;
     let repo = ctx.open_isolated_repo()?;
     let meta = ctx.meta()?;
-    let graph = but_graph::Graph::from_head(
-        &repo,
-        &meta,
-        ctx.project_meta()?,
-        but_graph::init::Options {
-            collect_tags: true,
-            ..but_graph::init::Options::limited()
-        },
-    )?;
+    let graph = but_graph::Graph::from_head(&repo, &meta, ctx.project_meta()?, options)?;
     graph.open_as_svg();
     Ok(())
 }
@@ -129,10 +135,17 @@ pub fn stack_details(
     ctx: &Context,
     stack_id: Option<StackId>,
 ) -> Result<but_workspace::ui::StackDetails> {
+    let traversal = ctx.graph_options(but_graph::init::Options::limited())?;
     let mut details = {
         let repo = ctx.clone_repo_for_merging_non_persisting()?;
         let meta = ctx.meta()?;
-        but_workspace::legacy::stack_details_v3(stack_id, &repo, &meta, &ctx.project_meta()?)
+        but_workspace::legacy::stack_details_v3(
+            stack_id,
+            &repo,
+            &meta,
+            &ctx.project_meta()?,
+            traversal,
+        )
     }?;
     let repo = ctx.repo.get()?;
     let gerrit_mode = repo.git_settings()?.gitbutler_gerrit_mode.unwrap_or(false);
@@ -423,6 +436,7 @@ pub fn workspace_branch_and_ancestors_push(
     run_hooks: bool,
     push_opts: Vec<but_gerrit::PushFlag>,
 ) -> Result<gitbutler_git::PushResult> {
+    let traversal = ctx.graph_options(but_graph::init::Options::limited())?;
     let repo = ctx.clone_repo_for_merging_non_persisting()?;
     let meta = ctx.meta()?;
     let gerrit_mode_enabled = repo.git_settings()?.gitbutler_gerrit_mode.unwrap_or(false);
@@ -437,7 +451,7 @@ pub fn workspace_branch_and_ancestors_push(
         &meta,
         but_workspace::ref_info::Options {
             project_meta: ctx.project_meta()?,
-            traversal: but_graph::init::Options::limited(),
+            traversal,
             expensive_commit_info: true,
             gerrit_mode,
         },

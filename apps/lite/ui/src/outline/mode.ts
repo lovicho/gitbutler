@@ -1,17 +1,17 @@
 import { Match } from "effect";
 import {
-	BranchOperand,
+	type BranchOperand,
 	branchOperand,
-	CommitOperand,
+	type CommitOperand,
 	commitOperand,
 	operandEquals,
 	type Operand,
 	uncommittedChangesOperand,
 } from "#ui/operands.ts";
-import { OperationType } from "#ui/operations/operation.ts";
+import type { OperationType } from "#ui/operations/operation.ts";
 import type { SelectionState } from "#ui/projects/project.ts";
 import type { SelectionScope } from "#ui/selection-scopes.ts";
-import { AbsorptionTarget } from "@gitbutler/but-sdk";
+import type { AbsorptionTarget } from "@gitbutler/but-sdk";
 
 /** @public */
 export type AbsorbMode = {

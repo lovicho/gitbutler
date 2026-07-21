@@ -8080,6 +8080,72 @@ fn shared_target_base_keeps_exact_target_segment_with_inactive_unapplied_branch(
 }
 
 #[test]
+fn worktree_tip_in_workspace_priority_mode() -> anyhow::Result<()> {
+    let (repo, mut meta) = read_only_in_memory_scenario("ws/worktree-ahead")?;
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* a26ae77 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+| * 26837d3 (wt-feature) W
+|/  
+* fafd9d0 (origin/main, main) init
+
+"#]]
+    );
+    add_workspace(&mut meta);
+
+    // Without the worktree tip, the branch ahead of the base is invisible.
+    let graph =
+        Graph::from_head(&repo, &*meta, project_meta(&*meta), standard_options())?.validated()?;
+    snapbox::assert_data_eq!(
+        graph_tree(&graph).to_string(),
+        snapbox::str![[r#"
+
+├── 👉📕►►►:0[0]:gitbutler/workspace[🌳]
+│   └── ·a26ae77 (⌂|🏘|01)
+│       └── ►:2[1]:main <> origin/main →:1:
+│           └── 🏁·fafd9d0 (⌂|🏘|✓|11)
+└── ►:1[0]:origin/main →:2:
+    └── →:2: (main →:1:)
+
+"#]]
+    );
+
+    // Seeding it adds the branch outside the workspace, leaving workspace,
+    // target, and remote computations undisturbed.
+    let mut options = standard_options();
+    options.worktree_tips = vec![but_graph::init::WorktreeTip {
+        ref_name: Some("refs/heads/wt-feature".try_into()?),
+        id: repo.find_reference("wt-feature")?.peel_to_id()?.detach(),
+    }];
+    let graph = Graph::from_head(&repo, &*meta, project_meta(&*meta), options)?.validated()?;
+    snapbox::assert_data_eq!(
+        graph_tree(&graph).to_string(),
+        snapbox::str![[r#"
+
+├── 👉📕►►►:0[0]:gitbutler/workspace[🌳]
+│   └── ·a26ae77 (⌂|🏘|01)
+│       └── ►:2[1]:main <> origin/main →:1:
+│           └── 🏁·fafd9d0 (⌂|🏘|✓|11)
+├── ►:1[0]:origin/main →:2:
+│   └── →:2: (main →:1:)
+└── ►:3[0]:wt-feature
+    └── ·26837d3 (⌂)
+        └── →:2: (main →:1:)
+
+"#]]
+    );
+    snapbox::assert_data_eq!(
+        graph_workspace(&graph.into_workspace()?).to_string(),
+        snapbox::str![[r#"
+📕🏘️:0:gitbutler/workspace[🌳] <> ✓refs/remotes/origin/main on fafd9d0
+
+"#]]
+    );
+    Ok(())
+}
+
+#[test]
 fn unapplied_branch_on_base_no_target() -> anyhow::Result<()> {
     let (repo, mut meta) = read_only_in_memory_scenario("ws/unapplied-branch-on-base")?;
     snapbox::assert_data_eq!(

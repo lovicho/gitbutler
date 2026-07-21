@@ -1,0 +1,275 @@
+use but_core::Commit;
+use but_rebase::graph_rebase::{
+    Editor, LookupStep as _,
+    mutate::{InsertSide, RelativeTo},
+};
+use but_testsupport::visualize_commit_graph_all;
+use gix::prelude::ObjectIdExt as _;
+use snapbox::IntoData;
+
+use crate::ref_info::with_workspace_commit::utils::named_writable_scenario_with_description_and_graph as writable_scenario;
+
+#[test]
+fn insert_below_commit() -> anyhow::Result<()> {
+    let (_tmp, graph, repo, mut meta, _description) =
+        writable_scenario("reword-three-commits", |_| {})?;
+    let mut workspace = graph.into_workspace()?;
+    let one = repo.rev_parse_single("one")?.detach();
+    let two = repo.rev_parse_single("two")?.detach();
+
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* c9f444c (HEAD -> three) commit three
+* 16fd221 (origin/two, two) commit two
+* 8b426d0 (one) commit one
+
+"#]]
+    );
+
+    let editor = Editor::create(&mut workspace, &mut meta, &repo)?;
+    but_workspace::commit::cherry_pick_commits(
+        editor,
+        [one],
+        RelativeTo::Commit(two),
+        InsertSide::Below,
+    )?
+    .0
+    .materialize()?;
+
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* 68995ae (HEAD -> three) commit three
+* 75334f1 (two) commit two
+* 50680ef commit one
+| * 16fd221 (origin/two) commit two
+|/  
+* 8b426d0 (one) commit one
+
+"#]]
+    );
+
+    Ok(())
+}
+
+#[test]
+fn insert_above_commit() -> anyhow::Result<()> {
+    let (_tmp, graph, repo, mut meta, _description) =
+        writable_scenario("reword-three-commits", |_| {})?;
+    let mut workspace = graph.into_workspace()?;
+    let one = repo.rev_parse_single("one")?.detach();
+    let two = repo.rev_parse_single("two")?.detach();
+
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* c9f444c (HEAD -> three) commit three
+* 16fd221 (origin/two, two) commit two
+* 8b426d0 (one) commit one
+
+"#]]
+    );
+
+    let editor = Editor::create(&mut workspace, &mut meta, &repo)?;
+    but_workspace::commit::cherry_pick_commits(
+        editor,
+        [one],
+        RelativeTo::Commit(two),
+        InsertSide::Above,
+    )?
+    .0
+    .materialize()?;
+
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* b4ca6cc (HEAD -> three) commit three
+* 5ad6169 (two) commit one
+* 16fd221 (origin/two) commit two
+* 8b426d0 (one) commit one
+
+"#]]
+    );
+
+    Ok(())
+}
+
+#[test]
+fn insert_below_reference() -> anyhow::Result<()> {
+    let (_tmp, graph, repo, mut meta, _description) =
+        writable_scenario("reword-three-commits", |_| {})?;
+    let mut workspace = graph.into_workspace()?;
+    let one = repo.rev_parse_single("one")?.detach();
+    let two_ref: gix::refs::FullName = "refs/heads/two".try_into()?;
+
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* c9f444c (HEAD -> three) commit three
+* 16fd221 (origin/two, two) commit two
+* 8b426d0 (one) commit one
+
+"#]]
+    );
+
+    let editor = Editor::create(&mut workspace, &mut meta, &repo)?;
+    but_workspace::commit::cherry_pick_commits(
+        editor,
+        [one],
+        RelativeTo::Reference(two_ref),
+        InsertSide::Below,
+    )?
+    .0
+    .materialize()?;
+
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+* b4ca6cc (HEAD -> three) commit three
+* 5ad6169 (two) commit one
+* 16fd221 (origin/two) commit two
+* 8b426d0 (one) commit one
+
+"#]]
+    );
+
+    Ok(())
+}
+
+#[test]
+fn parent_ordered() -> anyhow::Result<()> {
+    let (_tmp, graph, repo, mut meta, _description) =
+        writable_scenario("ws-ref-ws-commit-single-stack-double-stack", |_| {})?;
+    let mut workspace = graph.into_workspace()?;
+    let b = repo.rev_parse_single("B")?.detach();
+    let c = repo.rev_parse_single("C")?.detach();
+    let a_ref: gix::refs::FullName = "refs/heads/A".try_into()?;
+
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   f3e1bf2 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+| * 09d8e52 (A) A
+* | 09bc93e (C) C
+* | c813d8d (B) B
+|/  
+* 85efbe4 (origin/main, main) M
+
+"#]]
+        .raw()
+    );
+
+    let editor = Editor::create(&mut workspace, &mut meta, &repo)?;
+    let (rebase, _) = but_workspace::commit::cherry_pick_commits(
+        editor,
+        [c, b],
+        RelativeTo::Reference(a_ref),
+        InsertSide::Below,
+    )?;
+    rebase.materialize()?;
+
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   ce4b2e2 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+| * f603807 (A) C
+| * 698ccd3 B
+| * 09d8e52 A
+* | 09bc93e (C) C
+* | c813d8d (B) B
+|/  
+* 85efbe4 (origin/main, main) M
+
+"#]]
+        .raw()
+    );
+
+    Ok(())
+}
+
+#[test]
+fn sources_are_deduped() -> anyhow::Result<()> {
+    let (_tmp, graph, repo, mut meta, _description) =
+        writable_scenario("ws-ref-ws-commit-single-stack-double-stack", |_| {})?;
+    let mut workspace = graph.into_workspace()?;
+    let b = repo.rev_parse_single("B")?.detach();
+    let a_ref: gix::refs::FullName = "refs/heads/A".try_into()?;
+
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   f3e1bf2 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+| * 09d8e52 (A) A
+* | 09bc93e (C) C
+* | c813d8d (B) B
+|/  
+* 85efbe4 (origin/main, main) M
+
+"#]]
+        .raw()
+    );
+
+    let editor = Editor::create(&mut workspace, &mut meta, &repo)?;
+    let (rebase, inserted_selectors) = but_workspace::commit::cherry_pick_commits(
+        editor,
+        [b, b],
+        RelativeTo::Reference(a_ref),
+        InsertSide::Below,
+    )?;
+
+    assert_eq!(
+        inserted_selectors.len(),
+        1,
+        "duplicate B should produce only one copy"
+    );
+    rebase.materialize()?;
+
+    snapbox::assert_data_eq!(
+        visualize_commit_graph_all(&repo)?,
+        snapbox::str![[r#"
+*   ec1bb42 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|\  
+| * 698ccd3 (A) B
+| * 09d8e52 A
+* | 09bc93e (C) C
+* | c813d8d (B) B
+|/  
+* 85efbe4 (origin/main, main) M
+
+"#]]
+        .raw()
+    );
+
+    Ok(())
+}
+
+#[test]
+fn copies_get_new_change_ids() -> anyhow::Result<()> {
+    let (_tmp, graph, repo, mut meta, _description) =
+        writable_scenario("ws-ref-ws-commit-single-stack-double-stack", |_| {})?;
+    let mut workspace = graph.into_workspace()?;
+    let source = repo.rev_parse_single("B")?.detach();
+    let target_ref: gix::refs::FullName = "refs/heads/A".try_into()?;
+    let editor = Editor::create(&mut workspace, &mut meta, &repo)?;
+
+    let (rebase, inserted_selectors) = but_workspace::commit::cherry_pick_commits(
+        editor,
+        [source],
+        RelativeTo::Reference(target_ref),
+        InsertSide::Below,
+    )?;
+    let copy = rebase.lookup_pick(inserted_selectors[0])?;
+    rebase.materialize()?;
+
+    assert_ne!(
+        Commit::from_id(source.attach(&repo))?.change_id(),
+        Commit::from_id(copy.attach(&repo))?.change_id(),
+        "a copied commit should have a new change ID"
+    );
+
+    Ok(())
+}

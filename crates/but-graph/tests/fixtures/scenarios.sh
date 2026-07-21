@@ -66,6 +66,17 @@ git init ambiguous-worktrees
   git worktree add wt-inside-ambiguous-worktree
 )
 
+# A linked worktree whose branch is ahead of `main`, so its head commit is
+# unreachable from any other traversal tip.
+git init worktree-ahead
+(cd worktree-ahead
+  commit M
+  git worktree add -b wt-feature ../worktree-ahead-feature
+  (cd ../worktree-ahead-feature
+    commit W
+  )
+)
+
 # A single root that splits up into 4 branches and merges again
 git init four-diamond
 (cd four-diamond
@@ -1287,6 +1298,18 @@ EOF
     commit init
     git branch unapplied
     setup_target_to_match_main
+    create_workspace_commit_once main
+  )
+
+  # A branch ahead of the workspace base stands in for a linked-worktree HEAD -
+  # unreachable from the workspace or target unless seeded as a worktree tip.
+  git init worktree-ahead
+  (cd worktree-ahead
+    commit init
+    setup_target_to_match_main
+    git checkout -b wt-feature
+      commit W
+    git checkout main
     create_workspace_commit_once main
   )
 

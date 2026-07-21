@@ -5,7 +5,7 @@ import { getButtonClassName } from "#ui/components/Button.tsx";
 import { classes } from "#ui/components/classes.ts";
 import uiStyles from "#ui/components/ui.module.css";
 import styles from "./AskpassPromptDialog.module.css";
-import { AskpassPromptEvent } from "@gitbutler/but-sdk";
+import type { AskpassPromptEvent } from "@gitbutler/but-sdk";
 
 const secretPromptPattern = /\b(passphrase|password|token|secret|credential)\b/i;
 

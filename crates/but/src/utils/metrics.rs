@@ -145,6 +145,8 @@ impl Subcommands {
             #[cfg(feature = "legacy")]
             Subcommands::Worktree(worktree::Platform { cmd: _ }) => Worktree,
             Subcommands::Gui { .. } => Gui,
+            #[cfg(feature = "but-2")]
+            Subcommands::_Open { .. } => Open,
             #[cfg(feature = "legacy")]
             Subcommands::Commit(crate::args::commit::Platform { cmd, .. }) => match cmd {
                 None => Commit,

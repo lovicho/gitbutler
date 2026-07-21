@@ -10,14 +10,15 @@ import {
 	focusSelectionScope,
 	focusVerticalSelectionScope,
 	getFocusedSelectionScope,
-	SelectionScope,
+	type SelectionScope,
 } from "#ui/selection-scopes.ts";
 import { projectSlice } from "#ui/projects/state.ts";
+import { interfaceSlice } from "#ui/interface/state.ts";
 import { PickerDialog } from "#ui/components/PickerDialog.tsx";
 import { globalHotkeys, workspaceHotkeys } from "#ui/hotkeys.ts";
 import { writeLastOpenedProject } from "#ui/project.ts";
 import { useAppDispatch, useAppSelector } from "#ui/store.ts";
-import { ProjectForFrontend, RefInfo, WorktreeChanges } from "@gitbutler/but-sdk";
+import type { ProjectForFrontend, RefInfo, WorktreeChanges } from "@gitbutler/but-sdk";
 import { useHotkey, useHotkeys } from "@tanstack/react-hotkeys";
 import {
 	QueryErrorResetBoundary,
@@ -60,12 +61,8 @@ type PanelId = "outline-panel" | "details-panel";
 
 const useWorkspaceHotkeys = (projectId: string) => {
 	const dispatch = useAppDispatch();
-	const detailsFullWindow = useAppSelector((state) =>
-		projectSlice.selectors.selectDetailsFullWindow(state, projectId),
-	);
-	const dialog = useAppSelector((state) =>
-		projectSlice.selectors.selectDialogState(state, projectId),
-	);
+	const detailsFullWindow = useAppSelector(interfaceSlice.selectors.selectDetailsFullWindow);
+	const dialog = useAppSelector(interfaceSlice.selectors.selectDialogState);
 	const filesVisibleState = useAppSelector((state) =>
 		projectSlice.selectors.selectFilesVisible(state, projectId),
 	);
@@ -109,13 +106,8 @@ const useWorkspaceHotkeys = (projectId: string) => {
 		{
 			hotkey: globalHotkeys.commandPalette.hotkey,
 			callback: () => {
-				if (dialog._tag === "CommandPalette") {
-					dispatch(projectSlice.actions.closeDialog({ projectId }));
-				} else {
-					dispatch(
-						projectSlice.actions.openDialog({ projectId, dialog: { _tag: "CommandPalette" } }),
-					);
-				}
+				if (dialog._tag === "CommandPalette") dispatch(interfaceSlice.actions.closeDialog());
+				else dispatch(interfaceSlice.actions.openDialog({ dialog: { _tag: "CommandPalette" } }));
 			},
 			options: {
 				conflictBehavior: "allow",
@@ -291,12 +283,8 @@ const WorkspacePage: FC = () => {
 
 	const { id: projectId } = useParams({ from: "/project/$id/workspace" });
 
-	const detailsFullWindow = useAppSelector((state) =>
-		projectSlice.selectors.selectDetailsFullWindow(state, projectId),
-	);
-	const dialog = useAppSelector((state) =>
-		projectSlice.selectors.selectDialogState(state, projectId),
-	);
+	const detailsFullWindow = useAppSelector(interfaceSlice.selectors.selectDetailsFullWindow);
+	const dialog = useAppSelector(interfaceSlice.selectors.selectDialogState);
 	const outlineMode = useAppSelector((state) =>
 		projectSlice.selectors.selectOutlineModeState(state, projectId),
 	);
@@ -314,41 +302,33 @@ const WorkspacePage: FC = () => {
 	};
 
 	const setBranchPickerOpen = (open: boolean) => {
-		if (open)
-			dispatch(projectSlice.actions.openDialog({ projectId, dialog: { _tag: "BranchPicker" } }));
-		else dispatch(projectSlice.actions.closeDialog({ projectId }));
+		if (open) dispatch(interfaceSlice.actions.openDialog({ dialog: { _tag: "BranchPicker" } }));
+		else dispatch(interfaceSlice.actions.closeDialog());
 	};
 
 	const setApplyBranchPickerOpen = (open: boolean) => {
-		if (open) {
-			dispatch(
-				projectSlice.actions.openDialog({ projectId, dialog: { _tag: "ApplyBranchPicker" } }),
-			);
-		} else {
-			dispatch(projectSlice.actions.closeDialog({ projectId }));
-		}
+		if (open)
+			dispatch(interfaceSlice.actions.openDialog({ dialog: { _tag: "ApplyBranchPicker" } }));
+		else dispatch(interfaceSlice.actions.closeDialog());
 	};
 
 	const setCommandPaletteOpen = (open: boolean) => {
-		if (open)
-			dispatch(projectSlice.actions.openDialog({ projectId, dialog: { _tag: "CommandPalette" } }));
-		else dispatch(projectSlice.actions.closeDialog({ projectId }));
+		if (open) dispatch(interfaceSlice.actions.openDialog({ dialog: { _tag: "CommandPalette" } }));
+		else dispatch(interfaceSlice.actions.closeDialog());
 	};
 
 	const setProjectPickerOpen = (open: boolean) => {
-		if (open)
-			dispatch(projectSlice.actions.openDialog({ projectId, dialog: { _tag: "ProjectPicker" } }));
-		else dispatch(projectSlice.actions.closeDialog({ projectId }));
+		if (open) dispatch(interfaceSlice.actions.openDialog({ dialog: { _tag: "ProjectPicker" } }));
+		else dispatch(interfaceSlice.actions.closeDialog());
 	};
 
 	const setSettingsOpen = (open: boolean) => {
-		if (open)
-			dispatch(projectSlice.actions.openDialog({ projectId, dialog: { _tag: "Settings" } }));
-		else dispatch(projectSlice.actions.closeDialog({ projectId }));
+		if (open) dispatch(interfaceSlice.actions.openDialog({ dialog: { _tag: "Settings" } }));
+		else dispatch(interfaceSlice.actions.closeDialog());
 	};
 
 	const openProjectPicker = () => {
-		dispatch(projectSlice.actions.openDialog({ projectId, dialog: { _tag: "ProjectPicker" } }));
+		dispatch(interfaceSlice.actions.openDialog({ dialog: { _tag: "ProjectPicker" } }));
 	};
 
 	const toggleDetailsFullWindow = () => {
@@ -358,7 +338,7 @@ const WorkspacePage: FC = () => {
 		)
 			requestAnimationFrame(() => focusSelectionScope("diff"));
 
-		dispatch(projectSlice.actions.toggleDetailsFullWindow({ projectId }));
+		dispatch(interfaceSlice.actions.toggleDetailsFullWindow());
 	};
 
 	useHotkeys([

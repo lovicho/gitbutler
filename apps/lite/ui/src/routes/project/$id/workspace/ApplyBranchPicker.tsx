@@ -4,7 +4,7 @@ import { getHeadInfoIndex } from "#ui/api/ref-info.ts";
 import { headInfoQueryOptions, listBranchesQueryOptions } from "#ui/api/queries.ts";
 import { PickerDialog, type PickerDialogGroup } from "#ui/components/PickerDialog.tsx";
 import { formatRelativeTime } from "#ui/time.ts";
-import { BranchListing } from "@gitbutler/but-sdk";
+import type { BranchListing } from "@gitbutler/but-sdk";
 import { useQuery } from "@tanstack/react-query";
 import { type FC, useState } from "react";
 

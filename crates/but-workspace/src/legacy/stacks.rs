@@ -171,6 +171,7 @@ pub fn stacks_v3(
     repo: &gix::Repository,
     meta: &impl RefMetadata,
     project_meta: &ProjectMeta,
+    traversal: but_graph::init::Options,
     filter: StacksFilter,
     ref_name_override: Option<&gix::refs::FullNameRef>,
 ) -> anyhow::Result<Vec<StackEntry>> {
@@ -230,7 +231,7 @@ pub fn stacks_v3(
     let options = ref_info::Options {
         project_meta: project_meta.clone(),
         expensive_commit_info: false,
-        traversal: but_graph::init::Options::limited(),
+        traversal,
         ..Default::default()
     };
     let info = match ref_name_override {
@@ -299,6 +300,7 @@ pub fn stack_details_v3(
     repo: &gix::Repository,
     meta: &impl RefMetadata,
     project_meta: &ProjectMeta,
+    traversal: but_graph::init::Options,
 ) -> anyhow::Result<ui::StackDetails> {
     // Prefer the current `HEAD` projection if it can still see the requested stack, and only fall
     // back to resolving from a surviving ref when that stack is no longer reachable from `HEAD`.
@@ -308,15 +310,18 @@ pub fn stack_details_v3(
             .into_iter()
             .find(|stack| stack.id == Some(stack_id))
     }
-    fn new_ref_info_options(project_meta: &ProjectMeta) -> ref_info::Options<'static> {
+    fn new_ref_info_options(
+        project_meta: &ProjectMeta,
+        traversal: &but_graph::init::Options,
+    ) -> ref_info::Options<'static> {
         ref_info::Options {
             project_meta: project_meta.clone(),
             expensive_commit_info: true,
-            traversal: but_graph::init::Options::limited(),
+            traversal: traversal.clone(),
             ..Default::default()
         }
     }
-    let mut ref_info_options = new_ref_info_options(project_meta);
+    let mut ref_info_options = new_ref_info_options(project_meta, &traversal);
     let mut stack = match stack_id {
         None => {
             // assume single-branch mode.
@@ -343,7 +348,7 @@ pub fn stack_details_v3(
         }
         Some(stack_id) => {
             if let Some(stack) = stack_by_id(
-                head_info(repo, meta, new_ref_info_options(project_meta))?,
+                head_info(repo, meta, new_ref_info_options(project_meta, &traversal))?,
                 stack_id,
             ) {
                 stack
@@ -358,7 +363,11 @@ pub fn stack_details_v3(
                     .with_context(|| {
                         format!("Couldn't find any refs for stack {stack_id} in the repository")
                     })?;
-                let ref_info = ref_info(existing_ref, meta, new_ref_info_options(project_meta))?;
+                let ref_info = ref_info(
+                    existing_ref,
+                    meta,
+                    new_ref_info_options(project_meta, &traversal),
+                )?;
                 stack_by_id(ref_info, stack_id).with_context(|| {
                     format!("Really couldn't find {stack_id} in the current workspace projection")
                 })?

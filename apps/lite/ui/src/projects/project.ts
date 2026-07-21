@@ -29,14 +29,6 @@ import { createSelector } from "@reduxjs/toolkit";
 import type { AbsorptionTarget } from "@gitbutler/but-sdk";
 import { Match } from "effect";
 
-export type Dialog =
-	| { _tag: "None" }
-	| { _tag: "ApplyBranchPicker" }
-	| { _tag: "BranchPicker" }
-	| { _tag: "CommandPalette" }
-	| { _tag: "ProjectPicker" }
-	| { _tag: "Settings" };
-
 export type SelectionState = {
 	uncommittedFiles: string | null;
 	outline: Operand | null;
@@ -70,15 +62,11 @@ const createInitialWorkspaceState = (): WorkspaceState => ({
 });
 
 export type ProjectState = {
-	detailsFullWindow: boolean;
-	dialog: Dialog;
 	filesVisible: boolean;
 	workspace: WorkspaceState;
 };
 
 export const createInitialProjectState = (): ProjectState => ({
-	detailsFullWindow: false,
-	dialog: { _tag: "None" },
 	filesVisible: false,
 	workspace: createInitialWorkspaceState(),
 });
@@ -352,18 +340,6 @@ export const projectReducers = {
 	toggleFiles: (state: ProjectState) => {
 		state.filesVisible = !state.filesVisible;
 	},
-	setDetailsFullWindow: (state: ProjectState, { fullWindow }: { fullWindow: boolean }) => {
-		state.detailsFullWindow = fullWindow;
-	},
-	toggleDetailsFullWindow: (state: ProjectState) => {
-		state.detailsFullWindow = !state.detailsFullWindow;
-	},
-	openDialog: (state: ProjectState, { dialog }: { dialog: Dialog }) => {
-		state.dialog = dialog;
-	},
-	closeDialog: (state: ProjectState) => {
-		state.dialog = { _tag: "None" };
-	},
 };
 
 const selectCheckedCommits = createSelector(
@@ -385,9 +361,7 @@ export const projectSelectors = {
 	selectFilesVisible: (state: ProjectState) => state.filesVisible,
 	selectCanShowFiles: (state: ProjectState) =>
 		state.workspace.detailsSelectionScope !== "uncommitted-files",
-	selectDetailsFullWindow: (state: ProjectState) => state.detailsFullWindow,
 	selectDetailsSelectionScope: (state: ProjectState) => state.workspace.detailsSelectionScope,
-	selectDialogState: (state: ProjectState) => state.dialog,
 	selectSelectionUncommittedFiles: (
 		state: ProjectState,
 		navigationIndex: NavigationIndex<string>,

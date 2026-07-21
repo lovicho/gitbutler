@@ -28,7 +28,7 @@ import { commitBody, commitTitle, shortCommitId } from "#ui/commit.ts";
 import {
 	branchFileParent,
 	commitFileParent,
-	FileOperand,
+	type FileOperand,
 	fileOperand,
 	hunkOperand,
 	operandIdentityKey,
@@ -37,6 +37,7 @@ import {
 	type Operand,
 } from "#ui/operands.ts";
 import { projectSlice } from "#ui/projects/state.ts";
+import { interfaceSlice } from "#ui/interface/state.ts";
 import { getButtonClassName } from "#ui/components/Button.tsx";
 import { Icon } from "#ui/components/Icon.tsx";
 import { TooltipPopup } from "#ui/components/Tooltip.tsx";
@@ -70,11 +71,11 @@ import { useQuery, useSuspenseQueries, useSuspenseQuery } from "@tanstack/react-
 import { useParams } from "@tanstack/react-router";
 import { Match } from "effect";
 import {
-	ComponentProps,
-	FC,
-	MouseEvent,
+	type ComponentProps,
+	type FC,
+	type MouseEvent,
 	type RefObject,
-	SubmitEventHandler,
+	type SubmitEventHandler,
 	Suspense,
 	useId,
 	useLayoutEffect,
@@ -100,7 +101,7 @@ import {
 	rangeFromLineGroups,
 	synthesizeFilePatch,
 } from "#ui/hunk.ts";
-import { buildIndexByKey, NavigationIndex } from "#ui/workspace/navigation-index.ts";
+import { buildIndexByKey, type NavigationIndex } from "#ui/workspace/navigation-index.ts";
 import { showNativeContextMenu, showNativeMenuFromTrigger } from "#ui/native-menu.ts";
 import { useFileMenuItems } from "#ui/routes/project/$id/workspace/useFileMenuItems.ts";
 import { useMergedRefs } from "@base-ui/utils/useMergedRefs";
@@ -108,8 +109,8 @@ import { getHeadInfoIndex } from "#ui/api/ref-info.ts";
 import { Checkbox } from "#ui/components/Checkbox.tsx";
 import type { GUISettings } from "#electron/settings.ts";
 import { defaultSettings } from "#ui/settings.ts";
-import { AggregateCIChecks } from "#ui/ci.ts";
-import { IconName } from "#ui/components/iconNames.ts";
+import type { AggregateCIChecks } from "#ui/ci.ts";
+import type { IconName } from "#ui/components/iconNames.ts";
 import { draftPRQueryOptions, usePersistDraftPR } from "#ui/pr.ts";
 import { combineHashes, hash } from "#ui/hash.ts";
 import { assert } from "#ui/assert.ts";
@@ -1499,9 +1500,7 @@ export const Details: FC<
 	const { data: headInfo } = useQuery(headInfoQueryOptions(projectId));
 	const headInfoIndex = headInfo ? getHeadInfoIndex(headInfo) : null;
 	const dispatch = useAppDispatch();
-	const detailsFullWindow = useAppSelector((state) =>
-		projectSlice.selectors.selectDetailsFullWindow(state, projectId),
-	);
+	const detailsFullWindow = useAppSelector(interfaceSlice.selectors.selectDetailsFullWindow);
 	const filesVisibleState = useAppSelector((state) =>
 		projectSlice.selectors.selectFilesVisible(state, projectId),
 	);

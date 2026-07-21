@@ -8,7 +8,7 @@ use tracing::instrument;
 use url::Url;
 
 use crate::open::{
-    editor::{EDITORS, Editor, open_in_editor_unchecked},
+    program::{Editor, PROGRAMS, ProgramSpec, open_in_program_unchecked},
     spawn::spawn_and_reap,
 };
 
@@ -16,7 +16,7 @@ use crate::open::{
 pub mod terminal;
 
 /// Editor configuration.
-pub mod editor;
+pub mod program;
 
 /// Spawn helpers.
 pub(crate) mod spawn;
@@ -631,11 +631,20 @@ pub fn show_in_finder(path: String) -> Result<()> {
     Ok(())
 }
 
-/// List all supported editors.
+/// List all editors that can be opened from a GUI client.
 #[but_api(napi)]
 #[instrument(err(Debug))]
 pub fn list_editors() -> anyhow::Result<Vec<Editor>> {
-    Ok(EDITORS.iter().map(Into::into).collect())
+    Ok(PROGRAMS
+        .iter()
+        .filter(|program| program.is_gui_editor())
+        .map(Into::into)
+        .collect())
+}
+
+/// List all supported programs.
+pub fn list_program_specs() -> &'static [ProgramSpec] {
+    PROGRAMS.as_slice()
 }
 
 /// Open `path` within the given project's workdir using the editor specified by `editor_id`.
@@ -667,9 +676,11 @@ pub fn open_in_editor(
         bail_precondition!("{path:?} is inside repository .git directory at {git_dir_path:?}");
     }
 
-    let Some(editor) = EDITORS.iter().find(|editor| editor.id == editor_id) else {
-        bail_precondition!("editor_id '{editor_id}' does not exist");
-    };
-
-    open_in_editor_unchecked(editor, &resolved_path, line_nr)
+    if let Some(editor) = PROGRAMS.iter().find(|editor| editor.id == editor_id)
+        && editor.is_gui_editor()
+    {
+        open_in_program_unchecked(editor, &resolved_path, line_nr)
+    } else {
+        bail_precondition!("editor_id '{editor_id}' is not a GUI-compatible editor");
+    }
 }

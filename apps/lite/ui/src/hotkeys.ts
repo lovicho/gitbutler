@@ -25,7 +25,6 @@ export type CommandGroup =
 	| "Branch"
 	| "Commit"
 	| "Diff"
-	| "Display"
 	| "File"
 	| "Global"
 	| "Operations log"
@@ -140,7 +139,7 @@ export const workspaceHotkeys = {
 	},
 	toggleOutline: {
 		hotkey: ".",
-		meta: { group: "Display", name: "Toggle outline" },
+		meta: { group: "Global", name: "Toggle outline" },
 	},
 } satisfies Record<string, HotkeyWithMeta>;
 

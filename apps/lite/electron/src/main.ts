@@ -109,7 +109,7 @@ import {
 	updateBranchName,
 	updateReview,
 	workspaceBranchAndAncestorsPush,
-	BranchListingFilter,
+	type BranchListingFilter,
 	commitUncommit,
 	reviewTemplate,
 	restoreSnapshotWithKind,

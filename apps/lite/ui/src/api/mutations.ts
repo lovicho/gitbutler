@@ -20,12 +20,7 @@ import { projectSlice } from "#ui/projects/state.ts";
 import { type AppDispatch, useAppDispatch } from "#ui/store.ts";
 import { formatRelativeTime } from "#ui/time.ts";
 import { Toast } from "@base-ui/react";
-import {
-	type CommitAbsorption,
-	type InsertSide,
-	type RelativeTo,
-	type Snapshot,
-} from "@gitbutler/but-sdk";
+import type { CommitAbsorption, InsertSide, RelativeTo, Snapshot } from "@gitbutler/but-sdk";
 import { type QueryClient, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Match } from "effect";
 import type { OpenInEditorParams } from "#electron/ipc.ts";

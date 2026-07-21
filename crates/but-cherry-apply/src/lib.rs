@@ -54,6 +54,8 @@ pub fn cherry_apply_status(
     _perm: &RepoShared,
     subject: ObjectId,
 ) -> Result<CherryApplyStatus> {
+    let mut traversal = ctx.graph_options(Default::default())?;
+    traversal.commits_limit_hint = Some(300);
     let repo = ctx
         .repo
         .get()?
@@ -66,6 +68,7 @@ pub fn cherry_apply_status(
         &repo,
         &meta,
         &ctx.project_meta()?,
+        traversal,
         StacksFilter::InWorkspace,
         None,
     )?;
