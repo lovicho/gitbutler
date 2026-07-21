@@ -1,4 +1,5 @@
 import { useDiscardWorktreeChanges } from "#ui/api/mutations.ts";
+import { classes } from "#ui/components/classes.ts";
 import { Icon } from "#ui/components/Icon.tsx";
 import { createDiffSpec } from "#ui/operations/diff-specs.ts";
 import {
@@ -16,16 +17,10 @@ import { Toolbar } from "@base-ui/react";
 import { AbsorptionTarget, TreeChange, UnifiedPatch } from "@gitbutler/but-sdk";
 import { FC } from "react";
 import { getRowButtonClassName } from "../Row-utils.ts";
-import {
-	Row,
-	RowBubble,
-	RowBubbleGroup,
-	RowLabel,
-	RowLabelContainer,
-	RowToolbar,
-} from "../Row.tsx";
+import { Row, RowBubble, RowLabel, RowLabelContainer, RowToolbar } from "../Row.tsx";
 import { useQueries } from "@tanstack/react-query";
 import { treeChangeDiffsQueryOptions } from "#ui/api/queries.ts";
+import styles from "./UncommittedChangesRow.module.css";
 
 type LineStats = {
 	linesAdded: number;
@@ -104,6 +99,7 @@ export const UncommittedChangesRow: FC<{
 
 	return (
 		<Row
+			className={styles.container}
 			onContextMenu={(event) => {
 				void showNativeContextMenu(event, menuItems);
 			}}
@@ -115,14 +111,14 @@ export const UncommittedChangesRow: FC<{
 				<RowBubble variant="fillGray">{changes.length}</RowBubble>
 
 				{(lineStats.linesAdded > 0 || lineStats.linesRemoved > 0) && (
-					<RowBubbleGroup>
+					<span className={classes("text-12", styles.lineStats)}>
 						{lineStats.linesAdded > 0 && (
-							<RowBubble variant="safe">+{lineStats.linesAdded}</RowBubble>
+							<span className={styles.linesAdded}>+{lineStats.linesAdded}</span>
 						)}
 						{lineStats.linesRemoved > 0 && (
-							<RowBubble variant="danger">-{lineStats.linesRemoved}</RowBubble>
+							<span className={styles.linesRemoved}>-{lineStats.linesRemoved}</span>
 						)}
-					</RowBubbleGroup>
+					</span>
 				)}
 			</RowLabelContainer>
 

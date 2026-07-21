@@ -46,16 +46,11 @@ import {
 } from "../Row.tsx";
 import { getRowButtonClassName } from "../Row-utils.ts";
 import { InlineEditor } from "./InlineEditor.tsx";
-import { commitMessageInputId } from "../CommitForm.tsx";
 import { insertBlankCommitMenuItem } from "./insertBlankCommitMenuItem.ts";
 import { ItemRow } from "./ItemRow.tsx";
 import styles from "./BranchRow.module.css";
 import { ciChecksSummaryUrl, type AggregateCIChecks } from "#ui/ci.ts";
 import { type DownstackPushStatus, downstackPushStatusDisabled } from "#ui/segment.ts";
-
-const focusCommitMessageInput = () => {
-	document.getElementById(commitMessageInputId)?.focus();
-};
 
 const CIBubble: FC<{ checks: AggregateCIChecks }> = (p) => {
 	switch (p.checks.status) {
@@ -110,7 +105,6 @@ export const BranchRow: FC<
 		projectId: string;
 		refName: BranchReference;
 		stackId: string;
-		isCommitTarget: boolean;
 		canTearOffBranch: boolean;
 		canRemoveBranch: boolean;
 		downstackPushStatus: DownstackPushStatus;
@@ -123,7 +117,6 @@ export const BranchRow: FC<
 	projectId,
 	refName,
 	stackId,
-	isCommitTarget,
 	canTearOffBranch,
 	canRemoveBranch,
 	downstackPushStatus,
@@ -231,15 +224,6 @@ export const BranchRow: FC<
 	const relativeTo: RelativeTo = { type: "referenceBytes", subject: refName.fullNameBytes };
 	const bucketRelativeTo = (side: InsertSide): RelativeTo =>
 		side === "below" && bottomRelativeTo !== null ? bottomRelativeTo : relativeTo;
-
-	const setCommitTarget = () => {
-		dispatch(projectSlice.actions.setCommitTarget({ projectId, commitTarget: relativeTo }));
-	};
-
-	const composeCommitHere = () => {
-		setCommitTarget();
-		focusCommitMessageInput();
-	};
 
 	const cutBranch = () => {
 		dispatch(
@@ -355,18 +339,6 @@ export const BranchRow: FC<
 		}),
 		nativeMenuSeparator,
 		nativeMenuItem({
-			label: "Compose Commit Here",
-			accelerator: toElectronAccelerator(outlineHotkeys.composeCommitHere.hotkey),
-			onSelect: composeCommitHere,
-			enabled: isDefaultMode,
-		}),
-		nativeMenuItem({
-			label: "Set Commit Target",
-			accelerator: toElectronAccelerator(outlineHotkeys.setCommitTarget.hotkey),
-			onSelect: setCommitTarget,
-			enabled: isDefaultMode,
-		}),
-		nativeMenuItem({
 			label: "Open In Browser",
 			enabled: mforgeUrl != null,
 			accelerator: toElectronAccelerator(outlineHotkeys.openPRInBrowser.hotkey),
@@ -414,7 +386,6 @@ export const BranchRow: FC<
 			onContextMenu={(event) => {
 				void showNativeContextMenu(event, menuItems);
 			}}
-			isCommitTarget={isCommitTarget}
 		>
 			<GraphSegment glyph={isTopSegment ? "forkRight" : "joinRight"} status={graphStatus} />
 

@@ -149,9 +149,6 @@ export const outlineHotkeys = {
 		hotkey: "Shift+A",
 		meta: { group: "Commit", name: "Amend commit" },
 	},
-	composeCommitHere: {
-		hotkey: "C",
-	},
 	checkCommit: {
 		hotkey: "Space",
 		meta: { group: "Commit", name: "Check commit" },
@@ -178,10 +175,6 @@ export const outlineHotkeys = {
 	openPRInBrowser: {
 		hotkey: "O",
 		meta: { group: "Branch", name: "Open pull request in browser" },
-	},
-	setCommitTarget: {
-		hotkey: "Shift+C",
-		meta: { group: "Commit", name: "Set commit target" },
 	},
 	composeCommitMessage: {
 		hotkey: "Shift+Z",

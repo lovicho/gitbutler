@@ -1,28 +1,29 @@
-import { relativeToEquals } from "#ui/api/relative-to.ts";
 import type { HeadInfoIndex } from "#ui/api/ref-info.ts";
 import { commitTitle } from "#ui/commit.ts";
-import type { RefInfo, RelativeTo } from "@gitbutler/but-sdk";
+import { operandEquals, type Operand } from "#ui/operands.ts";
+import type { RefInfo } from "@gitbutler/but-sdk";
 import type { CommitTargetComboboxItem } from "../CommitForm.tsx";
 
 export const buildCommitTargetComboboxItems = ({
 	headInfo,
 	headInfoIndex,
-	commitTargetState,
+	outlineSelection,
 }: {
 	headInfo: RefInfo | undefined;
 	headInfoIndex: HeadInfoIndex | undefined;
-	commitTargetState: RelativeTo | null;
+	outlineSelection: Operand | null;
 }): Array<CommitTargetComboboxItem> => {
 	const commitTarget =
-		commitTargetState?.type === "commit"
-			? headInfoIndex?.commitContextById(commitTargetState.subject)?.commit
+		outlineSelection?._tag === "Commit"
+			? headInfoIndex?.commitContextById(outlineSelection.commitId)?.commit
 			: null;
 
 	return [
 		...(commitTarget
 			? ([
 					{
-						label: `Commit: ${commitTitle(commitTarget.message) ?? "(no message)"}`,
+						label: commitTitle(commitTarget.message) ?? "(no message)",
+						operand: { _tag: "Commit", commitId: commitTarget.id },
 						relativeTo: { type: "commit", subject: commitTarget.id },
 					},
 				] satisfies Array<CommitTargetComboboxItem>)
@@ -37,7 +38,11 @@ export const buildCommitTargetComboboxItems = ({
 							return [
 								{
 									label: refName.displayName,
-									relativeTo: { type: "referenceBytes", subject: refName.fullNameBytes },
+									operand: { _tag: "Branch", branchRef: refName.fullNameBytes },
+									relativeTo: {
+										type: "referenceBytes",
+										subject: refName.fullNameBytes,
+									},
 								},
 							];
 						}),
@@ -48,12 +53,9 @@ export const buildCommitTargetComboboxItems = ({
 
 export const selectCommitTargetComboboxItem = ({
 	items,
-	commitTargetState,
+	outlineSelection,
 }: {
 	items: Array<CommitTargetComboboxItem>;
-	commitTargetState: RelativeTo | null;
+	outlineSelection: Operand | null;
 }): CommitTargetComboboxItem | null =>
-	(commitTargetState &&
-		items.find((item) => relativeToEquals(item.relativeTo, commitTargetState))) ??
-	items[0] ??
-	null;
+	(outlineSelection && items.find((item) => operandEquals(item.operand, outlineSelection))) ?? null;

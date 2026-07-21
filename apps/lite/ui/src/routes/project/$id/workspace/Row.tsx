@@ -130,6 +130,7 @@ export const RowBubble: FC<
 	/>
 );
 
+/** @public */
 export const RowBubbleGroup: FC<ComponentProps<"span">> = (props) => (
 	<span {...props} className={classes(props.className, styles.bubbleGroup)} />
 );

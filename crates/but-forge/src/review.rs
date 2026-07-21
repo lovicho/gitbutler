@@ -516,14 +516,13 @@ pub fn list_forge_reviews_with_cache(
 ) -> Result<Vec<ForgeReview>> {
     let cache_config = cache_config.unwrap_or_default();
     let reviews = match cache_config {
-        CacheConfig::CacheOnly => crate::db::reviews_from_cache(db)?,
+        CacheConfig::CacheOnly => crate::list_cached_forge_reviews(db)?,
         CacheConfig::CacheWithFallback { max_age_seconds } => {
             let cached = crate::db::reviews_from_cache(db)?;
-            if let Some(last_sync) = cached.first().map(|r| r.last_sync_at) {
-                let age = chrono::Local::now().naive_local() - last_sync;
-                if !cached.is_empty() && age.num_seconds() as u64 <= max_age_seconds {
-                    return Ok(cached);
-                }
+            if let Some(reviews) =
+                cached.fresh_rows(max_age_seconds, chrono::Local::now().naive_local())
+            {
+                return Ok(reviews);
             }
             let reviews = list_forge_reviews(preferred_forge_user, forge_repo_info, storage)?;
             crate::db::cache_reviews(db, &reviews).ok();

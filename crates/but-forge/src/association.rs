@@ -26,7 +26,7 @@ pub fn review_for_head_ref(
     db: &but_db::DbHandle,
     head_ref_short: &str,
 ) -> anyhow::Result<Option<ForgeReview>> {
-    let reviews = crate::db::reviews_from_cache(db)?;
+    let reviews = crate::list_cached_forge_reviews(db)?;
     Ok(best_match(&reviews, head_ref_short).cloned())
 }
 
@@ -51,7 +51,7 @@ pub fn pr_numbers_by_head(db: &but_db::DbHandle) -> anyhow::Result<HashMap<Strin
 /// When several cached reviews share a `source_branch`, `preference` decides
 /// which one the key maps to.
 pub fn reviews_by_head(db: &but_db::DbHandle) -> anyhow::Result<HashMap<String, ForgeReview>> {
-    let reviews = crate::db::reviews_from_cache(db)?;
+    let reviews = crate::list_cached_forge_reviews(db)?;
     let mut map: HashMap<String, ForgeReview> = HashMap::new();
     for review in reviews {
         let replace = map

@@ -138,15 +138,6 @@ export const useOutlineTreeHotkeys = ({
 		commitAmend({ commitId: selection.commitId });
 	};
 
-	const setCommitTarget = (relativeTo: RelativeTo) => {
-		dispatch(projectSlice.actions.setCommitTarget({ projectId, commitTarget: relativeTo }));
-	};
-
-	const composeCommitHere = (relativeTo: RelativeTo) => {
-		setCommitTarget(relativeTo);
-		focusCommitMessageInput();
-	};
-
 	const insertEmptyCommit = () => {
 		if (!selection) return;
 
@@ -590,25 +581,6 @@ export const useOutlineTreeHotkeys = ({
 									target: ref,
 									meta: outlineHotkeys.createDependentBranchAbove.meta,
 									requireReset: true,
-								},
-							} satisfies UseHotkeyDefinition,
-							{
-								hotkey: outlineHotkeys.composeCommitHere.hotkey,
-								callback: () => composeCommitHere(relativeTo),
-								options: {
-									conflictBehavior: "allow",
-									enabled: defaultOutlineHotkeysEnabled,
-									target: ref,
-								},
-							} satisfies UseHotkeyDefinition,
-							{
-								hotkey: outlineHotkeys.setCommitTarget.hotkey,
-								callback: () => setCommitTarget(relativeTo),
-								options: {
-									conflictBehavior: "allow",
-									enabled: defaultOutlineHotkeysEnabled,
-									target: ref,
-									meta: outlineHotkeys.setCommitTarget.meta,
 								},
 							} satisfies UseHotkeyDefinition,
 						]

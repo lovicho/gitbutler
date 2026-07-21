@@ -228,7 +228,7 @@
 	justify-content: space-between;
 	padding: 8px;
 	border: 1px solid var(--border-3);
-	border-radius: 10px 10px 0 0;
+	border-radius: var(--radius-card) var(--radius-card) 0 0;
 	white-space: nowrap;
 
 	&.lone {

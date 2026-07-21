@@ -1,4 +1,3 @@
-import { bytesEqual } from "#ui/api/bytes.ts";
 import type { HeadInfoIndex } from "#ui/api/ref-info.ts";
 import {
 	branchOperand,
@@ -27,7 +26,7 @@ import {
 import { navigationIndexIncludes, type NavigationIndex } from "#ui/workspace/navigation-index.ts";
 import type { SelectionScope } from "#ui/selection-scopes.ts";
 import { createSelector } from "@reduxjs/toolkit";
-import type { AbsorptionTarget, RelativeTo } from "@gitbutler/but-sdk";
+import type { AbsorptionTarget } from "@gitbutler/but-sdk";
 import { Match } from "effect";
 
 export type Dialog =
@@ -49,7 +48,6 @@ type DetailsSelectionScope = Extract<SelectionScope, "uncommitted-files" | "outl
 
 type WorkspaceState = {
 	checkedCommitIds: Record<string, true>;
-	commitTarget: RelativeTo | null;
 	detailsSelectionScope: DetailsSelectionScope | null;
 	highlightedCommitIds: Array<string>;
 	mode: OutlineMode;
@@ -65,7 +63,6 @@ const createInitialSelectionState = (): SelectionState => ({
 
 const createInitialWorkspaceState = (): WorkspaceState => ({
 	checkedCommitIds: {},
-	commitTarget: null,
 	detailsSelectionScope: null,
 	highlightedCommitIds: [],
 	mode: defaultOutlineMode,
@@ -186,16 +183,6 @@ export const projectReducers = {
 			operandEquals(workspaceState.selection.outline, oldBranchOperand)
 		)
 			workspaceState.selection.outline = newBranchOperand;
-
-		if (
-			workspaceState.commitTarget?.type === "referenceBytes" &&
-			bytesEqual(workspaceState.commitTarget.subject, oldBranch.branchRef)
-		) {
-			workspaceState.commitTarget = {
-				type: "referenceBytes",
-				subject: newBranch.branchRef,
-			};
-		}
 
 		if (
 			workspaceState.mode._tag === "RenameBranch" &&
@@ -336,9 +323,6 @@ export const projectReducers = {
 	clearCheckedCommits: (state: ProjectState) => {
 		state.workspace.checkedCommitIds = {};
 	},
-	setCommitTarget: (state: ProjectState, { commitTarget }: { commitTarget: RelativeTo | null }) => {
-		state.workspace.commitTarget = commitTarget;
-	},
 	updateRewrittenCommitReferences: (
 		state: ProjectState,
 		{ replacedCommits }: { replacedCommits: Record<string, string> },
@@ -349,11 +333,6 @@ export const projectReducers = {
 			const newId = replacedCommits[selection.commitId];
 			if (newId !== undefined)
 				workspaceState.selection.outline = commitOperand({ commitId: newId });
-		}
-
-		if (workspaceState.commitTarget?.type === "commit") {
-			const newId = replacedCommits[workspaceState.commitTarget.subject];
-			if (newId !== undefined) workspaceState.commitTarget = { type: "commit", subject: newId };
 		}
 
 		for (const oldId of Object.keys(workspaceState.checkedCommitIds)) {
@@ -458,5 +437,4 @@ export const projectSelectors = {
 		selectCheckedCommits(state, headInfoIndex).size,
 	selectHasCheckedCommits: (state: ProjectState, headInfoIndex: HeadInfoIndex) =>
 		selectCheckedCommits(state, headInfoIndex).size > 0,
-	selectCommitTarget: (state: ProjectState) => state.workspace.commitTarget,
 };

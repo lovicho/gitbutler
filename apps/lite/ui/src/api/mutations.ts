@@ -417,9 +417,9 @@ export const useCommitCreate = ({ projectId }: { projectId: string }) => {
 
 			if (input.relativeTo.type === "commit" && response.newCommit !== null) {
 				dispatch(
-					projectSlice.actions.setCommitTarget({
+					projectSlice.actions.selectOutline({
 						projectId,
-						commitTarget: { type: "commit", subject: response.newCommit },
+						selection: commitOperand({ commitId: response.newCommit }),
 					}),
 				);
 			}

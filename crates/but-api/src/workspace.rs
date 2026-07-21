@@ -443,12 +443,7 @@ fn forge_review_integration_hints(
         return Ok(vec![]);
     }
 
-    let associated_reviews = db
-        .forge_reviews()
-        .list_all()?
-        .into_iter()
-        .map(but_forge::ForgeReview::try_from)
-        .collect::<anyhow::Result<Vec<_>>>()?;
+    let associated_reviews = but_forge::list_cached_forge_reviews(db)?;
 
     Ok(review_integration_hints_from_reviews(
         &target_branch_name,

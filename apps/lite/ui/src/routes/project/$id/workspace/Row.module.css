@@ -17,7 +17,7 @@
 }
 
 .containerInteractive {
-	border-radius: var(--radius-m);
+	border-radius: var(--radius-card);
 
 	&:where(:hover) {
 		background-color: var(--list-item-hover-bg);
@@ -124,7 +124,7 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	min-width: 20px;
+	min-width: 16px;
 	height: 16px;
 	padding-inline: 5px;
 	border-radius: 10px;

@@ -1,7 +1,7 @@
 .section {
-	padding: 6px;
-	border-radius: var(--radius-l);
-	background-color: var(--bg-2);
+	border-radius: var(--radius-card);
+	background-color: var(--bg-1);
+	box-shadow: var(--shadow-card);
 }
 
 .tree {
@@ -34,31 +34,70 @@
 	padding-inline: var(--panel-padding-inline);
 	padding-block: var(--panel-padding-block);
 	overflow: auto;
-	scroll-padding-block: var(--panel-padding-block);
-	scroll-padding-inline: var(--panel-padding-inline);
 }
 
 .uncommittedChanges {
 	display: flex;
-	flex-grow: 1;
 	flex-direction: column;
 	min-height: 0;
 }
 
 .uncommittedChangesTree {
 	flex-grow: 1;
-	overflow: auto;
+
+	/* The scrollbar gutter takes up part of the inline end padding so the
+	   thumb visually overlays the panel margin. */
+	padding-inline: var(--panel-padding-inline)
+		calc(var(--panel-padding-inline) - var(--overlay-scrollbar-size));
+
+	/* Gradient ramp that fades out the scrolling items, shown only while there
+	   is more content to scroll to below. */
+	&::after {
+		display: block;
+		z-index: 1;
+		position: sticky;
+		bottom: 0;
+		height: 20px;
+		margin-block-start: -8px;
+		background: linear-gradient(to top, var(--bg-1) 20%, transparent);
+		content: "";
+		opacity: 0;
+		pointer-events: none;
+		transition: opacity 120ms ease;
+
+		@container scroll-state(scrollable: bottom) {
+			opacity: 1;
+		}
+	}
+}
+
+.commitForm {
+	margin-inline: var(--panel-padding-inline);
+	margin-block-start: 1px; /* hack to avoid outline crop on focus */
+	margin-block-end: var(--panel-padding-block);
+}
+
+.stacksPanel {
+	background-color: var(--bg-2);
 }
 
 .stacks {
 	display: flex;
-	row-gap: 12px;
+	row-gap: 8px;
 	flex-direction: column;
+
+	/* The scrollbar gutter takes up part of the inline end padding so the
+	   thumb visually overlays the panel margin. */
+	padding-inline: var(--panel-padding-inline)
+		calc(var(--panel-padding-inline) - var(--overlay-scrollbar-size));
+	padding-block: var(--panel-padding-block);
 }
 
 .segments {
 	display: flex;
 	flex-direction: column;
+	padding-inline: 6px;
+	padding-block-start: 6px;
 }
 
 .segmentParentItemRow:last-child {
@@ -70,5 +109,5 @@
 .stack {
 	display: flex;
 	flex-direction: column;
-	padding-bottom: 0;
+	padding-block-end: 0;
 }

@@ -245,7 +245,7 @@ fn reconcile_listed_prunes_stale_rows() -> anyhow::Result<()> {
     // All rows were synced at t=1_000_000, well before `cutoff`, so none fall
     // inside the optimistic-insert grace window here.
     db.forge_reviews_mut()?
-        .reconcile_listed(vec![listed_open.clone()], cutoff, cutoff)?;
+        .reconcile_listed(vec![listed_open.clone()], 2, cutoff, cutoff)?;
 
     let reviews = db.forge_reviews().list_all()?;
     assert_eq!(
@@ -286,7 +286,7 @@ fn reconcile_listed_spares_recent_optimistic_inserts() -> anyhow::Result<()> {
         .unwrap()
         .naive_utc();
     db.forge_reviews_mut()?
-        .reconcile_listed(vec![], cutoff, cutoff)?;
+        .reconcile_listed(vec![], 2, cutoff, cutoff)?;
 
     let reviews = db.forge_reviews().list_all()?;
     assert_eq!(
@@ -323,7 +323,7 @@ fn reconcile_listed_spares_recent_optimistic_inserts_with_non_empty_list() -> an
         .unwrap()
         .naive_utc();
     db.forge_reviews_mut()?
-        .reconcile_listed(vec![listed.clone()], cutoff, cutoff)?;
+        .reconcile_listed(vec![listed.clone()], 2, cutoff, cutoff)?;
 
     let reviews = db.forge_reviews().list_all()?;
     assert_eq!(

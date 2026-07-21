@@ -3,10 +3,9 @@
 	align-items: center;
 	padding: 6px 8px;
 	gap: 7px;
-	border-radius: var(--radius-m);
-	outline: 1px solid color-mix(var(--scale-gray-0) 10%, transparent);
+	border-radius: var(--radius-button);
 	background-color: var(--bg-1);
-	box-shadow: var(--shadow-s);
+	box-shadow: var(--shadow-tooltip);
 	color: var(--text-1);
 }
 

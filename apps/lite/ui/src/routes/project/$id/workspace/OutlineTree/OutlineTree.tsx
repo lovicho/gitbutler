@@ -1,6 +1,5 @@
 import rowStyles from "../Row.module.css";
 import { changesInWorktreeQueryOptions, headInfoQueryOptions } from "#ui/api/queries.ts";
-import { relativeToEquals } from "#ui/api/relative-to.ts";
 import { getHeadInfoIndex } from "#ui/api/ref-info.ts";
 import { commitIsDiverged, commitTitle } from "#ui/commit.ts";
 import {
@@ -26,14 +25,9 @@ import { useAppDispatch, useAppSelector, useAppStore } from "#ui/store.ts";
 import { classes } from "#ui/components/classes.ts";
 import { navigationIndexIncludes, type NavigationIndex } from "#ui/workspace/navigation-index.ts";
 import { mergeProps, Tooltip, useRender } from "@base-ui/react";
-import {
-	BranchReference,
-	RelativeTo,
-	Segment,
-	Stack,
-	PushStatus,
-	WorkspaceState,
-} from "@gitbutler/but-sdk";
+import { BranchReference, Segment, Stack, PushStatus, WorkspaceState } from "@gitbutler/but-sdk";
+import uiStyles from "#ui/components/ui.module.css";
+
 import { useQuery } from "@tanstack/react-query";
 import { Match } from "effect";
 import { ComponentProps, createContext, FC, Fragment, use, useRef } from "react";
@@ -239,38 +233,46 @@ const UncommittedChanges: FC<{
 		<div className={styles.uncommittedChanges}>
 			<UncommittedChangesRow changes={worktreeChanges?.changes ?? []} projectId={projectId} />
 
-			<FilesTree
-				className={styles.uncommittedChangesTree}
-				data-selection-scope={"uncommitted-files" satisfies SelectionScope}
-				onFocus={() =>
-					dispatch(
-						projectSlice.actions.setDetailsSelectionScope({
-							projectId,
-							scope: "uncommitted-files",
-						}),
-					)
-				}
-				emptyLabel="Nothing to commit"
-				fileParent={uncommittedChangesFileParent}
-				items={fileRowItems}
-				navigationIndex={navigationIndex}
-				onFileSelection={(selection) =>
-					dispatch(projectSlice.actions.selectUncommittedFiles({ projectId, selection }))
-				}
-				projectId={projectId}
-				ref={(el) => {
-					// Don't steal focus if this component is mounted later on.
-					if (document.activeElement !== document.body) return;
+			<div
+				className={classes(
+					styles.uncommittedChangesTree,
+					uiStyles.scrollerWithSeparator,
+					uiStyles.overlayScrollbar,
+				)}
+			>
+				<FilesTree
+					data-selection-scope={"uncommitted-files" satisfies SelectionScope}
+					onFocus={() =>
+						dispatch(
+							projectSlice.actions.setDetailsSelectionScope({
+								projectId,
+								scope: "uncommitted-files",
+							}),
+						)
+					}
+					emptyLabel="Nothing to commit"
+					fileParent={uncommittedChangesFileParent}
+					items={fileRowItems}
+					navigationIndex={navigationIndex}
+					onFileSelection={(selection) =>
+						dispatch(projectSlice.actions.selectUncommittedFiles({ projectId, selection }))
+					}
+					projectId={projectId}
+					ref={(el) => {
+						// Don't steal focus if this component is mounted later on.
+						if (document.activeElement !== document.body) return;
 
-					el?.focus({ focusVisible: false });
-				}}
-				selection={fileSelection}
-			/>
+						el?.focus({ focusVisible: false });
+					}}
+					selection={fileSelection}
+				/>
+			</div>
 
 			<CommitForm
 				projectId={projectId}
 				commitTarget={commitTarget}
 				targetComboboxItems={targetComboboxItems}
+				className={styles.commitForm}
 			/>
 		</div>
 	);
@@ -295,7 +297,6 @@ const BranchSegment: FC<{
 	segment: Segment;
 	refName: BranchReference;
 	stackId: string;
-	commitTarget: RelativeTo | null;
 	canTearOffBranch: boolean;
 	canRemoveBranch: boolean;
 	downstackPushStatus: DownstackPushStatus;
@@ -306,7 +307,6 @@ const BranchSegment: FC<{
 	segment,
 	refName,
 	stackId,
-	commitTarget,
 	canTearOffBranch,
 	canRemoveBranch,
 	downstackPushStatus,
@@ -330,14 +330,6 @@ const BranchSegment: FC<{
 				canTearOffBranch={canTearOffBranch}
 				canRemoveBranch={canRemoveBranch}
 				downstackPushStatus={downstackPushStatus}
-				isCommitTarget={
-					commitTarget
-						? relativeToEquals(commitTarget, {
-								type: "referenceBytes",
-								subject: refName.fullNameBytes,
-							})
-						: false
-				}
 				pushStatus={segment.pushStatus}
 				graphStatus={segmentPushStatusToGraphSegmentStatus(segment.pushStatus)}
 				bottomRelativeTo={segmentBottomRelativeTo(segment)}
@@ -346,12 +338,7 @@ const BranchSegment: FC<{
 
 			{/* oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- Tree items need ARIA group semantics. */}
 			<div role="group">
-				<SegmentContent
-					projectId={projectId}
-					segment={segment}
-					commitTarget={commitTarget}
-					checkCommit={checkCommit}
-				/>
+				<SegmentContent projectId={projectId} segment={segment} checkCommit={checkCommit} />
 			</div>
 		</TreeItem>
 	);
@@ -387,9 +374,8 @@ const EmptySegmentContent: FC<{
 const SegmentContent: FC<{
 	projectId: string;
 	segment: Segment;
-	commitTarget: RelativeTo | null;
 	checkCommit: (evt: { commitId: string; shiftKey: boolean }) => void;
-}> = ({ projectId, segment, commitTarget, checkCommit }) => {
+}> = ({ projectId, segment, checkCommit }) => {
 	if (segment.commits.length === 0) return <EmptySegmentContent segment={segment} />;
 
 	const dryRunWorkspace = use(DryRunWorkspaceContext);
@@ -420,14 +406,6 @@ const SegmentContent: FC<{
 										commit={commit}
 										checkCommit={checkCommit}
 										projectId={projectId}
-										isCommitTarget={
-											commitTarget
-												? relativeToEquals(commitTarget, {
-														type: "commit",
-														subject: commit.id,
-													})
-												: false
-										}
 										dryRunCommit={dryRunCommit}
 									/>
 								}
@@ -443,9 +421,8 @@ const SegmentContent: FC<{
 const StackC: FC<{
 	projectId: string;
 	stack: Stack;
-	commitTarget: RelativeTo | null;
 	checkCommit: (evt: { commitId: string; shiftKey: boolean }) => void;
-}> = ({ projectId, stack, commitTarget, checkCommit }) => {
+}> = ({ projectId, stack, checkCommit }) => {
 	// From Caleb:
 	// > There shouldn't be a way within GitButler to end up with a stack without a
 	//   StackId. Users can disrupt our matching against our metadata by playing
@@ -491,7 +468,6 @@ const StackC: FC<{
 										segment={segment}
 										refName={segment.refName}
 										stackId={stackId}
-										commitTarget={commitTarget}
 										canTearOffBranch={canTearOffBranch}
 										canRemoveBranch={canRemoveBranchReference(stack, index)}
 										downstackPushStatus={downstackPushStatus}
@@ -502,7 +478,6 @@ const StackC: FC<{
 									<SegmentContent
 										projectId={projectId}
 										segment={segment}
-										commitTarget={commitTarget}
 										checkCommit={checkCommit}
 									/>
 								)}
@@ -541,9 +516,8 @@ const StackC: FC<{
 
 const Stacks: FC<{
 	projectId: string;
-	commitTarget: RelativeTo | null;
 	checkCommit: (evt: { commitId: string; shiftKey: boolean }) => void;
-}> = ({ projectId, commitTarget, checkCommit }) => {
+}> = ({ projectId, checkCommit }) => {
 	const navigationIndex = assert(use(NavigationIndexContext));
 	const dispatch = useAppDispatch();
 	const { data: headInfo } = useQuery(headInfoQueryOptions(projectId));
@@ -605,13 +579,7 @@ const Stacks: FC<{
 				ref={hotkeysRef}
 			>
 				{(headInfo?.stacks.toReversed() ?? []).map((stack) => (
-					<StackC
-						key={stack.id}
-						projectId={projectId}
-						stack={stack}
-						commitTarget={commitTarget}
-						checkCommit={checkCommit}
-					/>
+					<StackC key={stack.id} projectId={projectId} stack={stack} checkCommit={checkCommit} />
 				))}
 			</div>
 		</DryRunWorkspaceContext>
@@ -635,17 +603,17 @@ export const OutlineTree: FC<
 	const { data: headInfo } = useQuery(headInfoQueryOptions(projectId));
 	const headInfoIndex = headInfo ? getHeadInfoIndex(headInfo) : undefined;
 
-	const commitTargetState = useAppSelector((state) =>
-		projectSlice.selectors.selectCommitTarget(state, projectId),
+	const outlineSelection = useAppSelector((state) =>
+		projectSlice.selectors.selectSelectionOutline(state, projectId, navigationIndex),
 	);
 	const commitTargetComboboxItems = buildCommitTargetComboboxItems({
 		headInfo,
 		headInfoIndex,
-		commitTargetState,
+		outlineSelection,
 	});
 	const commitTarget = selectCommitTargetComboboxItem({
 		items: commitTargetComboboxItems,
-		commitTargetState,
+		outlineSelection,
 	});
 	const hasCheckedCommits = useAppSelector((state) =>
 		headInfoIndex
@@ -728,14 +696,12 @@ export const OutlineTree: FC<
 									operand={uncommittedChangesOperand}
 									outline="inside"
 									render={
-										<div className={styles.panel}>
-											<UncommittedChanges
-												navigationIndex={uncommittedFilesNavigationIndex}
-												commitTarget={commitTarget}
-												projectId={projectId}
-												targetComboboxItems={commitTargetComboboxItems}
-											/>
-										</div>
+										<UncommittedChanges
+											navigationIndex={uncommittedFilesNavigationIndex}
+											commitTarget={commitTarget}
+											projectId={projectId}
+											targetComboboxItems={commitTargetComboboxItems}
+										/>
 									}
 								/>
 							}
@@ -744,12 +710,12 @@ export const OutlineTree: FC<
 
 					<Separator className={styles.resizeHandle} />
 
-					<Panel id={"stacks-panel" satisfies PanelId} className={styles.panel} minSize={120}>
-						<Stacks
-							projectId={projectId}
-							commitTarget={commitTarget?.relativeTo ?? null}
-							checkCommit={checkCommit}
-						/>
+					<Panel
+						id={"stacks-panel" satisfies PanelId}
+						className={classes(styles.stacksPanel, uiStyles.overlayScrollbar)}
+						minSize={120}
+					>
+						<Stacks projectId={projectId} checkCommit={checkCommit} />
 					</Panel>
 				</Group>
 			</AbsorptionTargetCommitIdsContext>

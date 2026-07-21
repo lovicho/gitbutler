@@ -179,16 +179,18 @@ impl ForgeReviewsHandleMut<'_> {
     ///
     /// The list is the source of truth for which reviews are currently *open*,
     /// with two deliberate exceptions that keep the cache useful — and
-    /// non-flickery — between syncs. The three steps run in a single savepoint,
+    /// non-flickery — between syncs. The four steps run in a single savepoint,
     /// so a partial reconcile is never observable.
     ///
-    /// 1. **Upsert everything listed.** Each listed review is inserted or
+    /// 1. **Delete rows with another `struct_version`.** Their missing fields
+    ///    cannot be reconstructed from persisted data.
+    /// 2. **Upsert everything listed.** Each listed review is inserted or
     ///    refreshed, which also bumps its `last_sync_at`.
-    /// 2. **Delete open reviews the forge no longer lists — but only stale ones**
+    /// 3. **Delete open reviews the forge no longer lists — but only stale ones**
     ///    (see [`delete_open_reviews_absent_from_list`]). A freshly-written
     ///    optimistic insert is spared via `absent_open_cutoff` so it doesn't
     ///    flicker off before the forge's eventually-consistent list catches up.
-    /// 3. **Prune old merged reviews** past `merged_cutoff` (see
+    /// 4. **Prune old merged reviews** past `merged_cutoff` (see
     ///    [`prune_merged_before`]). Closed (non-merged) reviews are always kept,
     ///    so direct lookups such as upstream-integration hints keep working.
     ///
@@ -197,9 +199,14 @@ impl ForgeReviewsHandleMut<'_> {
     pub fn reconcile_listed(
         self,
         reviews: Vec<ForgeReview>,
+        struct_version: i32,
         merged_cutoff: chrono::NaiveDateTime,
         absent_open_cutoff: chrono::NaiveDateTime,
     ) -> rusqlite::Result<()> {
+        self.sp.execute(
+            "DELETE FROM forge_reviews WHERE struct_version != ?1",
+            [struct_version],
+        )?;
         let listed_numbers = reviews
             .iter()
             .map(|review| review.number)

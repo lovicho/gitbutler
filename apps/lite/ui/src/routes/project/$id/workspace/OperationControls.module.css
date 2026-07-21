@@ -11,9 +11,9 @@
 	overflow: hidden;
 	transform: translateX(-50%);
 	border: 1px solid light-dark(rgb(0 0 0 / 0.2), rgb(255 255 255 / 0.16));
-	border-radius: var(--radius-l);
+	border-radius: var(--radius-2xl);
 	background-color: var(--bg-1);
-	box-shadow: var(--shadow-m);
+	box-shadow: var(--shadow-md);
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
@@ -29,7 +29,7 @@
 	flex-direction: column;
 	justify-content: end;
 	padding: 8px;
-	border-radius: var(--radius-m);
+	border-radius: var(--radius-lg);
 	text-align: center;
 
 	&[data-pressed] {

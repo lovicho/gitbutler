@@ -16,6 +16,43 @@
 	transform: translate(-50%, -50%);
 }
 
+/* Utility class for scroll containers: replaces the default scrollbar with a
+   slim custom-styled native one. Being native, it doesn't interfere with
+   drag-and-drop or other pointer interactions.
+
+   The scrollbar reserves --overlay-scrollbar-size of space at the end edge.
+   To make it look like an overlay scrollbar, subtract that amount from the
+   container's end padding, e.g.:
+   padding-right: calc(var(--panel-padding-inline) - var(--overlay-scrollbar-size)); */
+.overlayScrollbar {
+	--overlay-scrollbar-size: 10px;
+
+	scrollbar-gutter: stable;
+
+	&::-webkit-scrollbar {
+		width: var(--overlay-scrollbar-size);
+		height: var(--overlay-scrollbar-size);
+		background-color: transparent;
+	}
+
+	&::-webkit-scrollbar-thumb {
+		/* Inset the thumb from the edges via a transparent border, using
+		   background-clip so the border doesn't get painted. */
+		border: 3px solid transparent;
+		border-radius: 5px;
+		background-clip: padding-box;
+		background-color: color-mix(in srgb, var(--text-1) 25%, transparent);
+
+		&:hover {
+			background-color: color-mix(in srgb, var(--text-1) 40%, transparent);
+		}
+	}
+
+	&::-webkit-scrollbar-corner {
+		background-color: transparent;
+	}
+}
+
 .scrollerWithSeparator {
 	container-type: scroll-state;
 	overflow: auto;
@@ -26,7 +63,7 @@
 		position: sticky;
 		top: 0;
 		margin-top: -1px;
-		border-top: 1px solid light-dark(hsl(0 0% 83.9% / 0.45), hsl(0 0% 0% / 0.5));
+		border-top: 1px solid var(--border-3);
 		content: "";
 		opacity: 0;
 		transition: opacity 120ms ease;

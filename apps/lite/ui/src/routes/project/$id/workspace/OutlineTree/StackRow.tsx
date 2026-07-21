@@ -73,6 +73,7 @@ export const StackRow: FC<
 		<Row
 			{...restProps}
 			interactive={false}
+			className={classes(styles.header, restProps.className)}
 			onContextMenu={(event) => {
 				void showNativeContextMenu(event, menuItems);
 			}}

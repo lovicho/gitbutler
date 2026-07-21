@@ -6,6 +6,7 @@ pub use crate::forge::{ForgeName, ForgeRepoInfo, ForgeUser, deserialize_preferre
 mod association;
 mod ci;
 mod db;
+pub use db::list_cached_forge_reviews;
 mod forge_info;
 mod repo;
 mod review;

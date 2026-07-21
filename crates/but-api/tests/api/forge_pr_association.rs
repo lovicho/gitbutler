@@ -94,6 +94,29 @@ fn optimistic_cache_insert_is_visible_on_the_next_projection() -> anyhow::Result
     Ok(())
 }
 
+#[test]
+fn incompatible_cache_rows_do_not_break_head_info() -> anyhow::Result<()> {
+    let (mut ctx, _tmp) = context_with_remote_branch()?;
+    let branch: gix::refs::FullName = format!("refs/heads/{BRANCH}").try_into()?;
+    but_api::branch::apply_only(&mut ctx, branch.as_ref())?;
+
+    for version in [1, 2] {
+        let mut row: but_db::ForgeReview = review(PR_NUMBER).try_into()?;
+        row.struct_version = version;
+        ctx.db
+            .get_cache_mut()?
+            .forge_reviews_mut()?
+            .set_all(vec![row])?;
+
+        assert_eq!(
+            projected_pr(&ctx)?,
+            None,
+            "an incompatible persisted review should behave like a cache miss"
+        );
+    }
+    Ok(())
+}
+
 fn context_with_remote_branch() -> anyhow::Result<(
     but_ctx::Context,
     but_testsupport::gix_testtools::tempfile::TempDir,

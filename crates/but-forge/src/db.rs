@@ -90,13 +90,48 @@ impl TryFrom<but_db::ForgeReview> for ForgeReview {
     }
 }
 
-pub(crate) fn reviews_from_cache(db: &but_db::DbHandle) -> anyhow::Result<Vec<ForgeReview>> {
+pub(crate) struct CachedReviews {
+    reviews: Vec<ForgeReview>,
+    saw_incompatible: bool,
+}
+
+impl CachedReviews {
+    pub(crate) fn fresh_rows(
+        self,
+        max_age_seconds: u64,
+        now: chrono::NaiveDateTime,
+    ) -> Option<Vec<ForgeReview>> {
+        if self.saw_incompatible {
+            return None;
+        }
+        let last_sync_at = self.reviews.first()?.last_sync_at;
+        let age_seconds = (now - last_sync_at).num_seconds();
+        (age_seconds >= 0 && age_seconds as u64 <= max_age_seconds).then_some(self.reviews)
+    }
+}
+
+pub(crate) fn reviews_from_cache(db: &but_db::DbHandle) -> anyhow::Result<CachedReviews> {
     let db_reviews = db.forge_reviews().list_all()?;
-    let reviews: Vec<ForgeReview> = db_reviews
+    let expected_version = ForgeReview::struct_version();
+    let saw_incompatible = db_reviews
+        .iter()
+        .any(|review| review.struct_version != expected_version);
+    let reviews = db_reviews
         .into_iter()
-        .map(|r| r.try_into())
-        .collect::<anyhow::Result<Vec<ForgeReview>>>()?;
-    Ok(reviews)
+        .filter(|review| review.struct_version == expected_version)
+        .map(ForgeReview::try_from)
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    Ok(CachedReviews {
+        reviews,
+        saw_incompatible,
+    })
+}
+
+/// Lists compatible persisted reviews without performing network I/O.
+///
+/// Rows written with another [`ForgeReview::struct_version`] are cache misses.
+pub fn list_cached_forge_reviews(db: &but_db::DbHandle) -> anyhow::Result<Vec<ForgeReview>> {
+    Ok(reviews_from_cache(db)?.reviews)
 }
 
 /// Refreshes the cached review rows returned by a forge listing.
@@ -105,7 +140,8 @@ pub(crate) fn reviews_from_cache(db: &but_db::DbHandle) -> anyhow::Result<Vec<Fo
 /// fetched reviews, such as recently merged PRs used by upstream integration,
 /// are not deleted by an open-review list response. Cached open reviews that no
 /// longer appear in the listed response are deleted, while retained merged
-/// reviews are pruned after 15 days.
+/// reviews are pruned after 15 days. Rows written with another persisted-model
+/// version are deleted because their missing fields cannot be reconstructed.
 pub(crate) fn cache_reviews(
     db: &mut but_db::DbHandle,
     reviews: &[ForgeReview],
@@ -118,7 +154,12 @@ pub(crate) fn cache_reviews(
         .map(|review| review.clone().try_into())
         .collect::<anyhow::Result<Vec<_>>>()?;
     db.forge_reviews_mut()?
-        .reconcile_listed(db_reviews, merged_cutoff, absent_open_cutoff)
+        .reconcile_listed(
+            db_reviews,
+            ForgeReview::struct_version(),
+            merged_cutoff,
+            absent_open_cutoff,
+        )
         .map_err(anyhow::Error::from)?;
     Ok(())
 }
@@ -270,4 +311,175 @@ pub(crate) fn cache_ci_checks(
     db.ci_checks_mut()?
         .set_for_reference(reference, db_checks)
         .map_err(Into::into)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{cache_reviews, list_cached_forge_reviews, reviews_from_cache};
+    use crate::ForgeReview;
+
+    fn review(
+        number: i64,
+        source_branch: &str,
+        last_sync_at: chrono::NaiveDateTime,
+    ) -> ForgeReview {
+        ForgeReview {
+            html_url: String::new(),
+            number,
+            title: String::new(),
+            body: None,
+            author: None,
+            labels: Vec::new(),
+            draft: false,
+            source_branch: source_branch.to_string(),
+            target_branch: "main".to_string(),
+            sha: String::new(),
+            integration_commit_shas: Vec::new(),
+            created_at: None,
+            modified_at: None,
+            merged_at: None,
+            closed_at: None,
+            repository_ssh_url: None,
+            repository_https_url: None,
+            repo_owner: None,
+            head_repo_is_fork: false,
+            reviewers: Vec::new(),
+            unit_symbol: "#".to_string(),
+            last_sync_at,
+        }
+    }
+
+    fn test_db() -> (tempfile::TempDir, but_db::DbHandle) {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = but_db::DbHandle::new_in_directory(tmp.path()).unwrap();
+        (tmp, db)
+    }
+
+    fn stored_review(
+        number: i64,
+        source_branch: &str,
+        struct_version: i32,
+        last_sync_at: chrono::NaiveDateTime,
+    ) -> but_db::ForgeReview {
+        let mut row: but_db::ForgeReview = review(number, source_branch, last_sync_at)
+            .try_into()
+            .unwrap();
+        row.struct_version = struct_version;
+        row
+    }
+
+    #[test]
+    fn mixed_versions_are_filtered_and_force_a_refetch() {
+        let (_tmp, mut db) = test_db();
+        let now = chrono::Local::now().naive_local();
+        db.forge_reviews_mut()
+            .unwrap()
+            .set_all(vec![
+                stored_review(1, "stale-v1", 1, now),
+                stored_review(2, "stale-v2", 2, now),
+                stored_review(3, "current", ForgeReview::struct_version(), now),
+            ])
+            .unwrap();
+
+        let compatible = list_cached_forge_reviews(&db).unwrap();
+        assert_eq!(
+            compatible
+                .iter()
+                .map(|review| review.number)
+                .collect::<Vec<_>>(),
+            vec![3],
+            "cache-only readers should skip incompatible rows"
+        );
+        assert!(
+            reviews_from_cache(&db)
+                .unwrap()
+                .fresh_rows(60, now)
+                .is_none(),
+            "fallback readers should refetch rather than reuse a partial cache"
+        );
+    }
+
+    #[test]
+    fn compatible_fresh_rows_are_reused() {
+        let (_tmp, mut db) = test_db();
+        let now = chrono::Local::now().naive_local();
+        db.forge_reviews_mut()
+            .unwrap()
+            .set_all(vec![stored_review(
+                3,
+                "current",
+                ForgeReview::struct_version(),
+                now,
+            )])
+            .unwrap();
+
+        let cached = reviews_from_cache(&db)
+            .unwrap()
+            .fresh_rows(60, now)
+            .expect("a compatible fresh cache should be reused");
+        assert_eq!(cached[0].number, 3, "the cached review should be returned");
+    }
+
+    #[test]
+    fn compatible_stale_rows_force_a_refetch() {
+        let (_tmp, mut db) = test_db();
+        let now = chrono::Local::now().naive_local();
+        db.forge_reviews_mut()
+            .unwrap()
+            .set_all(vec![stored_review(
+                3,
+                "current",
+                ForgeReview::struct_version(),
+                now - chrono::Duration::seconds(61),
+            )])
+            .unwrap();
+
+        assert!(
+            reviews_from_cache(&db)
+                .unwrap()
+                .fresh_rows(60, now)
+                .is_none(),
+            "a compatible cache older than the maximum age should be refetched"
+        );
+    }
+
+    #[test]
+    fn refreshing_the_cache_deletes_incompatible_rows() {
+        let (_tmp, mut db) = test_db();
+        let now = chrono::Local::now().naive_local();
+        db.forge_reviews_mut()
+            .unwrap()
+            .set_all(vec![
+                stored_review(1, "stale-v1", 1, now),
+                stored_review(2, "stale-v2", 2, now),
+            ])
+            .unwrap();
+
+        cache_reviews(&mut db, &[review(3, "current", now)]).unwrap();
+
+        let rows = db.forge_reviews().list_all().unwrap();
+        assert_eq!(rows.len(), 1, "refresh should discard stale cache entries");
+        assert_eq!(
+            rows[0].struct_version,
+            ForgeReview::struct_version(),
+            "refreshed cache only contains the current persisted model"
+        );
+    }
+
+    #[test]
+    fn current_version_corruption_is_an_error() {
+        let (_tmp, mut db) = test_db();
+        let now = chrono::Local::now().naive_local();
+        let mut corrupt: but_db::ForgeReview = review(1, "corrupt", now).try_into().unwrap();
+        corrupt.labels = "not-json".to_string();
+        db.forge_reviews_mut()
+            .unwrap()
+            .set_all(vec![corrupt])
+            .unwrap();
+
+        assert!(
+            list_cached_forge_reviews(&db).is_err(),
+            "current-version corruption must not be treated as a cache miss"
+        );
+    }
 }
