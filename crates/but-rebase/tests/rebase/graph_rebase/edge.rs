@@ -89,7 +89,6 @@ fn adding_an_existing_edge_causes_an_error() -> Result<()> {
 }
 
 #[test]
-#[cfg(debug_assertions)]
 fn adding_an_edge_that_introduces_a_cycle_causes_an_error() -> Result<()> {
     let (repo, mut meta) = fixture("four-commits")?;
 

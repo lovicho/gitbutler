@@ -44,8 +44,8 @@ pub fn ci_checks_for_ref_with_cache(
 ///
 /// A resolvable ref returns an authoritative list — even an empty one, which
 /// replaces the cache (e.g. after a force-push to a commit that has no CI). An
-/// unresolvable ref (`None`, e.g. a transient GitHub 422 before a pushed ref
-/// propagates) is surfaced as "no checks" for display but must not overwrite the
+/// unresolvable ref (`None`, e.g. a transient GitHub 422 or a deleted Bitbucket
+/// branch) is surfaced as "no checks" for display but must not overwrite the
 /// previously-good checks that cache-only readers such as `but status` rely on,
 /// since it can be transient.
 fn fetch_and_refresh_cache(
@@ -63,8 +63,8 @@ fn fetch_and_refresh_cache(
 ///
 /// `Some(checks)` is authoritative and refreshes the cache — even an empty vec,
 /// which clears it (e.g. after a force-push to a commit that has no CI). `None`
-/// means the ref did not resolve (a transient GitHub 422); it is surfaced as "no
-/// checks" for display but deliberately leaves the cache untouched, since a
+/// means the ref did not resolve; it is surfaced as "no checks" for display but
+/// deliberately leaves the cache untouched, since a
 /// cache-only reader such as `but status` must not lose previously-good checks
 /// to a momentary blip.
 fn refresh_cache_with_fetched(
@@ -81,8 +81,7 @@ fn refresh_cache_with_fetched(
     }
 }
 
-/// Fetch checks from the forge. `None` means the ref did not resolve (only
-/// GitHub distinguishes this today); every other forge returns `Some`.
+/// Fetch checks from the forge. `None` means the ref did not resolve.
 fn ci_checks_for_ref(
     preferred_forge_user: Option<crate::ForgeUser>,
     forge_repo_info: &crate::forge::ForgeRepoInfo,
@@ -180,7 +179,7 @@ fn ci_checks_for_ref(
             .join()
             .map_err(|e| anyhow::anyhow!("Failed to join thread: {e:?}"))??;
 
-            Ok(Some(
+            Ok(statuses.map(|statuses| {
                 statuses
                     .into_iter()
                     .map(|status| {
@@ -188,8 +187,8 @@ fn ci_checks_for_ref(
                         ci_check.reference = reference_for_checks.to_string();
                         ci_check
                     })
-                    .collect(),
-            ))
+                    .collect()
+            }))
         }
         _ => Err(anyhow::anyhow!(
             "Listing ci checks for forge {forge:?} is not implemented yet."
@@ -552,8 +551,8 @@ mod tests {
         let (_tmp, mut db) = test_db();
         refresh_cache_with_fetched(&mut db, REFERENCE, Some(vec![cache_check(1)]));
 
-        // An unresolvable ref (a transient GitHub 422) shows "no checks" for
-        // display but must not wipe the previously-good cache.
+        // An unresolvable ref shows "no checks" for display but must not wipe
+        // the previously-good cache.
         let displayed = refresh_cache_with_fetched(&mut db, REFERENCE, None);
 
         assert!(displayed.is_empty(), "an unresolvable ref shows no checks");

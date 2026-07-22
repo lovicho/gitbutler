@@ -31,7 +31,6 @@ export enum ReduxTag {
 	InitalEditListing = "InitialEditListing",
 	EditChangesSinceInitial = "EditChangesSinceInitial",
 	AuthorInfo = "AuthorInfo",
-	IntegrationSteps = "IntegrationSteps",
 	GitConfigProperty = "GitConfigProperty",
 	GitButlerConfig = "GitButlerConfig",
 	IrcConnectionState = "IrcConnectionState",

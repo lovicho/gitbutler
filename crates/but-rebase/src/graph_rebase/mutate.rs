@@ -4,7 +4,7 @@ use std::collections::HashSet;
 
 use anyhow::{Context as _, Result, anyhow, bail};
 use but_core::RefMetadata;
-use petgraph::{Direction, visit::EdgeRef};
+use petgraph::{Direction, algo::has_path_connecting, visit::EdgeRef};
 use serde::{Deserialize, Serialize};
 
 use crate::graph_rebase::{
@@ -831,25 +831,8 @@ impl<M: RefMetadata> Editor<'_, '_, M> {
         let child = self.history.normalize_selector(child.to_selector(self)?)?;
         let parent = self.history.normalize_selector(parent.to_selector(self)?)?;
 
-        if cfg!(debug_assertions) {
-            let mut seen = HashSet::from([parent.id]);
-            let mut tips = vec![parent.id];
-
-            while let Some(tip) = tips.pop() {
-                for parent in self
-                    .graph
-                    .edges_directed(tip, Direction::Outgoing)
-                    .map(|e| e.target())
-                {
-                    if seen.insert(parent) {
-                        tips.push(parent);
-                    }
-                }
-            }
-
-            if seen.contains(&child.id) {
-                bail!("BUG: Add edge introduces a cycle");
-            }
+        if has_path_connecting(&self.graph, parent.id, child.id, None) {
+            bail!("BUG: Add edge introduces a cycle");
         }
 
         if self

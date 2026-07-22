@@ -121,32 +121,42 @@ export async function unstackPRs(
 
 /**
  * Replaces or inserts a new footer into an existing body of text.
+ *
+ * If there is only one PR in the stack there is no stack to advertise, so we add
+ * no footer and strip any existing one - mirroring the single-PR guard in
+ * `update_body` in `but-forge`. A body without a footer is returned untouched so
+ * we don't needlessly rewrite PRs (including ones not opened through GitButler).
  */
-function updateBody(
+export function updateBody(
 	body: string | undefined,
 	prNumber: number,
 	allPrNumbers: number[],
 	symbol: string,
 ) {
-	const head = (body?.split(STACKING_FOOTER_BOUNDARY_TOP).at(0) || "").trim();
-	const tail = (body?.split(STACKING_FOOTER_BOUNDARY_BOTTOM).at(1) || "").trim();
-	const footer = generateFooter(prNumber, allPrNumbers, symbol);
-	const description = head + "\n\n" + footer + "\n\n" + tail;
-	return description;
+	if (allPrNumbers.length <= 1) {
+		return clearFooter(body) ?? "";
+	}
+	return composeBody(body, generateFooter(prNumber, allPrNumbers, symbol));
 }
 
 /**
  * Remove the footer from an existing body of text.
  */
 function clearFooter(body: string | undefined) {
-	if (!body) return body;
-	if (!body.includes(STACKING_FOOTER_BOUNDARY_TOP)) return body;
+	if (!body?.includes(STACKING_FOOTER_BOUNDARY_TOP)) return body;
 	if (!body.includes(STACKING_FOOTER_BOUNDARY_BOTTOM)) return body;
+	return composeBody(body);
+}
 
+/**
+ * Rebuild a PR body from its parts: the text before any existing footer, an
+ * optional new footer, and the text after any existing footer. Omitting the
+ * footer removes it.
+ */
+function composeBody(body: string | undefined, footer?: string): string {
 	const head = (body?.split(STACKING_FOOTER_BOUNDARY_TOP).at(0) || "").trim();
 	const tail = (body?.split(STACKING_FOOTER_BOUNDARY_BOTTOM).at(1) || "").trim();
-	const description = head + "\n\n" + tail;
-	return description;
+	return [head, footer, tail].filter(Boolean).join("\n\n");
 }
 
 /**

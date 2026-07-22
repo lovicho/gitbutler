@@ -335,6 +335,7 @@ export function buildStackEndpoints(build: BackendEndpointBuilder) {
 			}),
 			invalidatesTags: (_result, _error, args) => [
 				invalidatesItem(ReduxTag.StackDetails, args.stackId),
+				invalidatesList(ReduxTag.StackDetails),
 				invalidatesList(ReduxTag.BranchListing),
 			],
 		}),
@@ -357,7 +358,6 @@ export function buildStackEndpoints(build: BackendEndpointBuilder) {
 			transformResponse: normalizeCreateCommitOutcome,
 			invalidatesTags: [
 				invalidatesList(ReduxTag.WorktreeChanges),
-				invalidatesList(ReduxTag.IntegrationSteps),
 				invalidatesList(ReduxTag.HeadSha),
 			],
 		}),
@@ -821,8 +821,7 @@ export function buildStackEndpoints(build: BackendEndpointBuilder) {
 				branch: branchRef,
 				strategy,
 			}),
-			providesTags: (_result, _error, { branchRef }) =>
-				providesItem(ReduxTag.IntegrationSteps, branchRef),
+			providesTags: [providesList(ReduxTag.HeadSha), providesList(ReduxTag.StackDetails)],
 		}),
 		applyBranchIntegration: build.mutation<
 			IntegrateBranchResult,
@@ -852,7 +851,6 @@ export function buildStackEndpoints(build: BackendEndpointBuilder) {
 							invalidatesList(ReduxTag.Stacks),
 							invalidatesList(ReduxTag.StackDetails),
 							invalidatesList(ReduxTag.BranchListing),
-							invalidatesItem(ReduxTag.IntegrationSteps, args.branchRef),
 						],
 		}),
 		branchApply: build.mutation<ApplyOutcome, { projectId: string; existingBranch: string }>({

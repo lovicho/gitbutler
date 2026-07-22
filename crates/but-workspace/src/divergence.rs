@@ -105,6 +105,31 @@ pub(crate) fn commit_ids_from_selectors<M: RefMetadata>(
         .collect()
 }
 
+/// Find `commit_id` on the effective local first-parent path above `merge_base`.
+///
+/// The effective tip includes workspace commits above the local branch ref, while
+/// bounding the walk at the plan's merge base keeps commits from other stacks out.
+pub(crate) fn find_local_commit_until_merge_base<M: RefMetadata>(
+    ref_name: &gix::refs::FullNameRef,
+    commit_id: gix::ObjectId,
+    merge_base: gix::ObjectId,
+    editor: &Editor<'_, '_, M>,
+) -> Result<Option<Selector>> {
+    let local_tip = tip_for_ref(editor, ref_name, editor.repo())?;
+    let mut path = first_parent_path_until(editor, local_tip, |selector| {
+        editor.lookup_pick(*selector).ok() == Some(merge_base)
+    })?;
+    let Some(path_end) = path.pop() else {
+        return Ok(None);
+    };
+    if editor.lookup_pick(path_end).ok() != Some(merge_base) {
+        return Ok(None);
+    }
+    Ok(path
+        .into_iter()
+        .find(|selector| editor.lookup_pick(*selector).ok() == Some(commit_id)))
+}
+
 /// Classify candidate selectors by whether the target branch reaches them.
 ///
 /// `editor` provides the graph traversal and pick lookup operations used during

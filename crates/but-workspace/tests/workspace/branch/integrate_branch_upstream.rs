@@ -4,6 +4,7 @@ use std::vec;
 use anyhow::{Result, bail};
 use bstr::ByteSlice;
 use but_core::{ChangeId, Commit, RefMetadata, commit::Headers};
+use but_error::{AnyhowContextExt, Code};
 use but_graph::init::Options;
 use but_testsupport::gix_testtools::tempfile::TempDir;
 use but_testsupport::{InMemoryRefMetadata, visualize_commit_graph_all, visualize_tree};
@@ -968,6 +969,167 @@ fn integrate_branch_with_steps_empty_errors_early() -> Result<()> {
         err.to_string()
             .contains("Integration steps cannot be empty"),
         "unexpected error: {err:#}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn integrate_branch_with_steps_rejects_duplicate_prepared_commit() -> Result<()> {
+    let (_tmp, graph, repo, mut meta, _description) =
+        named_writable_scenario_with_description_and_graph(
+            "remote-diverged-with-workspace",
+            |meta| {
+                add_stack_with_segments(meta, 1, "A", StackState::InWorkspace, &[]);
+            },
+        )?;
+    let mut ws = graph.into_workspace()?;
+    let remote_commit = repo.rev_parse_single("origin/A~1")?.detach();
+    let merge_base = repo.rev_parse_single("A~2")?.detach();
+    let integration = InteractiveIntegration {
+        merge_base,
+        first_local_not_integrated: None,
+        steps: vec![
+            InteractiveIntegrationStep::Pick {
+                commit_id: remote_commit,
+            },
+            InteractiveIntegrationStep::Pick {
+                commit_id: remote_commit,
+            },
+        ],
+    };
+
+    let err =
+        integrate_branch_with_steps(r("refs/heads/A"), integration, &mut ws, &mut meta, &repo)
+            .expect_err("a repeated commit would alias one editor node and create a self-cycle");
+    assert_eq!(
+        err.custom_context().map(|context| context.code),
+        Some(Code::PreconditionFailed),
+        "a malformed integration plan is a recoverable caller precondition"
+    );
+    assert!(
+        err.to_string().contains("prepared commit")
+            && err.to_string().contains("appears more than once"),
+        "the error should explain which plan invariant failed: {err:#}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn integrate_branch_with_steps_classifies_a_stale_first_local_commit() -> Result<()> {
+    let (_tmp, graph, repo, mut meta, _description) =
+        named_writable_scenario_with_description_and_graph(
+            "remote-diverged-with-workspace",
+            |meta| {
+                add_stack_with_segments(meta, 1, "A", StackState::InWorkspace, &[]);
+            },
+        )?;
+    let mut ws = graph.into_workspace()?;
+    let local_commit = repo.rev_parse_single("A~1")?.detach();
+    let remote_commit = repo.rev_parse_single("origin/A~1")?.detach();
+    let merge_base = repo.rev_parse_single("A~2")?.detach();
+    let mut stale_commit = repo.find_commit(local_commit)?.decode()?.to_owned()?;
+    stale_commit.message = "unreachable stale integration commit".into();
+    let stale_commit = repo.write_object(stale_commit)?.detach();
+    let integration = InteractiveIntegration {
+        merge_base,
+        first_local_not_integrated: Some(stale_commit),
+        steps: vec![InteractiveIntegrationStep::Pick {
+            commit_id: remote_commit,
+        }],
+    };
+
+    let err =
+        integrate_branch_with_steps(r("refs/heads/A"), integration, &mut ws, &mut meta, &repo)
+            .expect_err("an integration plan must be refreshed after its boundary commit changes");
+    assert_eq!(
+        err.custom_context().map(|context| context.code),
+        Some(Code::PreconditionFailed),
+        "a stale cross-operation plan is a recoverable caller precondition"
+    );
+    assert!(
+        err.to_string().contains("Integration plan is stale")
+            && err.to_string().contains(&stale_commit.to_string()),
+        "the error should identify the stale commit and recovery: {err:#}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn integrate_branch_with_steps_accepts_a_duplicate_merge_base_pick_off_path() -> Result<()> {
+    let (_tmp, graph, repo, mut meta, _description) =
+        named_writable_scenario_with_description_and_graph(
+            "remote-diverged-with-workspace",
+            |meta| {
+                add_stack_with_segments(meta, 1, "A", StackState::InWorkspace, &[]);
+            },
+        )?;
+    let mut ws = graph.into_workspace()?;
+    let local_commit = repo.rev_parse_single("A~1")?.detach();
+    let remote_commit = repo.rev_parse_single("origin/A~1")?.detach();
+    let merge_base = repo.rev_parse_single("A~2")?.detach();
+    let duplicate_merge_base = ws
+        .graph
+        .segment_by_commit_id(merge_base)?
+        .commit_by_id(merge_base)
+        .expect("the merge-base segment contains the merge-base commit")
+        .clone();
+    let remote_segment = ws
+        .graph
+        .segment_by_ref_name(r("refs/remotes/origin/A"))
+        .expect("the fixture has the tracked remote branch")
+        .id;
+    ws.graph[remote_segment].commits.push(duplicate_merge_base);
+
+    let integration = InteractiveIntegration {
+        merge_base,
+        first_local_not_integrated: Some(local_commit),
+        steps: vec![InteractiveIntegrationStep::Pick {
+            commit_id: remote_commit,
+        }],
+    };
+
+    integrate_branch_with_steps(r("refs/heads/A"), integration, &mut ws, &mut meta, &repo)?;
+
+    Ok(())
+}
+
+#[test]
+fn integrate_branch_with_steps_rejects_a_boundary_from_another_branch() -> Result<()> {
+    let (_tmp, graph, repo, mut meta, _description) =
+        named_writable_scenario_with_description_and_graph(
+            "ws-ref-ws-commit-single-stack-double-stack",
+            |meta| {
+                add_stack_with_segments(meta, 1, "A", StackState::InWorkspace, &[]);
+                add_stack_with_segments(meta, 2, "C", StackState::InWorkspace, &["B"]);
+            },
+        )?;
+    let mut ws = graph.into_workspace()?;
+    let boundary_on_b = repo.rev_parse_single("B")?.detach();
+    let integration = InteractiveIntegration {
+        merge_base: repo.rev_parse_single("main")?.detach(),
+        first_local_not_integrated: Some(boundary_on_b),
+        steps: vec![InteractiveIntegrationStep::Pick {
+            commit_id: repo.rev_parse_single("C")?.detach(),
+        }],
+    };
+
+    let err =
+        integrate_branch_with_steps(r("refs/heads/A"), integration, &mut ws, &mut meta, &repo)
+            .expect_err("a boundary on another branch must not delimit the selected branch");
+    assert_eq!(
+        err.custom_context().map(|context| context.code),
+        Some(Code::PreconditionFailed),
+        "a moved integration boundary is a recoverable caller precondition"
+    );
+    assert!(
+        err.to_string().contains("Integration plan is stale")
+            && err
+                .to_string()
+                .contains("no longer reachable from the selected branch"),
+        "the error should explain that the boundary moved to another branch: {err:#}"
     );
 
     Ok(())

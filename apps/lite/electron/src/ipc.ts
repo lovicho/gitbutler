@@ -459,6 +459,8 @@ export interface LiteElectronApi {
 	getReview: (params: GetReviewParams) => Promise<ForgeReview>;
 	getUndoTargetSnapshot: (projectId: string) => Promise<Snapshot | null>;
 	headInfo: (projectId: string) => Promise<RefInfo>;
+	isFullScreen: () => Promise<boolean>;
+	onFullScreenChange: (callback: (fullScreen: boolean) => void) => () => void;
 	listBranches: (
 		projectId: string,
 		filter: BranchListingFilter | null,
@@ -547,6 +549,8 @@ export const liteIpcChannels = {
 	getReview: "workspace:get-review",
 	getUndoTargetSnapshot: "workspace:get-undo-target-snapshot",
 	headInfo: "workspace:head-info",
+	isFullScreen: "lite:is-full-screen",
+	fullScreenChange: "lite:full-screen-change",
 	listBranches: "workspace:list-branches",
 	listAvailableReviewTemplates: "workspace:list-available-review-templates",
 	listCiChecks: "workspace:list-ci-checks",

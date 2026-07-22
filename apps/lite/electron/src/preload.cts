@@ -146,6 +146,14 @@ const api: LiteElectronApi = {
 	getUndoTargetSnapshot: (params) =>
 		ipcRenderer.invoke("workspace:get-undo-target-snapshot", params) as Promise<Snapshot | null>,
 	headInfo: (projectId) => ipcRenderer.invoke("workspace:head-info", projectId) as Promise<RefInfo>,
+	isFullScreen: () => ipcRenderer.invoke("lite:is-full-screen") as Promise<boolean>,
+	onFullScreenChange: (callback) => {
+		const listener = (_event: Electron.IpcRendererEvent, fullScreen: boolean) => {
+			callback(fullScreen);
+		};
+		ipcRenderer.on("lite:full-screen-change", listener);
+		return () => ipcRenderer.removeListener("lite:full-screen-change", listener);
+	},
 	listBranches: (projectId, filter) =>
 		ipcRenderer.invoke("workspace:list-branches", projectId, filter) as Promise<
 			Array<BranchListing>

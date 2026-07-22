@@ -117,7 +117,8 @@
 					{/snippet}
 
 					{#snippet caption()}
-						Requires an API token with read/write access to repositories and pull requests.
+						Requires read:user:bitbucket, read:repository:bitbucket, read:pullrequest:bitbucket, and
+						write:pullrequest:bitbucket.
 						<br />
 						<Link href="https://id.atlassian.com/manage-profile/security/api-tokens"
 							>Create one on id.atlassian.com</Link

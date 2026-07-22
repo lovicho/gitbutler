@@ -1,5 +1,11 @@
 import { buildStackEndpoints } from "$lib/stacks/stackEndpoints";
-import { invalidatesItem, invalidatesList, invalidatesType, ReduxTag } from "$lib/state/tags";
+import {
+	invalidatesItem,
+	invalidatesList,
+	invalidatesType,
+	providesList,
+	ReduxTag,
+} from "$lib/state/tags";
 import { describe, expect, test } from "vitest";
 import type { BackendEndpointBuilder } from "$lib/state/backendApi";
 
@@ -11,6 +17,30 @@ function createEndpointBuilder(): BackendEndpointBuilder {
 }
 
 describe("buildStackEndpoints", () => {
+	test("refreshes integration plans after pushing a stack", () => {
+		const endpoints = buildStackEndpoints(createEndpointBuilder());
+		const invalidatesTags = endpoints.pushWorkspaceBranchAndAncestors.invalidatesTags;
+		const args = {
+			projectId: "project-1",
+			stackId: "stack-1",
+			withForce: false,
+			skipForcePushProtection: false,
+			branch: "feature",
+			runHooks: true,
+			pushOpts: [],
+		};
+
+		if (typeof invalidatesTags !== "function") {
+			throw new Error("Expected pushWorkspaceBranchAndAncestors.invalidatesTags to be callable");
+		}
+
+		expect(invalidatesTags(undefined, undefined, args, undefined)).toEqual([
+			invalidatesItem(ReduxTag.StackDetails, "stack-1"),
+			invalidatesList(ReduxTag.StackDetails),
+			invalidatesList(ReduxTag.BranchListing),
+		]);
+	});
+
 	test("maps uncommit to commit_uncommit with the new request shape", () => {
 		const endpoints = buildStackEndpoints(createEndpointBuilder());
 		const query = endpoints.uncommit.query;
@@ -145,16 +175,6 @@ describe("buildStackEndpoints", () => {
 		]);
 	});
 
-	test("invalidates integration state after creating commits", () => {
-		const endpoints = buildStackEndpoints(createEndpointBuilder());
-
-		expect(endpoints.commitCreate.invalidatesTags).toEqual([
-			invalidatesList(ReduxTag.WorktreeChanges),
-			invalidatesList(ReduxTag.IntegrationSteps),
-			invalidatesList(ReduxTag.HeadSha),
-		]);
-	});
-
 	test("uses move_branch with normalized refs and dryRun disabled", () => {
 		const endpoints = buildStackEndpoints(createEndpointBuilder());
 		const query = endpoints.moveBranch.query;
@@ -219,6 +239,10 @@ describe("buildStackEndpoints", () => {
 		expect(endpoints.getInitialBranchIntegration.extraOptions).toEqual({
 			command: "get_initial_branch_integration",
 		});
+		expect(endpoints.getInitialBranchIntegration.providesTags).toEqual([
+			providesList(ReduxTag.HeadSha),
+			providesList(ReduxTag.StackDetails),
+		]);
 		expect(query).toBeDefined();
 		expect(
 			query?.({
@@ -272,7 +296,6 @@ describe("buildStackEndpoints", () => {
 			invalidatesList(ReduxTag.Stacks),
 			invalidatesList(ReduxTag.StackDetails),
 			invalidatesList(ReduxTag.BranchListing),
-			invalidatesItem(ReduxTag.IntegrationSteps, "refs/heads/feature"),
 		]);
 	});
 

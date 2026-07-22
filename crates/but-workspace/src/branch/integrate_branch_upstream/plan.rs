@@ -8,6 +8,7 @@ use but_core::{
     ChangeId, RefMetadata, RepositoryExt,
     commit::{add_conflict_markers, write_conflicted_tree},
 };
+use but_error::bail_precondition;
 use but_rebase::{
     commit::DateMode,
     graph_rebase::{
@@ -213,22 +214,36 @@ pub(super) fn prepare_integration_steps_for_editor<M: RefMetadata>(
     editor: &Editor<'_, '_, M>,
     steps: &[InteractiveIntegrationStep],
 ) -> Result<Vec<PreparedIntegrationStep>> {
-    steps
-        .iter()
-        .map(|step| match step {
-            InteractiveIntegrationStep::Pick { commit_id } => Ok(PreparedIntegrationStep::Pick {
+    let mut prepared = Vec::with_capacity(steps.len());
+    let mut commit_ids = HashSet::new();
+
+    for step in steps {
+        let step = match step {
+            InteractiveIntegrationStep::Pick { commit_id } => PreparedIntegrationStep::Pick {
                 commit_id: *commit_id,
-            }),
-            InteractiveIntegrationStep::Merge { commit_id } => Ok(PreparedIntegrationStep::Merge {
+            },
+            InteractiveIntegrationStep::Merge { commit_id } => PreparedIntegrationStep::Merge {
                 commit_id: *commit_id,
-            }),
+            },
             InteractiveIntegrationStep::Squash { commits, message } => {
-                Ok(PreparedIntegrationStep::Pick {
+                PreparedIntegrationStep::Pick {
                     commit_id: prepare_squash_step_for_editor(editor, commits, message.as_deref())?,
-                })
+                }
             }
-        })
-        .collect()
+        };
+        let commit_id = match &step {
+            PreparedIntegrationStep::Pick { commit_id }
+            | PreparedIntegrationStep::Merge { commit_id } => *commit_id,
+        };
+        if !commit_ids.insert(commit_id) {
+            bail_precondition!(
+                "Integration plan is invalid: prepared commit {commit_id} appears more than once"
+            );
+        }
+        prepared.push(step);
+    }
+
+    Ok(prepared)
 }
 
 /// Precompute the squash payload from the current editor/repository state,

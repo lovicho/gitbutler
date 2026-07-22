@@ -17,7 +17,7 @@
 }
 
 .containerInteractive {
-	border-radius: var(--radius-card);
+	border-radius: var(--radius-button);
 
 	&:where(:hover) {
 		background-color: var(--list-item-hover-bg);

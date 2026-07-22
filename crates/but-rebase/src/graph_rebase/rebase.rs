@@ -1,9 +1,6 @@
 //! Perform the actual rebase operations
 
-use std::{
-    collections::{HashMap, HashSet, VecDeque},
-    fmt::Write as _,
-};
+use std::{collections::HashMap, fmt::Write as _};
 
 use anyhow::{Context, Result, bail};
 use but_core::RefMetadata;
@@ -11,7 +8,7 @@ use gix::refs::{
     Target,
     transaction::{Change, LogChange, PreviousValue, RefEdit},
 };
-use petgraph::{Direction, visit::EdgeRef};
+use petgraph::{algo::toposort, visit::EdgeRef};
 
 use crate::graph_rebase::{
     Editor, Pick, Step, StepGraph, StepGraphIndex, SuccessfulRebase,
@@ -22,21 +19,8 @@ use crate::graph_rebase::{
 impl<'ws, 'graph, M: RefMetadata> Editor<'ws, 'graph, M> {
     /// Perform the rebase
     pub fn rebase(self) -> Result<SuccessfulRebase<'ws, 'graph, M>> {
-        // First we want to get a list of nodes that can be reached by
-        // traversing downwards from the heads that we care about.
-        // Usually there would be just one "head" which is an index to access
-        // the reference step for `gitbutler/workspace`, but there could be
-        // multiple.
-
         let mut ref_edits = vec![];
-        // Every external (a node with no children) seeds the traversal so the
-        // output graph keeps every commit - immutable picks are copied verbatim
-        // rather than cherry-picked.
-        let rebase_heads = self
-            .graph
-            .externals(Direction::Incoming)
-            .collect::<Vec<_>>();
-        let steps_to_pick = order_steps_picking(&self.graph, &rebase_heads);
+        let steps_to_pick = order_steps_picking(&self.graph)?;
 
         // A 1 to 1 mapping between the incoming graph and the output graph
         let mut graph_mapping: HashMap<StepGraphIndex, StepGraphIndex> = HashMap::new();
@@ -239,59 +223,15 @@ impl<'ws, 'graph, M: RefMetadata> Editor<'ws, 'graph, M> {
     }
 }
 
-/// Creates a list of step indicies ordered in the dependency order.
-///
-/// We do this by first doing a breadth-first traversal down from the heads
-/// (which would usually be the `gitbutler/workspace` reference step) in order
-/// to determine which steps are reachable, and what the bottom most steps are.
-///
-/// Then, we do a second traversal up from those bottom most
-/// steps.
-///
-/// This second traversal ensures that all the parents of any given node have
-/// been seen, before traversing it.
-fn order_steps_picking(graph: &StepGraph, heads: &[StepGraphIndex]) -> VecDeque<StepGraphIndex> {
-    let mut heads = heads.to_vec();
-    let mut seen = heads.iter().cloned().collect::<HashSet<StepGraphIndex>>();
-    // Reachable nodes with no outgoing nodes.
-    let mut bases = VecDeque::new();
-
-    while let Some(head) = heads.pop() {
-        let edges = graph.edges_directed(head, petgraph::Direction::Outgoing);
-
-        if edges.clone().count() == 0 {
-            bases.push_back(head);
-            continue;
-        }
-
-        for edge in edges {
-            let t = edge.target();
-            if seen.insert(t) {
-                heads.push(t);
-            }
-        }
-    }
-
-    // Now we want to create a vector that contains all the steps in
-    // dependency order.
-    let mut ordered = bases.clone();
-    let mut retraversed = bases.iter().cloned().collect::<HashSet<_>>();
-
-    while let Some(base) = bases.pop_front() {
-        for edge in graph.edges_directed(base, petgraph::Direction::Incoming) {
-            // We only want to queue nodes for traversing that have had all of their parents traversed.
-            let s = edge.source();
-            let mut outgoing_edges = graph.edges_directed(s, petgraph::Direction::Outgoing);
-            let all_parents_seen = outgoing_edges.clone().count() == 0
-                || outgoing_edges.all(|e| retraversed.contains(&e.target()));
-            if all_parents_seen && seen.contains(&s) && retraversed.insert(s) {
-                bases.push_back(s);
-                ordered.push_back(s);
-            };
-        }
-    }
-
-    ordered
+/// Return every graph step in parent-before-child dependency order.
+fn order_steps_picking(graph: &StepGraph) -> Result<Vec<StepGraphIndex>> {
+    let mut ordered = match toposort(graph, None) {
+        Ok(ordered) => ordered,
+        Err(_) => bail!("BUG: Rebase editor graph contains a cycle"),
+    };
+    // Editor edges point from child to parent, opposite Petgraph's topological order.
+    ordered.reverse();
+    Ok(ordered)
 }
 
 fn format_base_merge_error(
@@ -375,12 +315,23 @@ mod test {
 "#]]
             );
 
-            let ordered_from_a = order_steps_picking(&graph, &[a]);
+            let ordered_from_a = order_steps_picking(&graph)?;
             assert_eq!(&ordered_from_a, &[c, b, a]);
-            let ordered_from_b = order_steps_picking(&graph, &[b]);
-            assert_eq!(&ordered_from_b, &[c, b]);
-            let ordered_from_c = order_steps_picking(&graph, &[c]);
-            assert_eq!(&ordered_from_c, &[c]);
+
+            Ok(())
+        }
+
+        #[test]
+        fn incomplete_order_from_a_cycle_is_rejected() -> Result<()> {
+            let mut graph = StepGraph::new();
+            let commit = graph.add_node(Step::new_pick(gix::ObjectId::from_str(
+                "1000000000000000000000000000000000000000",
+            )?));
+            graph.add_edge(commit, commit, Edge { order: 0 });
+
+            let err = order_steps_picking(&graph)
+                .expect_err("a cyclic graph must not produce a partial rebase mapping");
+            assert_eq!(err.to_string(), "BUG: Rebase editor graph contains a cycle");
 
             Ok(())
         }
@@ -449,8 +400,33 @@ mod test {
 "#]]
             );
 
-            let ordered_from_a = order_steps_picking(&graph, &[f, h]);
-            assert_eq!(&ordered_from_a, &[e, d, h, c, g, f]);
+            let ordered_from_a = order_steps_picking(&graph)?;
+            assert_eq!(
+                ordered_from_a.len(),
+                graph.node_count(),
+                "topological ordering must include every graph component"
+            );
+            let position = |node| {
+                ordered_from_a
+                    .iter()
+                    .position(|candidate| *candidate == node)
+                    .expect("every graph node is present")
+            };
+            for (child, parent) in [
+                (a, b),
+                (b, c),
+                (c, d),
+                (d, e),
+                (f, g),
+                (g, c),
+                (h, d),
+                (i, j),
+            ] {
+                assert!(
+                    position(parent) < position(child),
+                    "every parent must be ordered before its child"
+                );
+            }
 
             Ok(())
         }
@@ -494,7 +470,7 @@ mod test {
 "#]]
             );
 
-            let ordered_from_a = order_steps_picking(&graph, &[a]);
+            let ordered_from_a = order_steps_picking(&graph)?;
             assert_eq!(&ordered_from_a, &[c, b, e, d, a]);
 
             Ok(())
@@ -539,7 +515,7 @@ mod test {
 "#]]
             );
 
-            let ordered_from_a = order_steps_picking(&graph, &[a]);
+            let ordered_from_a = order_steps_picking(&graph)?;
             assert_eq!(&ordered_from_a, &[c, b, e, d, a]);
 
             Ok(())

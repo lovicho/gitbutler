@@ -433,71 +433,113 @@ impl BitbucketClient {
 
     /// List commit build statuses for a git reference.
     ///
-    /// Bitbucket's statuses endpoint is keyed by commit hash, so a branch name is
-    /// first resolved to its head commit; anything else is treated as a commit
-    /// revspec directly.
+    /// `None` means the repository is accessible but the reference does not
+    /// resolve. Bitbucket's statuses endpoint accepts branch names and commit
+    /// hashes directly, so a separate branch lookup is unnecessary.
     pub async fn list_checks_for_ref(
         &self,
         workspace: &str,
         repo_slug: &str,
         reference: &str,
-    ) -> Result<Vec<BitbucketBuildStatus>> {
-        let commit = self
-            .resolve_commit_hash(workspace, repo_slug, reference)
-            .await?;
+    ) -> Result<Option<Vec<BitbucketBuildStatus>>> {
         let url = format!(
             "{}/repositories/{}/{}/commit/{}/statuses?pagelen=100",
             self.base_url,
             urlencoding::encode(workspace),
             urlencoding::encode(repo_slug),
-            urlencoding::encode(&commit),
-        );
-        let statuses: Vec<BitbucketApiBuildStatus> = self.get_paginated(url).await?;
-        Ok(statuses
-            .into_iter()
-            .map(|s| BitbucketBuildStatus::from_api(s, &commit))
-            .collect())
-    }
-
-    /// Resolve a branch name to its head commit hash, falling back to treating
-    /// `reference` as a commit revspec when it isn't a branch.
-    async fn resolve_commit_hash(
-        &self,
-        workspace: &str,
-        repo_slug: &str,
-        reference: &str,
-    ) -> Result<String> {
-        if is_full_commit_hash(reference) {
-            return Ok(reference.to_string());
-        }
-        let url = format!(
-            "{}/repositories/{}/{}/refs/branches/{}",
-            self.base_url,
-            urlencoding::encode(workspace),
-            urlencoding::encode(repo_slug),
-            encode_branch_path(reference),
+            urlencoding::encode(reference),
         );
         let response = self.client.get(&url).send().await?;
         let status = response.status();
-        if status.is_success() {
-            #[derive(Deserialize)]
-            struct Branch {
-                target: Target,
-            }
-            #[derive(Deserialize)]
-            struct Target {
-                hash: String,
-            }
-            let branch: Branch = response.json().await?;
-            return Ok(branch.target.hash);
-        }
-        // 404 means it isn't a branch — treat the reference as a commit revspec.
-        // Any other status (auth failure, server error) is a real error to surface
-        // rather than silently returning empty checks.
         if status == reqwest::StatusCode::NOT_FOUND {
-            return Ok(reference.to_string());
+            let repository_status = self.repository_status(workspace, repo_slug).await?;
+            if repository_status.is_success() {
+                return Ok(None);
+            }
+            if matches!(
+                repository_status,
+                reqwest::StatusCode::UNAUTHORIZED
+                    | reqwest::StatusCode::FORBIDDEN
+                    | reqwest::StatusCode::NOT_FOUND
+            ) {
+                return Err(self
+                    .classify_repository_access_error(repository_status, workspace, repo_slug)
+                    .await);
+            }
+            return Err(anyhow::Error::new(HttpStatusError {
+                status: repository_status,
+            })
+            .context("Failed to verify Bitbucket repository access"));
         }
-        Err(HttpStatusError { status }.into())
+        if matches!(
+            status,
+            reqwest::StatusCode::UNAUTHORIZED | reqwest::StatusCode::FORBIDDEN
+        ) {
+            return Err(self
+                .classify_repository_access_error(status, workspace, repo_slug)
+                .await);
+        }
+        if !status.is_success() {
+            bail!("Bitbucket request failed: {status}");
+        }
+
+        let page: Paginated<BitbucketApiBuildStatus> = response.json().await?;
+        let mut statuses = page.values;
+        if let Some(next) = page.next {
+            statuses.extend(self.get_paginated(next).await?);
+        }
+        Ok(Some(
+            statuses
+                .into_iter()
+                .map(BitbucketBuildStatus::from_api)
+                .collect(),
+        ))
+    }
+
+    async fn repository_status(
+        &self,
+        workspace: &str,
+        repo_slug: &str,
+    ) -> Result<reqwest::StatusCode> {
+        let url = format!(
+            "{}/repositories/{}/{}",
+            self.base_url,
+            urlencoding::encode(workspace),
+            urlencoding::encode(repo_slug),
+        );
+        let response = self.client.get(&url).send().await?;
+        Ok(response.status())
+    }
+
+    /// Turn an ambiguous repository API failure into an actionable error.
+    ///
+    /// Repository endpoints can hide both inaccessible repositories and missing
+    /// scopes behind 404/401. `/user` only separates invalid credentials; a
+    /// valid token still cannot distinguish repository access from missing scope.
+    async fn classify_repository_access_error(
+        &self,
+        status: reqwest::StatusCode,
+        workspace: &str,
+        repo_slug: &str,
+    ) -> anyhow::Error {
+        if let Err(err) = self.get_authenticated().await {
+            if let Some(http_err) = err.downcast_ref::<HttpStatusError>() {
+                return match http_err.status {
+                    reqwest::StatusCode::UNAUTHORIZED => {
+                        err.context("Bitbucket credentials are invalid or expired")
+                    }
+                    reqwest::StatusCode::FORBIDDEN => err.context(
+                        "Bitbucket API token is missing required scope `read:user:bitbucket`",
+                    ),
+                    _ => err.context("Failed to verify Bitbucket credentials"),
+                };
+            }
+            return err.context("Failed to verify Bitbucket credentials");
+        }
+
+        anyhow::Error::new(HttpStatusError { status }).context(format!(
+            "Bitbucket repository '{workspace}/{repo_slug}' is inaccessible to this token, or the token is missing required scope `read:repository:bitbucket`"
+        ))
     }
 }
 
@@ -524,23 +566,6 @@ pub(crate) fn resolve_account(
     };
 
     Ok(account.to_owned())
-}
-
-/// Whether `reference` is a full 40-character SHA-1 commit hash, in which case it
-/// can be used against the statuses endpoint directly without a branch lookup.
-fn is_full_commit_hash(reference: &str) -> bool {
-    reference.len() == 40 && reference.bytes().all(|b| b.is_ascii_hexdigit())
-}
-
-/// Percent-encode a git ref for use as the `refs/branches/{name}` path, encoding
-/// each path segment individually so `/` stays a literal separator (encoding the
-/// whole ref would turn `feature/x` into `feature%2Fx`, which Bitbucket 404s).
-fn encode_branch_path(reference: &str) -> String {
-    reference
-        .split('/')
-        .map(|segment| urlencoding::encode(segment).into_owned())
-        .collect::<Vec<_>>()
-        .join("/")
 }
 
 /// Escape a value for embedding inside a double-quoted Bitbucket query-language
@@ -873,11 +898,7 @@ pub struct BitbucketBuildStatus {
 }
 
 impl BitbucketBuildStatus {
-    fn from_api(status: BitbucketApiBuildStatus, fallback_commit: &str) -> Self {
-        let commit_hash = status
-            .commit
-            .and_then(|c| c.hash)
-            .unwrap_or_else(|| fallback_commit.to_owned());
+    fn from_api(status: BitbucketApiBuildStatus) -> Self {
         // Bitbucket requires `key`; `name` is optional, so fall back to it.
         let name = status.name.unwrap_or_else(|| status.key.clone());
         BitbucketBuildStatus {
@@ -886,7 +907,7 @@ impl BitbucketBuildStatus {
             description: status.description,
             state: status.state,
             url: status.url,
-            commit_hash,
+            commit_hash: status.commit.hash,
             created_on: status.created_on,
             updated_on: status.updated_on,
         }
@@ -903,12 +924,16 @@ struct BitbucketApiBuildStatus {
     state: String,
     #[serde(default)]
     url: Option<String>,
-    #[serde(default)]
-    commit: Option<BitbucketCommitRef>,
+    commit: BitbucketBuildStatusCommit,
     #[serde(default)]
     created_on: Option<String>,
     #[serde(default)]
     updated_on: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct BitbucketBuildStatusCommit {
+    hash: String,
 }
 
 pub struct CreatePullRequestParams<'a> {
@@ -1031,6 +1056,9 @@ struct BranchBody<'a> {
 struct RepositoryBody<'a> {
     full_name: &'a str,
 }
+
+#[cfg(test)]
+mod checks_tests;
 
 #[cfg(test)]
 mod tests {
@@ -1227,35 +1255,6 @@ mod tests {
         assert!(pr.is_open());
         assert_eq!(pr.merged_at(), None);
         assert_eq!(pr.closed_at(), None);
-    }
-
-    #[test]
-    fn encode_branch_path_keeps_slashes_literal() {
-        assert_eq!(encode_branch_path("feature/login"), "feature/login");
-        assert_eq!(encode_branch_path("main"), "main");
-        // Per-segment encoding still escapes characters within a segment.
-        assert_eq!(encode_branch_path("feat/a b"), "feat/a%20b");
-        assert_eq!(encode_branch_path("a/b/c"), "a/b/c");
-    }
-
-    #[test]
-    fn is_full_commit_hash_only_matches_40_char_hex() {
-        assert!(is_full_commit_hash(
-            "0123456789abcdef0123456789abcdef01234567"
-        ));
-        assert!(is_full_commit_hash(
-            "0123456789ABCDEF0123456789ABCDEF01234567"
-        ));
-        // A branch name, a short hash, and an over-long string are all rejected.
-        assert!(!is_full_commit_hash("main"));
-        assert!(!is_full_commit_hash("0123456"));
-        assert!(!is_full_commit_hash(
-            "0123456789abcdef0123456789abcdef012345678"
-        ));
-        // 40 chars but not all hex.
-        assert!(!is_full_commit_hash(
-            "feature/0123456789abcdef0123456789abcdef"
-        ));
     }
 
     #[test]

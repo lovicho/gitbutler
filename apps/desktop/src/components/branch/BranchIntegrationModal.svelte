@@ -24,7 +24,7 @@
 		Badge,
 		chipToasts,
 	} from "@gitbutler/ui";
-	import type { BranchIntegrationStrategy } from "@gitbutler/but-sdk";
+	import type { BranchIntegrationStrategy, InitialBranchIntegration } from "@gitbutler/but-sdk";
 	import type { IconName } from "@gitbutler/ui";
 
 	type Props = {
@@ -85,10 +85,10 @@
 	let previewRows = $state<IntegrationGraphRow[] | null>(null);
 	let previewError = $state<string | null>(null);
 	let applying = $state(false);
-	let initializedForOpen = $state(false);
 	let showAllStrategies = $state(false);
 	let showIntegratedLocalCommits = $state(false);
 	let templateSelectionVersion = 0;
+	let initializedFrom: InitialBranchIntegration | undefined;
 
 	const visibleTemplates = $derived(
 		showAllStrategies
@@ -210,9 +210,10 @@
 	$effect(() => {
 		const modalOpen = modalRef?.imports.open ?? false;
 		if (!modalOpen) {
+			initializedFrom = undefined;
 			selectedTemplate = DEFAULT_TEMPLATE;
 			templateSelectionVersion++;
-			initializedForOpen = false;
+			stepDrafts = [];
 			showAllStrategies = false;
 			showIntegratedLocalCommits = false;
 			previewRows = null;
@@ -223,14 +224,15 @@
 	$effect(() => {
 		const modalOpen = modalRef?.imports.open ?? false;
 		const initial = initialBranchIntegration.response;
-		if (!modalOpen || !initial || initializedForOpen) return;
+		if (!modalOpen || !initial || initial === initializedFrom) return;
+		initializedFrom = initial;
 
 		const nextStepDrafts = buildIntegrationStepDrafts(initial.integration);
-		const version = templateSelectionVersion;
+		const version = ++templateSelectionVersion;
+		selectedTemplate = DEFAULT_TEMPLATE;
 		stepDrafts = nextStepDrafts;
 		previewRows = null;
 		previewError = null;
-		initializedForOpen = true;
 		if (nextStepDrafts.length > 0) {
 			void previewIntegrationWithSteps(
 				initial.integration.mergeBase,

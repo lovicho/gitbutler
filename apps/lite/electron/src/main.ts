@@ -538,6 +538,9 @@ const registerIpcHandlers = (): void => {
 		getUndoTargetSnapshot(projectId),
 	);
 	senderValidatingHandle(liteIpcChannels.headInfo, (_e, projectId: string) => headInfo(projectId));
+	senderValidatingHandle(liteIpcChannels.isFullScreen, (event) =>
+		Promise.resolve(BrowserWindow.fromWebContents(event.sender)?.isFullScreen() ?? false),
+	);
 	senderValidatingHandle(
 		liteIpcChannels.listBranches,
 		(_e, projectId: string, filter: BranchListingFilter | null) => listBranches(projectId, filter),
@@ -763,6 +766,12 @@ const createMainWindow = async (): Promise<void> => {
 			preload: path.join(currentDirPath, "preload.cjs"),
 		},
 	});
+
+	const notifyFullScreenChange = () => {
+		mainWindow.webContents.send(liteIpcChannels.fullScreenChange, mainWindow.isFullScreen());
+	};
+	mainWindow.on("enter-full-screen", notifyFullScreenChange);
+	mainWindow.on("leave-full-screen", notifyFullScreenChange);
 
 	const devServerUrl = process.env.VITE_DEV_SERVER_URL;
 	if (devServerUrl !== undefined) {

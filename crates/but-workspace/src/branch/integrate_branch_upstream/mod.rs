@@ -5,6 +5,7 @@ use std::{
 
 use anyhow::{Result, bail};
 use but_core::{RefMetadata, commit::Headers};
+use but_error::bail_precondition;
 use but_rebase::graph_rebase::{
     Editor, LookupStep, SuccessfulRebase, ToSelector,
     mutate::{SegmentDelimiter, SelectorSet},
@@ -17,7 +18,7 @@ use crate::{
     },
     divergence::{
         BranchMergeBaseCommits, classify_selectors_against_target_ref, commit_ids_from_selectors,
-        get_commits_until_merge_base,
+        find_local_commit_until_merge_base, get_commits_until_merge_base,
     },
 };
 use crate::{graph_manipulation::determine_parent_selector, resolve_tracking_branch_ref_name};
@@ -128,12 +129,23 @@ pub fn integrate_branch_with_steps<'ws, 'meta, M: RefMetadata>(
     let prepared_steps = prepare_integration_steps_for_editor(&editor, &integration.steps)?;
 
     let delimiter_child = editor.select_reference(ref_name)?;
-    let delimiter_parent =
-        if let Some(first_local_not_integrated_commit) = integration.first_local_not_integrated {
-            editor.select_commit(first_local_not_integrated_commit)?
-        } else {
-            editor.select_reference(ref_name)?
-        };
+    let delimiter_parent = match integration.first_local_not_integrated {
+        Some(commit_id) => {
+            let selector = find_local_commit_until_merge_base(
+                ref_name,
+                commit_id,
+                integration.merge_base,
+                &editor,
+            )?;
+            let Some(selector) = selector else {
+                bail_precondition!(
+                    "Integration plan is stale: the first local commit {commit_id} is no longer reachable from the selected branch. Refresh the integration plan and try again"
+                );
+            };
+            selector
+        }
+        None => delimiter_child,
+    };
     // Segment, from local-ref to the parent-most non-integrated local commit.
     // This represents the bounds of the commit chain we're about to manipulate and rebuild.
     let segment_delimiter = SegmentDelimiter {
