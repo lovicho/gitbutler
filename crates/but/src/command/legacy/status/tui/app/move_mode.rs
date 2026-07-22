@@ -30,6 +30,8 @@ use crate::{
     utils::targeting,
 };
 
+use super::mark::MarksRef;
+
 #[derive(Debug, Clone)]
 pub struct MoveMode {
     pub source: Arc<MoveSource>,
@@ -187,6 +189,14 @@ impl App {
     }
 
     fn handle_move_start(&mut self) {
+        match self.mode.marks_ref() {
+            MarksRef::Branches { .. } => return,
+            MarksRef::Empty
+            | MarksRef::Hunks { .. }
+            | MarksRef::Commits { .. }
+            | MarksRef::CommittedFiles { .. } => {}
+        }
+
         let Some(selection) = self.cursor.selected_line(&self.status_lines) else {
             return;
         };

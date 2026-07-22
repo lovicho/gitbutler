@@ -1,5 +1,5 @@
 import { selectionOperationHotkeys, type CommandGroup } from "#ui/hotkeys.ts";
-import type { OperationType } from "#ui/operations/operation.ts";
+import type { Placement } from "#ui/operations/operation.ts";
 import type { Operand } from "#ui/operands.ts";
 import { projectSlice } from "#ui/projects/state.ts";
 import { useAppDispatch } from "#ui/store.ts";
@@ -275,14 +275,14 @@ export const useNavigationIndexHotkeys = <T>({
 		},
 	]);
 
-	const enterTransferModeForSelection = (operationType: OperationType) => {
+	const enterTransferModeForSelection = (placement: Placement) => {
 		if (selection === null) return;
 
 		dispatch(
 			projectSlice.actions.enterKeyboardTransferMode({
 				projectId,
 				sources: operationSourcesForItem(selection),
-				operationType,
+				placement,
 			}),
 		);
 

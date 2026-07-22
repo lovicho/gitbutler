@@ -72,11 +72,11 @@ pub use normal_mode::*;
 mod pick_changes_mode;
 pub use pick_changes_mode::*;
 
-mod rub_mode;
-pub use rub_mode::*;
-
 mod stack_mode;
 pub use stack_mode::*;
+
+mod squash_mode;
+pub use squash_mode::*;
 
 #[derive(Debug)]
 pub struct App {
@@ -311,17 +311,7 @@ impl App {
                 if let Some(new_cursor) =
                     Cursor::select_branch(&branch_name.shorten().to_str_lossy(), &self.status_lines)
                 {
-                    self.cursor = if matches!(&*self.mode, Mode::Rub(_)) {
-                        new_cursor
-                            .move_down_within_section(
-                                &self.status_lines,
-                                &self.mode,
-                                self.flags.show_files,
-                            )
-                            .unwrap_or(new_cursor)
-                    } else {
-                        new_cursor
-                    };
+                    self.cursor = new_cursor;
                 }
             }
             Message::SelectUncommitted => {
@@ -350,7 +340,9 @@ impl App {
                     self.cursor = new_cursor;
                 }
             }
-            Message::Rub(rub_message) => self.handle_rub(rub_message, ctx, messages)?,
+            Message::Squash(squash_message) => {
+                self.handle_squash(squash_message, ctx, terminal_guard, messages)?
+            }
             Message::Back => {
                 self.handle_back(messages);
             }
@@ -524,7 +516,7 @@ impl App {
                 self.handle_toggle_help();
             }
             Message::Mark => {
-                self.handle_mark(ctx)?;
+                self.handle_mark()?;
             }
             Message::ClearMarks => {
                 self.handle_clear_marks();
@@ -561,7 +553,7 @@ impl App {
         self.outcome = Some(TuiOutcome::CliIds(
             match &*self.mode {
                 Mode::Normal(..)
-                | Mode::Rub(..)
+                | Mode::Squash(..)
                 | Mode::InlineReword(..)
                 | Mode::Command(..)
                 | Mode::Commit(..)
@@ -593,7 +585,7 @@ impl App {
             backstack.retain(|entry| match entry {
                 BackstackEntry::ShowFileList => {
                     // this keeps the global file list open after performing operations such as
-                    // committing or rubbing
+                    // committing or squashing
                     true
                 }
                 BackstackEntry::LeaveNormalMode | BackstackEntry::Mark => {
@@ -650,7 +642,7 @@ impl App {
                     });
                 }
                 if !self.maybe_move_cursor_into_file_list() {
-                    self.ensure_cursor_is_on_selectable_line();
+                    self.ensure_cursor_is_on_selectable_line(MoveCursorDiration::Down);
                 }
             }
             BackstackEntry::ShowFileList => {
@@ -671,7 +663,7 @@ impl App {
                     details_mode.return_mode.marks_mut().clear();
                 }
                 Mode::InlineReword(..)
-                | Mode::Rub(..)
+                | Mode::Squash(..)
                 | Mode::Command(..)
                 | Mode::Commit(..)
                 | Mode::Move(..)
@@ -692,10 +684,10 @@ impl App {
         match self.flags.show_files {
             FilesStatusFlag::Commit(object_id) => {
                 // When viewing files in a commit cursor movement is constrained to only those
-                // files. However you can start a rub which then enables moving outside the file
+                // files. However you can start a squash which then enables moving outside the file
                 // list, while keeping the file list visible. Thus when entering normal mode
-                // (perhaps from cancelling the rub) we need to potentially move the cursor back to
-                // the file list.
+                // (perhaps from cancelling the squash) we need to potentially move the cursor back
+                // to the file list.
                 let Some(selection) = self.cursor.selected_line(&self.status_lines) else {
                     return false;
                 };
@@ -717,22 +709,40 @@ impl App {
         }
     }
 
-    fn ensure_cursor_is_on_selectable_line(&mut self) {
+    fn ensure_cursor_is_on_selectable_line(&mut self, direction: MoveCursorDiration) {
         let Some(line) = self.cursor.selected_line(&self.status_lines) else {
             return;
         };
 
         if !is_selectable_in_mode(line, self.mode.as_ref(), self.flags.show_files) {
-            if let Some(new_cursor) =
-                self.cursor
-                    .move_down(&self.status_lines, &self.mode, self.flags.show_files)
-            {
-                self.cursor = new_cursor;
-            } else if let Some(new_cursor) =
-                self.cursor
-                    .move_up(&self.status_lines, &self.mode, self.flags.show_files)
-            {
-                self.cursor = new_cursor;
+            let directions = match direction {
+                MoveCursorDiration::Up => [MoveCursorDiration::Up, MoveCursorDiration::Down],
+                MoveCursorDiration::Down => [MoveCursorDiration::Down, MoveCursorDiration::Up],
+            };
+
+            for d in directions {
+                match d {
+                    MoveCursorDiration::Up => {
+                        if let Some(new_cursor) = self.cursor.move_up(
+                            &self.status_lines,
+                            &self.mode,
+                            self.flags.show_files,
+                        ) {
+                            self.cursor = new_cursor;
+                            break;
+                        }
+                    }
+                    MoveCursorDiration::Down => {
+                        if let Some(new_cursor) = self.cursor.move_down(
+                            &self.status_lines,
+                            &self.mode,
+                            self.flags.show_files,
+                        ) {
+                            self.cursor = new_cursor;
+                            break;
+                        }
+                    }
+                }
             }
         }
     }
@@ -974,7 +984,6 @@ impl App {
             | Some(SelectAfterReload::FirstFileInCommit(_))
             | Some(SelectAfterReload::UncommittedFile { .. })
             | Some(SelectAfterReload::Branch(_))
-            | Some(SelectAfterReload::Stack(_))
             | Some(SelectAfterReload::CliId(_))
             | Some(SelectAfterReload::Uncommitted)
             | None => None,
@@ -1010,7 +1019,6 @@ impl App {
                 | SelectAfterReload::Uncommitted
                 | SelectAfterReload::UncommittedFile { .. }
                 | SelectAfterReload::UncommittedDetailsSection { .. }
-                | SelectAfterReload::Stack(_)
                 | SelectAfterReload::CliId(_) => {}
             }
         }
@@ -1037,7 +1045,6 @@ impl App {
                 SelectAfterReload::FirstFileInCommit(commit_id) => {
                     Cursor::select_first_file_in_commit(commit_id, &new_lines)
                 }
-                SelectAfterReload::Stack(stack_id) => Cursor::select_stack(stack_id, &new_lines),
                 SelectAfterReload::CliId(cli_id) => Cursor::restore(&cli_id, &new_lines),
             }
         } else {
@@ -1076,7 +1083,7 @@ impl App {
         }
 
         self.status_lines = new_lines;
-        self.ensure_cursor_is_on_selectable_line();
+        self.ensure_cursor_is_on_selectable_line(MoveCursorDiration::Down);
 
         let details_selection_after_reload = self
             .cursor
@@ -1344,29 +1351,25 @@ impl App {
                 Some(&ref_info.ref_name)
             })
             .filter(|name| {
-                if matches!(&*self.mode, Mode::Rub(_)) {
-                    true
-                } else {
-                    // not all branches are selectable all the time, for example if we're committing
-                    // changes assigned to a stack then we cannot select branches outside the stack
-                    self.status_lines
-                        .iter()
-                        .find(|line| {
-                            if let Some(id) = line.data.cli_id()
-                                && let CliId::Branch {
-                                    name: name_on_line, ..
-                                } = &**id
-                                && name_on_line == name.shorten()
-                            {
-                                true
-                            } else {
-                                false
-                            }
-                        })
-                        .is_none_or(|line| {
-                            is_selectable_in_mode(line, self.mode.as_ref(), self.flags.show_files)
-                        })
-                }
+                // not all branches are selectable all the time, for example if we're committing
+                // changes assigned to a stack then we cannot select branches outside the stack
+                self.status_lines
+                    .iter()
+                    .find(|line| {
+                        if let Some(id) = line.data.cli_id()
+                            && let CliId::Branch {
+                                name: name_on_line, ..
+                            } = &**id
+                            && name_on_line == name.shorten()
+                        {
+                            true
+                        } else {
+                            false
+                        }
+                    })
+                    .is_none_or(|line| {
+                        is_selectable_in_mode(line, self.mode.as_ref(), self.flags.show_files)
+                    })
             })
             .map(|name| name.to_owned())
             .collect::<Vec<_>>();
@@ -1606,6 +1609,11 @@ impl FuzzyPickerItem for GotoBranchItem {
             Self::Uncommitted => theme.info,
         }
     }
+}
+
+enum MoveCursorDiration {
+    Up,
+    Down,
 }
 
 #[cfg(test)]

@@ -13,7 +13,6 @@ use but_settings::AppSettingsWithDiskSync;
 use crossterm::event::{Event, MouseEventKind};
 use gitbutler_operating_modes::OperatingMode;
 use gix::refs::FullName;
-use nonempty::NonEmpty;
 use ratatui::prelude::*;
 
 use crate::{
@@ -23,7 +22,7 @@ use crate::{
         tui::{
             app::{
                 CommandMessage, CommandModeKind, CommitMessage, JumpMessage, MoveMessage,
-                NormalMode, PickChangesMode, RewordMessage, RubMessage, StackMessage,
+                NormalMode, PickChangesMode, RewordMessage, SquashMessage, StackMessage,
             },
             backstack::{Backstack, BackstackEntry},
             confirm::ConfirmMessage,
@@ -393,7 +392,7 @@ fn event_to_messages(ev: Event, app: &App, terminal_area: Rect, messages: &mut V
                         }
                         Mode::Normal(..)
                         | Mode::Details(..)
-                        | Mode::Rub(..)
+                        | Mode::Squash(..)
                         | Mode::Commit(..)
                         | Mode::Stack(..)
                         | Mode::PickChanges(..)
@@ -428,7 +427,7 @@ fn event_to_messages(ev: Event, app: &App, terminal_area: Rect, messages: &mut V
                 }
                 Mode::Normal(..)
                 | Mode::Details(..)
-                | Mode::Rub(..)
+                | Mode::Squash(..)
                 | Mode::Commit(..)
                 | Mode::Stack(..)
                 | Mode::PickChanges(..)
@@ -481,12 +480,6 @@ fn mouse_is_over_debug(app: &App, terminal_area: Rect, column: u16, row: u16) ->
 fn mouse_is_over_details(app: &App, terminal_area: Rect, column: u16, row: u16) -> bool {
     render::details_content_area_for_app(app, terminal_area)
         .is_some_and(|area| area.contains(Position { x: column, y: row }))
-}
-
-fn nonempty_from_refs<'a, T>(head: &'a T, tail: impl Iterator<Item = &'a T>) -> NonEmpty<&'a T> {
-    let mut nonempty = NonEmpty::new(head);
-    nonempty.extend(tail);
-    nonempty
 }
 
 fn start_watcher(
@@ -588,7 +581,7 @@ enum Message {
 
     // Features
     Commit(CommitMessage),
-    Rub(RubMessage),
+    Squash(SquashMessage),
     Reword(RewordMessage),
     Command(CommandMessage),
     Files(FilesMessage),
@@ -683,6 +676,7 @@ enum FilesMessage {
 enum SelectAfterReload {
     Commit(gix::ObjectId),
     FirstFileInCommit(gix::ObjectId),
+    #[expect(dead_code)]
     UncommittedFile {
         path: BString,
         stack_id: Option<StackId>,
@@ -692,7 +686,6 @@ enum SelectAfterReload {
         direction: ScrollDirection,
     },
     Branch(String),
-    Stack(StackId),
     CliId(Box<CliId>),
     Uncommitted,
 }
@@ -759,13 +752,12 @@ fn dedup_mutation_messages(messages: &mut Vec<Message>, other_messages: &mut Vec
                 | CommitMessage::ToggleMessageComposer(_)
                 | CommitMessage::ToggleInsertSide => false,
             },
-            Message::Rub(message) => match message {
-                RubMessage::Confirm => true,
-                RubMessage::Start
-                | RubMessage::StartWithSource(..)
-                | RubMessage::StartReverse
-                | RubMessage::UseTargetMessage
-                | RubMessage::UseSourceMessage => false,
+            Message::Squash(message) => match message {
+                SquashMessage::Confirm => true,
+                SquashMessage::Start
+                | SquashMessage::StartReverse
+                | SquashMessage::StartWith(..)
+                | SquashMessage::UseTargetMessage => false,
             },
             Message::Reword(message) => match message {
                 RewordMessage::WithEditor

@@ -86,7 +86,7 @@ export const OperationSourceC: FC<
 				mode: pointerTransferMode({
 					sources: dragSources,
 					target: null,
-					operationType: null,
+					placement: null,
 				}),
 			}),
 		);

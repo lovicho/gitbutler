@@ -16,7 +16,7 @@ use crate::{
             tui::{
                 App, DetailsLayoutMessage, Message, Mode, ReloadCause, RewordMessage,
                 SelectAfterReload,
-                app::mark::hunk_is_child_of,
+                app::{MoveCursorDiration, mark::hunk_is_child_of},
                 render::{
                     ModeRender, RenderSingleLineSpans, render_commit_operation_target_marker,
                     source_span,
@@ -226,7 +226,9 @@ impl App {
                         Message::Commit(CommitMessage::Start),
                     ]);
                 }
-                MarksRef::Commits { .. } | MarksRef::CommittedFiles { .. } => {}
+                MarksRef::Commits { .. }
+                | MarksRef::CommittedFiles { .. }
+                | MarksRef::Branches { .. } => {}
             },
             _ => {}
         }
@@ -258,7 +260,7 @@ impl App {
                 *mode = Mode::Commit(commit_mode);
             });
 
-        self.ensure_cursor_is_on_selectable_line();
+        self.ensure_cursor_is_on_selectable_line(MoveCursorDiration::Down);
     }
 
     fn handle_commit_start_marks(&mut self) {
@@ -289,7 +291,7 @@ impl App {
                 });
             });
 
-        self.ensure_cursor_is_on_selectable_line();
+        self.ensure_cursor_is_on_selectable_line(MoveCursorDiration::Down);
     }
 
     fn handle_commit_confirm<T>(

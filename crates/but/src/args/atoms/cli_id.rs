@@ -1,4 +1,3 @@
-use bstr::BString;
 use nonempty::NonEmpty;
 use serde::Serialize;
 
@@ -6,7 +5,7 @@ use crate::{
     CliError, CliId, CliResult, IdMap,
     args::atoms::BranchArg,
     bad_input,
-    id::{ShortId, UncommittedHunkOrFile},
+    id::{CommittedFileId, UncommittedHunkOrFile},
 };
 
 /// An argument atom for cli ids that can match multiple things like branches, commits, files, etc.
@@ -85,11 +84,11 @@ impl CliIdArg {
                 commit_id,
                 path,
                 id,
-            } => ResolvedCliIdArg::CommittedFile {
+            } => ResolvedCliIdArg::CommittedFile(CommittedFileId {
                 commit_id,
                 path,
                 id,
-            },
+            }),
             CliId::Uncommitted { .. } => ResolvedCliIdArg::Uncommitted,
             CliId::Stack { .. } => ResolvedCliIdArg::Stack,
         }))
@@ -379,11 +378,7 @@ pub enum ResolvedCliIdArg {
     Commit(gix::ObjectId, Option<but_core::ChangeId>),
     Branch(BranchArg),
     UncommittedHunkOrFile(Box<UncommittedHunkOrFile>),
-    CommittedFile {
-        commit_id: gix::ObjectId,
-        path: BString,
-        id: ShortId,
-    },
+    CommittedFile(CommittedFileId),
     // These have no data because we don't have any commands that use them. So just add data if you
     // have a use case
     PathPrefix,
@@ -416,6 +411,23 @@ impl ResolvedCliIdArg {
             ResolvedCliIdArg::Stack => "a stack",
         }
     }
+
+    /// Convert this into a [`ResolvedCliIdArgRef`].
+    pub fn as_ref(&self) -> ResolvedCliIdArgRef<'_> {
+        match self {
+            ResolvedCliIdArg::Commit(object_id, change_id) => {
+                ResolvedCliIdArgRef::Commit(*object_id, change_id.as_ref())
+            }
+            ResolvedCliIdArg::Branch(branch_arg) => ResolvedCliIdArgRef::Branch(&branch_arg.0),
+            ResolvedCliIdArg::UncommittedHunkOrFile(hunk) => {
+                ResolvedCliIdArgRef::UncommittedHunkOrFile(hunk)
+            }
+            ResolvedCliIdArg::CommittedFile(file) => ResolvedCliIdArgRef::CommittedFile(file),
+            ResolvedCliIdArg::PathPrefix => ResolvedCliIdArgRef::PathPrefix,
+            ResolvedCliIdArg::Uncommitted => ResolvedCliIdArgRef::Uncommitted,
+            ResolvedCliIdArg::Stack => ResolvedCliIdArgRef::Stack,
+        }
+    }
 }
 
 impl std::fmt::Display for ResolvedCliIdArg {
@@ -430,6 +442,21 @@ impl std::fmt::Display for ResolvedCliIdArg {
             ResolvedCliIdArg::Stack => f.write_str("stack"),
         }
     }
+}
+
+/// A reference to a [`CliIdArg`] that has actually been resolved.
+#[derive(Debug, Clone, Copy)]
+#[expect(missing_docs)]
+pub enum ResolvedCliIdArgRef<'a> {
+    Commit(gix::ObjectId, Option<&'a but_core::ChangeId>),
+    Branch(&'a str),
+    UncommittedHunkOrFile(&'a UncommittedHunkOrFile),
+    CommittedFile(&'a CommittedFileId),
+    // These have no data because we don't have any commands that use them. So just add data if you
+    // have a use case
+    PathPrefix,
+    Uncommitted,
+    Stack,
 }
 
 /// Most commands need cli ids that point to either branches or commits.

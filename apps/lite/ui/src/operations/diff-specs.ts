@@ -2,7 +2,7 @@ import {
 	changesInWorktreeQueryOptions,
 	commitDetailsWithLineStatsQueryOptions,
 } from "#ui/api/queries.ts";
-import { type FileParent, type Operand, operandFileParent } from "#ui/operands.ts";
+import { operandEquals, type FileParent, type Operand, operandFileParent } from "#ui/operands.ts";
 import { type QueryClient, useQueries, useQuery } from "@tanstack/react-query";
 import type {
 	CommitDetails,
@@ -94,41 +94,90 @@ const commitIdFromParent = (parent: FileParent) =>
 		}),
 	);
 
+/**
+ * Gets the file parent from an array of sibling sources, if any. Disparate file parents are not
+ * currently supported.
+ */
+const fileParentFromSources = (sources: Array<Operand>): FileParent | null => {
+	const [source, ...rest] = sources;
+	if (!source) return null;
+
+	const fileParent = operandFileParent(source);
+	if (!fileParent) return null;
+
+	if (
+		rest.some((source) => {
+			const otherFileParent = operandFileParent(source);
+			return otherFileParent === null || !operandEquals(fileParent, otherFileParent);
+		})
+	)
+		return null;
+
+	return fileParent;
+};
+
+const resolvedDiffSpecsFromSources = ({
+	sources,
+	worktreeChanges,
+	commitDetails,
+}: {
+	sources: Array<Operand>;
+	worktreeChanges: WorktreeChanges | undefined;
+	commitDetails: CommitDetails | undefined;
+}): Array<DiffSpec> | null => {
+	const diffSpecs: Array<DiffSpec> = [];
+
+	for (const operand of sources) {
+		const resolvedDiffSpecs = resolvedDiffSpecsFromOperand({
+			operand,
+			worktreeChanges,
+			commitDetails,
+		});
+		if (!resolvedDiffSpecs) return null;
+
+		diffSpecs.push(...resolvedDiffSpecs);
+	}
+
+	return diffSpecs;
+};
+
 export const resolveDiffSpecs = async ({
-	source,
+	sources,
 	projectId,
 	queryClient,
 }: {
-	source: Operand;
+	sources: Array<Operand>;
 	projectId: string;
 	queryClient: QueryClient;
 }) => {
-	const fileParent = operandFileParent(source);
-	const commitId = fileParent ? commitIdFromParent(fileParent) : null;
+	const fileParent = fileParentFromSources(sources);
+	if (!fileParent) return null;
+
+	const commitId = commitIdFromParent(fileParent);
 	const [worktreeChanges, commitDetails] = await Promise.all([
 		queryClient.fetchQuery(changesInWorktreeQueryOptions(projectId)),
 		commitId !== null
 			? queryClient.fetchQuery(commitDetailsWithLineStatsQueryOptions({ projectId, commitId }))
-			: Promise.resolve(undefined),
+			: undefined,
 	]);
 
-	return resolvedDiffSpecsFromOperand({
-		operand: source,
+	return resolvedDiffSpecsFromSources({
+		sources,
 		worktreeChanges,
 		commitDetails,
 	});
 };
 
 export const useResolveDiffSpecs = ({
-	operand,
+	sources,
 	projectId,
 }: {
-	operand?: Operand;
+	sources?: Array<Operand>;
 	projectId: string;
 }) => {
 	const { data: worktreeChanges } = useQuery(changesInWorktreeQueryOptions(projectId));
 
-	const fileParent = operand ? operandFileParent(operand) : null;
+	const fileParent = fileParentFromSources(sources ?? []);
 	const commitId = fileParent ? commitIdFromParent(fileParent) : null;
 	const commitDetails = useQueries({
 		queries: (commitId !== null ? [commitId] : []).map((commitId) =>
@@ -137,10 +186,10 @@ export const useResolveDiffSpecs = ({
 		combine: ([result]) => result?.data,
 	});
 
-	if (!operand) return null;
+	if (!sources || !fileParent) return null;
 
-	return resolvedDiffSpecsFromOperand({
-		operand,
+	return resolvedDiffSpecsFromSources({
+		sources,
 		worktreeChanges,
 		commitDetails,
 	});

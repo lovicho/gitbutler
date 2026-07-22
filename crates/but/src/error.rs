@@ -102,6 +102,16 @@ impl Display for BadInput {
     }
 }
 
+#[derive(Debug)]
+pub enum CliError {
+    /// User provided bad input.
+    BadInput(BadInput),
+    /// We tried to execute the subcommand as an external command, but that command was not found.
+    ExternalCommandNotFound(OsString),
+    /// Something went wrong internally.
+    Internal(anyhow::Error),
+}
+
 impl From<BadInput> for CliError {
     fn from(value: BadInput) -> Self {
         Self::BadInput(value)
@@ -153,6 +163,15 @@ impl CliError {
             Self::Internal(value) => Self::Internal(value),
         }
     }
+
+    pub fn into_internal(self) -> anyhow::Error {
+        match self {
+            CliError::BadInput(..) | CliError::ExternalCommandNotFound(..) => {
+                anyhow::anyhow!("{self}")
+            }
+            CliError::Internal(error) => error,
+        }
+    }
 }
 
 impl Display for CliError {
@@ -171,16 +190,6 @@ impl Display for CliError {
     }
 }
 
-#[derive(Debug)]
-pub enum CliError {
-    /// User provided bad input.
-    BadInput(BadInput),
-    /// We tried to execute the subcommand as an external command, but that command was not found.
-    ExternalCommandNotFound(OsString),
-    /// Something went wrong internally.
-    Internal(anyhow::Error),
-}
-
 pub type CliResult<T> = Result<T, CliError>;
 
 pub trait CliResultExt<T> {
@@ -189,6 +198,8 @@ pub trait CliResultExt<T> {
 
     /// Add a lazily computed hint if the result is a [`CliError::BadInput`].
     fn with_hint<S: AsRef<str>>(self, make_hint: impl FnOnce() -> S) -> Self;
+
+    fn into_internal_error(self) -> anyhow::Result<T>;
 }
 
 impl<T> CliResultExt<T> for CliResult<T> {
@@ -204,5 +215,9 @@ impl<T> CliResultExt<T> for CliResult<T> {
             Ok(_) => self,
             Err(err) => Err(err.with_hint(make_hint)),
         }
+    }
+
+    fn into_internal_error(self) -> anyhow::Result<T> {
+        self.map_err(|err| err.into_internal())
     }
 }

@@ -75,6 +75,7 @@ fn copies_every_commit_value() {
     tui.input(KeyCode::Down);
     tui.input('r');
     tui.input((KeyModifiers::SHIFT, 'J'));
+    tui.input('u');
     tui.input(KeyCode::Enter);
     tui.reload();
     tui.input((KeyModifiers::SHIFT, 'K'));

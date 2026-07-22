@@ -8,7 +8,7 @@ import {
 	type Operand,
 	uncommittedChangesOperand,
 } from "#ui/operands.ts";
-import type { OperationType } from "#ui/operations/operation.ts";
+import type { Placement } from "#ui/operations/operation.ts";
 import type { SelectionState } from "#ui/projects/project.ts";
 import type { SelectionScope } from "#ui/selection-scopes.ts";
 import type { AbsorptionTarget } from "@gitbutler/but-sdk";
@@ -23,7 +23,7 @@ export type AbsorbMode = {
 /** @public */
 export type KeyboardTransferMode = {
 	sources: Array<Operand>;
-	operationType: OperationType;
+	placement: Placement;
 	restoreSelection: SelectionState;
 };
 
@@ -31,7 +31,7 @@ export type KeyboardTransferMode = {
 export type PointerTransferMode = {
 	sources: Array<Operand>;
 	target: Operand | null;
-	operationType: OperationType | null;
+	placement: Placement | null;
 };
 
 /** @public */
@@ -42,12 +42,12 @@ export type TransferMode =
 /** @public */
 export const keyboardTransferMode = ({
 	sources,
-	operationType,
+	placement,
 	restoreSelection,
 }: KeyboardTransferMode): TransferMode => ({
 	_tag: "Keyboard",
 	sources,
-	operationType,
+	placement,
 	restoreSelection,
 });
 
@@ -55,12 +55,12 @@ export const keyboardTransferMode = ({
 export const pointerTransferMode = ({
 	sources,
 	target,
-	operationType,
+	placement,
 }: PointerTransferMode): TransferMode => ({
 	_tag: "Pointer",
 	sources,
 	target,
-	operationType,
+	placement,
 });
 
 export const getTransferTarget = (

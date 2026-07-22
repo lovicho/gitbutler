@@ -8,18 +8,18 @@ use crate::command::legacy::status::{
     tui::{
         DetailsLayoutMessage, Message,
         backstack::BackstackEntry,
-        tests::utils::{TestTuiOptions, test_tui, test_tui_with_options},
+        tests::utils::{Shift, TestTuiOptions, test_tui, test_tui_with_options},
     },
 };
 
 mod binds {
-    use crossterm::event::KeyModifiers;
+    use crate::command::legacy::status::tui::tests::utils::Shift;
 
     pub const SCROLL_DOWN: char = 'j';
     pub const SCROLL_UP: char = 'k';
 
-    pub const NEXT_HUNK: (KeyModifiers, char) = (KeyModifiers::SHIFT, 'J');
-    pub const PREV_HUNK: (KeyModifiers, char) = (KeyModifiers::SHIFT, 'K');
+    pub const NEXT_HUNK: Shift = Shift('j');
+    pub const PREV_HUNK: Shift = Shift('k');
 }
 
 #[test]
@@ -1429,7 +1429,7 @@ fn marking_and_discarding_all_hunks() {
 }
 
 #[test]
-fn rubbing_marks_from_split_details_view() {
+fn squashing_marks_from_split_details_view() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
     env.setup_metadata(&["A"]);
 
@@ -1443,22 +1443,23 @@ fn rubbing_marks_from_split_details_view() {
     tui.input(' ');
     tui.input('d');
     tui.input('l').assert_rendered_term_svg_eq(file![
-        "snapshots/rubbing_marks_from_split_details_view_001.svg"
+        "snapshots/squashing_marks_from_split_details_view_001.svg"
     ]);
     tui.input('r').assert_rendered_term_svg_eq(file![
-        "snapshots/rubbing_marks_from_split_details_view_002.svg"
+        "snapshots/squashing_marks_from_split_details_view_002.svg"
     ]);
-    tui.input(binds::SCROLL_DOWN)
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/rubbing_marks_from_split_details_view_003.svg"
-        ]);
+    tui.input('j');
+    tui.input('j');
+    tui.input('u').assert_rendered_term_svg_eq(file![
+        "snapshots/squashing_marks_from_split_details_view_003.svg"
+    ]);
     tui.input(KeyCode::Enter).assert_rendered_term_svg_eq(file![
-        "snapshots/rubbing_marks_from_split_details_view_004.svg"
+        "snapshots/squashing_marks_from_split_details_view_004.svg"
     ]);
 }
 
 #[test]
-fn rubbing_marks_from_full_screen_details_view() {
+fn squashing_marks_from_full_screen_details_view() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
     env.setup_metadata(&["A"]);
 
@@ -1470,24 +1471,24 @@ fn rubbing_marks_from_full_screen_details_view() {
     tui.input(binds::SCROLL_DOWN);
     tui.input(' ');
     tui.input(' ');
-    tui.input((KeyModifiers::SHIFT, 'D'))
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/rubbing_marks_from_full_screen_details_view_001.svg"
-        ]);
-    tui.input('r').assert_rendered_term_svg_eq(file![
-        "snapshots/rubbing_marks_from_full_screen_details_view_002.svg"
+    tui.input(Shift('d')).assert_rendered_term_svg_eq(file![
+        "snapshots/squashing_marks_from_full_screen_details_view_001.svg"
     ]);
-    tui.input(binds::SCROLL_DOWN)
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/rubbing_marks_from_full_screen_details_view_003.svg"
-        ]);
+    tui.input('r').assert_rendered_term_svg_eq(file![
+        "snapshots/squashing_marks_from_full_screen_details_view_002.svg"
+    ]);
+    tui.input('j');
+    tui.input('j');
+    tui.input('u').assert_rendered_term_svg_eq(file![
+        "snapshots/squashing_marks_from_full_screen_details_view_003.svg"
+    ]);
     tui.input(KeyCode::Enter).assert_rendered_term_svg_eq(file![
-        "snapshots/rubbing_marks_from_full_screen_details_view_004.svg"
+        "snapshots/squashing_marks_from_full_screen_details_view_004.svg"
     ]);
 }
 
 #[test]
-fn rubbing_selection_from_split_details_view() {
+fn squashing_selection_from_split_details_view() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
     env.setup_metadata(&["A"]);
 
@@ -1501,20 +1502,23 @@ fn rubbing_selection_from_split_details_view() {
     tui.input('l');
     tui.input(binds::SCROLL_DOWN)
         .assert_rendered_term_svg_eq(file![
-            "snapshots/rubbing_selection_from_split_details_view_001.svg"
+            "snapshots/squashing_selection_from_split_details_view_001.svg"
         ]);
-    tui.input('r');
-    tui.input(binds::SCROLL_DOWN)
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/rubbing_selection_from_split_details_view_002.svg"
-        ]);
+    tui.input('r').assert_rendered_term_svg_eq(file![
+        "snapshots/squashing_selection_from_split_details_view_002.svg"
+    ]);
+    tui.input('j');
+    tui.input('j');
+    tui.input('u').assert_rendered_term_svg_eq(file![
+        "snapshots/squashing_selection_from_split_details_view_003.svg"
+    ]);
     tui.input(KeyCode::Enter).assert_rendered_term_svg_eq(file![
-        "snapshots/rubbing_selection_from_split_details_view_003.svg"
+        "snapshots/squashing_selection_from_split_details_view_004.svg"
     ]);
 }
 
 #[test]
-fn rubbing_selection_from_full_screen_details_view() {
+fn squashing_selection_from_full_screen_details_view() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
     env.setup_metadata(&["A"]);
 
@@ -1524,18 +1528,21 @@ fn rubbing_selection_from_full_screen_details_view() {
     let mut tui = test_tui(env);
 
     tui.input(binds::SCROLL_DOWN);
-    tui.input((KeyModifiers::SHIFT, 'D'));
+    tui.input(Shift('d'));
     tui.input(binds::SCROLL_DOWN)
         .assert_rendered_term_svg_eq(file![
-            "snapshots/rubbing_selection_from_full_screen_details_view_001.svg"
+            "snapshots/squashing_selection_from_full_screen_details_view_001.svg"
         ]);
-    tui.input('r');
-    tui.input(binds::SCROLL_DOWN)
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/rubbing_selection_from_full_screen_details_view_002.svg"
-        ]);
+    tui.input('r').assert_rendered_term_svg_eq(file![
+        "snapshots/squashing_selection_from_full_screen_details_view_002.svg"
+    ]);
+    tui.input('j');
+    tui.input('j');
+    tui.input('u').assert_rendered_term_svg_eq(file![
+        "snapshots/squashing_selection_from_full_screen_details_view_003.svg"
+    ]);
     tui.input(KeyCode::Enter).assert_rendered_term_svg_eq(file![
-        "snapshots/rubbing_selection_from_full_screen_details_view_003.svg"
+        "snapshots/squashing_selection_from_full_screen_details_view_004.svg"
     ]);
 }
 
@@ -1707,7 +1714,7 @@ fn commit_source_with_partial_marks_is_selectable() {
 }
 
 #[test]
-fn rub_source_without_marks_is_selectable() {
+fn squash_source_without_marks_is_selectable() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
     env.setup_metadata(&["A"]);
 
@@ -1719,12 +1726,12 @@ fn rub_source_without_marks_is_selectable() {
     tui.input('l');
     tui.input('j');
     tui.input('r').assert_rendered_term_svg_eq(file![
-        "snapshots/rub_source_without_marks_is_selectable_001.svg"
+        "snapshots/squash_source_without_marks_is_selectable_001.svg"
     ]);
 }
 
 #[test]
-fn rub_source_with_marks_is_selectable() {
+fn squash_source_with_marks_is_selectable() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
     env.setup_metadata(&["A"]);
 
@@ -1737,12 +1744,12 @@ fn rub_source_with_marks_is_selectable() {
     tui.input('j');
     tui.input(' ');
     tui.input('r').assert_rendered_term_svg_eq(file![
-        "snapshots/rub_source_with_marks_is_selectable_001.svg"
+        "snapshots/squash_source_with_marks_is_selectable_001.svg"
     ]);
 }
 
 #[test]
-fn rub_source_with_partial_marks_is_selectable() {
+fn squash_source_with_partial_marks_is_selectable() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
     env.setup_metadata(&[]);
 
@@ -1766,6 +1773,6 @@ fn rub_source_with_partial_marks_is_selectable() {
     tui.input('j');
     tui.input(' ');
     tui.input('r').assert_rendered_term_svg_eq(file![
-        "snapshots/rub_source_with_partial_marks_is_selectable_001.svg"
+        "snapshots/squash_source_with_partial_marks_is_selectable_001.svg"
     ]);
 }

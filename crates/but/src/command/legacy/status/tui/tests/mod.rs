@@ -24,7 +24,7 @@ mod discard_tests;
 mod jump_tests;
 mod marking_tests;
 mod move_tests;
-mod rub_tests;
+mod squash_tests;
 mod stack_tests;
 mod utils;
 
@@ -667,7 +667,7 @@ fn inline_reword_open_editor_keeps_inline_message_when_editor_makes_no_changes()
 }
 
 #[test]
-fn esc_leaves_rub_mode() {
+fn esc_leaves_squash_mode() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
     env.setup_metadata(&["A"]);
 
@@ -685,106 +685,10 @@ fn esc_leaves_rub_mode() {
         .assert_current_line_eq(str!["┊   vo A test.txt"]);
 
     tui.input('r')
-        .assert_current_line_eq(str!["┊   << source >> << noop >> vo A test.txt"]);
+        .assert_current_line_eq(str!["┊   << source >> vo A test.txt"]);
 
     tui.input(KeyCode::Esc)
         .assert_current_line_eq(str!["┊   vo A test.txt"]);
-}
-
-#[test]
-fn mode_key_r_enters_and_escape_leaves_rub_mode() {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    env.setup_metadata(&["A"]);
-
-    let mut tui = test_tui(env);
-
-    tui.env().file("test.txt", "content");
-
-    tui.reload();
-
-    tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊   vo A test.txt"]);
-
-    tui.input('r')
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/mode_toggle_key_r_enters_and_leaves_rub_mode_001.svg"
-        ])
-        .assert_current_line_eq(str!["┊   << source >> << noop >> vo A test.txt"]);
-
-    tui.input(KeyCode::Esc)
-        .assert_current_line_eq(str!["┊   vo A test.txt"]);
-}
-
-#[test]
-fn rub_mode_shift_j_lands_on_first_selectable_in_next_branch() {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
-    env.setup_metadata(&["A", "B"]);
-
-    let mut tui = test_tui(env);
-
-    tui.env().file("test.txt", "content");
-
-    tui.reload();
-
-    tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊   vo A test.txt"]);
-
-    tui.input('r')
-        .assert_current_line_eq(str!["┊   << source >> << noop >> vo A test.txt"]);
-
-    tui.input((KeyModifiers::SHIFT, 'J'))
-        .assert_current_line_eq(str!["┊●   << amend >> tpm add A"]);
-}
-
-#[test]
-fn rub_mode_shift_j_can_jump_between_branches() {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
-    env.setup_metadata(&["A", "B"]);
-
-    let mut tui = test_tui(env);
-
-    tui.env().file("test.txt", "content");
-
-    tui.reload();
-
-    tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊   vo A test.txt"]);
-
-    tui.input('r')
-        .assert_current_line_eq(str!["┊   << source >> << noop >> vo A test.txt"]);
-
-    tui.input((KeyModifiers::SHIFT, 'J'))
-        .assert_current_line_eq(str!["┊●   << amend >> tpm add A"]);
-
-    tui.input((KeyModifiers::SHIFT, 'J'))
-        .assert_current_line_eq(str!["┊●   << amend >> lrm add B"]);
-}
-
-#[test]
-fn rub_mode_shift_k_jumps_to_first_selectable_in_previous_branch() {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
-    env.setup_metadata(&["A", "B"]);
-
-    let mut tui = test_tui(env);
-
-    tui.env().file("test.txt", "content");
-
-    tui.reload();
-
-    tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊   vo A test.txt"]);
-
-    tui.input('r')
-        .assert_current_line_eq(str!["┊   << source >> << noop >> vo A test.txt"]);
-
-    tui.input((KeyModifiers::SHIFT, 'J'))
-        .assert_current_line_eq(str!["┊●   << amend >> tpm add A"]);
-
-    tui.input((KeyModifiers::SHIFT, 'J'))
-        .assert_current_line_eq(str!["┊●   << amend >> lrm add B"]);
-
-    tui.input((KeyModifiers::SHIFT, 'K'))
-        .assert_current_line_eq(str!["┊●   << amend >> tpm add A"]);
 }
 
 #[test]
@@ -840,63 +744,6 @@ fn key_b_creates_new_branch_from_selected_branch() {
 
     tui.input('b')
         .assert_current_line_eq(str!["┊╭┄br [c-branch-1] (no commits)"]);
-}
-
-#[test]
-fn rubbing() {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    env.setup_metadata(&["A"]);
-
-    let mut tui = test_tui(env);
-
-    tui.reload()
-        .assert_rendered_term_svg_eq(file!["snapshots/rubbing_001.svg"])
-        .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
-
-    tui.env().file("test.txt", "content");
-
-    tui.reload()
-        .assert_rendered_term_svg_eq(file!["snapshots/rubbing_002.svg"])
-        .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
-
-    tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊   vo A test.txt"]);
-
-    tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
-
-    tui.input('n')
-        .assert_current_line_eq(str!["┊●   1 (no commit message) (no changes)"]);
-
-    tui.input([KeyCode::Up, KeyCode::Up])
-        .assert_current_line_eq(str!["┊   vo A test.txt"]);
-
-    tui.input('r')
-        .assert_current_line_eq(str!["┊   << source >> << noop >> vo A test.txt"]);
-
-    tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊●   << amend >> 1 (no commit message) (no changes)"]);
-
-    tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊●   << amend >> tpm add A"]);
-
-    tui.input(KeyCode::Enter);
-    // that you end up on zz is a bug but requires moving the rub implementation to use but-api
-    // that work is in progress
-    tui.input([
-        KeyCode::Up,
-        KeyCode::Up,
-        KeyCode::Up,
-        KeyCode::Up,
-        KeyCode::Up,
-        KeyCode::Up,
-        KeyCode::Up,
-        KeyCode::Up,
-    ])
-    .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
-
-    tui.input((KeyModifiers::SHIFT, 'F'))
-        .assert_rendered_term_svg_eq(file!["snapshots/rubbing_003.svg"]);
 }
 
 #[test]
@@ -977,55 +824,6 @@ fn commit_file_toggle_on_commit_without_files_is_noop() {
         .assert_rendered_term_svg_eq(file![
             "snapshots/commit_file_toggle_on_commit_without_files_is_noop_final.svg"
         ]);
-}
-
-#[test]
-fn commit_file_list_rub_esc_leaves_rub_and_closes_file_list() {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
-    env.setup_metadata(&["A", "B"]);
-
-    let mut tui = test_tui(env);
-
-    tui.input([KeyCode::Down, KeyCode::Down])
-        .assert_current_line_eq(str!["┊●   tpm add A"]);
-
-    tui.input('f')
-        .assert_current_line_eq(str!["┊│     t:t A A"]);
-
-    tui.input((KeyModifiers::SHIFT, 'R'))
-        .assert_current_line_eq(str!["┊│     t:t A A"]);
-
-    tui.input(KeyCode::Up)
-        .assert_current_line_eq(str!["┊│     t:t A A"]);
-
-    tui.input(KeyCode::Esc)
-        .assert_current_line_eq(str!["┊●   tpm add A"])
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/commit_file_list_rub_esc_leaves_rub_and_closes_file_list_final.svg"
-        ]);
-}
-
-#[test]
-fn confirm_rub_keeps_commit_file_list_open() {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
-    env.setup_metadata(&["A", "B"]);
-
-    let mut tui = test_tui(env);
-
-    tui.input([KeyCode::Down, KeyCode::Down])
-        .assert_current_line_eq(str!["┊●   tpm add A"]);
-
-    tui.input('f')
-        .assert_current_line_eq(str!["┊│     t:t A A"]);
-
-    tui.input((KeyModifiers::SHIFT, 'R'))
-        .assert_current_line_eq(str!["┊│     t:t A A"]);
-
-    tui.input(KeyCode::Enter)
-        .assert_current_line_eq(str!["┊│     t:t A A"]);
-
-    tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊│     t:t A A"]);
 }
 
 #[test]
@@ -1327,9 +1125,9 @@ fn jumping_up_down_non_normal_mode() {
     tui.input('r');
 
     tui.input((KeyModifiers::CONTROL, 'd'))
-        .assert_current_line_eq("┊●   << amend >> 1#9 commit #3 (no changes)");
+        .assert_current_line_eq(str!["┊●   << amend >> 1#8 commit #4 (no changes)"]);
     tui.input((KeyModifiers::CONTROL, 'u'))
-        .assert_current_line_eq("╭┄<< source >> << noop >> zz [uncommitted]");
+        .assert_current_line_eq(str!["╭┄<< source >> zz [uncommitted]"]);
 }
 
 #[test]

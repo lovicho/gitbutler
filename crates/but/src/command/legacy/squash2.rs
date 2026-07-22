@@ -1,13 +1,16 @@
 use anyhow::Context as _;
-use bstr::BString;
+use bstr::{BString, ByteSlice as _};
 use but_api::json::HexHash;
 use but_core::{DiffSpec, DryRun, RefMetadata, sync::RepoExclusive};
 use but_ctx::Context;
 use but_graph::Workspace;
 use but_transaction::{IntermediateCommitCreateResult, Transaction};
-use but_workspace::commit::squash_commits::MessageCombinationStrategy;
+use but_workspace::{RefInfo, commit::squash_commits::MessageCombinationStrategy};
 use gitbutler_oplog::entry::{OperationKind, SnapshotDetails};
-use gix::{ObjectId, refs::FullName};
+use gix::{
+    ObjectId,
+    refs::{FullName, FullNameRef},
+};
 use itertools::Itertools;
 use nonempty::NonEmpty;
 use serde::Serialize;
@@ -15,12 +18,12 @@ use serde::Serialize;
 use crate::{
     CliError, CliResult, CliResultExt, IdMap,
     args::{
-        atoms::{BranchArg, CliIdArg, Priority, Purpose, ResolvedCliIdArg},
+        atoms::{BranchArg, CliIdArg, Priority, Purpose, ResolvedCliIdArg, ResolvedCliIdArgRef},
         squash2::Platform,
     },
     bad_input,
     command::legacy::reword2::RewordCommitOperation,
-    id::{UNCOMMITTED, UncommittedHunkOrFile},
+    id::{CommittedFileId, UNCOMMITTED, UncommittedHunkOrFile},
     theme::{self, Theme},
     utils::{
         CliOutput, CliOutputHuman, IntermediateChannel, WriteWithUtils, diff_specs::DiffSpecBuilder,
@@ -146,6 +149,7 @@ impl CliOutput for SquashOutcome {
     }
 }
 
+#[cfg_attr(not(feature = "but-2"), expect(dead_code))]
 pub fn squash(
     ctx: &mut Context,
     _out: IntermediateChannel<'_>,
@@ -154,19 +158,34 @@ pub fn squash(
     let mut guard = ctx.exclusive_worktree_access();
     let mut meta = ctx.meta()?;
     let id_map = IdMap::new_from_context(ctx, None, guard.read_permission())?;
+    let (repo, ws, _) = ctx.workspace_and_db_with_perm(guard.read_permission())?;
+    let head_info = but_workspace::head_info(
+        &repo,
+        &meta,
+        but_workspace::ref_info::Options {
+            project_meta: ctx.project_meta()?,
+            expensive_commit_info: false,
+            ..Default::default()
+        },
+    )?;
 
-    let squash_op = resolve(ctx, guard.write_permission(), args, &id_map)?;
-    let outcome = run(ctx, &mut meta, guard.write_permission(), squash_op)?;
+    let resolved_args = resolve_args(&repo, args, &id_map, &head_info)?;
+    let resolved_args = resolved_args.as_ref();
 
-    Ok(outcome)
+    let squash_op = resolve(resolved_args, &ws, &repo)?;
+
+    drop(repo);
+    drop(ws);
+
+    Ok(run(ctx, &mut meta, guard.write_permission(), squash_op)?)
 }
 
-fn resolve(
-    ctx: &mut Context,
-    perm: &mut RepoExclusive,
+fn resolve_args(
+    repo: &gix::Repository,
     args: Platform,
     id_map: &IdMap,
-) -> CliResult<SquashOperation> {
+    head_info: &RefInfo,
+) -> CliResult<ResolvedSquashArgs> {
     let Platform {
         target,
         sources,
@@ -176,137 +195,238 @@ fn resolve(
         use_source_message,
     } = args;
 
-    let (repo, ws, _) = ctx.workspace_and_db_with_perm(perm.read_permission())?;
+    let reword = resolve_reword(message, no_message, use_target_message, use_source_message);
 
-    let resolved_squash = if let Some(target) = target {
-        let target = resolve_target(
-            target,
-            message,
-            no_message,
-            use_target_message,
-            use_source_message,
-            &repo,
-            id_map,
-        )?;
-        let sources = sources
-            .into_iter()
-            .map(|source| {
-                let id = source.resolve_in_workspace(&repo, id_map, Purpose::Source, None)?;
-                Squashable::try_from_resolved_id(id)
-            })
+    if let Some(target) = target {
+        let resolved_sources = sources
+            .iter()
+            .map(|source| source.resolve_in_workspace(repo, id_map, Purpose::Source, None))
             .collect::<CliResult<Vec<_>>>()?;
 
-        let mut commit_sources = Vec::new();
-        let mut branch_sources = Vec::new();
-        let mut hunk_sources = Vec::new();
-        let mut uncommitted_sources = Vec::new();
-        let mut committed_file_sources = Vec::new();
-        for source in sources {
-            match source {
-                Squashable::Commit(object_id) => commit_sources.push(object_id),
-                Squashable::Branch(branch_arg) => branch_sources.push(branch_arg),
-                Squashable::UncommittedHunkOrFile(hunk) => hunk_sources.push(*hunk),
-                Squashable::Uncommitted(zz) => uncommitted_sources.push(zz),
-                Squashable::CommittedFile(committed_file) => {
-                    committed_file_sources.push(committed_file)
-                }
-            }
-        }
+        let target_kind_hint = "--target must be an applied commit, branch, or zz";
+        let hint = format!("{}. {}", target_kind_hint, CliIdArg::TARGET_MISSING_HINT);
+        let resolved_target = target
+            .resolve_in_workspace(
+                repo,
+                id_map,
+                Purpose::Target,
+                Some(Priority::BranchAndCommit),
+            )
+            .with_hint(|| hint.clone())?;
 
-        match ClassifiedSquashables::try_from_sources(
-            commit_sources,
-            branch_sources,
-            hunk_sources,
-            uncommitted_sources,
-            committed_file_sources,
-        )? {
-            ClassifiedSquashables::Commits(sources) => ResolvedSquash::Commits { target, sources },
-            ClassifiedSquashables::Branches(branch_sources) => {
-                resolve_squash_branch(target, branch_sources, &ws)?
+        let target = match resolve_target(resolved_target.as_ref(), reword, head_info) {
+            Ok(target) => target,
+            Err(err) => {
+                return Err(match err {
+                    ResolveTargetError::CannotBeEmptyBranch => {
+                        bad_input("--target cannot be an empty branch").into()
+                    }
+                    ResolveTargetError::NotFound => bad_input("target not found").hint(hint).into(),
+                    ResolveTargetError::UseTargetMessageUnavailable => {
+                        bad_input("--use-target-message cannot be used when uncommitting").into()
+                    }
+                    ResolveTargetError::UseSourceMessageUnavailable => {
+                        bad_input("--use-source-message cannot be used when uncommitting").into()
+                    }
+                    ResolveTargetError::NoMessageUnavailable => {
+                        bad_input("--no-message cannot be used when uncommitting").into()
+                    }
+                    ResolveTargetError::MessageUnavailable => {
+                        bad_input("--message cannot be used when uncommitting").into()
+                    }
+                    ResolveTargetError::InvalidTarget => bad_input(target_kind_hint)
+                        .hint(CliIdArg::TARGET_MISSING_HINT)
+                        .into(),
+                    ResolveTargetError::Other(err) => err.into(),
+                });
             }
-            ClassifiedSquashables::UncommittedHunks(source_hunks) => {
-                let (target, reword) = match target {
-                    SquashTarget::Commit { commit, reword } => {
-                        (commit, reword.try_into_uncommitting()?)
-                    }
-                    SquashTarget::Uncommitted => {
-                        return Err(cannot_uncommit_uncommitted_changes_error());
-                    }
-                };
-                ResolvedSquash::UncommittedHunk(AmendUncommittedHunks {
-                    target,
-                    source_hunks,
-                    reword,
-                })
-            }
-            ClassifiedSquashables::Uncommitted => {
-                let (target, reword) = match target {
-                    SquashTarget::Commit { commit, reword } => {
-                        (commit, reword.try_into_uncommitting()?)
-                    }
-                    SquashTarget::Uncommitted => {
-                        return Err(cannot_uncommit_uncommitted_changes_error());
-                    }
-                };
-                ResolvedSquash::Uncommitted { target, reword }
-            }
-            ClassifiedSquashables::CommittedFiles(committed_files) => {
-                let first = committed_files.first();
+        };
 
-                let mut source_paths = Vec::from([first.path.clone()]);
-                let source = first.commit_id;
-                for committed_file in committed_files.into_iter().skip(1) {
-                    let CommittedFile { commit_id, path } = committed_file;
-
-                    if source != commit_id {
-                        let err = format!(
-                            "All committed files must come from the same commit. Found files from {} and {}",
-                            source.to_hex_with_len(7),
-                            commit_id.to_hex_with_len(7),
-                        );
-                        return Err(bad_input(err).into());
-                    }
-
-                    source_paths.push(path);
-                }
-
-                ResolvedSquash::CommittedFiles {
-                    target: MoveCommittedChangesTarget::from_squash_target(target)?,
-                    source,
-                    source_paths,
-                }
-            }
-        }
+        Ok(ResolvedSquashArgs::Normal {
+            sources: resolved_sources,
+            target,
+        })
     } else {
         match &sources[..] {
             [source] => {
-                let branch = source.resolve_branch_in_workspace(&repo, id_map)?;
-                let (source_branch_name, mut sources) = resolve_commits_on_branch(&branch, &ws)?;
-                let Some(target) = sources.pop() else {
-                    return Err(bad_input("Cannot squash empty branch into itself").into());
-                };
+                let branch = source.resolve_branch_in_workspace(repo, id_map)?;
+                Ok(ResolvedSquashArgs::SingleBranchSourceAndTarget { branch, reword })
+            }
+            _ => Err(
+                bad_input("When --target isn't used the source must be exactly one branch").into(),
+            ),
+        }
+    }
+}
 
-                let reword =
-                    resolve_reword(message, no_message, use_target_message, use_source_message);
+/// [`resolve`] does a lot of work that we don't wanna duplicate in the TUI but the TUI also
+/// shouldn't have to pass [`Platform`] to [`resolve`]. Hence this "pre-resolved" type exists to
+/// give clients a bit more flexibility.
+///
+/// The CLI calls [`resolve_args`] to get `ResolvedCliIdArg` whereas the TUI builds it directly.
+///
+/// Note the TUI actually uses [`ResolvedSquashArgsRef`] to avoid potentially expensive clones but
+/// the serves the same purpose.
+enum ResolvedSquashArgs {
+    /// The normal squash flow where we squash a list of sources into a target.
+    Normal {
+        sources: Vec<ResolvedCliIdArg>,
+        target: SquashTarget,
+    },
+    /// The special flow where we squash a single branch into the bottom most commit in that
+    /// branch. This corresponds to `but squash some-branch`.
+    SingleBranchSourceAndTarget {
+        branch: BranchArg,
+        reword: HowToRewordTarget,
+    },
+}
 
-                ResolvedSquash::Branches {
-                    target,
-                    reword,
-                    source_commits: sources,
-                    source_branches: NonEmpty::new(source_branch_name),
-                    branches_to_remove: Vec::new(),
+impl ResolvedSquashArgs {
+    fn as_ref(&self) -> ResolvedSquashArgsRef<'_> {
+        match self {
+            ResolvedSquashArgs::Normal { sources, target } => ResolvedSquashArgsRef::Normal {
+                sources: sources.iter().map(|s| s.as_ref()).collect(),
+                target: target.clone(),
+            },
+            ResolvedSquashArgs::SingleBranchSourceAndTarget { branch, reword } => {
+                ResolvedSquashArgsRef::SingleBranchSourceAndTarget {
+                    branch: branch.clone(),
+                    reword: reword.clone(),
                 }
             }
-            _ => {
-                return Err(bad_input(
-                    "When --target isn't used the source must be exactly one branch",
-                )
-                .into());
+        }
+    }
+}
+
+/// See [`ResolvedSquashArgs`].
+pub enum ResolvedSquashArgsRef<'a> {
+    Normal {
+        sources: Vec<ResolvedCliIdArgRef<'a>>,
+        target: SquashTarget,
+    },
+    SingleBranchSourceAndTarget {
+        branch: BranchArg,
+        reword: HowToRewordTarget,
+    },
+}
+
+pub fn resolve<'a>(
+    args: ResolvedSquashArgsRef<'a>,
+    ws: &Workspace,
+    repo: &gix::Repository,
+) -> CliResult<SquashOperation<'a>> {
+    let resolved_squash = match args {
+        ResolvedSquashArgsRef::Normal { sources, target } => {
+            let sources = sources
+                .iter()
+                .map(|source| Squashable::try_from_resolved_id(*source))
+                .collect::<CliResult<Vec<_>>>()?;
+
+            let mut commit_sources = Vec::new();
+            let mut branch_sources = Vec::new();
+            let mut hunk_sources = Vec::new();
+            let mut uncommitted_sources = Vec::new();
+            let mut committed_file_sources = Vec::new();
+            for source in sources {
+                match source {
+                    Squashable::Commit(object_id) => commit_sources.push(object_id),
+                    Squashable::Branch(branch_arg) => branch_sources.push(branch_arg),
+                    Squashable::UncommittedHunkOrFile(hunk) => hunk_sources.push(hunk),
+                    Squashable::Uncommitted(zz) => uncommitted_sources.push(zz),
+                    Squashable::CommittedFile(committed_file) => {
+                        committed_file_sources.push(committed_file)
+                    }
+                }
+            }
+
+            match ClassifiedSquashables::try_from_sources(
+                commit_sources,
+                branch_sources,
+                hunk_sources,
+                uncommitted_sources,
+                committed_file_sources,
+            )? {
+                ClassifiedSquashables::Commits(sources) => {
+                    ResolvedSquash::Commits { target, sources }
+                }
+                ClassifiedSquashables::Branches(branch_sources) => {
+                    resolve_squash_branch(target, branch_sources, ws)?
+                }
+                ClassifiedSquashables::UncommittedHunks(source_hunks) => {
+                    let (target, reword) = match target {
+                        SquashTarget::Commit { commit, reword } => {
+                            (commit, reword.try_into_uncommitting()?)
+                        }
+                        SquashTarget::Uncommitted => {
+                            return Err(cannot_uncommit_uncommitted_changes_error());
+                        }
+                    };
+                    ResolvedSquash::UncommittedHunk(AmendUncommittedHunks {
+                        target,
+                        source_hunks,
+                        reword,
+                    })
+                }
+                ClassifiedSquashables::Uncommitted => {
+                    let (target, reword) = match target {
+                        SquashTarget::Commit { commit, reword } => {
+                            (commit, reword.try_into_uncommitting()?)
+                        }
+                        SquashTarget::Uncommitted => {
+                            return Err(cannot_uncommit_uncommitted_changes_error());
+                        }
+                    };
+                    ResolvedSquash::Uncommitted { target, reword }
+                }
+                ClassifiedSquashables::CommittedFiles(committed_files) => {
+                    let first = committed_files.first();
+
+                    let mut source_paths = Vec::from([first.path.clone()]);
+                    let source = first.commit_id;
+                    for committed_file in committed_files.into_iter().skip(1) {
+                        let CommittedFileId {
+                            commit_id,
+                            path,
+                            id: _,
+                        } = committed_file;
+
+                        if source != commit_id {
+                            let err = format!(
+                                "All committed files must come from the same commit. Found files from {} and {}",
+                                source.to_hex_with_len(7),
+                                commit_id.to_hex_with_len(7),
+                            );
+                            return Err(bad_input(err).into());
+                        }
+
+                        source_paths.push(path);
+                    }
+
+                    ResolvedSquash::CommittedFiles {
+                        target: MoveCommittedChangesTarget::from_squash_target(target)?,
+                        source,
+                        source_paths,
+                    }
+                }
+            }
+        }
+        ResolvedSquashArgsRef::SingleBranchSourceAndTarget { branch, reword } => {
+            let (source_branch_name, mut sources) = resolve_commits_on_branch(&branch, ws)?;
+            let Some(target) = sources.pop() else {
+                return Err(bad_input("Cannot squash empty branch into itself").into());
+            };
+
+            ResolvedSquash::Branches {
+                target,
+                reword,
+                source_commits: sources,
+                source_branches: NonEmpty::new(source_branch_name),
+                branches_to_remove: Vec::new(),
             }
         }
     };
 
-    let squash_op = match resolved_squash {
+    let mut squash_op = match resolved_squash {
         ResolvedSquash::Commits { target, sources } => match target {
             SquashTarget::Commit {
                 commit: target,
@@ -360,6 +480,8 @@ fn resolve(
         },
     };
 
+    fix_up_unnecessary_reword_via_editor(&mut squash_op, repo)?;
+
     Ok(squash_op)
 }
 
@@ -369,7 +491,97 @@ fn cannot_uncommit_uncommitted_changes_error() -> CliError {
         .into()
 }
 
-enum ResolvedSquash {
+/// Changes how the operation rewords the target to avoid unnecessarily opening the editor.
+///
+/// For example if none of the sources have a message then we should always pick the target
+/// message, and vice versa.
+///
+/// If no editor would have been opened then this function does nothing. So we still respect
+/// `--use-source-message` and `--use-target-message` flags.
+fn fix_up_unnecessary_reword_via_editor(
+    op: &mut SquashOperation,
+    repo: &gix::Repository,
+) -> anyhow::Result<()> {
+    fn obvious_final_message<I>(
+        commits: I,
+        repo: &gix::Repository,
+    ) -> anyhow::Result<Option<String>>
+    where
+        I: IntoIterator<Item = gix::ObjectId>,
+    {
+        let mut out = None;
+        let mut seen = Vec::new();
+        for commit in commits {
+            if seen.contains(&commit) {
+                continue;
+            } else {
+                seen.push(commit);
+            }
+
+            let commit = repo.find_commit(commit)?;
+            let msg = commit.message_raw()?;
+            if msg.is_empty() {
+                continue;
+            }
+            if out.is_some() {
+                return Ok(None);
+            }
+            if let Ok(msg) = msg.to_str() {
+                out = Some(msg.to_owned());
+            } else {
+                // make sure we don't remove non utf-8 messages
+                return Ok(None);
+            }
+        }
+        if let Some(out) = out {
+            Ok(Some(out))
+        } else {
+            // none of the commits have messages so just keep an empty message and dont open an
+            // editor
+            Ok(Some(String::new()))
+        }
+    }
+
+    if !op.will_open_editor() {
+        return Ok(());
+    }
+
+    match op {
+        SquashOperation::Commits(op) => {
+            let commits = op.sources.iter().copied().chain([op.target]);
+            if let Some(msg) = obvious_final_message(commits, repo)? {
+                op.reword = HowToRewordTarget::Reword(RewordCommitOperation::Message(msg));
+            }
+        }
+        SquashOperation::Branch(op) => {
+            let commits = op.sources.iter().copied().chain([op.target]);
+            if let Some(msg) = obvious_final_message(commits, repo)? {
+                op.reword = HowToRewordTarget::Reword(RewordCommitOperation::Message(msg));
+            }
+        }
+        SquashOperation::UncommittedHunks(op) => {
+            if let Some(msg) = obvious_final_message([op.target], repo)? {
+                op.reword = HowToRewordTargetNoSource::Reword(RewordCommitOperation::Message(msg));
+            }
+        }
+        SquashOperation::Uncommitted { target, reword, .. } => {
+            if let Some(msg) = obvious_final_message([*target], repo)? {
+                *reword = HowToRewordTargetNoSource::Reword(RewordCommitOperation::Message(msg));
+            }
+        }
+        SquashOperation::MoveCommittedFiles { target, reword, .. } => {
+            if let Some(msg) = obvious_final_message([*target], repo)? {
+                *reword = HowToRewordTargetNoSource::Reword(RewordCommitOperation::Message(msg));
+            }
+        }
+        SquashOperation::Uncommit(..) | SquashOperation::UncommitCommittedFiles(..) => {}
+    }
+
+    Ok(())
+}
+
+#[derive(Debug)]
+pub enum ResolvedSquash<'a> {
     Commits {
         target: SquashTarget,
         sources: NonEmpty<ObjectId>,
@@ -388,7 +600,7 @@ enum ResolvedSquash {
         /// The branches that should be removed after squashing the commits.
         branches_to_remove: Vec<FullName>,
     },
-    UncommittedHunk(AmendUncommittedHunks),
+    UncommittedHunk(AmendUncommittedHunks<'a>),
     Uncommitted {
         target: ObjectId,
         reword: HowToRewordTargetNoSource,
@@ -400,15 +612,15 @@ enum ResolvedSquash {
     },
 }
 
-#[derive(Clone)]
-struct AmendUncommittedHunks {
-    target: ObjectId,
-    source_hunks: NonEmpty<UncommittedHunkOrFile>,
-    reword: HowToRewordTargetNoSource,
+#[derive(Clone, Debug)]
+pub struct AmendUncommittedHunks<'a> {
+    pub target: ObjectId,
+    pub source_hunks: NonEmpty<&'a UncommittedHunkOrFile>,
+    pub reword: HowToRewordTargetNoSource,
 }
 
 #[derive(Debug, Clone)]
-enum SquashTarget {
+pub enum SquashTarget {
     Commit {
         commit: ObjectId,
         reword: HowToRewordTarget,
@@ -417,7 +629,7 @@ enum SquashTarget {
 }
 
 #[derive(Debug, Clone)]
-enum MoveCommittedChangesTarget {
+pub enum MoveCommittedChangesTarget {
     Commit {
         commit: ObjectId,
         reword: HowToRewordTargetNoSource,
@@ -437,95 +649,83 @@ impl MoveCommittedChangesTarget {
     }
 }
 
-fn resolve_target(
-    id: CliIdArg,
-    message: Option<Vec<String>>,
-    no_message: bool,
-    use_target_message: bool,
-    use_source_message: bool,
-    repo: &gix::Repository,
-    id_map: &IdMap,
-) -> CliResult<SquashTarget> {
-    let target_kind_hint = "--target must be an applied commit, branch, or zz";
-    let hint = format!("{}. {}", target_kind_hint, CliIdArg::TARGET_MISSING_HINT);
-    match id
-        .resolve_in_workspace(
-            repo,
-            id_map,
-            Purpose::Target,
-            Some(Priority::BranchAndCommit),
-        )
-        .with_hint(|| hint.clone())?
-    {
-        ResolvedCliIdArg::Commit(object_id, _change_id) => {
-            let reword =
-                resolve_reword(message, no_message, use_target_message, use_source_message);
-            Ok(SquashTarget::Commit {
-                commit: object_id,
-                reword,
-            })
-        }
-        ResolvedCliIdArg::Branch(branch_arg) => {
-            let branch_name = branch_arg.resolve_local_branch_name()?;
+pub fn resolve_target(
+    target: ResolvedCliIdArgRef<'_>,
+    reword: HowToRewordTarget,
+    head_info: &RefInfo,
+) -> Result<SquashTarget, ResolveTargetError> {
+    match target {
+        ResolvedCliIdArgRef::Commit(object_id, _change_id) => Ok(SquashTarget::Commit {
+            commit: object_id,
+            reword,
+        }),
+        ResolvedCliIdArgRef::Branch(branch_name) => {
+            let branch_name = BranchArg(branch_name.to_owned())
+                .resolve_local_branch_name()
+                .map_err(ResolveTargetError::Other)?;
 
-            for stack in id_map.stacks() {
+            for stack in &head_info.stacks {
                 for segment in &stack.segments {
-                    let Some(ref_info) = &segment.inner.ref_info else {
+                    let Some(ref_info) = &segment.ref_info else {
                         continue;
                     };
-
                     if ref_info.ref_name == branch_name {
                         return if let Some(commit) = ref_info.commit_id {
-                            let reword = resolve_reword(
-                                message,
-                                no_message,
-                                use_target_message,
-                                use_source_message,
-                            );
                             Ok(SquashTarget::Commit { commit, reword })
                         } else {
-                            Err(bad_input("--target cannot be an empty branch").into())
+                            Err(ResolveTargetError::CannotBeEmptyBranch)
                         };
                     }
                 }
             }
 
-            Err(bad_input("target not found").hint(hint).into())
+            Err(ResolveTargetError::NotFound)
         }
-        ResolvedCliIdArg::Uncommitted => {
-            if message.is_some() {
-                return Err(bad_input("--message cannot be used when uncommitting").into());
-            }
-            if no_message {
-                return Err(bad_input("--no-message cannot be used when uncommitting").into());
-            }
-            if use_target_message {
-                return Err(
-                    bad_input("--use-target-message cannot be used when uncommitting").into(),
-                );
-            }
-            if use_source_message {
-                return Err(
-                    bad_input("--use-source-message cannot be used when uncommitting").into(),
-                );
+        ResolvedCliIdArgRef::Uncommitted => {
+            match reword {
+                HowToRewordTarget::UseTargetMessage => {
+                    return Err(ResolveTargetError::UseTargetMessageUnavailable);
+                }
+                HowToRewordTarget::UseSourceMessage => {
+                    return Err(ResolveTargetError::UseSourceMessageUnavailable);
+                }
+                HowToRewordTarget::Reword(reword_op) => match reword_op {
+                    RewordCommitOperation::NoMessage => {
+                        return Err(ResolveTargetError::NoMessageUnavailable);
+                    }
+                    RewordCommitOperation::Message(_) => {
+                        return Err(ResolveTargetError::MessageUnavailable);
+                    }
+                    RewordCommitOperation::UseEditor => {}
+                },
             }
 
             Ok(SquashTarget::Uncommitted)
         }
-        ResolvedCliIdArg::UncommittedHunkOrFile(..)
-        | ResolvedCliIdArg::CommittedFile { .. }
-        | ResolvedCliIdArg::PathPrefix
-        | ResolvedCliIdArg::Stack => Err(bad_input(target_kind_hint)
-            .hint(CliIdArg::TARGET_MISSING_HINT)
-            .into()),
+        ResolvedCliIdArgRef::UncommittedHunkOrFile(..)
+        | ResolvedCliIdArgRef::CommittedFile { .. }
+        | ResolvedCliIdArgRef::PathPrefix
+        | ResolvedCliIdArgRef::Stack => Err(ResolveTargetError::InvalidTarget),
     }
 }
 
-fn resolve_squash_branch(
+#[derive(Debug)]
+pub enum ResolveTargetError {
+    CannotBeEmptyBranch,
+    NotFound,
+    UseTargetMessageUnavailable,
+    UseSourceMessageUnavailable,
+    NoMessageUnavailable,
+    MessageUnavailable,
+    InvalidTarget,
+    Other(anyhow::Error),
+}
+
+pub fn resolve_squash_branch(
     target: SquashTarget,
     branch_sources: NonEmpty<BranchArg>,
     ws: &Workspace,
-) -> CliResult<ResolvedSquash> {
+) -> CliResult<ResolvedSquash<'static>> {
     let (target, reword) = match target {
         SquashTarget::Commit { commit, reword } => (commit, reword),
         SquashTarget::Uncommitted => {
@@ -588,7 +788,7 @@ fn resolve_reword(
 }
 
 #[derive(Debug, Clone)]
-enum HowToRewordTarget {
+pub enum HowToRewordTarget {
     UseTargetMessage,
     UseSourceMessage,
     Reword(RewordCommitOperation),
@@ -648,13 +848,13 @@ impl HowToRewordTarget {
 ///
 /// Used when the source is uncommitted, which doesn't have messages.
 #[derive(Debug, Clone)]
-enum HowToRewordTargetNoSource {
+pub enum HowToRewordTargetNoSource {
     UseTargetMessage,
     Reword(RewordCommitOperation),
 }
 
 impl HowToRewordTargetNoSource {
-    fn will_open_editor(&self) -> bool {
+    pub fn will_open_editor(&self) -> bool {
         match self {
             Self::UseTargetMessage => false,
             Self::Reword(op) => op.will_open_editor(),
@@ -673,37 +873,30 @@ impl HowToRewordTargetNoSource {
     }
 }
 
-enum Squashable {
+enum Squashable<'a> {
     Commit(gix::ObjectId),
     Branch(BranchArg),
-    UncommittedHunkOrFile(Box<UncommittedHunkOrFile>),
+    UncommittedHunkOrFile(&'a UncommittedHunkOrFile),
     Uncommitted(&'static str),
-    CommittedFile(CommittedFile),
+    CommittedFile(CommittedFileId),
 }
 
-struct CommittedFile {
-    commit_id: gix::ObjectId,
-    path: BString,
-}
-
-impl Squashable {
-    fn try_from_resolved_id(id: ResolvedCliIdArg) -> CliResult<Self> {
+impl<'a> Squashable<'a> {
+    fn try_from_resolved_id(id: ResolvedCliIdArgRef<'a>) -> CliResult<Self> {
         let kind = match id {
-            ResolvedCliIdArg::Commit(commit, _change_id) => return Ok(Self::Commit(commit)),
-            ResolvedCliIdArg::Branch(branch) => return Ok(Self::Branch(branch)),
-            ResolvedCliIdArg::UncommittedHunkOrFile(hunk) => {
+            ResolvedCliIdArgRef::Commit(commit, _change_id) => return Ok(Self::Commit(commit)),
+            ResolvedCliIdArgRef::Branch(branch_name) => {
+                return Ok(Self::Branch(BranchArg(branch_name.to_owned())));
+            }
+            ResolvedCliIdArgRef::UncommittedHunkOrFile(hunk) => {
                 return Ok(Self::UncommittedHunkOrFile(hunk));
             }
-            ResolvedCliIdArg::Uncommitted => return Ok(Self::Uncommitted(UNCOMMITTED)),
-            ResolvedCliIdArg::CommittedFile {
-                commit_id,
-                path,
-                id: _,
-            } => {
-                return Ok(Self::CommittedFile(CommittedFile { commit_id, path }));
+            ResolvedCliIdArgRef::Uncommitted => return Ok(Self::Uncommitted(UNCOMMITTED)),
+            ResolvedCliIdArgRef::CommittedFile(file) => {
+                return Ok(Self::CommittedFile(file.clone()));
             }
-            ResolvedCliIdArg::PathPrefix => "a path",
-            ResolvedCliIdArg::Stack => "a stack",
+            ResolvedCliIdArgRef::PathPrefix => "a path",
+            ResolvedCliIdArgRef::Stack => "a stack",
         };
         Err(bad_input(format!(
             "Expected a commit, a branch, or an uncommitted change, got {kind}"
@@ -712,21 +905,21 @@ impl Squashable {
     }
 }
 
-enum ClassifiedSquashables {
+enum ClassifiedSquashables<'a> {
     Commits(NonEmpty<gix::ObjectId>),
     Branches(NonEmpty<BranchArg>),
-    UncommittedHunks(NonEmpty<UncommittedHunkOrFile>),
+    UncommittedHunks(NonEmpty<&'a UncommittedHunkOrFile>),
     Uncommitted,
-    CommittedFiles(NonEmpty<CommittedFile>),
+    CommittedFiles(NonEmpty<CommittedFileId>),
 }
 
-impl ClassifiedSquashables {
+impl<'a> ClassifiedSquashables<'a> {
     fn try_from_sources(
         commit_sources: Vec<ObjectId>,
         branch_sources: Vec<BranchArg>,
-        hunk_sources: Vec<UncommittedHunkOrFile>,
+        hunk_sources: Vec<&'a UncommittedHunkOrFile>,
         uncommitted_sources: Vec<&'static str>,
-        committed_file_sources: Vec<CommittedFile>,
+        committed_file_sources: Vec<CommittedFileId>,
     ) -> CliResult<Self> {
         let has_commits = !commit_sources.is_empty();
         let has_branches = !branch_sources.is_empty();
@@ -767,7 +960,7 @@ impl ClassifiedSquashables {
     }
 }
 
-fn run(
+pub fn run(
     ctx: &mut Context,
     meta: &mut impl RefMetadata,
     perm: &mut RepoExclusive,
@@ -1017,10 +1210,10 @@ fn run(
 }
 
 #[derive(Clone)]
-enum SquashOperation {
+pub enum SquashOperation<'a> {
     Commits(SquashCommitsOperation),
     Branch(SquashBranchOperation),
-    UncommittedHunks(AmendUncommittedHunks),
+    UncommittedHunks(AmendUncommittedHunks<'a>),
     Uncommitted {
         target: ObjectId,
         reword: HowToRewordTargetNoSource,
@@ -1035,8 +1228,7 @@ enum SquashOperation {
     UncommitCommittedFiles(UncommitCommittedFilesOperation),
 }
 
-impl SquashOperation {
-    #[expect(dead_code)]
+impl SquashOperation<'_> {
     pub fn will_open_editor(&self) -> bool {
         match self {
             SquashOperation::Commits(op) => op.reword.will_open_editor(),
@@ -1070,10 +1262,10 @@ enum TransactionCompatibleOperation {
 }
 
 #[derive(Clone)]
-struct SquashCommitsOperation {
-    sources: NonEmpty<gix::ObjectId>,
-    target: gix::ObjectId,
-    reword: HowToRewordTarget,
+pub struct SquashCommitsOperation {
+    pub sources: NonEmpty<gix::ObjectId>,
+    pub target: gix::ObjectId,
+    pub reword: HowToRewordTarget,
 }
 
 impl SquashCommitsOperation {
@@ -1092,12 +1284,12 @@ impl SquashCommitsOperation {
 }
 
 #[derive(Clone)]
-struct SquashBranchOperation {
-    sources: Vec<gix::ObjectId>,
-    target: gix::ObjectId,
-    reword: HowToRewordTarget,
-    source_branches: NonEmpty<FullName>,
-    branches_to_remove: Vec<FullName>,
+pub struct SquashBranchOperation {
+    pub sources: Vec<gix::ObjectId>,
+    pub target: gix::ObjectId,
+    pub reword: HowToRewordTarget,
+    pub source_branches: NonEmpty<FullName>,
+    pub branches_to_remove: Vec<FullName>,
 }
 
 impl SquashBranchOperation {
@@ -1180,14 +1372,14 @@ impl MoveCommittedFilesOperation {
 }
 
 #[derive(Clone)]
-struct UncommitOperation {
-    sources: NonEmpty<gix::ObjectId>,
+pub struct UncommitOperation {
+    pub sources: NonEmpty<gix::ObjectId>,
 }
 
 #[derive(Clone)]
-struct UncommitCommittedFilesOperation {
-    source: ObjectId,
-    source_paths: Vec<BString>,
+pub struct UncommitCommittedFilesOperation {
+    pub source: ObjectId,
+    pub source_paths: Vec<BString>,
 }
 
 fn resolve_commits_on_branch(
@@ -1195,9 +1387,17 @@ fn resolve_commits_on_branch(
     ws: &Workspace,
 ) -> CliResult<(FullName, Vec<ObjectId>)> {
     let branch_name = branch.resolve_local_branch_name()?;
-    let (_, segment) = ws.try_find_segment_and_stack_by_refname(branch_name.as_ref())?;
-    let commits_in_segment = segment.commits.iter().map(|commit| commit.id).collect();
+    let commits_in_segment = resolve_commits_on_branch_by_ref(branch_name.as_ref(), ws)?;
     Ok((branch_name, commits_in_segment))
+}
+
+pub fn resolve_commits_on_branch_by_ref(
+    branch: &FullNameRef,
+    ws: &Workspace,
+) -> anyhow::Result<Vec<ObjectId>> {
+    let (_, segment) = ws.try_find_segment_and_stack_by_refname(branch)?;
+    let commits_in_segment = segment.commits.iter().map(|commit| commit.id).collect();
+    Ok(commits_in_segment)
 }
 
 fn non_empty_dedup_maintain_sort<T>(non_empty: NonEmpty<T>) -> NonEmpty<T>

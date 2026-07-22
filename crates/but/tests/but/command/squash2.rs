@@ -2245,3 +2245,162 @@ Hint: run `but help` for all commands
 
 "#]]);
 }
+
+#[test]
+fn doesnt_open_editor_if_no_sources_have_message() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    env.file(".git/editor.sh", "false");
+    let editor_path = env.projects_root().join(".git/editor.sh");
+    let editor_command = format!("sh {}", editor_path.display());
+
+    env.but("_commit2 --empty --no-message").assert().success();
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted] (no changes)
+┊
+┊╭┄g0 [A]
+┊●   1 (no commit message) (no changes)
+┊●   tpm add A
+┊│     tpm:t A A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    env.but("_squash2 1 -t tpm")
+        .env("GIT_EDITOR", editor_command)
+        .assert()
+        .success();
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted] (no changes)
+┊
+┊╭┄g0 [A]
+┊●   tpm add A
+┊│     tpm:t A A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}
+
+#[test]
+fn doesnt_open_editor_if_no_target_has_message() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    env.file(".git/editor.sh", "false");
+    let editor_path = env.projects_root().join(".git/editor.sh");
+    let editor_command = format!("sh {}", editor_path.display());
+
+    env.but("_commit2 --empty --no-message").assert().success();
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted] (no changes)
+┊
+┊╭┄g0 [A]
+┊●   1 (no commit message) (no changes)
+┊●   tpm add A
+┊│     tpm:t A A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    env.but("_squash2 tpm -t 1")
+        .env("GIT_EDITOR", editor_command)
+        .assert()
+        .success();
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted] (no changes)
+┊
+┊╭┄g0 [A]
+┊●   1 add A
+┊│     1:t A A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}
+
+#[test]
+fn doesnt_open_editor_if_both_source_and_target_doesnt_have_a_message() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    env.file(".git/editor.sh", "false");
+    let editor_path = env.projects_root().join(".git/editor.sh");
+    let editor_command = format!("sh {}", editor_path.display());
+
+    env.but("_commit2 --empty --no-message").assert().success();
+    env.but("_commit2 --empty --no-message").assert().success();
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted] (no changes)
+┊
+┊╭┄g0 [A]
+┊●   1#0 (no commit message) (no changes)
+┊●   1#1 (no commit message) (no changes)
+┊●   tpm add A
+┊│     tpm:t A A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    env.but("_squash2 1#0 -t 1#1")
+        .env("GIT_EDITOR", editor_command)
+        .assert()
+        .success();
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄zz [uncommitted] (no changes)
+┊
+┊╭┄g0 [A]
+┊●   1 (no commit message) (no changes)
+┊●   tpm add A
+┊│     tpm:t A A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}

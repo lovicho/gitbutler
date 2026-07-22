@@ -1295,7 +1295,10 @@ impl Details {
     fn handle_discard_marks(&mut self, messages: &mut Vec<Message>, marks: MarksRef<'_>) {
         match marks {
             MarksRef::Hunks { .. } => {}
-            MarksRef::Empty | MarksRef::Commits { .. } | MarksRef::CommittedFiles { .. } => return,
+            MarksRef::Empty
+            | MarksRef::Commits { .. }
+            | MarksRef::CommittedFiles { .. }
+            | MarksRef::Branches { .. } => return,
         }
 
         self.to_be_discarded = self
@@ -1381,13 +1384,21 @@ impl Details {
                                     builder
                                         .push_changes_from_committed_file(c.commit_id, c.path)?;
                                 }
+                                MarkableRef::Branch(..) => {
+                                    anyhow::bail!(
+                                        "BUG: it should not be possible to mark and discard branches"
+                                    );
+                                }
                             }
                         }
                         match marks {
                             Marks::Hunks(..) => {
                                 builder.reconcile_worktree_diff_specs()?;
                             }
-                            Marks::Empty | Marks::Commits(..) | Marks::CommittedFiles(..) => {}
+                            Marks::Empty
+                            | Marks::Commits(..)
+                            | Marks::CommittedFiles(..)
+                            | Marks::Branches(..) => {}
                         }
                         builder.into_diff_specs()
                     };

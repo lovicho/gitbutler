@@ -1340,7 +1340,7 @@ fn print_group(
             };
 
             output.branch(
-                Vec::from([Span::raw(format!("┊{notch}┄"))]),
+                Vec::from([Span::raw("┊"), Span::raw(format!("{notch}┄"))]),
                 BranchLineContent {
                     id: Vec::from([Span::styled(segment.short_id.clone(), t.cli_id)]),
                     decoration_start: Vec::from([Span::raw(decoration_start)]),

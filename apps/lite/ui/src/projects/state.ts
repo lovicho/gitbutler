@@ -54,7 +54,7 @@ export const projectSlice = createSlice({
 		enterKeyboardTransferMode: withProject(projectReducers.enterKeyboardTransferMode),
 		enterAbsorbMode: withProject(projectReducers.enterAbsorbMode),
 		updatePointerTransfer: withProject(projectReducers.updatePointerTransfer),
-		updateTransferOperationType: withProject(projectReducers.updateTransferOperationType),
+		updateTransferPlacement: withProject(projectReducers.updateTransferPlacement),
 		exitMode: withProject(projectReducers.exitMode),
 		cancelMode: withProject(projectReducers.cancelMode),
 		setHighlightedCommitIds: withProject(projectReducers.setHighlightedCommitIds),

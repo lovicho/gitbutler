@@ -156,11 +156,12 @@ fn discard_stack_confirm_yes_discards_staged_changes() {
         .assert_current_line_eq(str!["┊   vo A test.txt"]);
 
     tui.input('r')
-        .assert_current_line_eq(str!["┊   << source >> << noop >> vo A test.txt"]);
+        .assert_current_line_eq(str!["┊   << source >> vo A test.txt"]);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊●   << amend >> tpm add A"]);
+        .assert_current_line_eq(str!["┊╭┄<< amend >> g0 [A]"]);
 
+    tui.input('u');
     tui.input(KeyCode::Enter)
         .assert_current_line_eq(str!["┊●   tpm add A"]);
 

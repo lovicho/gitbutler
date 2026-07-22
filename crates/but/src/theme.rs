@@ -293,7 +293,7 @@ pub struct Theme {
     // TUI modes
     pub tui_mode_normal: Style,
     pub tui_mode_commit: Style,
-    pub tui_mode_rub: Style,
+    pub tui_mode_squash: Style,
     pub tui_mode_inline_reword: Style,
     pub tui_mode_command: Style,
     pub tui_mode_move: Style,
@@ -433,7 +433,7 @@ impl Theme {
             // TUI modes
             tui_mode_normal: Style::new().bg(Color::DarkGray).fg(Color::White),
             tui_mode_commit: Style::new().bg(Color::Green).fg(Color::Black),
-            tui_mode_rub: Style::new().bg(Color::Blue).fg(Color::Black),
+            tui_mode_squash: Style::new().bg(Color::Blue).fg(Color::Black),
             tui_mode_inline_reword: Style::new().bg(Color::Magenta).fg(Color::Black),
             tui_mode_command: Style::new().bg(Color::Yellow).fg(Color::Black),
             tui_mode_move: Style::new().bg(Color::Cyan).fg(Color::Black),
@@ -488,7 +488,7 @@ impl Theme {
             // TUI modes
             tui_mode_normal: dark_t.tui_mode_normal.fg(white_256),
             tui_mode_commit: dark_t.tui_mode_commit.fg(white_256),
-            tui_mode_rub: dark_t.tui_mode_rub.fg(white_256),
+            tui_mode_squash: dark_t.tui_mode_squash.fg(white_256),
             tui_mode_inline_reword: dark_t
                 .tui_mode_inline_reword
                 .bg(Color::Magenta)

@@ -238,16 +238,18 @@ fn moving_multiple_commits() {
 
     tui.input('j');
     tui.input('j');
-    tui.input(' ');
-
-    tui.input('j');
     tui.input('j');
     tui.input(' ')
         .assert_rendered_term_svg_eq(file!["snapshots/moving_multiple_commits_002.svg"]);
 
-    tui.input('m')
+    tui.input('j');
+    tui.input(' ')
         .assert_rendered_term_svg_eq(file!["snapshots/moving_multiple_commits_003.svg"]);
-    tui.input('j')
+
+    tui.input('k');
+    tui.input('m');
+    tui.input('k');
+    tui.input('k')
         .assert_rendered_term_svg_eq(file!["snapshots/moving_multiple_commits_004.svg"]);
     tui.input(KeyCode::Enter)
         .assert_rendered_term_svg_eq(file!["snapshots/moving_multiple_commits_005.svg"]);

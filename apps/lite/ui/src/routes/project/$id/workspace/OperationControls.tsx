@@ -10,9 +10,9 @@ import { operationHotkeys } from "#ui/hotkeys.ts";
 import type { Operand } from "#ui/operands.ts";
 import {
 	getOperations,
-	useRunOperation,
-	type OperationType,
-	type OperationsByType,
+	useExecuteOperation,
+	type Placement,
+	type OperationsByPlacement,
 } from "#ui/operations/operation.ts";
 import { projectSlice } from "#ui/projects/state.ts";
 import { operandLabel, operandsLabel } from "#ui/routes/project/$id/workspace/operandLabel.ts";
@@ -201,32 +201,32 @@ const AbsorbOperationControls: FC<{
 
 const TransferTypeToggleGroup: FC<{
 	projectId: string;
-	operations: OperationsByType;
-	operationType: OperationType;
-}> = ({ projectId, operations, operationType }) => {
+	operations: OperationsByPlacement;
+	placement: Placement;
+}> = ({ projectId, operations, placement }) => {
 	const dispatch = useAppDispatch();
 
-	const setOperationType = (operationType: OperationType) =>
-		dispatch(projectSlice.actions.updateTransferOperationType({ projectId, operationType }));
+	const setPlacement = (placement: Placement) =>
+		dispatch(projectSlice.actions.updateTransferPlacement({ projectId, placement }));
 
 	useHotkeys([
 		{
 			hotkey: operationHotkeys.selectAbove.hotkey,
-			callback: () => setOperationType("above"),
+			callback: () => setPlacement("above"),
 			options: {
 				conflictBehavior: "allow",
 			},
 		},
 		{
 			hotkey: operationHotkeys.selectInto.hotkey,
-			callback: () => setOperationType("into"),
+			callback: () => setPlacement("into"),
 			options: {
 				conflictBehavior: "allow",
 			},
 		},
 		{
 			hotkey: operationHotkeys.selectBelow.hotkey,
-			callback: () => setOperationType("below"),
+			callback: () => setPlacement("below"),
 			options: {
 				conflictBehavior: "allow",
 			},
@@ -235,15 +235,15 @@ const TransferTypeToggleGroup: FC<{
 
 	const onValueChange = (value: Array<string>) => {
 		if (value.length === 0) return;
-		const nextOperationType = value[0] as OperationType;
+		const nextPlacement = value[0] as Placement;
 
-		setOperationType(nextOperationType);
+		setPlacement(nextPlacement);
 	};
 
 	return (
 		<ToggleGroup
 			aria-label="Operation type"
-			value={[operationType]}
+			value={[placement]}
 			onValueChange={onValueChange}
 			className={styles.toggleGroupRow}
 			onMouseDown={(event) => {
@@ -251,7 +251,7 @@ const TransferTypeToggleGroup: FC<{
 				if (!event.defaultPrevented) event.preventDefault();
 			}}
 		>
-			<Toggle className={styles.toggleGroupRowToggle} value={"above" satisfies OperationType}>
+			<Toggle className={styles.toggleGroupRowToggle} value={"above" satisfies Placement}>
 				{operations.above && (
 					<div className={classes("text-12", styles.operationLabel)}>{operations.above.label}</div>
 				)}
@@ -260,7 +260,7 @@ const TransferTypeToggleGroup: FC<{
 				</div>
 			</Toggle>
 
-			<Toggle className={styles.toggleGroupRowToggle} value={"into" satisfies OperationType}>
+			<Toggle className={styles.toggleGroupRowToggle} value={"into" satisfies Placement}>
 				{operations.into && (
 					<div className={classes("text-12", styles.operationLabel)}>{operations.into.label}</div>
 				)}
@@ -269,7 +269,7 @@ const TransferTypeToggleGroup: FC<{
 				</div>
 			</Toggle>
 
-			<Toggle className={styles.toggleGroupRowToggle} value={"below" satisfies OperationType}>
+			<Toggle className={styles.toggleGroupRowToggle} value={"below" satisfies Placement}>
 				{operations.below && (
 					<div className={classes("text-12", styles.operationLabel)}>{operations.below.label}</div>
 				)}
@@ -295,20 +295,20 @@ const TransferKeyboardOperationControls: FC<{
 	);
 
 	const dispatch = useAppDispatch();
-	const { mutate: runOperation } = useRunOperation();
+	const { mutate: executeOperation } = useExecuteOperation();
 
 	const target = getTransferTarget(keyboardTransferMode(mode), selection, detailsSelectionScope);
 	if (!target) return null;
 
 	const operations = getOperations(mode.sources, target);
-	const operation = operations[mode.operationType];
+	const operation = operations[mode.placement];
 
 	const run = () => {
 		dispatch(projectSlice.actions.exitMode({ projectId }));
 
 		if (!operation) return;
 
-		runOperation(operation.operation);
+		executeOperation(operation.operation);
 	};
 
 	const cancel = () => {
@@ -320,7 +320,7 @@ const TransferKeyboardOperationControls: FC<{
 			<TransferTypeToggleGroup
 				projectId={projectId}
 				operations={operations}
-				operationType={mode.operationType}
+				placement={mode.placement}
 			/>
 			<Separator />
 			<ControlsRow>

@@ -109,7 +109,7 @@ impl App {
             let return_mode = match previous_mode {
                 Mode::Normal(normal_mode) => CommandReturnMode::Normal(normal_mode),
                 Mode::Details(details_mode) => CommandReturnMode::Details(details_mode),
-                Mode::Rub(..)
+                Mode::Squash(..)
                 | Mode::InlineReword(..)
                 | Mode::Command(..)
                 | Mode::Commit(..)

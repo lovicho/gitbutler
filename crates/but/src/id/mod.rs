@@ -1730,3 +1730,105 @@ impl<'a> Node<'a> for &'a UncommittedHunk {
         })))
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct CommittedFileId {
+    pub commit_id: gix::ObjectId,
+    pub path: BString,
+    pub id: ShortId,
+}
+
+impl CommittedFileId {
+    pub fn as_ref(&self) -> CommittedFileIdRef<'_> {
+        CommittedFileIdRef {
+            commit_id: self.commit_id,
+            path: self.path.as_ref(),
+            id: &self.id,
+        }
+    }
+}
+
+impl PartialEq for CommittedFileId {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_ref() == other.as_ref()
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct CommittedFileIdRef<'a> {
+    pub commit_id: gix::ObjectId,
+    pub path: &'a BStr,
+    pub id: &'a str,
+}
+
+impl CommittedFileIdRef<'_> {
+    pub fn to_owned(self) -> CommittedFileId {
+        CommittedFileId {
+            commit_id: self.commit_id,
+            path: self.path.to_owned(),
+            id: self.id.to_owned(),
+        }
+    }
+}
+
+impl PartialEq for CommittedFileIdRef<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        let Self {
+            commit_id,
+            path,
+            id: _,
+        } = self;
+        *commit_id == other.commit_id && path == &other.path
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct BranchId {
+    pub name: String,
+    pub id: ShortId,
+    pub stack_id: Option<StackId>,
+}
+
+impl BranchId {
+    pub fn as_ref(&self) -> BranchIdRef<'_> {
+        BranchIdRef {
+            id: &self.id,
+            name: &self.name,
+            stack_id: self.stack_id,
+        }
+    }
+}
+
+impl PartialEq for BranchId {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_ref() == other.as_ref()
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct BranchIdRef<'a> {
+    pub name: &'a str,
+    pub id: &'a str,
+    pub stack_id: Option<StackId>,
+}
+
+impl BranchIdRef<'_> {
+    pub fn to_owned(self) -> BranchId {
+        BranchId {
+            name: self.name.to_owned(),
+            id: self.id.to_owned(),
+            stack_id: self.stack_id,
+        }
+    }
+}
+
+impl PartialEq for BranchIdRef<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        let Self {
+            name,
+            id: _,
+            stack_id: _,
+        } = self;
+        name == &other.name
+    }
+}

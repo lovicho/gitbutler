@@ -10,7 +10,7 @@ use crate::{
         diff2::Platform,
     },
     bad_input,
-    id::{ShortId, UncommittedHunkOrFile},
+    id::{CommittedFileId, ShortId, UncommittedHunkOrFile},
     theme::{Paint as _, Theme},
     utils::{
         CliOutput, CliOutputHuman, IntermediateChannel, WriteWithUtils,
@@ -217,11 +217,11 @@ fn resolve(ctx: &Context, id_map: &IdMap, args: Platform) -> CliResult<DiffOpera
         ResolvedCliIdArg::UncommittedHunkOrFile(hunk) => {
             Ok(DiffOperation::UncommittedHunkOrFile { hunk })
         }
-        ResolvedCliIdArg::CommittedFile {
+        ResolvedCliIdArg::CommittedFile(CommittedFileId {
             commit_id,
             path,
             id,
-        } => Ok(DiffOperation::CommittedFile {
+        }) => Ok(DiffOperation::CommittedFile {
             commit_id,
             path,
             id,

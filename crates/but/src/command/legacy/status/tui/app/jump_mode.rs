@@ -161,7 +161,7 @@ impl App {
         let previous_mode = match &*self.mode {
             Mode::Details(..) => return,
             mode @ (Mode::Normal(..)
-            | Mode::Rub(..)
+            | Mode::Squash(..)
             | Mode::InlineReword(..)
             | Mode::Command(..)
             | Mode::Commit(..)

@@ -1,5 +1,5 @@
 import styles from "./OperationTarget.module.css";
-import type { OperationType } from "#ui/operations/operation.ts";
+import type { Placement } from "#ui/operations/operation.ts";
 import { classes } from "#ui/components/classes.ts";
 import { mergeProps, useRender } from "@base-ui/react";
 import { Match } from "effect";
@@ -9,14 +9,14 @@ export type OperationTargetOutline = "inside" | "outside";
 
 export const OperationTarget: FC<
 	{
-		operationType: OperationType | undefined;
+		placement: Placement | undefined;
 		outline: OperationTargetOutline;
 	} & useRender.ComponentProps<"div">
-> = ({ operationType, outline, render, ...props }) =>
+> = ({ placement, outline, render, ...props }) =>
 	useRender({
 		render,
 		props: mergeProps<"div">(props, {
-			className: Match.value(operationType).pipe(
+			className: Match.value(placement).pipe(
 				Match.when("above", () => classes(styles.insertionTarget, styles.insertionTargetAbove)),
 				Match.when("below", () => classes(styles.insertionTarget, styles.insertionTargetBelow)),
 				Match.when("into", () =>

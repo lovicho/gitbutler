@@ -40,7 +40,7 @@ import { type ComponentProps, createContext, type FC, Fragment, use, useRef } fr
 import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panels";
 import styles from "./OutlineTree.module.css";
 import { Row, RowLabel, RowLabelContainer } from "../Row.tsx";
-import { getOperation, type OperationType, useDryRunOperation } from "#ui/operations/operation.ts";
+import { getOperation, type Placement, useDryRunOperation } from "#ui/operations/operation.ts";
 import { GraphSegment, type GraphSegmentStatus } from "#ui/components/GraphSegment.tsx";
 import { segmentBottomRelativeTo } from "#ui/api/stack.ts";
 import { assert } from "#ui/assert.ts";
@@ -116,7 +116,7 @@ const OperationTarget: FC<
 	const absorptionTargetCommitIds = assert(use(AbsorptionTargetCommitIdsContext));
 	const navigationIndex = assert(use(NavigationIndexContext));
 
-	type ActiveOperation = { operationType: OperationType; tooltip?: string | undefined };
+	type ActiveOperation = { placement: Placement; tooltip?: string | undefined };
 	const activeOperation = useAppSelector((state) => {
 		const selection = projectSlice.selectors.selectSelectionOutline(
 			state,
@@ -136,21 +136,21 @@ const OperationTarget: FC<
 						operand._tag === "Commit" && absorptionTargetCommitIds.has(operand.commitId);
 					if (!isActive) return null;
 
-					return { operationType: "into", tooltip: "Absorb target" };
+					return { placement: "into", tooltip: "Absorb target" };
 				},
 				Transfer: ({ value: mode }): ActiveOperation | null => {
-					if (mode.operationType === null) return null;
+					if (mode.placement === null) return null;
 
 					const target = getTransferTarget(mode, selection, detailsSelectionScope);
 					const isActive = target !== null && operandEquals(target, operand);
 					if (!isActive) return null;
 
 					return {
-						operationType: mode.operationType,
+						placement: mode.placement,
 						tooltip: getOperation({
 							sources: mode.sources,
 							target: operand,
-							operationType: mode.operationType,
+							placement: mode.placement,
 						})?.label,
 					};
 				},
@@ -176,7 +176,7 @@ const OperationTarget: FC<
 						ref={(el) => {
 							dropRef.current = el;
 						}}
-						operationType={activeOperation?.operationType}
+						placement={activeOperation?.placement}
 						outline={outline}
 						render={render}
 					/>
@@ -542,7 +542,7 @@ const Stacks: FC<{
 		return Match.value(outlineMode).pipe(
 			Match.tags({
 				Transfer: ({ value: mode }) => {
-					if (mode.operationType === null) return;
+					if (mode.placement === null) return;
 
 					const target = getTransferTarget(mode, selection, detailsSelectionScope);
 					if (!target) return;
@@ -550,7 +550,7 @@ const Stacks: FC<{
 					return getOperation({
 						sources: mode.sources,
 						target,
-						operationType: mode.operationType,
+						placement: mode.placement,
 					})?.operation;
 				},
 			}),

@@ -203,65 +203,6 @@ pub fn create_branch_legacy(ctx: &mut Context) -> anyhow::Result<String> {
     Ok(new_name)
 }
 
-#[expect(dead_code)]
-pub fn has_uncommitted_changes(ctx: &Context) -> anyhow::Result<bool> {
-    let context_lines = ctx.settings.context_lines;
-
-    let (_guard, repo, ws, mut db) = ctx.workspace_and_db_mut()?;
-    let changes = but_core::diff::ui::worktree_changes(&repo)?.changes;
-    let (assignments, _assignments_error) = but_hunk_assignment::assignments_with_fallback(
-        db.hunk_assignments_mut()?,
-        &repo,
-        &ws,
-        Some(changes),
-        context_lines,
-    )?;
-
-    Ok(assignments
-        .into_iter()
-        .any(|assignment| assignment.stack_id.is_none()))
-}
-
-pub fn stack_has_assigned_changes(ctx: &Context, stack: StackId) -> anyhow::Result<bool> {
-    let context_lines = ctx.settings.context_lines;
-
-    let (_guard, repo, ws, mut db) = ctx.workspace_and_db_mut()?;
-    let changes = but_core::diff::ui::worktree_changes(&repo)?.changes;
-    let (assignments, _assignments_error) = but_hunk_assignment::assignments_with_fallback(
-        db.hunk_assignments_mut()?,
-        &repo,
-        &ws,
-        Some(changes),
-        context_lines,
-    )?;
-
-    Ok(assignments
-        .into_iter()
-        .any(|assignment| assignment.stack_id.is_some_and(|id| id == stack)))
-}
-
-pub fn assigned_file_count_for_stack(ctx: &Context, stack_id: StackId) -> anyhow::Result<usize> {
-    let context_lines = ctx.settings.context_lines;
-
-    let (_guard, repo, ws, mut db) = ctx.workspace_and_db_mut()?;
-    let changes = but_core::diff::ui::worktree_changes(&repo)?.changes;
-    let (assignments, _assignments_error) = but_hunk_assignment::assignments_with_fallback(
-        db.hunk_assignments_mut()?,
-        &repo,
-        &ws,
-        Some(changes),
-        context_lines,
-    )?;
-
-    let files = assignments
-        .into_iter()
-        .filter(|assignment| assignment.stack_id == Some(stack_id))
-        .map(|assignment| assignment.path_bytes.to_vec())
-        .collect::<std::collections::HashSet<_>>();
-
-    Ok(files.len())
-}
-
 pub fn commit_is_empty(ctx: &mut Context, commit_id: gix::ObjectId) -> anyhow::Result<bool> {
     let repo = ctx.repo.get()?;
     let commit = but_core::Commit::from_id(commit_id.attach(&repo))?;
@@ -328,24 +269,6 @@ pub fn discard_uncommitted_legacy(ctx: &mut Context) -> anyhow::Result<()> {
     }
 
     but_api::legacy::workspace::discard_worktree_changes(ctx, uncommitted_changes)?;
-
-    Ok(())
-}
-
-pub fn discard_stack(ctx: &mut Context, stack_id: StackId) -> anyhow::Result<()> {
-    let stack_changes = {
-        let context_lines = ctx.settings.context_lines;
-        let (_guard, repo, ws, mut db) = ctx.workspace_and_db_mut()?;
-        let mut builder = diff_specs::DiffSpecBuilder::new(&mut db, &repo, &ws, context_lines);
-        builder.push_changes_from_stack(stack_id)?;
-        builder.into_diff_specs()
-    };
-
-    if stack_changes.is_empty() {
-        return Ok(());
-    }
-
-    but_api::legacy::workspace::discard_worktree_changes(ctx, stack_changes)?;
 
     Ok(())
 }

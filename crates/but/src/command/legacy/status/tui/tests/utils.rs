@@ -912,3 +912,28 @@ impl TuiInputOutputChannel for TestTuiInputOutputChannel<'_> {
         panic!("cannot get input in tests")
     }
 }
+
+pub struct Shift(pub char);
+
+impl InputEventPolling for Shift {}
+
+impl EventPolling for Shift {
+    type Error = <(KeyModifiers, char) as EventPolling>::Error;
+
+    fn poll_into(self, timeout: Duration, events: &mut Vec<Event>) -> Result<(), Self::Error> {
+        (KeyModifiers::SHIFT, self.0.to_ascii_uppercase()).poll_into(timeout, events)
+    }
+}
+
+#[expect(dead_code)]
+pub struct Control(pub char);
+
+impl InputEventPolling for Control {}
+
+impl EventPolling for Control {
+    type Error = <(KeyModifiers, char) as EventPolling>::Error;
+
+    fn poll_into(self, timeout: Duration, events: &mut Vec<Event>) -> Result<(), Self::Error> {
+        (KeyModifiers::CONTROL, self.0).poll_into(timeout, events)
+    }
+}

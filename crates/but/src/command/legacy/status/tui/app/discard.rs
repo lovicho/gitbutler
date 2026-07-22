@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use but_core::{DiffSpec, DryRun, ref_metadata::StackId};
+use but_core::{DiffSpec, DryRun};
 use but_ctx::Context;
 use gitbutler_oplog::entry::{OperationKind, SnapshotDetails};
 use gix::{ObjectId, refs::Category};
@@ -25,25 +25,6 @@ use crate::{
 use super::mark::Marks;
 
 impl App {
-    pub fn select_top_branch_for_stack_after_reload(
-        &self,
-        stack_id: StackId,
-    ) -> Option<SelectAfterReload> {
-        self.status_lines.iter().find_map(|line| {
-            let cli_id = line.data.cli_id()?;
-            if let CliId::Branch {
-                stack_id: Some(branch_stack_id),
-                ..
-            } = &**cli_id
-                && *branch_stack_id == stack_id
-            {
-                Some(SelectAfterReload::CliId(Box::new((**cli_id).clone())))
-            } else {
-                None
-            }
-        })
-    }
-
     pub fn handle_discard(
         &mut self,
         ctx: &mut Context,
@@ -92,23 +73,12 @@ impl App {
                     self.to_be_discarded = Vec::from([Arc::clone(cli_id)]);
                     let uncommitted = uncommitted.clone();
 
-                    let select_after_reload = if uncommitted.is_entire_file
-                    // Discarding a whole file: handle stack-specific cursor fallback.
-                    && let Some(stack_id) = uncommitted.hunk_assignments.first().stack_id
-                    // If this is the last file on the stack, jump to the stack's top branch.
-                    && operations::assigned_file_count_for_stack(ctx, stack_id)
-                        .is_ok_and(|count| count == 1)
-                    {
-                        self.select_top_branch_for_stack_after_reload(stack_id)
-                            .unwrap_or(SelectAfterReload::Stack(stack_id))
-                    } else {
-                        // Discarding only part of a file: select the previous selectable line.
-                        self.cursor.select_previous_cli_id_or_uncommitted(
-                            &self.status_lines,
-                            &self.mode,
-                            self.flags.show_files,
-                        )
-                    };
+                    // Discarding only part of a file: select the previous selectable line.
+                    let select_after_reload = self.cursor.select_previous_cli_id_or_uncommitted(
+                        &self.status_lines,
+                        &self.mode,
+                        self.flags.show_files,
+                    );
 
                     let drop_to_be_discarded =
                         message_on_drop::message_on_drop(Message::DropToBeDiscarded, messages);
@@ -122,28 +92,6 @@ impl App {
                                 .cloned()
                                 .collect::<Vec<_>>();
                             operations::discard_uncommitted_hunks_legacy(ctx, hunk_assignments)?;
-                            messages.push(Message::Reload(
-                                Some(select_after_reload),
-                                ReloadCause::Mutation,
-                            ));
-                            drop(drop_to_be_discarded);
-                            Ok(())
-                        },
-                    )
-                }
-                CliId::Stack { stack_id, .. } => {
-                    self.to_be_discarded = Vec::from([Arc::clone(cli_id)]);
-                    let stack_id = *stack_id;
-                    let select_after_reload = self
-                        .select_top_branch_for_stack_after_reload(stack_id)
-                        .unwrap_or(SelectAfterReload::Stack(stack_id));
-                    let drop_to_be_discarded =
-                        message_on_drop::message_on_drop(Message::DropToBeDiscarded, messages);
-                    Confirm::new(
-                        NonEmpty::new("Discard staged changes in this stack?".into()),
-                        self.theme,
-                        move |ctx, messages| {
-                            operations::discard_stack(ctx, stack_id)?;
                             messages.push(Message::Reload(
                                 Some(select_after_reload),
                                 ReloadCause::Mutation,
@@ -296,7 +244,7 @@ impl App {
                         },
                     )
                 }
-                CliId::PathPrefix { .. } => return Ok(()),
+                CliId::Stack { .. } | CliId::PathPrefix { .. } => return Ok(()),
             },
         });
 
@@ -337,6 +285,7 @@ impl App {
 
             match &normal_mode.marks {
                 Marks::Empty | Marks::Commits(..) => None,
+                Marks::Branches(..) => return Ok(()),
                 Marks::Hunks(hunks) => {
                     for hunk in hunks {
                         builder.push_changes_from_uncommitted(hunk)?;

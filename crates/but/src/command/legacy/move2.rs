@@ -18,6 +18,7 @@ use crate::{
         move2::Platform,
     },
     bad_input,
+    id::CommittedFileId,
     theme::{self, Theme},
     utils::{
         CliOutputHuman, IntermediateChannel, WriteWithUtils, diff_specs::DiffSpecBuilder,
@@ -609,11 +610,11 @@ fn resolve_sources(
             ResolvedCliIdArg::Commit(source_commit_id, _change_id) => {
                 commit_sources.push(source_commit_id)
             }
-            ResolvedCliIdArg::CommittedFile {
+            ResolvedCliIdArg::CommittedFile(CommittedFileId {
                 commit_id,
                 path,
                 id: _,
-            } => {
+            }) => {
                 file_sources.push((commit_id, path));
             }
             ResolvedCliIdArg::Branch(branch) => {

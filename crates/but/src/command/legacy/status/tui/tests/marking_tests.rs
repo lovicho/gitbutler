@@ -2,7 +2,10 @@ use but_testsupport::Sandbox;
 use crossterm::event::*;
 use snapbox::{file, str};
 
-use crate::command::legacy::status::tui::{BackstackEntry, tests::utils::test_tui};
+use crate::command::legacy::status::tui::{
+    BackstackEntry,
+    tests::utils::{Shift, test_tui},
+};
 
 #[test]
 fn marking_individual_commit_toggles_mark_indicator() {
@@ -21,25 +24,6 @@ fn marking_individual_commit_toggles_mark_indicator() {
         .assert_current_line_eq(str!["┊●   tpm add A"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/marking_individual_commit_toggles_mark_indicator_final.svg"
-        ]);
-}
-
-#[test]
-fn marking_branch_toggles_all_commits_in_that_branch() {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
-    env.setup_metadata(&["A", "B"]);
-
-    let mut tui = test_tui(env);
-
-    tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
-
-    tui.input(' ').assert_current_line_eq(str!["┊╭┄g0 [A]"]);
-
-    tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊✔︎   tpm add A"])
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/marking_branch_toggles_all_commits_in_that_branch_final.svg"
         ]);
 }
 
@@ -124,38 +108,6 @@ fn marking_section_edge_moves_only_when_neighbor_differs() {
     tui.input(' ').assert_current_line_eq(str!["[..]one[..]"]);
     tui.input(' ').assert_current_line_eq(str!["[..]two[..]"]);
     tui.input(' ').assert_current_line_eq(str!["[..]two[..]"]);
-}
-
-#[test]
-fn multi_squash_marked_commits_into_selected_marked_target() {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
-    env.setup_metadata(&["A", "B"]);
-
-    let mut tui = test_tui(env);
-
-    tui.input([KeyCode::Down, KeyCode::Down])
-        .assert_current_line_eq(str!["┊●   tpm add A"]);
-
-    tui.input(' ')
-        .assert_current_line_eq(str!["┊✔︎   tpm add A"]);
-
-    tui.input((KeyModifiers::SHIFT, 'J'))
-        .assert_current_line_eq(str!["┊╭┄h0 [B]"]);
-
-    tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊●   lrm add B"]);
-
-    tui.input(' ')
-        .assert_current_line_eq(str!["┊✔︎   lrm add B"]);
-
-    tui.input('r')
-        .assert_current_line_eq(str!["┊✔︎   << source >> << squash >> lrm add B"]);
-
-    tui.input(KeyCode::Enter)
-        .assert_current_line_eq(str!["┊●   lrm add B"])
-        .assert_rendered_term_svg_eq(file![
-            "snapshots/multi_squash_marked_commits_into_selected_marked_target_final.svg"
-        ]);
 }
 
 #[test]
@@ -291,4 +243,117 @@ fn can_only_mark_files_from_one_commit() {
                 "snapshots/can_only_mark_files_from_one_commit_004.svg"
             ]);
     }
+}
+
+#[test]
+fn marking_commit_on_branch_with_one_commit() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+    env.setup_metadata(&["A", "B"]);
+
+    let mut tui = test_tui(env);
+
+    tui.input('j');
+    tui.input('j');
+    tui.input('j');
+
+    // there is only one commit on the branch, so marking it should keep the cursor within the
+    // branch
+    tui.input('j')
+        .assert_current_line_eq(str![["┊●   lrm add B"]]);
+    tui.input(' ')
+        .assert_current_line_eq(str![["┊✔︎   lrm add B"]]);
+}
+
+#[test]
+fn marking_and_squashing_branches() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.file("one", "");
+    env.file("two", "");
+    env.file("three", "");
+
+    let mut tui = test_tui(env);
+
+    for _ in 0..3 {
+        tui.input('g');
+        tui.input('j');
+        tui.input('c');
+        tui.input('e');
+        tui.input('b');
+    }
+    tui.input('g');
+    tui.input(Shift('f'));
+
+    tui.input('j');
+    tui.input(' ')
+        .assert_current_line_eq(str![["┊╭┄ra [c-branch-2]"]])
+        .assert_rendered_term_svg_eq(file!["snapshots/marking_and_squashing_branches_001.svg"]);
+    tui.input(' ')
+        .assert_current_line_eq(str![["┊╭┄an [c-branch-1]"]])
+        .assert_rendered_term_svg_eq(file!["snapshots/marking_and_squashing_branches_002.svg"]);
+    tui.input(' ')
+        .assert_current_line_eq(str![["┊✔︎ an [c-branch-1]"]])
+        .assert_rendered_term_svg_eq(file!["snapshots/marking_and_squashing_branches_003.svg"]);
+
+    tui.input('r');
+    tui.input('u');
+    tui.input('k');
+    tui.input('k');
+    tui.input('k')
+        .assert_rendered_term_svg_eq(file!["snapshots/marking_and_squashing_branches_004.svg"]);
+    tui.input(KeyCode::Enter)
+        .assert_rendered_term_svg_eq(file!["snapshots/marking_and_squashing_branches_005.svg"]);
+}
+
+#[test]
+fn cannot_mark_and_discard_commit_and_move_multiple_branches_yet() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+    env.setup_metadata(&["A", "B"]);
+
+    let mut tui = test_tui(env);
+
+    tui.input('j');
+    tui.input(' ');
+    tui.input(' ').assert_rendered_term_svg_eq(file![
+        "snapshots/cannot_mark_and_discard_commit_and_move_multiple_branches_yet_001.svg"
+    ]);
+
+    tui.input('x').assert_rendered_term_svg_eq(file![
+        "snapshots/cannot_mark_and_discard_commit_and_move_multiple_branches_yet_001.svg"
+    ]);
+    tui.input('c').assert_rendered_term_svg_eq(file![
+        "snapshots/cannot_mark_and_discard_commit_and_move_multiple_branches_yet_001.svg"
+    ]);
+    tui.input('m').assert_rendered_term_svg_eq(file![
+        "snapshots/cannot_mark_and_discard_commit_and_move_multiple_branches_yet_001.svg"
+    ]);
+}
+
+#[test]
+fn fix_backstack_with_marks_in_squash_mode_from_commit_file_list() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    let mut tui = test_tui(env);
+
+    tui.input('j');
+    tui.input('j');
+    tui.input('f');
+    tui.input(' ');
+    tui.input('r').assert_backstack_eq([
+        BackstackEntry::LeaveNormalMode,
+        BackstackEntry::Mark,
+        BackstackEntry::ShowFileList,
+    ]);
+
+    tui.input('k').assert_backstack_eq([
+        BackstackEntry::LeaveNormalMode,
+        BackstackEntry::Mark,
+        BackstackEntry::ShowFileList,
+    ]);
+
+    tui.input(KeyCode::Esc)
+        .assert_backstack_eq([BackstackEntry::Mark, BackstackEntry::ShowFileList])
+        .assert_current_line_eq(str![["┊✔︎     t:t A A"]]);
 }

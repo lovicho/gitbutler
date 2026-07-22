@@ -265,6 +265,20 @@ pub(crate) fn repo(
         )),
     }?;
 
+    // A ported project can keep its target in Git config while the legacy `virtual_branches.toml`
+    // / database store is empty — for example after that store was reset. The check below would
+    // then see a target and report "already set up", but the workspace needs the legacy default
+    // target to work. Repair it from the workspace first so setup isn't a dead end.
+    if gitbutler_branch_actions::base::bootstrap_default_target_if_missing(&*ctx)?
+        && let Some(out) = out.for_human()
+    {
+        writeln!(
+            out,
+            "  {}",
+            t.success.paint("✓ Repaired missing target metadata")
+        )?;
+    }
+
     // Check if target branch is set
     let target = but_api::legacy::virtual_branches::get_base_branch_data(ctx, perm)?;
 

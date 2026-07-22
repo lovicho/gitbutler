@@ -11,8 +11,8 @@ use crate::{
         tui::{
             Mode, NormalMode, PickChangesMode, SelectAfterReload,
             app::{
-                CommitSource,
-                mark::{MarkableRef, Marks, MarksRef},
+                CommitSource, SquashMode,
+                mark::{MarkableRef, Marks},
                 prefix_match,
             },
             mode::ModeRef,
@@ -318,20 +318,6 @@ impl Cursor {
         Some(Self(idx))
     }
 
-    /// Select the first line that points to the given stack.
-    pub fn select_stack(stack_id: StackId, lines: &[StatusOutputLine]) -> Option<Self> {
-        let idx = lines.iter().position(|line| {
-            if let Some(CliId::Stack { stack_id: id, .. }) = line.data.cli_id().map(|id| &**id)
-                && stack_id == *id
-            {
-                true
-            } else {
-                false
-            }
-        })?;
-        Some(Self(idx))
-    }
-
     /// Select the first uncommitted file line that points to the given path in the given stack.
     pub fn select_uncommitted_file(
         path: &BStr,
@@ -486,6 +472,28 @@ impl Cursor {
     }
 
     #[must_use]
+    pub fn move_up_within_section(
+        self,
+        lines: &[StatusOutputLine],
+        mode: &Mode,
+        show_files: FilesStatusFlag,
+    ) -> Option<Self> {
+        if self.0 >= lines.len() {
+            return None;
+        }
+
+        let section_start = find_section_start_at_or_before(lines, mode, self.0)?;
+        let (idx, _) = lines
+            .iter()
+            .enumerate()
+            .take(self.0)
+            .skip(section_start)
+            .rev()
+            .find(|(idx, _)| is_cursor_selectable_at_index(*idx, lines, mode, show_files))?;
+        Some(Self(idx))
+    }
+
+    #[must_use]
     pub fn move_down_within_section(
         self,
         lines: &[StatusOutputLine],
@@ -524,15 +532,28 @@ impl Cursor {
                     MarkableRef::try_from_cli_id(id).map(|_| mode.marks_ref().contains_cli_id(id))
                 })
         };
+        let current_markable = self
+            .selected_line(lines)
+            .and_then(|line| line.data.cli_id())
+            .and_then(|id| MarkableRef::try_from_cli_id(id))?;
         let current_is_marked = mark_state(self)?;
         let is_opposite = |cursor| mark_state(cursor) == Some(!current_is_marked);
 
-        self.move_down_within_section(lines, mode, show_files)
-            .filter(|next| is_opposite(*next))
-            .or_else(|| {
-                self.move_up(lines, mode, show_files)
-                    .filter(|previous| is_opposite(*previous))
-            })
+        let (next, previous) = match current_markable {
+            MarkableRef::Branch(..) => (
+                self.move_down(lines, mode, show_files),
+                self.move_up(lines, mode, show_files),
+            ),
+            MarkableRef::Uncommitted(..)
+            | MarkableRef::Commit(..)
+            | MarkableRef::CommittedFile(..) => (
+                self.move_down_within_section(lines, mode, show_files),
+                self.move_up_within_section(lines, mode, show_files),
+            ),
+        };
+
+        next.filter(|next| is_opposite(*next))
+            .or_else(|| previous.filter(|previous| is_opposite(*previous)))
     }
 
     /// Moves the cursor to the first selectable row in the next section.
@@ -780,20 +801,11 @@ fn is_section_header(line: &StatusOutputLine, mode: &Mode) -> bool {
         | Mode::Stack(..)
         | Mode::MoveStack(..)
         | Mode::Jump(..)
+        | Mode::Squash(..)
         | Mode::Details(..) => {
             matches!(
                 line.data,
                 StatusOutputLineData::Branch { .. }
-                    | StatusOutputLineData::UncommittedChanges { .. }
-                    | StatusOutputLineData::MergeBase
-            )
-        }
-
-        Mode::Rub(..) => {
-            matches!(
-                line.data,
-                StatusOutputLineData::Branch { .. }
-                    | StatusOutputLineData::StagedChanges { .. }
                     | StatusOutputLineData::UncommittedChanges { .. }
                     | StatusOutputLineData::MergeBase
             )
@@ -856,9 +868,9 @@ pub fn is_selectable_in_mode(
 
     // selecting the source line should always be possible
     match mode {
-        ModeRef::Rub(rub_mode) => {
+        ModeRef::Squash(squash_mode) => {
             if let Some(cli_id) = line.data.cli_id()
-                && rub_mode.source.contains(cli_id)
+                && squash_mode.source.contains(cli_id)
             {
                 return true;
             }
@@ -907,15 +919,28 @@ pub fn is_selectable_in_mode(
                 }
             }
             Marks::Commits(..) => {
-                if !matches!(
-                    &line.data,
-                    StatusOutputLineData::Branch { .. } | StatusOutputLineData::Commit { .. }
-                ) {
+                if !matches!(&line.data, StatusOutputLineData::Commit { .. }) {
                     return false;
                 }
             }
-            Marks::CommittedFiles(..) => {
+            Marks::CommittedFiles(files) => {
                 if !matches!(&line.data, StatusOutputLineData::File { .. }) {
+                    return false;
+                }
+                if let FilesStatusFlag::All = show_files_flag {
+                    let Some(id) = line.data.cli_id() else {
+                        return false;
+                    };
+                    let CliId::CommittedFile { commit_id, .. } = &**id else {
+                        return false;
+                    };
+                    if *commit_id != files.head.commit_id {
+                        return false;
+                    }
+                }
+            }
+            Marks::Branches(..) => {
+                if !matches!(&line.data, StatusOutputLineData::Branch { .. }) {
                     return false;
                 }
             }
@@ -931,7 +956,7 @@ pub fn is_selectable_in_mode(
                 return false;
             }
         }
-        ModeRef::Rub(..)
+        ModeRef::Squash(..)
         | ModeRef::InlineReword(..)
         | ModeRef::Command(..)
         | ModeRef::Commit(..)
@@ -940,20 +965,6 @@ pub fn is_selectable_in_mode(
         | ModeRef::MoveStack(..)
         | ModeRef::Jump(..)
         | ModeRef::Stack(..) => {}
-    }
-
-    if let FilesStatusFlag::All = show_files_flag
-        && let MarksRef::CommittedFiles { head, .. } = mode.marks_ref()
-    {
-        let Some(id) = line.data.cli_id() else {
-            return false;
-        };
-        let CliId::CommittedFile { commit_id, .. } = &**id else {
-            return false;
-        };
-        if *commit_id != head.commit_id {
-            return false;
-        }
     }
 
     match mode {
@@ -972,10 +983,10 @@ pub fn is_selectable_in_mode(
         ModeRef::Details(details_mode) => {
             is_selectable_in_mode(line, details_mode.return_mode.as_ref(), show_files_flag)
         }
-        ModeRef::Rub(rub_mode) => line
+        ModeRef::Squash(SquashMode { source, reword: _ }) => line
             .data
             .cli_id()
-            .is_some_and(|cli_id| rub_mode.available_targets.contains(cli_id)),
+            .is_some_and(|target| source.can_target(target)),
         ModeRef::Commit(commit_mode) => commit_operation_display(&line.data, commit_mode).is_some(),
         ModeRef::Move(move_mode) => move_operation_display(&line.data, move_mode).is_some(),
         ModeRef::MoveStack(move_mode) => reorder_operation_display(&line.data, move_mode).is_some(),

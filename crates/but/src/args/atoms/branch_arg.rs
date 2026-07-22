@@ -25,7 +25,7 @@ impl BranchArg {
     /// Resolve the argument to a local branch name like `refs/heads/foo`.
     ///
     /// Doesn't check that the branch actually exists.
-    pub fn resolve_local_branch_name(&self) -> CliResult<FullName> {
+    pub fn resolve_local_branch_name(&self) -> anyhow::Result<FullName> {
         Ok(Category::LocalBranch.to_full_name(&*self.0)?)
     }
 
