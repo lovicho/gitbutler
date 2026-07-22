@@ -102,13 +102,15 @@ pub fn compare_branch_url(
 
 fn build_base_url(remote_url: &str, repo_info: &ForgeRepoInfo) -> String {
     // Web URLs need https — git+ssh remotes can't open in a browser.
-    let scheme = if repo_info.protocol == "ssh" || repo_info.protocol == "git" {
+    let rewrote_scheme = repo_info.protocol == "ssh" || repo_info.protocol == "git";
+    let scheme = if rewrote_scheme {
         "https"
     } else {
         repo_info.protocol.as_str()
     };
-    let host = git_url_parse::GitUrl::parse(remote_url)
-        .ok()
+    let parsed = git_url_parse::GitUrl::parse(remote_url).ok();
+    let host = parsed
+        .as_ref()
         .and_then(|u| u.host().map(|h| h.to_string()))
         .unwrap_or_else(|| match repo_info.forge {
             ForgeName::GitHub => "github.com".into(),
@@ -116,6 +118,10 @@ fn build_base_url(remote_url: &str, repo_info: &ForgeRepoInfo) -> String {
             ForgeName::Bitbucket => "bitbucket.org".into(),
             ForgeName::Azure => "dev.azure.com".into(),
         });
+    let host = match parsed.as_ref().and_then(|u| u.port()) {
+        Some(port) if !rewrote_scheme => format!("{host}:{port}"),
+        _ => host,
+    };
     match repo_info.forge {
         ForgeName::Azure => {
             // `derive_forge_repo_info` uses git-url-parse's GenericProvider,
@@ -279,6 +285,35 @@ mod tests {
         let url =
             compare_branch_url("https://gitlab.com/group/repo.git", "main", "feat", None).unwrap();
         assert_eq!(url, "https://gitlab.com/group/repo/-/compare/main...feat");
+    }
+
+    #[test]
+    fn self_hosted_gitlab_custom_port_is_preserved() {
+        // Regression for #14626: a self-hosted GitLab on a non-standard
+        // port must keep the `:8080` in every generated web URL.
+        let remote = "https://gitlab.example.com:8080/group/repo.git";
+        let info = forge_info(remote).unwrap();
+        assert_eq!(info.name, ForgeName::GitLab);
+        assert_eq!(info.base_url, "https://gitlab.example.com:8080/group/repo");
+        assert_eq!(
+            composed_commit_url(remote, "abc123"),
+            "https://gitlab.example.com:8080/group/repo/-/commit/abc123"
+        );
+        assert_eq!(
+            composed_pr_url(remote, 42),
+            "https://gitlab.example.com:8080/group/repo/-/merge_requests/42"
+        );
+        assert_eq!(
+            compare_branch_url(remote, "main", "feat", None).unwrap(),
+            "https://gitlab.example.com:8080/group/repo/-/compare/main...feat"
+        );
+    }
+
+    #[test]
+    fn ssh_remote_transport_port_is_dropped_from_web_url() {
+        let info = forge_info("ssh://git@gitlab.example.com:2222/group/repo.git").unwrap();
+        assert_eq!(info.name, ForgeName::GitLab);
+        assert_eq!(info.base_url, "https://gitlab.example.com/group/repo");
     }
 
     #[test]
