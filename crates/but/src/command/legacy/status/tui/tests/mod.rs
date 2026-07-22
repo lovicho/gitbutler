@@ -12,7 +12,7 @@ use crate::command::legacy::status::tui::tests::utils::{
     TestTuiOptions, test_tui, test_tui_with_options,
 };
 use crate::command::legacy::status::tui::{BackstackEntry, Message, ReloadCause};
-use crate::command::legacy::status::{TuiOutcome, TuiRunOptions};
+use crate::command::legacy::status::{TuiLaunchOptions, TuiOutcome, TuiRunOptions};
 
 mod branch_picker_tests;
 mod branch_tests;
@@ -307,10 +307,10 @@ fn basic_cursor_movement() {
 
     tui.reload()
         .assert_rendered_term_svg_eq(file!["snapshots/basic_cursor_movement_001.svg"])
-        .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted] (no changes)"]);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"]);
 
     tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊●   tpm add A"]);
@@ -336,7 +336,7 @@ fn basic_cursor_movement() {
         KeyCode::Up,
         KeyCode::Up,
     ])
-    .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
+    .assert_current_line_eq(str!["╭┄ zz [uncommitted] (no changes)"]);
 }
 
 #[test]
@@ -347,17 +347,17 @@ fn movement_aliases_j_k() {
     let mut tui = test_tui(env);
 
     tui.reload()
-        .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted] (no changes)"]);
 
-    tui.input('j').assert_current_line_eq(str!["┊╭┄g0 [A]"]);
+    tui.input('j').assert_current_line_eq(str!["┊╭┄ g0 [A]"]);
 
     tui.input('j')
         .assert_current_line_eq(str!["┊●   tpm add A"]);
 
-    tui.input('k').assert_current_line_eq(str!["┊╭┄g0 [A]"]);
+    tui.input('k').assert_current_line_eq(str!["┊╭┄ g0 [A]"]);
 
     tui.input('k')
-        .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted] (no changes)"]);
 }
 
 #[test]
@@ -368,19 +368,19 @@ fn section_jumps_shift_j_k() {
     let mut tui = test_tui(env);
 
     tui.reload()
-        .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted] (no changes)"]);
 
     tui.input((KeyModifiers::SHIFT, 'J'))
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"]);
 
     tui.input((KeyModifiers::SHIFT, 'J'))
         .assert_current_line_eq(str!["┴ 0dc3733 (common base) 2000-01-02 add M"]);
 
     tui.input((KeyModifiers::SHIFT, 'K'))
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"]);
 
     tui.input((KeyModifiers::SHIFT, 'K'))
-        .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted] (no changes)"]);
 }
 
 #[test]
@@ -391,16 +391,16 @@ fn shift_k_from_commit_moves_to_current_section_header_first() {
     let mut tui = test_tui(env);
 
     tui.reload()
-        .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted] (no changes)"]);
 
     tui.input([KeyCode::Down, KeyCode::Down])
         .assert_current_line_eq(str!["┊●   tpm add A"]);
 
     tui.input((KeyModifiers::SHIFT, 'K'))
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"]);
 
     tui.input((KeyModifiers::SHIFT, 'K'))
-        .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted] (no changes)"]);
 }
 
 #[test]
@@ -411,19 +411,19 @@ fn shift_k_from_second_stack_commit_moves_to_its_header() {
     let mut tui = test_tui(env);
 
     tui.reload()
-        .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted] (no changes)"]);
 
     tui.input((KeyModifiers::SHIFT, 'J'))
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"]);
 
     tui.input((KeyModifiers::SHIFT, 'J'))
-        .assert_current_line_eq(str!["┊╭┄h0 [B]"]);
+        .assert_current_line_eq(str!["┊╭┄ h0 [B]"]);
 
     tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊●   lrm add B"]);
 
     tui.input((KeyModifiers::SHIFT, 'K'))
-        .assert_current_line_eq(str!["┊╭┄h0 [B]"]);
+        .assert_current_line_eq(str!["┊╭┄ h0 [B]"]);
 }
 
 #[test]
@@ -444,7 +444,7 @@ fn cursor_movement_scrolls_viewport_down() {
         .assert_rendered_term_svg_eq(file![
             "snapshots/cursor_movement_scrolls_viewport_down_001.svg"
         ])
-        .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted] (no changes)"]);
 
     tui.input([KeyCode::Down, KeyCode::Down, KeyCode::Down, KeyCode::Down])
         .assert_rendered_term_svg_eq(file![
@@ -477,7 +477,7 @@ fn cursor_movement_scrolls_viewport_up() {
         .assert_rendered_term_svg_eq(file![
             "snapshots/cursor_movement_scrolls_viewport_up_002.svg"
         ])
-        .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted] (no changes)"]);
 }
 
 #[test]
@@ -498,19 +498,19 @@ fn section_jumps_scroll_viewport_when_target_is_offscreen() {
         .assert_rendered_term_svg_eq(file![
             "snapshots/section_jumps_scroll_viewport_when_target_is_offscreen_001.svg"
         ])
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"]);
 
     tui.input((KeyModifiers::SHIFT, 'J'))
         .assert_rendered_term_svg_eq(file![
             "snapshots/section_jumps_scroll_viewport_when_target_is_offscreen_002.svg"
         ])
-        .assert_current_line_eq(str!["┊╭┄h0 [B]"]);
+        .assert_current_line_eq(str!["┊╭┄ h0 [B]"]);
 
     tui.input((KeyModifiers::SHIFT, 'K'))
         .assert_rendered_term_svg_eq(file![
             "snapshots/section_jumps_scroll_viewport_when_target_is_offscreen_003.svg"
         ])
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"]);
 }
 
 #[test]
@@ -528,10 +528,10 @@ fn moving_to_merge_base_scrolls_to_keep_selection_visible() {
     );
 
     tui.input((KeyModifiers::SHIFT, 'J'))
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"]);
 
     tui.input((KeyModifiers::SHIFT, 'J'))
-        .assert_current_line_eq(str!["┊╭┄h0 [B]"]);
+        .assert_current_line_eq(str!["┊╭┄ h0 [B]"]);
 
     tui.input((KeyModifiers::SHIFT, 'J'))
         .assert_current_line_eq(str!["┴ 0dc3733 (common base) 2000-01-02 add M"]);
@@ -599,10 +599,10 @@ fn creating_empty_commits() {
 
     tui.reload()
         .assert_rendered_term_svg_eq(file!["snapshots/creating_empty_commits_001.svg"])
-        .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted] (no changes)"]);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"]);
 
     tui.input('n')
         .assert_rendered_term_svg_eq(file!["snapshots/creating_empty_commits_002.svg"])
@@ -622,10 +622,10 @@ fn inline_reword() {
 
     tui.reload()
         .assert_rendered_term_svg_eq(file!["snapshots/inline_reword_001.svg"])
-        .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted] (no changes)"]);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"]);
 
     tui.input('n')
         .assert_rendered_term_svg_eq(file!["snapshots/inline_reword_002.svg"])
@@ -674,12 +674,12 @@ fn esc_leaves_squash_mode() {
     let mut tui = test_tui(env);
 
     tui.reload()
-        .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted] (no changes)"]);
 
     tui.env().file("test.txt", "content");
 
     tui.reload()
-        .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted]"]);
 
     tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊   vo A test.txt"]);
@@ -706,10 +706,10 @@ fn mode_key_c_enters_and_escape_leaves_commit_mode() {
         .assert_rendered_term_svg_eq(file![
             "snapshots/mode_toggle_key_c_enters_and_leaves_commit_mode_001.svg"
         ])
-        .assert_current_line_eq(str!["╭┄<< source >> << noop >> zz [uncommitted]"]);
+        .assert_current_line_eq(str!["╭┄ << source >> << noop >> zz [uncommitted]"]);
 
     tui.input(KeyCode::Esc)
-        .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted]"]);
 }
 
 #[test]
@@ -720,16 +720,16 @@ fn mode_key_m_enters_and_escape_leaves_move_mode() {
     let mut tui = test_tui(env);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"]);
 
     tui.input('m')
         .assert_rendered_term_svg_eq(file![
             "snapshots/mode_toggle_key_m_enters_and_leaves_move_mode_001.svg"
         ])
-        .assert_current_line_eq(str!["┊╭┄<< source >> << noop >> g0 [A]"]);
+        .assert_current_line_eq(str!["┊╭┄ << source >> << noop >> g0 [A]"]);
 
     tui.input(KeyCode::Esc)
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"]);
 }
 
 #[test]
@@ -740,10 +740,10 @@ fn key_b_creates_new_branch_from_selected_branch() {
     let mut tui = test_tui(env);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"]);
 
     tui.input('b')
-        .assert_current_line_eq(str!["┊╭┄br [c-branch-1] (no commits)"]);
+        .assert_current_line_eq(str!["┊╭┄ br [c-branch-1] (no commits)"]);
 }
 
 #[test]
@@ -763,7 +763,7 @@ fn global_file_list_does_not_restrict_cursor() {
         .assert_current_line_eq(str!["┊│     t:t A A"]);
 
     tui.input((KeyModifiers::SHIFT, 'J'))
-        .assert_current_line_eq(str!["┊╭┄h0 [B]"])
+        .assert_current_line_eq(str!["┊╭┄ h0 [B]"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/global_file_list_does_not_restrict_cursor_final.svg"
         ]);
@@ -807,7 +807,7 @@ fn commit_file_toggle_on_commit_without_files_is_noop() {
     );
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"]);
 
     with_var("GIT_AUTHOR_DATE", Some("2000-01-01T00:00:00Z"), || {
         with_var("GIT_COMMITTER_DATE", Some("2000-01-01T00:00:00Z"), || {
@@ -1127,7 +1127,7 @@ fn jumping_up_down_non_normal_mode() {
     tui.input((KeyModifiers::CONTROL, 'd'))
         .assert_current_line_eq(str!["┊●   << amend >> 1#8 commit #4 (no changes)"]);
     tui.input((KeyModifiers::CONTROL, 'u'))
-        .assert_current_line_eq(str!["╭┄<< source >> zz [uncommitted]"]);
+        .assert_current_line_eq(str!["╭┄ << source >> zz [uncommitted]"]);
 }
 
 #[test]
@@ -1169,4 +1169,78 @@ fn maintains_selection_using_change_id() {
     // undo the reword, this shouldn't change the selection
     tui.input('u')
         .assert_current_line_eq(str!["┊●   1 (no commit message) (no changes)"]);
+}
+
+#[test]
+fn remember_selection() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    let launch_options = TuiLaunchOptions {
+        remember_selection: true,
+        ..Default::default()
+    };
+
+    let mut tui = test_tui_with_options(
+        env,
+        TestTuiOptions {
+            launch_options,
+            ..Default::default()
+        },
+    );
+
+    tui.input('j');
+    tui.input('j')
+        .assert_current_line_eq(str![["┊●   tpm add A"]]);
+    tui.input('q');
+
+    let env = tui.into_env();
+
+    let mut tui = test_tui_with_options(
+        env,
+        TestTuiOptions {
+            launch_options,
+            ..Default::default()
+        },
+    );
+
+    tui.reload()
+        .assert_current_line_eq(str![["┊●   tpm add A"]]);
+}
+
+#[test]
+fn remember_selection_with_file_name_conflicting_with_branch() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    env.file("A", "");
+
+    let launch_options = TuiLaunchOptions {
+        remember_selection: true,
+        ..Default::default()
+    };
+
+    let mut tui = test_tui_with_options(
+        env,
+        TestTuiOptions {
+            launch_options,
+            ..Default::default()
+        },
+    );
+
+    tui.input('j');
+    tui.input('j').assert_current_line_eq(str![["┊╭┄ g0 [A]"]]);
+    tui.input('q');
+
+    let env = tui.into_env();
+
+    let mut tui = test_tui_with_options(
+        env,
+        TestTuiOptions {
+            launch_options,
+            ..Default::default()
+        },
+    );
+
+    tui.reload().assert_current_line_eq(str![["┊╭┄ g0 [A]"]]);
 }

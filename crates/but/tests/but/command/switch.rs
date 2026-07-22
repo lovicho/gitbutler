@@ -240,9 +240,9 @@ fn assert_workspace_status(env: &crate::utils::Sandbox) {
         .success()
         .stderr_eq(str![])
         .stdout_eq(str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   tpm add A
 ├╯
 ┊

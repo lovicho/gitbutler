@@ -28,7 +28,7 @@ fn unapply_stack() {
 
     tui.input('k');
     tui.input('u')
-        .assert_current_line_eq(str!["┊├┄g0 [A]"])
+        .assert_current_line_eq(str!["┊├┄ g0 [A]"])
         .assert_rendered_term_svg_eq(file!["snapshots/unapply_stack_004.svg"]);
 }
 
@@ -48,7 +48,7 @@ fn unapply_stack_selects_base_branch_when_next_stack_has_commits() {
 
     tui.input('g');
     tui.input('s');
-    tui.input('u').assert_current_line_eq(str!["┊├┄g0 [A]"]);
+    tui.input('u').assert_current_line_eq(str!["┊├┄ g0 [A]"]);
 }
 
 #[test]
@@ -153,7 +153,7 @@ fn escape_moves_cursor_back_to_valid_position() {
 
     let mut tui = test_tui(env);
 
-    tui.input('j').assert_current_line_eq(str![["┊╭┄g0 [A]"]]);
+    tui.input('j').assert_current_line_eq(str!["┊╭┄ g0 [A]"]);
     tui.input('s');
     tui.input('m');
     tui.input('j');
@@ -172,11 +172,11 @@ fn maintains_cursor_position_if_on_source() {
 
     let mut tui = test_tui(env);
 
-    tui.input('j').assert_current_line_eq(str![["┊╭┄g0 [A]"]]);
+    tui.input('j').assert_current_line_eq(str!["┊╭┄ g0 [A]"]);
     tui.input('s');
     tui.input('m');
 
     // cancelling should put the cursor at a valid position
     tui.input(KeyCode::Esc)
-        .assert_current_line_eq(str![["┊╭┄g0 [A]"]]);
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"]);
 }

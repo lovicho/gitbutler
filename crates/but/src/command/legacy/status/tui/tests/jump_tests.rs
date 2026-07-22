@@ -141,7 +141,7 @@ fn when_branch_short_code_and_commit_change_id_have_same_initial_character() {
         "snapshots/when_branch_short_code_matches_commit_sha_without_change_id_001.svg"
     ]);
     tui.input("r")
-        .assert_current_line_eq(str![["┊╭┄rr [rr-branch]"]]);
+        .assert_current_line_eq(str!["┊╭┄ rr [rr-branch]"]);
 
     tui.input("g");
     tui.input("/");

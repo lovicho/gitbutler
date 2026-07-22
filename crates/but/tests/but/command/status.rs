@@ -57,12 +57,12 @@ fn anonymous_segment() {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0
+┊╭┄ g0
 ┊●   sxu anonymous (no changes)
 ┊│
-┊├┄h0 [A]
+┊├┄ h0 [A]
 ┊●   tpm add A
 ├╯
 ┊
@@ -596,13 +596,13 @@ fn status_upstream_and_merge_base_messages_truncate_when_unpaged() {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A] [✓ upstream merges cleanly]
+┊╭┄ g0 [A] [✓ upstream merges cleanly]
 ┊●   lvx add A
 ├╯
 ┊
-┊╭┄(upstream: origin/main) 1 new commit
+┊╭┄ (upstream: origin/main) 1 new commit
 ┊● 67247ca add upstream-commit-message-that-is-intentionally-very-very-long-to-exc…
 ┊┊
 ├╯ 9fd740d (common base) 2000-01-02 add merge-base-message-that-is-intentio…
@@ -641,13 +641,13 @@ fn status_marks_merged_upstream_without_upstream_flag() {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A] (merged upstream)
+┊╭┄ g0 [A] (merged upstream)
 ┊●   nyq A-change
 ├╯
 ┊
-┊╭┄h0 [B]
+┊╭┄ h0 [B]
 ┊●   kyl B-change
 ├╯
 ┊
@@ -681,9 +681,9 @@ Applied remote branch 'origin/document-but-pr-skill' to workspace
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄do [document-but-pr-skill] (merged upstream) (no commits)
+┊╭┄ do [document-but-pr-skill] (merged upstream) (no commits)
 ├╯
 ┊
 ┊● 55165db (upstream: origin/main) 1 new commit
@@ -763,11 +763,11 @@ fn unmerged_empty_branch_above_merged_one_is_not_treated_as_merged() {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄to [top] (no commits)
+┊╭┄ to [top] (no commits)
 ┊│
-┊├┄bo [bottom] (merged upstream) (no commits)
+┊├┄ bo [bottom] (merged upstream) (no commits)
 ├╯
 ┊
 ┊● 334227d (upstream: origin/main) 1 new commit
@@ -924,17 +924,17 @@ fn status_upstream_prunes_untracked_integrated_branch() {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A] (merged upstream)
+┊╭┄ g0 [A] (merged upstream)
 ┊●   nyq A-change
 ├╯
 ┊
-┊╭┄h0 [B] [✓ upstream merges cleanly]
+┊╭┄ h0 [B] [✓ upstream merges cleanly]
 ┊●   kyl B-change
 ├╯
 ┊
-┊╭┄(upstream: origin/main) 2 new commits
+┊╭┄ (upstream: origin/main) 2 new commits
 ┊● 9354ac4 main-advance
 ┊● 756ee31 A-change
 ┊┊
@@ -967,20 +967,20 @@ fn status_upstream_prunes_metadata_tracked_integrated_branches() {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A] (merged upstream)
+┊╭┄ g0 [A] (merged upstream)
 ┊●   nyq A-change
 ├╯
 ┊
-┊╭┄h0 [B] [✓ upstream merges cleanly]
+┊╭┄ h0 [B] [✓ upstream merges cleanly]
 ┊●   kyl B-change
 ├╯
 ┊
-┊╭┄ex [extra-untracked] ○ empty (no commits)
+┊╭┄ ex [extra-untracked] ○ empty (no commits)
 ├╯
 ┊
-┊╭┄(upstream: origin/main) 2 new commits
+┊╭┄ (upstream: origin/main) 2 new commits
 ┊● 9354ac4 main-advance
 ┊● 756ee31 A-change
 ┊┊
@@ -1018,21 +1018,21 @@ fn status_upstream_prunes_with_different_bases() {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A] [✓ upstream merges cleanly]
+┊╭┄ g0 [A] [✓ upstream merges cleanly]
 ┊●   nyq A-change
 ├╯
 ┊
-┊╭┄h0 [B] [✓ upstream merges cleanly]
+┊╭┄ h0 [B] [✓ upstream merges cleanly]
 ┊●   wxl B-change
 ┊│
-┊├┄ma [main] (merged upstream)
+┊├┄ ma [main] (merged upstream)
 ┊●   upk M2
 ┊●   tpp M1
 ├╯
 ┊
-┊╭┄(upstream: origin/main) 2 new commits
+┊╭┄ (upstream: origin/main) 2 new commits
 ┊● ba5149e M2
 ┊● 6daac93 M1
 ┊┊
@@ -1166,9 +1166,9 @@ fn agent_status_explains_rewritten_commit_marker() {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊◐   [..] add one
 ├╯
 ┊
@@ -1192,9 +1192,9 @@ Then read the installed SKILL.md path printed by that command and continue.
 Do not merely tell the user to run it.
 This notice repeats until the skill is installed. If it still appears after installing, report it instead of retrying.
 
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊◐   [..] add one
 ├╯
 ┊
@@ -1210,9 +1210,9 @@ Hint: commits are listed newest first. The first token on each line is the ID to
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊◐   [..] add one
 ├╯
 ┊
@@ -1247,10 +1247,10 @@ printf '100644 %s 1\tconflicted.txt\n100644 %s 2\tconflicted.txt\n100644 %s 3\tc
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted]
+╭┄ zz [uncommitted]
 ┊    conflicted.txt {conflicted}
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   tpm add A
 ├╯
 ┊
@@ -1336,9 +1336,9 @@ fn status_file_prefixed_with_persisted_or_synthetic_change_id() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   123 Commit with change ID
 ┊│     123:p A B
 ┊●   tpm add A
@@ -1365,7 +1365,7 @@ fn file_ids_are_nicely_aligned() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted]
+╭┄ zz [uncommitted]
 ┊   rr A file-0.txt
 ┊   kr A file-1.txt
 ┊   tp A file-2.txt
@@ -1389,9 +1389,9 @@ Hint: run `but branch new` to create a new branch to work on
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄br [a-branch-1]
+┊╭┄ br [a-branch-1]
 ┊●   1 add files
 ┊│     1:r  A file-0.txt
 ┊│     1:k  A file-1.txt
@@ -1416,9 +1416,9 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄br [a-branch-1]
+┊╭┄ br [a-branch-1]
 ┊● 1 author 2000-01-01 00:00:00 +0000 (sha 5877ef4)
 ┊│     add files
 ┊│     1:r  A file-0.txt

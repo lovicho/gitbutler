@@ -326,9 +326,9 @@ fn json_target_committed_file() {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   1 committed-file-target
 ┊│     1:k A committed-other.txt
 ┊│     1:w A committed-target.txt
@@ -336,7 +336,7 @@ fn json_target_committed_file() {
 ┊│     tpm:t A A
 ├╯
 ┊
-┊╭┄h0 [B]
+┊╭┄ h0 [B]
 ┊●   lrm add B
 ┊│     lrm:p A B
 ├╯
@@ -424,14 +424,14 @@ fn json_target_commit() {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   tpm add A
 ┊│     tpm:t A A
 ├╯
 ┊
-┊╭┄h0 [B]
+┊╭┄ h0 [B]
 ┊●   lrm add B
 ┊│     lrm:p A B
 ├╯
@@ -528,18 +528,18 @@ fn json_target_stack() {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted]
+╭┄ zz [uncommitted]
 ┊   nz A unassigned.txt
 ┊
-┊  ╭┄k0 [staged to A]
+┊  ╭┄ k0 [staged to A]
 ┊  │ su A assigned.txt
 ┊  │
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   tpm add A
 ┊│     tpm:t A A
 ├╯
 ┊
-┊╭┄h0 [B]
+┊╭┄ h0 [B]
 ┊●   lrm add B
 ┊│     lrm:p A B
 ├╯
@@ -607,9 +607,9 @@ fn json_commit_target_tree_change_statuses() -> anyhow::Result<()> {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   1#0 status-target
 ┊│     1#0:nx A added.txt
 ┊│     1#0:nm D deleted.txt
@@ -623,7 +623,7 @@ fn json_commit_target_tree_change_statuses() -> anyhow::Result<()> {
 ┊│     tpm:t A A
 ├╯
 ┊
-┊╭┄h0 [B]
+┊╭┄ h0 [B]
 ┊●   lrm add B
 ┊│     lrm:p A B
 ├╯

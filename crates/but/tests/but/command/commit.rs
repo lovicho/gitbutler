@@ -37,9 +37,9 @@ fn commit_moved_file_replaced_by_directory() {
     env.but("commit -m 'Commit everything'").assert().success();
 
     env.but("status -f").assert().success().stdout_eq(str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   1 Commit everything
 ┊│     1:q A A/file
 ┊│     1:p R B
@@ -378,9 +378,9 @@ fn commit_empty_default() {
     env.setup_metadata(&["A"]);
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   tpm add A
 ├╯
 ┊
@@ -399,9 +399,9 @@ Created blank commit at the tip of branch 'A'
 "#]]);
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   1 (no commit message) (no changes)
 ┊●   tpm add A
 ├╯
@@ -521,9 +521,9 @@ fn commit_empty_after_stack_head_is_disallowed() -> anyhow::Result<()> {
     env.setup_metadata(&["A"]);
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   tpm add A
 ├╯
 ┊
@@ -579,12 +579,12 @@ fn commit_empty_after_branch_for_non_stack_head() -> anyhow::Result<()> {
         .success();
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   ywx add second
 ┊│
-┊├┄bo [bottom]
+┊├┄ bo [bottom]
 ┊●   zll add first
 ├╯
 ┊
@@ -604,13 +604,13 @@ Created blank commit above branch 'bottom'
 "#]]);
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   ywx add second
 ┊●   1 (no commit message) (no changes)
 ┊│
-┊├┄bo [bottom]
+┊├┄ bo [bottom]
 ┊●   zll add first
 ├╯
 ┊
@@ -629,9 +629,9 @@ fn commit_empty_with_before_branch() {
     env.setup_metadata(&["A"]);
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   tpm add A
 ├╯
 ┊
@@ -650,9 +650,9 @@ Created blank commit at the tip of branch 'A'
 "#]]);
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   1 (no commit message) (no changes)
 ┊●   tpm add A
 ├╯
@@ -1656,9 +1656,9 @@ Created new independent branch 'a-branch-1'
 "#]]);
 
     env.but("status -f").assert().success().stdout_eq(str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄br [a-branch-1]
+┊╭┄ br [a-branch-1]
 ┊●   1 Add file
 ┊│     1:q A file
 ├╯

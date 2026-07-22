@@ -31,6 +31,14 @@ export enum ReduxTag {
 	InitalEditListing = "InitialEditListing",
 	EditChangesSinceInitial = "EditChangesSinceInitial",
 	AuthorInfo = "AuthorInfo",
+	/**
+	 * The upstream integration plan (`get_initial_branch_integration`). The query
+	 * is only subscribed while the integration modal is open and refetches on each
+	 * open, so staleness between opens is a non-issue. The single invalidation is
+	 * the `workspace-activity` listener, which refreshes an open modal when the
+	 * workspace changes underneath it (e.g. an external fetch or `but` CLI write).
+	 */
+	IntegrationSteps = "IntegrationSteps",
 	GitConfigProperty = "GitConfigProperty",
 	GitButlerConfig = "GitButlerConfig",
 	IrcConnectionState = "IrcConnectionState",

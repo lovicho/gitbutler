@@ -36,9 +36,9 @@ Deleted branch A
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [B]
+┊╭┄ g0 [B]
 ┊●   lrm add B
 ├╯
 ┊
@@ -69,12 +69,12 @@ Deleted branch A
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [C]
+┊╭┄ g0 [C]
 ┊●   wlx add C
 ┊│
-┊├┄h0 [B]
+┊├┄ h0 [B]
 ┊●   wwm add B
 ├╯
 ┊
@@ -105,12 +105,12 @@ Deleted branch B
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [C]
+┊╭┄ g0 [C]
 ┊●   wlx add C
 ┊│
-┊├┄h0 [A]
+┊├┄ h0 [A]
 ┊●   tpm add A
 ├╯
 ┊
@@ -141,12 +141,12 @@ Deleted branch C
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [B]
+┊╭┄ g0 [B]
 ┊●   wwm add B
 ┊│
-┊├┄h0 [A]
+┊├┄ h0 [A]
 ┊●   tpm add A
 ├╯
 ┊
@@ -177,12 +177,12 @@ Deleted branch C
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [B]
+┊╭┄ g0 [B]
 ┊●   wwm add B
 ┊│
-┊├┄h0 [A]
+┊├┄ h0 [A]
 ┊●   tpm add A
 ├╯
 ┊

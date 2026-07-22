@@ -8,7 +8,10 @@ use tracing::instrument;
 use url::Url;
 
 use crate::open::{
-    program::{Editor, PROGRAMS, ProgramSpec, open_in_program_unchecked},
+    program::{
+        Editor, PROGRAMS, ProgramSpec, USER_DEFINED_PROGRAMS_FILENAME, UserDefinedProgramSpec,
+        open_in_program_unchecked,
+    },
     spawn::spawn_and_reap,
 };
 
@@ -635,16 +638,54 @@ pub fn show_in_finder(path: String) -> Result<()> {
 #[but_api(napi)]
 #[instrument(err(Debug))]
 pub fn list_editors() -> anyhow::Result<Vec<Editor>> {
-    Ok(PROGRAMS
+    Ok(list_user_defined_program_specs()
         .iter()
-        .filter(|program| program.is_gui_editor())
+        .chain(PROGRAMS.iter())
+        .filter(|p| p.is_gui_editor())
         .map(Into::into)
         .collect())
 }
 
-/// List all supported programs.
-pub fn list_program_specs() -> &'static [ProgramSpec] {
+/// List all built-in supported programs.
+pub fn list_builtin_program_specs() -> &'static [ProgramSpec] {
     PROGRAMS.as_slice()
+}
+
+/// List all user-defined programs.
+///
+/// This function never fails, it only logs errors as warnings if something goes wrong.
+pub fn list_user_defined_program_specs() -> Vec<ProgramSpec> {
+    let Ok(user_defined_programs_file) =
+        but_path::app_config_dir().map(|dir| dir.join(USER_DEFINED_PROGRAMS_FILENAME))
+    else {
+        return vec![];
+    };
+
+    let content = match std::fs::read_to_string(&user_defined_programs_file) {
+        Ok(content) => content,
+        Err(err) => {
+            tracing::debug!(
+                ?err,
+                ?user_defined_programs_file,
+                "Failed to read from user-defined programs file"
+            );
+            return vec![];
+        }
+    };
+
+    let user_defined_program_specs: Vec<UserDefinedProgramSpec> =
+        match serde_json::from_str(&content) {
+            Ok(specs) => specs,
+            Err(err) => {
+                tracing::warn!(?err, "Failed to decode user-defined programs file");
+                vec![]
+            }
+        };
+
+    user_defined_program_specs
+        .into_iter()
+        .map(Into::into)
+        .collect()
 }
 
 /// Open `path` within the given project's workdir using the editor specified by `editor_id`.
@@ -676,7 +717,10 @@ pub fn open_in_editor(
         bail_precondition!("{path:?} is inside repository .git directory at {git_dir_path:?}");
     }
 
-    if let Some(editor) = PROGRAMS.iter().find(|editor| editor.id == editor_id)
+    if let Some(editor) = list_user_defined_program_specs()
+        .iter()
+        .chain(PROGRAMS.iter())
+        .find(|editor| editor.id == editor_id)
         && editor.is_gui_editor()
     {
         open_in_program_unchecked(editor, &resolved_path, line_nr)

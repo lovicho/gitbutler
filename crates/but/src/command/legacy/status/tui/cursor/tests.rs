@@ -62,6 +62,7 @@ fn committed_file_cli_id(hex: &str, path: &str, id: &str) -> Arc<CliId> {
         commit_id: commit_id(hex),
         path: path.into(),
         id: id.into(),
+        change_id: None,
     })
 }
 

@@ -53,12 +53,12 @@ fn discard_by_path_prefix_removes_only_matching_files() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted]
+╭┄ zz [uncommitted]
 ┊   up A path/other/third.txt
 ┊   ms A path/to/first.txt
 ┊   rr A path/to/second.txt
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   tpm add A
 ├╯
 ┊
@@ -74,10 +74,10 @@ Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "mes
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted]
+╭┄ zz [uncommitted]
 ┊   up A path/other/third.txt
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   tpm add A
 ├╯
 ┊

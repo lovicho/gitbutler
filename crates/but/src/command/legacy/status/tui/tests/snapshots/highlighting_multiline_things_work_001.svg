@@ -11,10 +11,10 @@
   <rect x="10" y="352" width="80" height="18" fill="#555555" />
   <g font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">
     <text x="10 18" y="24" style="fill:#FFFFFF;font-weight:bold;">╭┄</text>
-    <text x="26 34" y="24" style="fill:#0000AA;font-weight:bold;">zz</text>
-    <text x="50" y="24" style="fill:#FFFFFF;font-weight:bold;">[</text>
-    <text x="58 66 74 82 90 98 106 114 122 130 138" y="24" style="fill:#00AAAA;font-weight:bold;">uncommitted</text>
-    <text x="146" y="24" style="fill:#FFFFFF;font-weight:bold;">]</text>
+    <text x="34 42" y="24" style="fill:#0000AA;font-weight:bold;">zz</text>
+    <text x="58" y="24" style="fill:#FFFFFF;font-weight:bold;">[</text>
+    <text x="66 74 82 90 98 106 114 122 130 138 146" y="24" style="fill:#00AAAA;font-weight:bold;">uncommitted</text>
+    <text x="154" y="24" style="fill:#FFFFFF;font-weight:bold;">]</text>
     <text x="410" y="24" style="fill:#555555;">│</text>
     <text x="418" y="24" style="fill:#CCCCCC;">1</text>
     <text x="434 442 450 458" y="24" style="fill:#CCCCCC;">file</text>
@@ -52,8 +52,8 @@
     <text x="450" y="168" style="fill:#00AA00;">1</text>
     <text x="466" y="168" style="fill:#555555;">│</text>
     <text x="482" y="168" style="fill:#CCCCCC;">+</text>
-    <text x="490 498 506 514 522 530 538 546 554 562 570 578 586 594" y="168" style="fill:#75715E;">#!/usr/bin/env</text>
-    <text x="610 618 626 634 642 650 658" y="168" style="fill:#75715E;">python3</text>
+    <text x="490 498 506 514 522 530 538 546 554 562 570 578 586 594" y="168" style="fill:#9399B2;">#!/usr/bin/env</text>
+    <text x="610 618 626 634 642 650 658" y="168" style="fill:#9399B2;">python3</text>
     <text x="410" y="186" style="fill:#555555;">│</text>
     <text x="434" y="186" style="fill:#555555;">┊</text>
     <text x="450" y="186" style="fill:#00AA00;">2</text>
@@ -64,40 +64,44 @@
     <text x="450" y="204" style="fill:#00AA00;">3</text>
     <text x="466" y="204" style="fill:#555555;">│</text>
     <text x="482" y="204" style="fill:#CCCCCC;">+</text>
-    <text x="490 498 506 514 522 530 538 546 554 562 570" y="204" style="fill:#F8F8F2;">@dataclass(</text>
-    <text x="578 586 594 602 610 618" y="204" style="fill:#FD971F;">frozen</text>
-    <text x="626" y="204" style="fill:#F92672;">=</text>
-    <text x="634 642 650 658" y="204" style="fill:#BE84FF;">True</text>
-    <text x="666" y="204" style="fill:#F8F8F2;">)</text>
+    <text x="490 498 506 514 522 530 538 546 554 562" y="204" style="fill:#FAB387;">@dataclass</text>
+    <text x="570" y="204" style="fill:#9399B2;">(</text>
+    <text x="578 586 594 602 610 618" y="204" style="fill:#EBA0AC;">frozen</text>
+    <text x="626" y="204" style="fill:#94E2D5;">=</text>
+    <text x="634 642 650 658" y="204" style="fill:#FAB387;">True</text>
+    <text x="666" y="204" style="fill:#9399B2;">)</text>
     <text x="410" y="222" style="fill:#555555;">│</text>
     <text x="434" y="222" style="fill:#555555;">┊</text>
     <text x="450" y="222" style="fill:#00AA00;">4</text>
     <text x="466" y="222" style="fill:#555555;">│</text>
     <text x="482" y="222" style="fill:#CCCCCC;">+</text>
-    <text x="490 498 506 514 522" y="222" style="fill:#A6E22E;">class</text>
-    <text x="538 546 554 562 570 578 586 594 602 610 618" y="222" style="fill:#66D9EF;">FileSummary</text>
-    <text x="626" y="222" style="fill:#F8F8F2;">:</text>
+    <text x="490 498 506 514 522" y="222" style="fill:#CBA6F7;">class</text>
+    <text x="538 546 554 562 570 578 586 594 602 610 618" y="222" style="fill:#F9E2AF;">FileSummary</text>
+    <text x="626" y="222" style="fill:#9399B2;">:</text>
     <text x="410" y="240" style="fill:#555555;">│</text>
     <text x="434" y="240" style="fill:#555555;">┊</text>
     <text x="450" y="240" style="fill:#00AA00;">5</text>
     <text x="466" y="240" style="fill:#555555;">│</text>
     <text x="482" y="240" style="fill:#CCCCCC;">+</text>
-    <text x="522 530 538 546 554" y="240" style="fill:#F8F8F2;">path:</text>
-    <text x="570 578 586" y="240" style="fill:#A6E22E;">str</text>
+    <text x="522 530 538 546" y="240" style="fill:#CDD6F4;">path</text>
+    <text x="554" y="240" style="fill:#9399B2;">:</text>
+    <text x="570 578 586" y="240" style="fill:#CBA6F7;">str</text>
     <text x="410" y="258" style="fill:#555555;">│</text>
     <text x="434" y="258" style="fill:#555555;">┊</text>
     <text x="450" y="258" style="fill:#00AA00;">6</text>
     <text x="466" y="258" style="fill:#555555;">│</text>
     <text x="482" y="258" style="fill:#CCCCCC;">+</text>
-    <text x="522 530 538 546 554 562 570 578 586 594 602" y="258" style="fill:#F8F8F2;">size_bytes:</text>
-    <text x="618 626 634" y="258" style="fill:#A6E22E;">int</text>
+    <text x="522 530 538 546 554 562 570 578 586 594" y="258" style="fill:#CDD6F4;">size_bytes</text>
+    <text x="602" y="258" style="fill:#9399B2;">:</text>
+    <text x="618 626 634" y="258" style="fill:#CBA6F7;">int</text>
     <text x="410" y="276" style="fill:#555555;">│</text>
     <text x="434" y="276" style="fill:#555555;">┊</text>
     <text x="450" y="276" style="fill:#00AA00;">7</text>
     <text x="466" y="276" style="fill:#555555;">│</text>
     <text x="482" y="276" style="fill:#CCCCCC;">+</text>
-    <text x="522 530 538 546 554 562 570" y="276" style="fill:#F8F8F2;">sha256:</text>
-    <text x="586 594 602" y="276" style="fill:#A6E22E;">str</text>
+    <text x="522 530 538 546 554 562" y="276" style="fill:#CDD6F4;">sha256</text>
+    <text x="570" y="276" style="fill:#9399B2;">:</text>
+    <text x="586 594 602" y="276" style="fill:#CBA6F7;">str</text>
     <text x="410" y="294" style="fill:#555555;">│</text>
     <text x="410" y="312" style="fill:#555555;">│</text>
     <text x="410" y="330" style="fill:#555555;">│</text>

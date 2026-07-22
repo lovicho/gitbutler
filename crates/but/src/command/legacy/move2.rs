@@ -614,6 +614,7 @@ fn resolve_sources(
                 commit_id,
                 path,
                 id: _,
+                change_id: _,
             }) => {
                 file_sources.push((commit_id, path));
             }

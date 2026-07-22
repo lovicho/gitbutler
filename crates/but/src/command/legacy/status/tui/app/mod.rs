@@ -19,7 +19,7 @@ use crate::{
         FilesStatusFlag, StatusFlags, StatusOutputLine, TuiLaunchOptions, TuiOutcome,
         TuiRunOptions,
         output::StatusOutputLineData,
-        tui::{copy_selection_picker::Clipboard, details::Details},
+        tui::{copy_selection_picker::Clipboard, details::Details, remember_selection},
     },
     theme::Theme,
     tui::TerminalGuard,
@@ -133,6 +133,7 @@ pub(super) fn changed_paths_affect_uncommitted_details<'a>(
 
 impl App {
     pub fn new(
+        ctx: &Context,
         status_lines: Vec<StatusOutputLine>,
         flags: StatusFlags,
         launch_options: TuiLaunchOptions,
@@ -145,6 +146,10 @@ impl App {
         let cursor = if let Some(object_id) = launch_options.select_commit {
             Cursor::select_commit(object_id, &status_lines)
                 .unwrap_or_else(|| Cursor::new(&status_lines))
+        } else if launch_options.remember_selection
+            && let Some(cursor) = remember_selection::restore_selection(ctx, &status_lines)
+        {
+            cursor
         } else {
             Cursor::new(&status_lines)
         };
@@ -1290,6 +1295,7 @@ impl App {
                 path,
                 id,
                 commit_id: _,
+                change_id: _,
             } => copy_selection_picker::committed_file_picker(
                 path.to_owned(),
                 id.to_owned(),

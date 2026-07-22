@@ -22,11 +22,11 @@
   <rect width="100%" height="100%" y="0" rx="4.5" class="bg" />
 
   <text xml:space="preserve" class="container fg">
-    <tspan x="10px" y="28px"><tspan>╭┄</tspan><tspan class="fg-blue bold">zz</tspan><tspan> [</tspan><tspan class="fg-cyan">uncommitted</tspan><tspan>] </tspan><tspan class="dimmed">(no changes)</tspan>
+    <tspan x="10px" y="28px"><tspan>╭┄ </tspan><tspan class="fg-blue bold">zz</tspan><tspan> [</tspan><tspan class="fg-cyan">uncommitted</tspan><tspan>] </tspan><tspan class="dimmed">(no changes)</tspan>
 </tspan>
     <tspan x="10px" y="46px"><tspan>┊</tspan>
 </tspan>
-    <tspan x="10px" y="64px"><tspan>┊╭┄</tspan><tspan class="fg-blue bold">g0</tspan><tspan> [</tspan><tspan class="fg-green">A</tspan><tspan>]</tspan><tspan class="fg-magenta"> (merged upstream)</tspan>
+    <tspan x="10px" y="64px"><tspan>┊╭┄ </tspan><tspan class="fg-blue bold">g0</tspan><tspan> [</tspan><tspan class="fg-green">A</tspan><tspan>]</tspan><tspan class="fg-magenta"> (merged upstream)</tspan>
 </tspan>
     <tspan x="10px" y="82px"><tspan>┊</tspan><tspan class="fg-magenta">●</tspan><tspan>   </tspan><tspan class="fg-magenta">n</tspan><tspan class="dimmed">yq</tspan><tspan> A-change</tspan>
 </tspan>
@@ -34,7 +34,7 @@
 </tspan>
     <tspan x="10px" y="118px"><tspan>┊</tspan>
 </tspan>
-    <tspan x="10px" y="136px"><tspan>┊╭┄</tspan><tspan class="fg-blue bold">h0</tspan><tspan> [</tspan><tspan class="fg-green">B</tspan><tspan>]</tspan><tspan class="fg-green"> [✓ upstream merges cleanly]</tspan>
+    <tspan x="10px" y="136px"><tspan>┊╭┄ </tspan><tspan class="fg-blue bold">h0</tspan><tspan> [</tspan><tspan class="fg-green">B</tspan><tspan>]</tspan><tspan class="fg-green"> [✓ upstream merges cleanly]</tspan>
 </tspan>
     <tspan x="10px" y="154px"><tspan>┊●   </tspan><tspan class="fg-magenta">k</tspan><tspan class="dimmed">yl</tspan><tspan> B-change</tspan>
 </tspan>
@@ -42,7 +42,7 @@
 </tspan>
     <tspan x="10px" y="190px"><tspan>┊</tspan>
 </tspan>
-    <tspan x="10px" y="208px"><tspan>┊╭┄(upstream: origin/main) 2 new commits</tspan>
+    <tspan x="10px" y="208px"><tspan>┊╭┄ (upstream: origin/main) 2 new commits</tspan>
 </tspan>
     <tspan x="10px" y="226px"><tspan>┊</tspan><tspan class="fg-green">●</tspan><tspan> </tspan><tspan class="fg-cyan">9354ac4</tspan><tspan> </tspan><tspan class="dimmed">main-advance</tspan>
 </tspan>

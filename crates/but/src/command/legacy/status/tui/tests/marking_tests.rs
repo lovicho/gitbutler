@@ -36,10 +36,10 @@ fn marking_uncommitted_toggles_all_uncommitted_files() {
     let mut tui = test_tui(env);
 
     tui.reload()
-        .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted]"]);
 
     tui.input(' ')
-        .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted]"]);
 
     tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊✔︎  nk A a.txt"]);
@@ -287,13 +287,13 @@ fn marking_and_squashing_branches() {
 
     tui.input('j');
     tui.input(' ')
-        .assert_current_line_eq(str![["┊╭┄ra [c-branch-2]"]])
+        .assert_current_line_eq(str!["┊╭┄ ra [c-branch-2]"])
         .assert_rendered_term_svg_eq(file!["snapshots/marking_and_squashing_branches_001.svg"]);
     tui.input(' ')
-        .assert_current_line_eq(str![["┊╭┄an [c-branch-1]"]])
+        .assert_current_line_eq(str!["┊╭┄ an [c-branch-1]"])
         .assert_rendered_term_svg_eq(file!["snapshots/marking_and_squashing_branches_002.svg"]);
     tui.input(' ')
-        .assert_current_line_eq(str![["┊✔︎ an [c-branch-1]"]])
+        .assert_current_line_eq(str!["┊✔︎  an [c-branch-1]"])
         .assert_rendered_term_svg_eq(file!["snapshots/marking_and_squashing_branches_003.svg"]);
 
     tui.input('r');
@@ -356,4 +356,15 @@ fn fix_backstack_with_marks_in_squash_mode_from_commit_file_list() {
     tui.input(KeyCode::Esc)
         .assert_backstack_eq([BackstackEntry::Mark, BackstackEntry::ShowFileList])
         .assert_current_line_eq(str![["┊✔︎     t:t A A"]]);
+}
+
+#[test]
+fn marking_branches_shows_checkmark_in_the_right_place() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    let mut tui = test_tui(env);
+
+    tui.input('j').assert_current_line_eq(str![["┊╭┄ g0 [A]"]]);
+    tui.input(' ').assert_current_line_eq(str![["┊✔︎  g0 [A]"]]);
 }

@@ -323,6 +323,7 @@ impl Details {
                 commit_id,
                 path,
                 id,
+                change_id: _,
             } => {
                 let commit = *commit_id;
                 let path = path.clone();

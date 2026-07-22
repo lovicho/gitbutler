@@ -15,9 +15,9 @@
     <text x="50" y="60" style="fill:#00AA00;">1</text>
     <text x="66" y="60" style="fill:#555555;">│</text>
     <text x="82" y="60" style="fill:#CCCCCC;">+</text>
-    <text x="90 98 106 114 122 130 138" y="60" style="fill:#F8F8F2;">content</text>
-    <text x="154 162" y="60" style="fill:#F8F8F2;">of</text>
-    <text x="178 186 194" y="60" style="fill:#F8F8F2;">one</text>
+    <text x="90 98 106 114 122 130 138" y="60" style="fill:#CDD6F4;">content</text>
+    <text x="154 162" y="60" style="fill:#CDD6F4;">of</text>
+    <text x="178 186 194" y="60" style="fill:#CDD6F4;">one</text>
     <text x="18 26 34 42 50 58 66 74 82 90 98 106 114 122 130 138" y="96" style="fill:#555555;">───────────────╮</text>
     <text x="26" y="114" style="fill:#000000;">✔︎</text>
     <text x="50 58 66 74" y="114" style="fill:#0000AA;">or:f</text>
@@ -38,9 +38,9 @@
     <text x="50" y="204" style="fill:#00AA00;">1</text>
     <text x="66" y="204" style="fill:#555555;">│</text>
     <text x="82" y="204" style="fill:#CCCCCC;">+</text>
-    <text x="90 98 106 114 122 130 138" y="204" style="fill:#F8F8F2;">content</text>
-    <text x="154 162" y="204" style="fill:#F8F8F2;">of</text>
-    <text x="178 186 194 202 210" y="204" style="fill:#F8F8F2;">three</text>
+    <text x="90 98 106 114 122 130 138" y="204" style="fill:#CDD6F4;">content</text>
+    <text x="154 162" y="204" style="fill:#CDD6F4;">of</text>
+    <text x="178 186 194 202 210" y="204" style="fill:#CDD6F4;">three</text>
     <text x="802" y="204" style="fill:#555555;">█</text>
     <text x="802" y="222" style="fill:#555555;">█</text>
     <text x="10" y="240" style="fill:#FFA500;">▌</text>
@@ -70,9 +70,9 @@
     <text x="50" y="348" style="fill:#00AA00;">1</text>
     <text x="66" y="348" style="fill:#555555;">│</text>
     <text x="82" y="348" style="fill:#CCCCCC;">+</text>
-    <text x="90 98 106 114 122 130 138" y="348" style="fill:#F8F8F2;">content</text>
-    <text x="154 162" y="348" style="fill:#F8F8F2;">of</text>
-    <text x="178 186 194" y="348" style="fill:#F8F8F2;">two</text>
+    <text x="90 98 106 114 122 130 138" y="348" style="fill:#CDD6F4;">content</text>
+    <text x="154 162" y="348" style="fill:#CDD6F4;">of</text>
+    <text x="178 186 194" y="348" style="fill:#CDD6F4;">two</text>
     <text x="802" y="348" style="fill:#555555;">█</text>
     <text x="26 34 42 50 58 66 74" y="366" style="fill:#000000;">details</text>
     <text x="106 114 122" y="366" style="fill:#0000AA;">↓/j</text>

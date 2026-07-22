@@ -4,10 +4,10 @@
   <rect x="10" y="352" width="80" height="18" fill="#555555" />
   <g font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14" xml:space="preserve">
     <text x="10 18" y="24" style="fill:#CCCCCC;">╭┄</text>
-    <text x="26 34" y="24" style="fill:#0000AA;font-weight:bold;">zz</text>
-    <text x="50" y="24" style="fill:#CCCCCC;">[</text>
-    <text x="58 66 74 82 90 98 106 114 122 130 138" y="24" style="fill:#00AAAA;">uncommitted</text>
-    <text x="146" y="24" style="fill:#CCCCCC;">]</text>
+    <text x="34 42" y="24" style="fill:#0000AA;font-weight:bold;">zz</text>
+    <text x="58" y="24" style="fill:#CCCCCC;">[</text>
+    <text x="66 74 82 90 98 106 114 122 130 138 146" y="24" style="fill:#00AAAA;">uncommitted</text>
+    <text x="154" y="24" style="fill:#CCCCCC;">]</text>
     <text x="10" y="42" style="fill:#CCCCCC;">┊</text>
     <text x="42 50 58" y="42" style="fill:#0000AA;font-weight:bold;">klx</text>
     <text x="82" y="42" style="fill:#CCCCCC;">A</text>
@@ -26,10 +26,10 @@
     <text x="98 106 114" y="96" style="fill:#00AA00;">two</text>
     <text x="10" y="114" style="fill:#CCCCCC;">┊</text>
     <text x="10 18 26" y="132" style="fill:#CCCCCC;">┊╭┄</text>
-    <text x="34 42" y="132" style="fill:#0000AA;font-weight:bold;">g0</text>
-    <text x="58" y="132" style="fill:#CCCCCC;">[</text>
-    <text x="66" y="132" style="fill:#00AA00;">A</text>
-    <text x="74" y="132" style="fill:#CCCCCC;">]</text>
+    <text x="42 50" y="132" style="fill:#0000AA;font-weight:bold;">g0</text>
+    <text x="66" y="132" style="fill:#CCCCCC;">[</text>
+    <text x="74" y="132" style="fill:#00AA00;">A</text>
+    <text x="82" y="132" style="fill:#CCCCCC;">]</text>
     <text x="10 18" y="150" style="fill:#CCCCCC;">┊●</text>
     <text x="50 58" y="150" style="fill:#AA00AA;">tp</text>
     <text x="66" y="150" style="fill:#CCCCCC;opacity:0.75;">m</text>
@@ -38,10 +38,10 @@
     <text x="10 18" y="168" style="fill:#CCCCCC;">├╯</text>
     <text x="10" y="186" style="fill:#CCCCCC;">┊</text>
     <text x="10 18 26" y="204" style="fill:#FFFFFF;font-weight:bold;">┊╭┄</text>
-    <text x="34 42" y="204" style="fill:#0000AA;font-weight:bold;">h0</text>
-    <text x="58" y="204" style="fill:#FFFFFF;font-weight:bold;">[</text>
-    <text x="66" y="204" style="fill:#00AA00;font-weight:bold;">C</text>
-    <text x="74" y="204" style="fill:#FFFFFF;font-weight:bold;">]</text>
+    <text x="42 50" y="204" style="fill:#0000AA;font-weight:bold;">h0</text>
+    <text x="66" y="204" style="fill:#FFFFFF;font-weight:bold;">[</text>
+    <text x="74" y="204" style="fill:#00AA00;font-weight:bold;">C</text>
+    <text x="82" y="204" style="fill:#FFFFFF;font-weight:bold;">]</text>
     <text x="10 18" y="222" style="fill:#CCCCCC;">┊●</text>
     <text x="50" y="222" style="fill:#AA00AA;">x</text>
     <text x="58 66" y="222" style="fill:#CCCCCC;opacity:0.75;">wn</text>
@@ -49,10 +49,10 @@
     <text x="114" y="222" style="fill:#CCCCCC;">C</text>
     <text x="10 18" y="240" style="fill:#CCCCCC;">┊│</text>
     <text x="10 18 26" y="258" style="fill:#CCCCCC;">┊├┄</text>
-    <text x="34 42" y="258" style="fill:#0000AA;font-weight:bold;">i0</text>
-    <text x="58" y="258" style="fill:#CCCCCC;">[</text>
-    <text x="66" y="258" style="fill:#00AA00;">B</text>
-    <text x="74" y="258" style="fill:#CCCCCC;">]</text>
+    <text x="42 50" y="258" style="fill:#0000AA;font-weight:bold;">i0</text>
+    <text x="66" y="258" style="fill:#CCCCCC;">[</text>
+    <text x="74" y="258" style="fill:#00AA00;">B</text>
+    <text x="82" y="258" style="fill:#CCCCCC;">]</text>
     <text x="10 18" y="276" style="fill:#CCCCCC;">┊●</text>
     <text x="50" y="276" style="fill:#AA00AA;">l</text>
     <text x="58 66" y="276" style="fill:#CCCCCC;opacity:0.75;">rm</text>

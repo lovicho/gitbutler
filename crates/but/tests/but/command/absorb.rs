@@ -348,10 +348,10 @@ nk:5 a.txt│
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted]
+╭┄ zz [uncommitted]
 ┊   nk M a.txt
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   1#0 partial change to a.txt 3
 ┊│     1#0:n M a.txt
 ┊●   1#1 partial change to a.txt 2
@@ -364,7 +364,7 @@ nk:5 a.txt│
 ┊│     tpm:t A A
 ├╯
 ┊
-┊╭┄h0 [B]
+┊╭┄ h0 [B]
 ┊●   lrm add B
 ┊│     lrm:p A B
 ├╯
@@ -400,9 +400,9 @@ Hint: you can run `but undo` to undo these changes
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   1#0 partial change to a.txt 3
 ┊│     1#0:n M a.txt
 ┊●   1#1 partial change to a.txt 2
@@ -415,7 +415,7 @@ Hint: you can run `but undo` to undo these changes
 ┊│     tpm:t A A
 ├╯
 ┊
-┊╭┄h0 [B]
+┊╭┄ h0 [B]
 ┊●   lrm add B
 ┊│     lrm:p A B
 ├╯

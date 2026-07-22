@@ -41,8 +41,9 @@ use ratatui::{
 use serde::{Deserialize, Serialize};
 use syntect::highlighting::{self, ThemeSet};
 
-const MONOKAI_THEME: &[u8] =
-    include_bytes!("../assets/syntax-highlighting-themes/Monokai Extended.tmTheme");
+const CATPPUCCIN_THEME_DARK: &[u8] =
+    include_bytes!("../assets/syntax-highlighting-themes/Catppuccin Mocha.tmTheme");
+
 const MONOKAI_THEME_LIGHT: &[u8] =
     include_bytes!("../assets/syntax-highlighting-themes/Monokai Extended Light.tmTheme");
 
@@ -463,7 +464,7 @@ impl Theme {
                 .bg(Color::from_hsl(Hsl::new(236.8, 0.162, 0.229))),
             legend: Style::new().fg(Color::Blue),
 
-            syntax_highlighting_theme_raw: MONOKAI_THEME,
+            syntax_highlighting_theme_raw: CATPPUCCIN_THEME_DARK,
 
             // Symbols initialized below
             symbols: None,

@@ -201,6 +201,7 @@ impl<'a> MarksRef<'a> {
                     commit_id,
                     path,
                     id: _,
+                    change_id: _,
                 } = cli_id
                 else {
                     return false;
@@ -573,10 +574,12 @@ impl Markable {
                 commit_id,
                 path,
                 id,
+                change_id,
             }) => CliId::CommittedFile {
                 commit_id,
                 path,
                 id,
+                change_id,
             },
             Markable::Branch(BranchId { name, id, stack_id }) => {
                 CliId::Branch { name, id, stack_id }
@@ -655,12 +658,14 @@ impl<'a> MarkableRef<'a> {
                         commit_id,
                         path,
                         id,
+                        change_id,
                     } = cli_id
                     {
                         return Some(Self::CommittedFile(CommittedFileIdRef {
                             commit_id: *commit_id,
                             path: path.as_ref(),
                             id,
+                            change_id: change_id.as_ref(),
                         }));
                     }
                 }

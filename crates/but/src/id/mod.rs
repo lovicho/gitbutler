@@ -394,6 +394,10 @@ impl<'a> Node<'a> for &'a WorkspaceCommitWithId {
                                 .unwrap_or(&self.short_id),
                             short_id
                         ),
+                        change_id: self
+                            .change_id
+                            .as_ref()
+                            .map(|change_id| change_id.change_id.clone()),
                     },
                 }));
             }
@@ -1494,6 +1498,8 @@ pub enum CliId {
         path: BString,
         /// The short CLI ID for this file (typically 2 characters)
         id: ShortId,
+        /// The stable change ID from the commit headers, if present.
+        change_id: Option<but_core::ChangeId>,
     },
     /// A branch.
     Branch {
@@ -1736,6 +1742,7 @@ pub struct CommittedFileId {
     pub commit_id: gix::ObjectId,
     pub path: BString,
     pub id: ShortId,
+    pub change_id: Option<ChangeId>,
 }
 
 impl CommittedFileId {
@@ -1744,6 +1751,7 @@ impl CommittedFileId {
             commit_id: self.commit_id,
             path: self.path.as_ref(),
             id: &self.id,
+            change_id: self.change_id.as_ref(),
         }
     }
 }
@@ -1759,6 +1767,7 @@ pub struct CommittedFileIdRef<'a> {
     pub commit_id: gix::ObjectId,
     pub path: &'a BStr,
     pub id: &'a str,
+    pub change_id: Option<&'a ChangeId>,
 }
 
 impl CommittedFileIdRef<'_> {
@@ -1767,6 +1776,7 @@ impl CommittedFileIdRef<'_> {
             commit_id: self.commit_id,
             path: self.path.to_owned(),
             id: self.id.to_owned(),
+            change_id: self.change_id.cloned(),
         }
     }
 }
@@ -1777,6 +1787,7 @@ impl PartialEq for CommittedFileIdRef<'_> {
             commit_id,
             path,
             id: _,
+            change_id: _,
         } = self;
         *commit_id == other.commit_id && path == &other.path
     }

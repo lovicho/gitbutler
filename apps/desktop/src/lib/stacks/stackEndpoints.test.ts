@@ -240,8 +240,7 @@ describe("buildStackEndpoints", () => {
 			command: "get_initial_branch_integration",
 		});
 		expect(endpoints.getInitialBranchIntegration.providesTags).toEqual([
-			providesList(ReduxTag.HeadSha),
-			providesList(ReduxTag.StackDetails),
+			providesList(ReduxTag.IntegrationSteps),
 		]);
 		expect(query).toBeDefined();
 		expect(

@@ -538,16 +538,19 @@ fn render_status_list_item(
         });
 
         if let Some(mark_symbol) = mark_symbol {
+            let mut mark_padding = 0;
             for (idx, span) in connector.iter().enumerate() {
                 if idx == 1 {
-                    line.render(mark_symbol.span());
-                    if connector.len() == 2 {
+                    let mark_span = mark_symbol.span();
+                    mark_padding = span.width().saturating_sub(mark_span.width());
+                    line.render(mark_span);
+                    for _ in 0..mark_padding {
                         line.render(Span::raw(" ").style(app.theme.tui_mark));
                     }
                 } else if idx == 2 {
                     // after the indicator is a bunch of spaces
                     for (c_idx, c) in span.content.chars().enumerate() {
-                        line.render(if c_idx == 0 {
+                        line.render(if c_idx == 0 && mark_padding == 0 {
                             // color the background of the first space the same as the mark indicator
                             // since the checkmark symbol we use takes up more than one cell
                             Span::raw(c.to_string()).style(app.theme.tui_mark)

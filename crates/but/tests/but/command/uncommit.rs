@@ -127,9 +127,9 @@ fn uncommit_different_files_from_different_commits_same_branch() -> anyhow::Resu
         .success()
         .stderr_eq(str![])
         .stdout_eq(str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   1#0 add c2
 ┊│     1#0:w A c2.txt
 ┊●   1#1 add c1
@@ -138,7 +138,7 @@ fn uncommit_different_files_from_different_commits_same_branch() -> anyhow::Resu
 ┊│     tpm:t A A
 ├╯
 ┊
-┊╭┄h0 [B]
+┊╭┄ h0 [B]
 ┊●   lrm add B
 ┊│     lrm:p A B
 ├╯
@@ -182,18 +182,18 @@ Uncommitted changes
         .success()
         .stderr_eq(str![])
         .stdout_eq(str![[r#"
-╭┄zz [uncommitted]
+╭┄ zz [uncommitted]
 ┊   ls A c1.txt
 ┊   wy A c2.txt
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   1#0 add c2 (no changes)
 ┊●   1#1 add c1 (no changes)
 ┊●   tpm add A
 ┊│     tpm:t A A
 ├╯
 ┊
-┊╭┄h0 [B]
+┊╭┄ h0 [B]
 ┊●   lrm add B
 ┊│     lrm:p A B
 ├╯
@@ -233,9 +233,9 @@ fn uncommit_different_files_from_the_same_commit() -> anyhow::Result<()> {
         .success()
         .stderr_eq(str![])
         .stdout_eq(str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   1 add c1 and c2
 ┊│     1:l A c1.txt
 ┊│     1:w A c2.txt
@@ -243,7 +243,7 @@ fn uncommit_different_files_from_the_same_commit() -> anyhow::Result<()> {
 ┊│     tpm:t A A
 ├╯
 ┊
-┊╭┄h0 [B]
+┊╭┄ h0 [B]
 ┊●   lrm add B
 ┊│     lrm:p A B
 ├╯
@@ -285,17 +285,17 @@ Uncommitted changes
         .success()
         .stderr_eq(str![])
         .stdout_eq(str![[r#"
-╭┄zz [uncommitted]
+╭┄ zz [uncommitted]
 ┊   ls A c1.txt
 ┊   wy A c2.txt
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   1 add c1 and c2 (no changes)
 ┊●   tpm add A
 ┊│     tpm:t A A
 ├╯
 ┊
-┊╭┄h0 [B]
+┊╭┄ h0 [B]
 ┊●   lrm add B
 ┊│     lrm:p A B
 ├╯
@@ -337,9 +337,9 @@ fn uncommit_same_file_from_different_commits_same_branch() -> anyhow::Result<()>
         .success()
         .stderr_eq(str![])
         .stdout_eq(str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   1#0 write v3
 ┊│     1#0:s M f.txt
 ┊●   1#1 write v2
@@ -350,7 +350,7 @@ fn uncommit_same_file_from_different_commits_same_branch() -> anyhow::Result<()>
 ┊│     tpm:t A A
 ├╯
 ┊
-┊╭┄h0 [B]
+┊╭┄ h0 [B]
 ┊●   lrm add B
 ┊│     lrm:p A B
 ├╯
@@ -396,10 +396,10 @@ Uncommitted changes
         .success()
         .stderr_eq(str![])
         .stdout_eq(str![[r#"
-╭┄zz [uncommitted]
+╭┄ zz [uncommitted]
 ┊   sp A f.txt
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   1#0 write v3 (no changes)
 ┊●   1#1 write v2 (no changes)
 ┊●   1#2 write v1 (no changes)
@@ -407,7 +407,7 @@ Uncommitted changes
 ┊│     tpm:t A A
 ├╯
 ┊
-┊╭┄h0 [B]
+┊╭┄ h0 [B]
 ┊●   lrm add B
 ┊│     lrm:p A B
 ├╯
@@ -447,16 +447,16 @@ fn uncommit_different_files_from_different_commits_different_branches() -> anyho
         .success()
         .stderr_eq(str![])
         .stdout_eq(str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   1#0 add fa
 ┊│     1#0:s A fa.txt
 ┊●   tpm add A
 ┊│     tpm:t A A
 ├╯
 ┊
-┊╭┄h0 [B]
+┊╭┄ h0 [B]
 ┊●   1#1 add fb
 ┊│     1#1:q A fb.txt
 ┊●   lrm add B
@@ -497,17 +497,17 @@ Uncommitted changes
         .success()
         .stderr_eq(str![])
         .stdout_eq(str![[r#"
-╭┄zz [uncommitted]
+╭┄ zz [uncommitted]
 ┊   sk A fa.txt
 ┊   qq A fb.txt
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   1#0 add fa (no changes)
 ┊●   tpm add A
 ┊│     tpm:t A A
 ├╯
 ┊
-┊╭┄h0 [B]
+┊╭┄ h0 [B]
 ┊●   1#1 add fb (no changes)
 ┊●   lrm add B
 ┊│     lrm:p A B
@@ -676,9 +676,9 @@ fn uncommit_command_with_discard_on_commit() -> anyhow::Result<()> {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   1 create a.txt and b.txt
 ┊│     1:n A a.txt
 ┊│     1:p A b.txt
@@ -686,7 +686,7 @@ fn uncommit_command_with_discard_on_commit() -> anyhow::Result<()> {
 ┊│     tpm:t A A
 ├╯
 ┊
-┊╭┄h0 [B]
+┊╭┄ h0 [B]
 ┊●   lrm add B
 ┊│     lrm:p A B
 ├╯
@@ -723,14 +723,14 @@ Hint: run `but help` for all commands
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   tpm add A
 ┊│     tpm:t A A
 ├╯
 ┊
-┊╭┄h0 [B]
+┊╭┄ h0 [B]
 ┊●   lrm add B
 ┊│     lrm:p A B
 ├╯
@@ -760,9 +760,9 @@ fn uncommit_command_with_discard_on_committed_file() -> anyhow::Result<()> {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   1 create a.txt and b.txt
 ┊│     1:n A a.txt
 ┊│     1:p A b.txt
@@ -770,7 +770,7 @@ fn uncommit_command_with_discard_on_committed_file() -> anyhow::Result<()> {
 ┊│     tpm:t A A
 ├╯
 ┊
-┊╭┄h0 [B]
+┊╭┄ h0 [B]
 ┊●   lrm add B
 ┊│     lrm:p A B
 ├╯
@@ -804,16 +804,16 @@ Hint: run `but help` for all commands
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   1 create a.txt and b.txt
 ┊│     1:n A a.txt
 ┊●   tpm add A
 ┊│     tpm:t A A
 ├╯
 ┊
-┊╭┄h0 [B]
+┊╭┄ h0 [B]
 ┊●   lrm add B
 ┊│     lrm:p A B
 ├╯

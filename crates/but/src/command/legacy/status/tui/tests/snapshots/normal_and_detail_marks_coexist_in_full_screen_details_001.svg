@@ -31,9 +31,9 @@
     <text x="50" y="168" style="fill:#00AA00;">1</text>
     <text x="66" y="168" style="fill:#555555;">│</text>
     <text x="82" y="168" style="fill:#CCCCCC;">+</text>
-    <text x="90 98 106 114 122 130 138" y="168" style="fill:#F8F8F2;">content</text>
-    <text x="154 162" y="168" style="fill:#F8F8F2;">of</text>
-    <text x="178 186 194 202 210" y="168" style="fill:#F8F8F2;">three</text>
+    <text x="90 98 106 114 122 130 138" y="168" style="fill:#CDD6F4;">content</text>
+    <text x="154 162" y="168" style="fill:#CDD6F4;">of</text>
+    <text x="178 186 194 202 210" y="168" style="fill:#CDD6F4;">three</text>
     <text x="26 34 42 50 58 66 74" y="366" style="fill:#000000;">details</text>
     <text x="106 114 122" y="366" style="fill:#0000AA;">↓/j</text>
     <text x="138 146 154 162" y="366" style="fill:#CCCCCC;opacity:0.75;">next</text>

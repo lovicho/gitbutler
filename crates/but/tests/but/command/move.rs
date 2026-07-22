@@ -113,9 +113,9 @@ fn move_multiple_commits_before_another_commit() -> anyhow::Result<()> {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   1#0 create e.txt and f.txt
 ┊●   1#1 create c.txt and d.txt
 ┊●   1#2 create a.txt and b.txt
@@ -157,9 +157,9 @@ Moved 2 commits → before 1
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   1#0 create a.txt and b.txt
 ┊●   1#1 create e.txt and f.txt
 ┊●   1#2 create c.txt and d.txt
@@ -191,9 +191,9 @@ fn move_multiple_commits_after_another_commit() -> anyhow::Result<()> {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   1#0 create e.txt and f.txt
 ┊●   1#1 create c.txt and d.txt
 ┊●   1#2 create a.txt and b.txt
@@ -235,9 +235,9 @@ Moved 2 commits → after 1
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   1#0 create c.txt and d.txt
 ┊●   1#1 create a.txt and b.txt
 ┊●   1#2 create e.txt and f.txt
@@ -264,18 +264,18 @@ fn move_multiple_commits_from_different_branches() -> anyhow::Result<()> {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   psr A: 10 lines on top
 ├╯
 ┊
-┊╭┄h0 [B]
+┊╭┄ h0 [B]
 ┊●   ynm B: another 10 lines at the bottom
 ┊●   tlv B: 10 lines at the bottom
 ├╯
 ┊
-┊╭┄i0 [C]
+┊╭┄ i0 [C]
 ┊●   zmt C: add another 10 lines to new file
 ┊●   xkt C: add 10 lines to new file
 ┊●   sxz C: new file with 10 lines
@@ -371,12 +371,12 @@ Moved 4 commits → before [..]
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A] (no commits)
+┊╭┄ g0 [A] (no commits)
 ├╯
 ┊
-┊╭┄h0 [B]
+┊╭┄ h0 [B]
 ┊●   [..] B: another 10 lines at the bottom
 ┊●   zmt C: add another 10 lines to new file
 ┊●   xkt C: add 10 lines to new file
@@ -385,7 +385,7 @@ Moved 4 commits → before [..]
 ┊●   tlv B: 10 lines at the bottom
 ├╯
 ┊
-┊╭┄i0 [C] (no commits)
+┊╭┄ i0 [C] (no commits)
 ├╯
 ┊
 ┴ 8f0d338 (common base) 2000-01-02 base
@@ -408,18 +408,18 @@ fn move_multiple_commits_from_different_branches_after() -> anyhow::Result<()> {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   psr A: 10 lines on top
 ├╯
 ┊
-┊╭┄h0 [B]
+┊╭┄ h0 [B]
 ┊●   ynm B: another 10 lines at the bottom
 ┊●   tlv B: 10 lines at the bottom
 ├╯
 ┊
-┊╭┄i0 [C]
+┊╭┄ i0 [C]
 ┊●   zmt C: add another 10 lines to new file
 ┊●   xkt C: add 10 lines to new file
 ┊●   sxz C: new file with 10 lines
@@ -515,12 +515,12 @@ Moved 4 commits → after ynm
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A] (no commits)
+┊╭┄ g0 [A] (no commits)
 ├╯
 ┊
-┊╭┄h0 [B]
+┊╭┄ h0 [B]
 ┊●   zmt C: add another 10 lines to new file
 ┊●   xkt C: add 10 lines to new file
 ┊●   sxz C: new file with 10 lines
@@ -529,7 +529,7 @@ Moved 4 commits → after ynm
 ┊●   tlv B: 10 lines at the bottom
 ├╯
 ┊
-┊╭┄i0 [C] (no commits)
+┊╭┄ i0 [C] (no commits)
 ├╯
 ┊
 ┴ 8f0d338 (common base) 2000-01-02 base
@@ -790,16 +790,16 @@ fn move_branch_by_name_from_top_level_move() -> anyhow::Result<()> {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   tpm add A
 ├╯
 ┊
-┊╭┄h0 [C]
+┊╭┄ h0 [C]
 ┊●   xwn add C
 ┊│
-┊├┄i0 [B]
+┊├┄ i0 [B]
 ┊●   lrm add B
 ├╯
 ┊
@@ -826,15 +826,15 @@ Moved branch A on top of C.
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   tpm add A
 ┊│
-┊├┄h0 [C]
+┊├┄ h0 [C]
 ┊●   xwn add C
 ┊│
-┊├┄i0 [B]
+┊├┄ i0 [B]
 ┊●   lrm add B
 ├╯
 ┊
@@ -889,11 +889,11 @@ Moved branch A on top of B.
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A] (no commits)
+┊╭┄ g0 [A] (no commits)
 ┊│
-┊├┄h0 [B] (no commits)
+┊├┄ h0 [B] (no commits)
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -945,16 +945,16 @@ fn move_branch_by_cli_id_from_top_level_move() -> anyhow::Result<()> {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   tpm add A
 ├╯
 ┊
-┊╭┄h0 [C]
+┊╭┄ h0 [C]
 ┊●   xwn add C
 ┊│
-┊├┄i0 [B]
+┊├┄ i0 [B]
 ┊●   lrm add B
 ├╯
 ┊
@@ -994,15 +994,15 @@ Moved branch A on top of C.
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   tpm add A
 ┊│
-┊├┄h0 [C]
+┊├┄ h0 [C]
 ┊●   xwn add C
 ┊│
-┊├┄i0 [B]
+┊├┄ i0 [B]
 ┊●   lrm add B
 ├╯
 ┊
@@ -1028,16 +1028,16 @@ fn tear_off_branch_with_top_level_move_to_zz() -> anyhow::Result<()> {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   tpm add A
 ├╯
 ┊
-┊╭┄h0 [C]
+┊╭┄ h0 [C]
 ┊●   xwn add C
 ┊│
-┊├┄i0 [B]
+┊├┄ i0 [B]
 ┊●   lrm add B
 ├╯
 ┊
@@ -1076,17 +1076,17 @@ Unstacked branch C.
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   tpm add A
 ├╯
 ┊
-┊╭┄h0 [B]
+┊╭┄ h0 [B]
 ┊●   lrm add B
 ├╯
 ┊
-┊╭┄i0 [C]
+┊╭┄ i0 [C]
 ┊●   xwn add C
 ├╯
 ┊
@@ -1112,16 +1112,16 @@ fn move_branch_with_after_flag_fails_from_top_level_move() {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   tpm add A
 ├╯
 ┊
-┊╭┄h0 [C]
+┊╭┄ h0 [C]
 ┊●   xwn add C
 ┊│
-┊├┄i0 [B]
+┊├┄ i0 [B]
 ┊●   lrm add B
 ├╯
 ┊
@@ -1144,16 +1144,16 @@ Failed to move branch. The --after flag only makes sense when moving a commit to
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   tpm add A
 ├╯
 ┊
-┊╭┄h0 [C]
+┊╭┄ h0 [C]
 ┊●   xwn add C
 ┊│
-┊├┄i0 [B]
+┊├┄ i0 [B]
 ┊●   lrm add B
 ├╯
 ┊

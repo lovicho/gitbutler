@@ -993,6 +993,12 @@ pub enum Subcommands {
     #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
     #[cfg(feature = "legacy")]
     Tui {
+        /// When the TUI quits save the selection and restore it when re-opening.
+        ///
+        /// If the saved selection cannot be restore the TUI launch normally as if
+        /// `--remember-selection` wasn't passed.
+        #[clap(long, default_value_t = false)]
+        remember_selection: bool,
         /// Show debug pane with selected-line metadata.
         ///
         /// Requires `tui-profiling` feature.

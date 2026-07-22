@@ -12,7 +12,7 @@ import {
 	waitForTestId,
 	waitForTestIdToNotExist,
 } from "../src/util.ts";
-import { expect, type Page } from "@playwright/test";
+import { expect, type Page, type Request } from "@playwright/test";
 import { execFileSync } from "child_process";
 import { existsSync, readFileSync, writeFileSync } from "fs";
 
@@ -318,6 +318,88 @@ test("should preview branch integration for a diverged branch with a parallel em
 	await waitForTestId(page, "branch-integration-modal");
 	await expect(getByTestId(page, "branch-integration-preview-row").first()).toBeVisible();
 	await expect(getByTestId(page, "branch-integration-error")).toHaveCount(0);
+});
+
+test("fetches a fresh default integration plan each time the modal opens", async ({
+	page,
+	gitbutler,
+}) => {
+	const integrationPlanRequests: Request[] = [];
+	page.on("request", (request) => {
+		if (request.url().endsWith("/get_initial_branch_integration")) {
+			integrationPlanRequests.push(request);
+		}
+	});
+
+	await gitbutler.runScript("project-with-diverged-branch-and-parallel-empty-branch.sh");
+	await openWorkspace(page);
+	await clickByTestId(page, "sync-button");
+
+	await expect(getByTestId(page, "upstream-commits-integrate-button")).toBeVisible();
+	expect(integrationPlanRequests).toHaveLength(0);
+
+	await clickByTestId(page, "upstream-commits-integrate-button");
+	await expect(getByTestId(page, "branch-integration-preview-row").first()).toBeVisible();
+	expect(integrationPlanRequests).toHaveLength(1);
+	expect(integrationPlanRequests[0]?.postDataJSON()).toMatchObject({
+		branch: expect.stringContaining("feature-foo"),
+		strategy: "pullRebase",
+	});
+
+	await page.getByRole("button", { name: "Cancel" }).click();
+	await waitForTestIdToNotExist(page, "branch-integration-modal");
+	await clickByTestId(page, "upstream-commits-integrate-button");
+	await expect(getByTestId(page, "branch-integration-preview-row").first()).toBeVisible();
+
+	expect(integrationPlanRequests).toHaveLength(2);
+	expect(integrationPlanRequests[1]?.postDataJSON()).toMatchObject({
+		branch: integrationPlanRequests[0]?.postDataJSON().branch,
+		strategy: "pullRebase",
+	});
+});
+
+test("keeps integration steps aligned with the selected strategy", async ({ page, gitbutler }) => {
+	await gitbutler.runScript("project-with-diverged-branch-and-parallel-empty-branch.sh");
+	await openWorkspace(page);
+	await clickByTestId(page, "sync-button");
+	await clickByTestId(page, "upstream-commits-integrate-button");
+
+	const applyButton = getByTestId(page, "branch-integration-apply-button");
+	await expect(applyButton).toBeEnabled();
+
+	let releaseStrategyRequest: () => void;
+	const strategyRequestBlocked = new Promise<void>((resolve) => {
+		releaseStrategyRequest = resolve;
+	});
+	let blockStrategyRequest = true;
+	await page.route("**/get_initial_branch_integration", async (route) => {
+		if (blockStrategyRequest && route.request().postDataJSON()?.strategy === "smartSquash") {
+			blockStrategyRequest = false;
+			await strategyRequestBlocked;
+		}
+		await route.continue();
+	});
+
+	await clickByTestId(page, "branch-integration-template-smartSquash");
+	await expect(applyButton).toBeDisabled();
+	releaseStrategyRequest!();
+	await expect(applyButton).toBeEnabled();
+
+	const strategyRefresh = page.waitForRequest(
+		(request) =>
+			request.url().endsWith("/get_initial_branch_integration") &&
+			request.postDataJSON()?.strategy === "smartSquash",
+	);
+	const localClone = gitbutler.pathInWorkdir("local-clone");
+	git(localClone, [
+		"update-ref",
+		"refs/remotes/origin/workspace-activity",
+		git(localClone, ["rev-parse", "HEAD"]),
+	]);
+	await strategyRefresh;
+
+	await expect(page.locator("#strategy-smartSquash")).toBeChecked();
+	await expect(applyButton).toBeEnabled();
 });
 
 test("should be able to apply a remote branch and integrate the remote changes - create commit", async ({

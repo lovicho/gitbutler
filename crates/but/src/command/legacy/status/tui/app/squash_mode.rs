@@ -377,11 +377,13 @@ impl App {
                 commit_id,
                 path,
                 id,
+                change_id,
             } => {
                 self.start_with_source(SquashSource::CommittedFile(CommittedFileId {
                     commit_id: *commit_id,
                     path: path.clone(),
                     id: id.clone(),
+                    change_id: change_id.clone(),
                 }));
             }
             CliId::PathPrefix { .. } | CliId::Stack { .. } => {}

@@ -154,15 +154,15 @@ fn showing_branch_that_isnt_top_of_stack() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [C]
+┊╭┄ g0 [C]
 ┊●   wlx add C
 ┊│
-┊├┄h0 [B]
+┊├┄ h0 [B]
 ┊●   wwm add B
 ┊│
-┊├┄i0 [A]
+┊├┄ i0 [A]
 ┊●   tpm add A
 ├╯
 ┊
@@ -232,15 +232,15 @@ fn checking_merge_status_of_branch_that_isnt_top_of_stack() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [C]
+┊╭┄ g0 [C]
 ┊●   wlx add C
 ┊│
-┊├┄h0 [B]
+┊├┄ h0 [B]
 ┊●   wwm add B
 ┊│
-┊├┄i0 [A]
+┊├┄ i0 [A]
 ┊●   tpm add A
 ├╯
 ┊

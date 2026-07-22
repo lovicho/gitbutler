@@ -676,6 +676,7 @@ uncommitted_hunks: [ ln:q ]
         commit_id: Sha1(0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a),
         path: "committed.txt",
         id: "0:z",
+        change_id: None,
     },
 ]
 
@@ -1326,6 +1327,9 @@ fn committed_file_can_be_referenced_by_either_change_id_or_commit_id() {
         commit_id: Sha1(0101010101010101010101010101010101010101),
         path: "file.txt",
         id: "s:u",
+        change_id: Some(
+            "swstzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+        ),
     },
 ]
 
@@ -1342,6 +1346,9 @@ fn committed_file_can_be_referenced_by_either_change_id_or_commit_id() {
         commit_id: Sha1(0101010101010101010101010101010101010101),
         path: "file.txt",
         id: "s:u",
+        change_id: Some(
+            "swstzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+        ),
     },
 ]
 

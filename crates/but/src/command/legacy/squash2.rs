@@ -388,6 +388,7 @@ pub fn resolve<'a>(
                             commit_id,
                             path,
                             id: _,
+                            change_id: _,
                         } = committed_file;
 
                         if source != commit_id {

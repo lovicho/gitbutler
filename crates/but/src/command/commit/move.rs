@@ -391,6 +391,7 @@ mod tests {
             commit_id: gix::ObjectId::empty_tree(gix::hash::Kind::Sha1),
             path: BString::from(path),
             id: "cf".to_string(),
+            change_id: None,
         }
     }
 

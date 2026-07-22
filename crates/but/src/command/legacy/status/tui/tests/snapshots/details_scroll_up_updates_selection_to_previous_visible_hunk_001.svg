@@ -14,46 +14,46 @@
     <text x="50" y="24" style="fill:#00AA00;">1</text>
     <text x="66" y="24" style="fill:#555555;">│</text>
     <text x="82" y="24" style="fill:#CCCCCC;">+</text>
-    <text x="90 98 106 114 122 130 138 146" y="24" style="fill:#F8F8F2;">alpha-01</text>
+    <text x="90 98 106 114 122 130 138 146" y="24" style="fill:#CDD6F4;">alpha-01</text>
     <text x="34" y="42" style="fill:#555555;">┊</text>
     <text x="50" y="42" style="fill:#00AA00;">2</text>
     <text x="66" y="42" style="fill:#555555;">│</text>
     <text x="82" y="42" style="fill:#CCCCCC;">+</text>
-    <text x="90 98 106 114 122 130 138 146" y="42" style="fill:#F8F8F2;">alpha-02</text>
+    <text x="90 98 106 114 122 130 138 146" y="42" style="fill:#CDD6F4;">alpha-02</text>
     <text x="34" y="60" style="fill:#555555;">┊</text>
     <text x="50" y="60" style="fill:#00AA00;">3</text>
     <text x="66" y="60" style="fill:#555555;">│</text>
     <text x="82" y="60" style="fill:#CCCCCC;">+</text>
-    <text x="90 98 106 114 122 130 138 146" y="60" style="fill:#F8F8F2;">alpha-03</text>
+    <text x="90 98 106 114 122 130 138 146" y="60" style="fill:#CDD6F4;">alpha-03</text>
     <text x="34" y="78" style="fill:#555555;">┊</text>
     <text x="50" y="78" style="fill:#00AA00;">4</text>
     <text x="66" y="78" style="fill:#555555;">│</text>
     <text x="82" y="78" style="fill:#CCCCCC;">+</text>
-    <text x="90 98 106 114 122 130 138 146" y="78" style="fill:#F8F8F2;">alpha-04</text>
+    <text x="90 98 106 114 122 130 138 146" y="78" style="fill:#CDD6F4;">alpha-04</text>
     <text x="802" y="78" style="fill:#555555;">█</text>
     <text x="34" y="96" style="fill:#555555;">┊</text>
     <text x="50" y="96" style="fill:#00AA00;">5</text>
     <text x="66" y="96" style="fill:#555555;">│</text>
     <text x="82" y="96" style="fill:#CCCCCC;">+</text>
-    <text x="90 98 106 114 122 130 138 146" y="96" style="fill:#F8F8F2;">alpha-05</text>
+    <text x="90 98 106 114 122 130 138 146" y="96" style="fill:#CDD6F4;">alpha-05</text>
     <text x="802" y="96" style="fill:#555555;">█</text>
     <text x="34" y="114" style="fill:#555555;">┊</text>
     <text x="50" y="114" style="fill:#00AA00;">6</text>
     <text x="66" y="114" style="fill:#555555;">│</text>
     <text x="82" y="114" style="fill:#CCCCCC;">+</text>
-    <text x="90 98 106 114 122 130 138 146" y="114" style="fill:#F8F8F2;">alpha-06</text>
+    <text x="90 98 106 114 122 130 138 146" y="114" style="fill:#CDD6F4;">alpha-06</text>
     <text x="802" y="114" style="fill:#555555;">█</text>
     <text x="34" y="132" style="fill:#555555;">┊</text>
     <text x="50" y="132" style="fill:#00AA00;">7</text>
     <text x="66" y="132" style="fill:#555555;">│</text>
     <text x="82" y="132" style="fill:#CCCCCC;">+</text>
-    <text x="90 98 106 114 122 130 138 146" y="132" style="fill:#F8F8F2;">alpha-07</text>
+    <text x="90 98 106 114 122 130 138 146" y="132" style="fill:#CDD6F4;">alpha-07</text>
     <text x="802" y="132" style="fill:#555555;">█</text>
     <text x="34" y="150" style="fill:#555555;">┊</text>
     <text x="50" y="150" style="fill:#00AA00;">8</text>
     <text x="66" y="150" style="fill:#555555;">│</text>
     <text x="82" y="150" style="fill:#CCCCCC;">+</text>
-    <text x="90 98 106 114 122 130 138 146" y="150" style="fill:#F8F8F2;">alpha-08</text>
+    <text x="90 98 106 114 122 130 138 146" y="150" style="fill:#CDD6F4;">alpha-08</text>
     <text x="802" y="150" style="fill:#555555;">█</text>
     <text x="10" y="186" style="fill:#FFA500;">▌</text>
     <text x="18 26 34 42 50 58 66 74 82 90 98 106 114 122 130 138 146" y="186" style="fill:#555555;">────────────────╮</text>

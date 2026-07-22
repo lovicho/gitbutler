@@ -188,6 +188,7 @@ impl App {
                     commit_id,
                     path,
                     id: _,
+                    change_id: _,
                 } => {
                     let commit_id = *commit_id;
                     let path = path.to_owned();

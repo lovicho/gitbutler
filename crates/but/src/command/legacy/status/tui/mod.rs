@@ -36,6 +36,7 @@ use crate::{
             help::HelpMessage,
             key_bind::{KeyBinds, fuzzy_picker_key_binds},
             mode::Mode,
+            remember_selection::save_selection_to_disk,
             toast::ToastKind,
         },
     },
@@ -65,6 +66,7 @@ mod message_on_drop;
 mod mode;
 mod operations;
 mod popup;
+mod remember_selection;
 mod render;
 mod toast;
 
@@ -93,6 +95,7 @@ pub fn render_tui(
 
     let head_sha = operations::head_sha(ctx)?;
     let mut app = App::new(
+        ctx,
         status_lines,
         flags,
         launch_options,
@@ -334,6 +337,10 @@ where
 
     if app.fps.update() {
         app.should_render = true;
+    }
+
+    if app.outcome.is_some() && app.launch_options.remember_selection {
+        _ = save_selection_to_disk(ctx, app);
     }
 
     Ok(())

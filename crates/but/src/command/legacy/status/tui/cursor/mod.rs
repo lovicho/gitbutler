@@ -711,16 +711,26 @@ pub(super) fn same_entity_for_reload(previous: &CliId, current: &CliId) -> bool 
             .eq(current.iter().map(|(_, assignment)| assignment)),
         (
             CliId::CommittedFile {
-                commit_id: previous_commit,
+                commit_id: previous_commit_id,
                 path: previous_path,
+                change_id: previous_change_id,
                 ..
             },
             CliId::CommittedFile {
-                commit_id: current_commit,
+                commit_id: current_commit_id,
                 path: current_path,
+                change_id: current_change_id,
                 ..
             },
-        ) => previous_commit == current_commit && previous_path == current_path,
+        ) => {
+            previous_path == current_path
+                && match (previous_change_id, current_change_id) {
+                    (Some(previous), Some(current)) => previous == current,
+                    (Some(_), None) | (None, Some(_)) | (None, None) => {
+                        previous_commit_id == current_commit_id
+                    }
+                }
+        }
         (CliId::Branch { name: previous, .. }, CliId::Branch { name: current, .. }) => {
             previous == current
         }

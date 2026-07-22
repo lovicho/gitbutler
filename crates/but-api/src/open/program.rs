@@ -10,25 +10,43 @@ use std::path::PathBuf;
 
 use crate::open::spawn::spawn_and_reap;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-const FILEPATH_PLACEHOLDER: &str = "{{filepath}}";
-const LINE_NUMBER_PLACEHOLDER: &str = "{{line_number}}";
+/// Name of the user-defined programs file
+pub const USER_DEFINED_PROGRAMS_FILENAME: &str = "programs.json";
 
-/// Program type to classify an openable program.
-#[derive(Clone, PartialEq)]
-pub enum ProgramType {
+/// Placeholder used for filepath interpolation.
+pub const FILEPATH_PLACEHOLDER: &str = "{{filepath}}";
+
+/// Placeholder used for line number.
+pub const LINE_NUMBER_PLACEHOLDER: &str = "{{line_number}}";
+
+/// Program category to classify an openable program.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ProgramCategory {
     /// A text editor/IDE.
     Editor,
+    /// A file manager such as Finder, Explorer or Thunar.
+    FileManager,
     /// Anything that doesn't fit within other types and is not worthwhile to add a new type for.
     Other,
-    /// Purely for testing, should never be exposed outside of this module. This is only here until
-    /// we have the capability to define custom programs through config.
+    #[cfg(debug_assertions)]
+    /// Purely for testing, should not be included in production builds.
     Test,
 }
 
+impl From<UserDefinedProgramCategory> for ProgramCategory {
+    fn from(value: UserDefinedProgramCategory) -> Self {
+        match value {
+            UserDefinedProgramCategory::Editor => ProgramCategory::Editor,
+            UserDefinedProgramCategory::FileManager => ProgramCategory::FileManager,
+            UserDefinedProgramCategory::Other => ProgramCategory::Other,
+        }
+    }
+}
+
 /// Supported program to open a file or directory in.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ProgramSpec {
     /// Identifier used to refer to the program.
     pub id: String,
@@ -38,8 +56,8 @@ pub struct ProgramSpec {
     cli_arg_supplier: CliArgumentSupplier,
     /// The exuctable to invoke to start the program.
     pub executable: ExecutableProgram,
-    /// The kind of the program.
-    pub kind: ProgramType,
+    /// The category of the program.
+    pub category: ProgramCategory,
 }
 
 impl ProgramSpec {
@@ -53,12 +71,27 @@ impl ProgramSpec {
             ExecutableProgram::MacosApplication(_) => false,
         };
 
-        !requires_terminal && self.kind == ProgramType::Editor
+        !requires_terminal && self.category == ProgramCategory::Editor
+    }
+}
+
+impl From<UserDefinedProgramSpec> for ProgramSpec {
+    fn from(value: UserDefinedProgramSpec) -> Self {
+        ProgramSpec {
+            id: value.id.unwrap_or_else(|| value.name.clone()),
+            name: value.name,
+            cli_arg_supplier: CliArgumentSupplier::Custom(CustomCliArgumentSupplier {
+                open_args: value.open_args,
+                open_at_line_args: value.open_at_line_args,
+            }),
+            executable: value.executable.into(),
+            category: value.category.into(),
+        }
     }
 }
 
 /// A named executable that can be invoked from a shell.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ShellExecutable {
     /// Name of the executable on the PATH, or a qualified path to it.
     pub name_or_path: String,
@@ -70,13 +103,22 @@ pub struct ShellExecutable {
 }
 
 /// The executable to invoke for a program.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ExecutableProgram {
     /// A program that can be executed from a shell.
     ShellExecutable(ShellExecutable),
     /// A macOS application installed s.t. it has a bundle identifier.
     #[cfg(target_os = "macos")]
     MacosApplication(MacosApplication),
+}
+
+impl From<UserDefinedShellExecutable> for ExecutableProgram {
+    fn from(value: UserDefinedShellExecutable) -> Self {
+        ExecutableProgram::ShellExecutable(ShellExecutable {
+            name_or_path: value.name_or_path,
+            requires_tty: value.requires_terminal,
+        })
+    }
 }
 
 /// Supported editor configuration for API clients.
@@ -100,7 +142,7 @@ impl From<&ProgramSpec> for Editor {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum CliArgumentSupplier {
     VSCodeLike,
     Zed,
@@ -145,7 +187,7 @@ impl CliArgumentSupplier {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct CustomCliArgumentSupplier {
     /// Arguments to pass to the executable when invoked to open a file.
     ///
@@ -154,7 +196,7 @@ struct CustomCliArgumentSupplier {
     /// * [`FILEPATH_PLACEHOLDER`] is substituted for the filepath
     ///
     /// TODO should not assume utf8 for args
-    open_args: Vec<String>,
+    open_args: Option<Vec<String>>,
     /// Arguments to pass to the executable when invoked to open at a specific line.
     ///
     /// Recognized placeholders:
@@ -163,12 +205,16 @@ struct CustomCliArgumentSupplier {
     /// * [`LINE_NUMBER_PLACEHOLDER`] is substituted for the line number
     ///
     /// TODO should not assume utf8 for args
-    open_at_line_args: Vec<String>,
+    open_at_line_args: Option<Vec<String>>,
 }
 
 impl CustomCliArgumentSupplier {
     fn open_at_line<'a>(&self, cmd: &'a mut Command, path: &Path, line_nr: i32) -> &'a mut Command {
-        for arg in &self.open_at_line_args {
+        let Some(open_at_line_args) = &self.open_at_line_args else {
+            return self.open(cmd, path);
+        };
+
+        for arg in open_at_line_args {
             // TODO should not assume utf8 for path
             cmd.arg(
                 arg.replace(FILEPATH_PLACEHOLDER, &path.to_string_lossy())
@@ -179,7 +225,12 @@ impl CustomCliArgumentSupplier {
     }
 
     fn open<'a>(&self, cmd: &'a mut Command, path: &Path) -> &'a mut Command {
-        for arg in &self.open_args {
+        let Some(open_args) = &self.open_args else {
+            cmd.arg(path);
+            return cmd;
+        };
+
+        for arg in open_args {
             // TODO should not assume utf8 for path
             cmd.arg(arg.replace(FILEPATH_PLACEHOLDER, &path.to_string_lossy()));
         }
@@ -197,7 +248,7 @@ pub(crate) static PROGRAMS: LazyLock<Vec<ProgramSpec>> = LazyLock::new(|| {
                 name_or_path: "nvim".into(),
                 requires_tty: true,
             }),
-            kind: ProgramType::Editor,
+            category: ProgramCategory::Editor,
         },
         ProgramSpec {
             id: "cursor".into(),
@@ -217,7 +268,7 @@ pub(crate) static PROGRAMS: LazyLock<Vec<ProgramSpec>> = LazyLock::new(|| {
                 bundle_identifier: "com.todesktop.230313mzl4w4u92".into(),
                 cli_wrapper_path: Some("Contents/Resources/app/bin/cursor".into()),
             }),
-            kind: ProgramType::Editor,
+            category: ProgramCategory::Editor,
         },
         ProgramSpec {
             id: "sublime".into(),
@@ -236,7 +287,7 @@ pub(crate) static PROGRAMS: LazyLock<Vec<ProgramSpec>> = LazyLock::new(|| {
                 bundle_identifier: "com.sublimetext.4".into(),
                 cli_wrapper_path: Some("Contents/SharedSupport/bin/subl".into()),
             }),
-            kind: ProgramType::Editor,
+            category: ProgramCategory::Editor,
         },
         ProgramSpec {
             id: "vscode".into(),
@@ -255,7 +306,7 @@ pub(crate) static PROGRAMS: LazyLock<Vec<ProgramSpec>> = LazyLock::new(|| {
                 bundle_identifier: "com.microsoft.VSCode".into(),
                 cli_wrapper_path: Some("Contents/Resources/app/bin/code".into()),
             }),
-            kind: ProgramType::Editor,
+            category: ProgramCategory::Editor,
         },
         #[cfg(target_os = "macos")]
         ProgramSpec {
@@ -266,7 +317,7 @@ pub(crate) static PROGRAMS: LazyLock<Vec<ProgramSpec>> = LazyLock::new(|| {
                 bundle_identifier: "com.apple.dt.Xcode".into(),
                 cli_wrapper_path: Some("Contents/Developer/usr/bin/xed".into()),
             }),
-            kind: ProgramType::Editor,
+            category: ProgramCategory::Editor,
         },
         ProgramSpec {
             id: "zed".into(),
@@ -285,24 +336,24 @@ pub(crate) static PROGRAMS: LazyLock<Vec<ProgramSpec>> = LazyLock::new(|| {
                 bundle_identifier: "dev.zed.Zed".into(),
                 cli_wrapper_path: Some("Contents/MacOS/cli".into()),
             }),
-            kind: ProgramType::Editor,
+            category: ProgramCategory::Editor,
         },
-        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        #[cfg(debug_assertions)]
         ProgramSpec {
             id: "echo".into(),
             name: "echo".into(),
             cli_arg_supplier: CliArgumentSupplier::Custom(CustomCliArgumentSupplier {
-                open_at_line_args: vec![
+                open_at_line_args: Some(vec![
                     "filepath='{{filepath}}'".into(),
                     "line_number='{{line_number}}'".into(),
-                ],
-                open_args: vec!["filepath='{{filepath}}'".into()],
+                ]),
+                open_args: Some(vec!["filepath='{{filepath}}'".into()]),
             }),
             executable: ExecutableProgram::ShellExecutable(ShellExecutable {
                 name_or_path: "echo".into(),
                 requires_tty: true,
             }),
-            kind: ProgramType::Test,
+            category: ProgramCategory::Test,
         },
         #[cfg(target_os = "linux")]
         ProgramSpec {
@@ -313,31 +364,31 @@ pub(crate) static PROGRAMS: LazyLock<Vec<ProgramSpec>> = LazyLock::new(|| {
                 name_or_path: "thunar".into(),
                 requires_tty: false,
             }),
-            kind: ProgramType::Other,
+            category: ProgramCategory::FileManager,
         },
         #[cfg(unix)]
         ProgramSpec {
             id: "nvim-remote".into(),
             name: "Neovim Remote".into(),
             cli_arg_supplier: CliArgumentSupplier::Custom(CustomCliArgumentSupplier {
-                open_at_line_args: vec![
+                open_at_line_args: Some(vec![
                     "--server".into(),
                     "/tmp/nvim-server.pipe".into(),
                     "--remote-expr".into(),
                     "execute('edit +{{line_number}} ' . fnameescape('{{filepath}}'))".into(),
-                ],
-                open_args: vec![
+                ]),
+                open_args: Some(vec![
                     "--server".into(),
                     "/tmp/nvim-server.pipe".into(),
                     "--remote-expr".into(),
                     "execute('edit ' . fnameescape('{{filepath}}'))".into(),
-                ],
+                ]),
             }),
             executable: ExecutableProgram::ShellExecutable(ShellExecutable {
                 name_or_path: "nvim".into(),
                 requires_tty: false,
             }),
-            kind: ProgramType::Editor,
+            category: ProgramCategory::Editor,
         },
     ])
 });
@@ -395,7 +446,7 @@ fn open_in_shell_executable(
 
 /// A canonically installed macOS application with a bundle ID and an optional CLI wrapper.
 #[cfg(target_os = "macos")]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct MacosApplication {
     /// macOS bundle identifier for the application.
     pub bundle_identifier: String,
@@ -471,4 +522,58 @@ fn open_in_macos_application(
     }
 
     Ok(())
+}
+
+/// A serializable form of [`ProgramSpec`] for user defined programs.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserDefinedProgramSpec {
+    /// Identifier used to refer to the program.
+    ///
+    /// If left empty, the ID is derived from [`Self::name`] instead.
+    pub id: Option<String>,
+    /// The display name of the program.
+    pub name: String,
+    /// The exuctable to invoke to start the program.
+    pub executable: UserDefinedShellExecutable,
+    /// The kind of the program.
+    pub category: UserDefinedProgramCategory,
+    /// Arguments to pass to the executable when invoked to open a file.
+    ///
+    /// Recognized placeholders:
+    ///
+    /// * [`FILEPATH_PLACEHOLDER`] is substituted for the filepath
+    pub open_args: Option<Vec<String>>,
+    /// Arguments to pass to the executable when invoked to open at a specific line.
+    ///
+    /// Recognized placeholders:
+    ///
+    /// * [`FILEPATH_PLACEHOLDER`] is substituted for the filepath
+    /// * [`LINE_NUMBER_PLACEHOLDER`] is substituted for the line number
+    pub open_at_line_args: Option<Vec<String>>,
+}
+
+/// A user defined executable.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserDefinedShellExecutable {
+    /// Name of the executable on the PATH, or a qualified path to it.
+    pub name_or_path: String,
+    /// Whether the program requires an attached terminal or not.
+    ///
+    /// If this is true, it means that this program cannot be launched reliably from a GUI client,
+    /// and also needs the TUI to suspend in order for the editor to take over the terminal.
+    pub requires_terminal: bool,
+}
+
+/// Program category.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum UserDefinedProgramCategory {
+    /// A text editor/IDE.
+    Editor,
+    /// A file manager.
+    FileManager,
+    /// Anything else.
+    Other,
 }

@@ -59,6 +59,7 @@ impl<'a> DiffSpecBuilder<'a> {
                 commit_id,
                 path,
                 id: _,
+                change_id: _,
             } => self.push_changes_from_committed_file(*commit_id, path.as_ref()),
             CliId::Branch { name, id, stack_id } => {
                 self.push_changes_from_branch(name, id, *stack_id)

@@ -84,10 +84,12 @@ impl CliIdArg {
                 commit_id,
                 path,
                 id,
+                change_id,
             } => ResolvedCliIdArg::CommittedFile(CommittedFileId {
                 commit_id,
                 path,
                 id,
+                change_id,
             }),
             CliId::Uncommitted { .. } => ResolvedCliIdArg::Uncommitted,
             CliId::Stack { .. } => ResolvedCliIdArg::Stack,

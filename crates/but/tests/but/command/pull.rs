@@ -16,12 +16,12 @@ fn pull_prunes_integrated_stack_and_keeps_remaining_stack_parent() -> anyhow::Re
     env.setup_metadata_at_target(&["A", "B"], "origin/main");
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A] (no commits)
+┊╭┄ g0 [A] (no commits)
 ├╯
 ┊
-┊╭┄h0 [B]
+┊╭┄ h0 [B]
 ┊●   lrm add B
 ├╯
 ┊
@@ -35,9 +35,9 @@ Hint: origin/main moved ahead; run `but pull` to update the workspace
     env.but("pull").assert().success();
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [B]
+┊╭┄ g0 [B]
 ┊◐   lrm add B
 ├╯
 ┊
@@ -89,12 +89,12 @@ fn pull_prunes_integrated_branch_from_partial_stack() -> anyhow::Result<()> {
     setup_single_stack_metadata_at_target(&env, &["A", "C"], "refs/heads/base")?;
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   ozt add A
 ┊│
-┊├┄h0 [C] (merged upstream)
+┊├┄ h0 [C] (merged upstream)
 ┊●   rkq add C
 ├╯
 ┊
@@ -109,9 +109,9 @@ Hint: branches marked `(merged upstream)` have landed; run `but pull` to remove 
     env.but("pull").assert().success();
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊◐   ozt add A
 ├╯
 ┊
@@ -174,12 +174,12 @@ fn pull_check_uses_workspace_dry_run_for_partial_stack() -> anyhow::Result<()> {
     setup_single_stack_metadata_at_target(&env, &["A", "C"], "refs/heads/base")?;
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   ozt add A
 ┊│
-┊├┄h0 [C] (merged upstream)
+┊├┄ h0 [C] (merged upstream)
 ┊●   rkq add C
 ├╯
 ┊
@@ -221,12 +221,12 @@ Run `but pull` to update your branches
     );
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   ozt add A
 ┊│
-┊├┄h0 [C] (merged upstream)
+┊├┄ h0 [C] (merged upstream)
 ┊●   rkq add C
 ├╯
 ┊
@@ -248,9 +248,9 @@ fn pull_check_reports_conflicted_branches_as_rebasable() -> anyhow::Result<()> {
     env.invoke_git("remote set-url origin .");
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   nyo A-change
 ├╯
 ┊
@@ -287,9 +287,9 @@ Hint: origin/main moved ahead; run `but pull` to update the workspace
     env.but("pull").assert().success();
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊◐   nyo A-change (no changes) {conflicted}
 ├╯
 ┊
@@ -308,12 +308,12 @@ fn pull_reparents_workspace_to_target_after_all_stacks_integrate() -> anyhow::Re
     env.setup_metadata_at_target(&["A", "B"], "origin/main");
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A] (no commits)
+┊╭┄ g0 [A] (no commits)
 ├╯
 ┊
-┊╭┄h0 [B] (no commits)
+┊╭┄ h0 [B] (no commits)
 ├╯
 ┊
 ┊● 7e5d4e1 (upstream: origin/main) 3 new commits
@@ -326,7 +326,7 @@ Hint: origin/main moved ahead; run `but pull` to update the workspace
     env.but("pull").assert().success();
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
 ┴ 7e5d4e1 (common base) 2000-01-02 add upstream
 
@@ -361,7 +361,7 @@ fn pull_reparents_empty_workspace_when_target_advances() -> anyhow::Result<()> {
     env.invoke_git("checkout gitbutler/workspace");
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
 
@@ -372,7 +372,7 @@ Hint: run `but branch new` to create a new branch to work on
     env.but("pull").assert().success();
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
 ┴ 526bb83 (common base) 2000-01-02 upstream-change
 
@@ -399,10 +399,10 @@ fn pull_does_not_report_branch_rebase_conflicts_as_worktree_conflicts() -> anyho
     env.file("shared.txt", "local\nextra local work\n");
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄zz [uncommitted]
+╭┄ zz [uncommitted]
 ┊   ot M shared.txt
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   vun local change
 ├╯
 ┊
@@ -436,10 +436,10 @@ Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "mes
     );
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄zz [uncommitted]
+╭┄ zz [uncommitted]
 ┊   ot M shared.txt
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊◐   vun local change (no changes) {conflicted}
 ├╯
 ┊
@@ -460,9 +460,9 @@ fn pull_json_reports_branch_rebase_conflicts_as_successful_integration() -> anyh
     env.setup_metadata_at_target(&["A"], "main");
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   vun local change
 ├╯
 ┊
@@ -501,9 +501,9 @@ Hint: origin/main moved ahead; run `but pull` to update the workspace
     );
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊◐   vun local change (no changes) {conflicted}
 ├╯
 ┊
@@ -524,12 +524,12 @@ fn pull_reports_conflict_in_lower_branch_of_stack() -> anyhow::Result<()> {
     setup_single_stack_metadata_at_target(&env, &["A", "B"], "main")?;
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   [..] top change
 ┊│
-┊├┄h0 [B]
+┊├┄ h0 [B]
 ┊●   [..] bottom change
 ├╯
 ┊
@@ -566,12 +566,12 @@ To undo this operation:
 "#]]);
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊◐   rvk top change
 ┊│
-┊├┄h0 [B]
+┊├┄ h0 [B]
 ┊◐   rou bottom change (no changes) {conflicted}
 ├╯
 ┊
@@ -592,12 +592,12 @@ fn pull_reports_conflicts_in_multiple_branches_of_stack() -> anyhow::Result<()> 
     setup_single_stack_metadata_at_target(&env, &["A", "B"], "main")?;
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   [..] top change
 ┊│
-┊├┄h0 [B]
+┊├┄ h0 [B]
 ┊●   [..] bottom change
 ├╯
 ┊
@@ -636,12 +636,12 @@ To undo this operation:
 "#]]);
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊◐   wmr top change (no changes) {conflicted}
 ┊│
-┊├┄h0 [B]
+┊├┄ h0 [B]
 ┊◐   trk bottom change (no changes) {conflicted}
 ├╯
 ┊

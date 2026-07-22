@@ -49,6 +49,7 @@ pub struct TestTuiOptions {
     pub height: u16,
     pub run_options: TuiRunOptions,
     pub show_file_browser: bool,
+    pub launch_options: TuiLaunchOptions,
 }
 
 impl Default for TestTuiOptions {
@@ -58,6 +59,7 @@ impl Default for TestTuiOptions {
             height: 20,
             run_options: Default::default(),
             show_file_browser: false,
+            launch_options: Default::default(),
         }
     }
 }
@@ -72,6 +74,7 @@ pub fn test_tui_with_options(env: Sandbox, options: TestTuiOptions) -> TestTui {
         height,
         run_options,
         show_file_browser,
+        launch_options,
     } = options;
 
     env.invoke_git("config user.name committer");
@@ -87,10 +90,6 @@ pub fn test_tui_with_options(env: Sandbox, options: TestTuiOptions) -> TestTui {
     let mut out = OutputChannel::new(OutputFormat::Human);
 
     let flags = StatusFlags::all_false();
-    let launch_options = TuiLaunchOptions {
-        debug: false,
-        ..Default::default()
-    };
 
     let mut guard = ctx.exclusive_worktree_access();
 
@@ -116,6 +115,7 @@ pub fn test_tui_with_options(env: Sandbox, options: TestTuiOptions) -> TestTui {
     let (clipboard, clipboard_text) = Clipboard::test();
 
     let app = App::new(
+        &ctx,
         lines,
         flags,
         launch_options,
@@ -222,6 +222,14 @@ impl TestTui {
         });
 
         TestTuiInputThenRenderResult(self)
+    }
+
+    pub fn into_env(mut self) -> Sandbox {
+        let env = self.env.take().expect(
+            "env already removed?! This shouldn't happen, only TestTui::recreate removes the env",
+        );
+        std::mem::forget(self);
+        env
     }
 
     #[track_caller]

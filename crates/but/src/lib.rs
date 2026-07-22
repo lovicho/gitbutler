@@ -885,6 +885,7 @@ async fn match_subcommand(
         }
         #[cfg(feature = "legacy")]
         Subcommands::Tui {
+            remember_selection,
             #[cfg(feature = "tui-profiling")]
             debug,
             #[cfg(feature = "tui-profiling")]
@@ -917,6 +918,7 @@ async fn match_subcommand(
             )?;
             #[cfg(feature = "tui-profiling")]
             let _options = TuiLaunchOptions {
+                remember_selection,
                 debug,
                 quit_after,
                 headless,
@@ -925,7 +927,10 @@ async fn match_subcommand(
                 select_commit,
             };
             #[cfg(not(feature = "tui-profiling"))]
-            let _options = TuiLaunchOptions::default();
+            let _options = TuiLaunchOptions {
+                remember_selection,
+                ..Default::default()
+            };
             command::legacy::status::worktree(
                 &mut ctx,
                 out,

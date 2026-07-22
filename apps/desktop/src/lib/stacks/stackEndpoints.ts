@@ -821,7 +821,7 @@ export function buildStackEndpoints(build: BackendEndpointBuilder) {
 				branch: branchRef,
 				strategy,
 			}),
-			providesTags: [providesList(ReduxTag.HeadSha), providesList(ReduxTag.StackDetails)],
+			providesTags: [providesList(ReduxTag.IntegrationSteps)],
 		}),
 		applyBranchIntegration: build.mutation<
 			IntegrateBranchResult,

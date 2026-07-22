@@ -134,11 +134,11 @@ fn changing_pushed_commit_does_not_cause_change_id_ambiguity() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄br [a-branch-1]
+┊╭┄ br [a-branch-1]
 ┊┊
-┊╭┄┄(upstream: on origin/a-branch-1)
+┊╭┄┄ (upstream: on origin/a-branch-1)
 ┊●   a5caff1 second
 ┊-
 ┊◐   123 rewritten
@@ -206,9 +206,9 @@ fn exact_match_on_branch_short_id_must_prioritize_branch() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄g0 [A]
+┊╭┄ g0 [A]
 ┊●   tpm add A
 ├╯
 ┊

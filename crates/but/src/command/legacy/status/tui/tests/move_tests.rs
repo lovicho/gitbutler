@@ -15,16 +15,16 @@ fn esc_leaves_move_mode() {
     let mut tui = test_tui(env);
 
     tui.reload()
-        .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted] (no changes)"]);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"]);
 
     tui.input('m')
-        .assert_current_line_eq(str!["┊╭┄<< source >> << noop >> g0 [A]"]);
+        .assert_current_line_eq(str!["┊╭┄ << source >> << noop >> g0 [A]"]);
 
     tui.input(KeyCode::Esc)
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"])
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"])
         .assert_rendered_term_svg_eq(file!["snapshots/esc_leaves_move_mode_final.svg"]);
 }
 
@@ -43,10 +43,10 @@ fn move_mode_keeps_selected_commit_and_extension_visible_when_scrolled() {
     );
 
     tui.reload()
-        .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted] (no changes)"]);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"]);
 
     tui.input('n')
         .assert_current_line_eq(str!["┊●   1 (no commit message) (no changes)"]);
@@ -74,10 +74,10 @@ fn move_commit_above_other_commit_reorders_tui() {
     let mut tui = test_tui(env);
 
     tui.reload()
-        .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted] (no changes)"]);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"]);
 
     tui.input('n')
         .assert_current_line_eq(str!["┊●   1 (no commit message) (no changes)"]);
@@ -114,7 +114,7 @@ fn move_commit_down_from_source_selects_next_commit() {
     let mut tui = test_tui(env);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"]);
 
     tui.input('n')
         .assert_current_line_eq(str!["┊●   1 (no commit message) (no changes)"]);
@@ -143,7 +143,7 @@ fn move_commit_up_from_top_commit_selects_source_branch() {
     let mut tui = test_tui(env);
 
     tui.input([KeyCode::Down, KeyCode::Down, KeyCode::Down])
-        .assert_current_line_eq(str!["┊╭┄h0 [C]"]);
+        .assert_current_line_eq(str!["┊╭┄ h0 [C]"]);
 
     tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊●   xwn add C"]);
@@ -152,7 +152,7 @@ fn move_commit_up_from_top_commit_selects_source_branch() {
         .assert_current_line_eq(str!["┊●   << source >> << noop >> xwn add C"]);
 
     tui.input(KeyCode::Up)
-        .assert_current_line_eq(str!["┊╭┄h0 [C]"])
+        .assert_current_line_eq(str!["┊╭┄ h0 [C]"])
         .assert_rendered_contains("<< move commit to branch >>");
 }
 
@@ -166,19 +166,19 @@ fn move_branch_onto_other_branch_reorders_stacks() {
     let mut tui = test_tui(env);
 
     tui.reload()
-        .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted] (no changes)"]);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"]);
 
     tui.input('m')
-        .assert_current_line_eq(str!["┊╭┄<< source >> << noop >> g0 [A]"]);
+        .assert_current_line_eq(str!["┊╭┄ << source >> << noop >> g0 [A]"]);
 
     tui.input([KeyCode::Down, KeyCode::Down])
-        .assert_current_line_eq(str!["┊│ << stack branch >>"]);
+        .assert_current_line_eq(str!["┊│  << stack branch >>"]);
 
     tui.input(KeyCode::Enter)
-        .assert_current_line_eq(str!["┊├┄h0 [A]"]);
+        .assert_current_line_eq(str!["┊├┄ h0 [A]"]);
 
     tui = tui.recreate();
     tui.reload().assert_rendered_term_svg_eq(file![
@@ -196,13 +196,13 @@ fn move_branch_to_merge_base_tears_off_branch() {
     let mut tui = test_tui(env);
 
     tui.reload()
-        .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted] (no changes)"]);
 
     tui.input([KeyCode::Down, KeyCode::Down, KeyCode::Down])
-        .assert_current_line_eq(str!["┊╭┄h0 [C]"]);
+        .assert_current_line_eq(str!["┊╭┄ h0 [C]"]);
 
     tui.input('m')
-        .assert_current_line_eq(str!["┊╭┄<< source >> << noop >> h0 [C]"]);
+        .assert_current_line_eq(str!["┊╭┄ << source >> << noop >> h0 [C]"]);
 
     tui.input([KeyCode::Down, KeyCode::Down])
         .assert_current_line_eq(str![
@@ -210,7 +210,7 @@ fn move_branch_to_merge_base_tears_off_branch() {
         ]);
 
     tui.input(KeyCode::Enter)
-        .assert_current_line_eq(str!["┊╭┄i0 [C]"]);
+        .assert_current_line_eq(str!["┊╭┄ i0 [C]"]);
 
     tui = tui.recreate();
     tui.render_with_messages(

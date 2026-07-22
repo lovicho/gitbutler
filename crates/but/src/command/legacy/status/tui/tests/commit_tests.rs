@@ -17,16 +17,16 @@ fn commit_mode_enter_and_escape() {
     tui.env().file("test.txt", "content");
 
     tui.reload()
-        .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted]"]);
 
     tui.input('c')
-        .assert_current_line_eq(str!["╭┄<< source >> << noop >> zz [uncommitted]"]);
+        .assert_current_line_eq(str!["╭┄ << source >> << noop >> zz [uncommitted]"]);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"]);
 
     tui.input(KeyCode::Esc)
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"])
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"])
         .assert_rendered_term_svg_eq(file!["snapshots/commit_mode_enter_and_escape_final.svg"]);
 }
 
@@ -40,13 +40,13 @@ fn commit_confirm_on_source_is_noop() {
     tui.env().file("test.txt", "content");
 
     tui.reload()
-        .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted]"]);
 
     tui.input('c')
-        .assert_current_line_eq(str!["╭┄<< source >> << noop >> zz [uncommitted]"]);
+        .assert_current_line_eq(str!["╭┄ << source >> << noop >> zz [uncommitted]"]);
 
     tui.input(KeyCode::Enter)
-        .assert_current_line_eq(str!["╭┄zz [uncommitted]"])
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted]"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/commit_confirm_on_source_is_noop_final.svg"
         ]);
@@ -60,12 +60,12 @@ fn commiting_with_no_uncommitted_changes() {
     let mut tui = test_tui(env);
 
     tui.reload()
-        .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted] (no changes)"]);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"]);
 
-    tui.input('c').assert_current_line_eq(str!["┊╭┄g0 [A]"]);
+    tui.input('c').assert_current_line_eq(str!["┊╭┄ g0 [A]"]);
 
     tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊●   tpm add A"])
@@ -74,11 +74,10 @@ fn commiting_with_no_uncommitted_changes() {
         ]);
 
     tui.input(KeyCode::Up)
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"]);
 
     tui.input('e')
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"])
-        .assert_rendered_contains("┊│ << commit to branch (empty message) >>")
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/commiting_with_no_uncommitted_changes_002.svg"
         ]);
@@ -107,13 +106,13 @@ fn commit_from_unstaged_changes_creates_commit_visible_in_tui() {
     tui.env().file("test.txt", "content");
 
     tui.reload()
-        .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted]"]);
 
     tui.input('c')
-        .assert_current_line_eq(str!["╭┄<< source >> << noop >> zz [uncommitted]"]);
+        .assert_current_line_eq(str!["╭┄ << source >> << noop >> zz [uncommitted]"]);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"]);
 
     with_var("GIT_EDITOR", Some(editor_command), || {
         tui.input(KeyCode::Enter)
@@ -144,13 +143,13 @@ fn commit_from_unstaged_changes_to_new_branch_creates_branch_and_commit() {
     tui.env().file("test.txt", "content");
 
     tui.reload()
-        .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted]"]);
 
     tui.input('c')
-        .assert_current_line_eq(str!["╭┄<< source >> << noop >> zz [uncommitted]"]);
+        .assert_current_line_eq(str!["╭┄ << source >> << noop >> zz [uncommitted]"]);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"]);
 
     with_var("GIT_EDITOR", Some(editor_command), || {
         tui.input('b')
@@ -187,13 +186,13 @@ fn commit_from_unstaged_changes_with_multiple_hunks_in_same_file_commits_all_cha
     tui.env().file("multi-hunk.txt", &base);
 
     tui.reload()
-        .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted]"]);
 
     tui.input('c')
-        .assert_current_line_eq(str!["╭┄<< source >> << noop >> zz [uncommitted]"]);
+        .assert_current_line_eq(str!["╭┄ << source >> << noop >> zz [uncommitted]"]);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"]);
 
     with_var("GIT_EDITOR", Some(editor_command.clone()), || {
         tui.input(KeyCode::Enter)
@@ -216,13 +215,13 @@ fn commit_from_unstaged_changes_with_multiple_hunks_in_same_file_commits_all_cha
     tui.reload();
     tui.input(std::array::repeat::<_, 20>(KeyCode::Up));
     tui.reload()
-        .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted]"]);
 
     tui.input('c')
-        .assert_current_line_eq(str!["╭┄<< source >> << noop >> zz [uncommitted]"]);
+        .assert_current_line_eq(str!["╭┄ << source >> << noop >> zz [uncommitted]"]);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"]);
 
     with_var("GIT_EDITOR", Some(editor_command), || {
         tui.input(KeyCode::Enter)
@@ -246,10 +245,10 @@ fn commit_mode_shows_commit_below_on_commit_rows() {
     tui.env().file("test.txt", "content");
 
     tui.reload()
-        .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted]"]);
 
     tui.input('c')
-        .assert_current_line_eq(str!["╭┄<< source >> << noop >> zz [uncommitted]"]);
+        .assert_current_line_eq(str!["╭┄ << source >> << noop >> zz [uncommitted]"]);
 
     tui.input([KeyCode::Down, KeyCode::Down])
         .assert_current_line_eq(str!["┊●   tpm add A"])
@@ -275,10 +274,10 @@ fn commit_to_commit_above_creates_commit_visible_in_tui() {
     tui.env().file("test.txt", "content");
 
     tui.reload()
-        .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted]"]);
 
     tui.input('c')
-        .assert_current_line_eq(str!["╭┄<< source >> << noop >> zz [uncommitted]"]);
+        .assert_current_line_eq(str!["╭┄ << source >> << noop >> zz [uncommitted]"]);
 
     tui.input([KeyCode::Down, KeyCode::Down])
         .assert_current_line_eq(str!["┊●   tpm add A"])
@@ -319,10 +318,10 @@ fn commit_to_commit_below_creates_commit_visible_in_tui() {
     tui.env().file("test.txt", "content");
 
     tui.reload()
-        .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted]"]);
 
     tui.input('c')
-        .assert_current_line_eq(str!["╭┄<< source >> << noop >> zz [uncommitted]"]);
+        .assert_current_line_eq(str!["╭┄ << source >> << noop >> zz [uncommitted]"]);
 
     tui.input([KeyCode::Down, KeyCode::Down])
         .assert_current_line_eq(str!["┊●   tpm add A"])
@@ -353,7 +352,7 @@ fn commit_mode_from_staged_changes_stays_within_current_stack() {
     tui.env().file("test.txt", "content");
 
     tui.reload()
-        .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted]"]);
 
     tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊   vo A test.txt"]);
@@ -371,14 +370,14 @@ fn commit_mode_from_staged_changes_stays_within_current_stack() {
         .assert_current_line_eq(str!["┊●   tpm add A"]);
 
     tui.input([KeyCode::Up, KeyCode::Up])
-        .assert_current_line_eq(str!["╭┄zz [uncommitted] (no changes)"]);
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted] (no changes)"]);
 
     tui.input('c').assert_current_line_eq(str![
-        "╭┄<< source >> << noop >> zz [uncommitted] (no changes)"
+        "╭┄ << source >> << noop >> zz [uncommitted] (no changes)"
     ]);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"]);
 
     tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊●   tpm add A"])
@@ -387,7 +386,7 @@ fn commit_mode_from_staged_changes_stays_within_current_stack() {
         ]);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊╭┄h0 [B]"])
+        .assert_current_line_eq(str!["┊╭┄ h0 [B]"])
         .assert_rendered_term_svg_eq(file![
             "snapshots/commit_mode_from_staged_changes_stays_within_current_stack_final.svg"
         ]);
@@ -403,32 +402,28 @@ fn commit_with_inline_reword() {
     tui.env().file("test.txt", "content");
 
     tui.reload()
-        .assert_current_line_eq(str!["╭┄zz [uncommitted]"]);
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted]"]);
 
     tui.input('c')
-        .assert_current_line_eq(str!["╭┄<< source >> << noop >> zz [uncommitted]"]);
+        .assert_current_line_eq(str!["╭┄ << source >> << noop >> zz [uncommitted]"]);
 
     tui.input(KeyCode::Down)
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"]);
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"]);
 
     tui.input('e')
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"])
-        .assert_rendered_contains("┊│ << commit to branch (empty message) >>")
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"])
         .assert_rendered_term_svg_eq(file!["snapshots/commit_with_inline_reword_001.svg"]);
 
     tui.input('i')
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"])
-        .assert_rendered_contains("┊│ << commit to branch (reword inline) >>")
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"])
         .assert_rendered_term_svg_eq(file!["snapshots/commit_with_inline_reword_002.svg"]);
 
     tui.input('i')
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"])
-        .assert_rendered_contains("┊│ << commit to branch >>")
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"])
         .assert_rendered_term_svg_eq(file!["snapshots/commit_with_inline_reword_003.svg"]);
 
     tui.input('i')
-        .assert_current_line_eq(str!["┊╭┄g0 [A]"])
-        .assert_rendered_contains("┊│ << commit to branch (reword inline) >>")
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"])
         .assert_rendered_term_svg_eq(file!["snapshots/commit_with_inline_reword_004.svg"]);
 
     tui.input(KeyCode::Enter)

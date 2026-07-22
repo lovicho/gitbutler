@@ -1,9 +1,10 @@
 import {
+	branchHeader,
 	expectCurrentBranchChip,
 	openSingleBranchWorkspace,
 	SINGLE_BRANCH_NAME,
 } from "./helpers.ts";
-import { assertBranch, assertCommitSubjects } from "../../src/branch.ts";
+import { assertBranch, assertCommitSubjects, branchTip } from "../../src/branch.ts";
 import { openWorkspace } from "../../src/setup.ts";
 import { test } from "../../src/test.ts";
 import { getByTestId, waitForTestId, waitForTestIdToNotExist } from "../../src/util.ts";
@@ -78,5 +79,31 @@ test.describe("single-branch mode enabled", () => {
 			["single-branch: add file", "single-branch: second commit", "single-branch: first commit"],
 			localClone,
 		);
+	});
+
+	test("shows a new externally checked-out branch at the target commit", async ({
+		page,
+		gitbutler,
+	}) => {
+		await gitbutler.runScript("project-with-remote-branches.sh");
+		const localClone = gitbutler.pathInWorkdir("local-clone");
+		await gitbutler.runScript("project-with-remote-branches__checkout-master.sh", ["local-clone"]);
+		await assertBranch("master", localClone);
+		expect(branchTip("master", localClone)).toBe(branchTip("origin/master", localClone));
+
+		await openSingleBranchWorkspace(page);
+		await expect(branchHeader(page, "master")).toBeVisible();
+
+		const branchName = "external-branch-at-target";
+		await gitbutler.runScript("project-with-remote-branches__checkout-new-branch-at-target.sh", [
+			"local-clone",
+			branchName,
+		]);
+
+		await assertBranch(branchName, localClone);
+		expect(branchTip(branchName, localClone)).toBe(branchTip("origin/master", localClone));
+		await expectCurrentBranchChip(page, branchName);
+		await expect(branchHeader(page, branchName)).toBeVisible();
+		await expect(branchHeader(page, "master")).toHaveCount(0);
 	});
 });

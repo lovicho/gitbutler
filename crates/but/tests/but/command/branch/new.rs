@@ -252,9 +252,9 @@ fn creates_new_branches_on_top() {
     env.but("branch new one").assert().success();
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄on [one] (no commits)
+┊╭┄ on [one] (no commits)
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -266,12 +266,12 @@ Hint: run `but help` for all commands
     env.but("branch new two").assert().success();
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄zz [uncommitted] (no changes)
+╭┄ zz [uncommitted] (no changes)
 ┊
-┊╭┄tw [two] (no commits)
+┊╭┄ tw [two] (no commits)
 ├╯
 ┊
-┊╭┄on [one] (no commits)
+┊╭┄ on [one] (no commits)
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M

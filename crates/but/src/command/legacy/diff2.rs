@@ -221,6 +221,7 @@ fn resolve(ctx: &Context, id_map: &IdMap, args: Platform) -> CliResult<DiffOpera
             commit_id,
             path,
             id,
+            change_id: _,
         }) => Ok(DiffOperation::CommittedFile {
             commit_id,
             path,
