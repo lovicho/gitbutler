@@ -1,75 +1,204 @@
 import {
-	generateFooter,
-	STACKING_FOOTER_BOUNDARY_BOTTOM,
-	STACKING_FOOTER_BOUNDARY_TOP,
-	updateBody,
+	syncStackAfterReviewCreation,
+	unstackPRs,
+	updatePrDescriptionTables,
+	updateStackPrs,
 } from "$lib/forge/shared/prFooter";
-import { describe, expect, test } from "vitest";
+import { showWarning } from "$lib/notifications/toasts";
+import { describe, expect, test, vi } from "vitest";
+import type { PullRequest } from "$lib/forge/interface/types";
+import type { PrService } from "$lib/forge/prService.svelte";
+import type { Segment } from "@gitbutler/but-sdk";
 
-// The desktop receives stack segments child -> parent, i.e. [top, ..., base]
-// (104 is the tip, 100 the base). The footer must render top-first with the base
-// numbered 1, and "part X of N" must match each PR's position badge.
-describe("generateFooter", () => {
-	const topToBase = [104, 103, 102, 101, 100];
+vi.mock("$lib/notifications/toasts", () => ({ showWarning: vi.fn() }));
 
-	function listLines(footer: string) {
-		return footer.split("\n").filter((l) => l.startsWith("- "));
-	}
+function mockPrService(bodies: Record<number, string | null> = {}) {
+	const fetch = vi.fn(async (_projectId: string, number: number) => ({
+		number,
+		body: bodies[number] ?? null,
+	}));
+	const updateReviewFooters = vi.fn(async () => undefined);
+	const service = { fetch, updateReviewFooters } as unknown as PrService;
+	return { service, fetch, updateReviewFooters };
+}
 
-	test("lists the stack top-first and numbers the base 1", () => {
-		const footer = generateFooter(100, topToBase, "#");
-		const lines = listLines(footer);
+function segment(name: string, review?: number): Segment {
+	return {
+		refName: { displayName: name },
+		metadata: { review: { pullRequest: review } },
+	} as Segment;
+}
 
-		expect(lines[0]).toContain("#104");
-		expect(lines.at(-1)).toContain("#100");
-		expect(footer).toContain("<kbd>&nbsp;1&nbsp;</kbd> #100");
-		expect(footer).toContain("<kbd>&nbsp;5&nbsp;</kbd> #104");
+describe("updatePrDescriptionTables", () => {
+	test("translates desktop top-to-base ordering to Rust base-to-top ordering", async () => {
+		const { service, fetch, updateReviewFooters } = mockPrService({
+			100: "Base description",
+			102: "Top description",
+		});
+
+		await updatePrDescriptionTables(service, "project", [102, 101, 100], "#");
+
+		expect(fetch.mock.calls.map(([, number]) => number)).toEqual([100, 101, 102]);
+		expect(updateReviewFooters).toHaveBeenCalledWith("project", [
+			{
+				number: 100,
+				body: "Base description",
+				updateDescription: true,
+				unitSymbol: "#",
+				targetBranch: null,
+			},
+			{
+				number: 101,
+				body: null,
+				updateDescription: true,
+				unitSymbol: "#",
+				targetBranch: null,
+			},
+			{
+				number: 102,
+				body: "Top description",
+				updateDescription: true,
+				unitSymbol: "#",
+				targetBranch: null,
+			},
+		]);
 	});
 
-	test("'part X of N' matches the current PR's position badge", () => {
-		expect(generateFooter(100, topToBase, "#")).toContain("part 1 of 5 in a stack");
-		expect(generateFooter(104, topToBase, "#")).toContain("part 5 of 5 in a stack");
-		expect(generateFooter(102, topToBase, "#")).toContain("part 3 of 5 in a stack");
+	test("does not invoke Rust for a single review", async () => {
+		const { service, fetch, updateReviewFooters } = mockPrService();
+
+		await updatePrDescriptionTables(service, "project", [100]);
+
+		expect(fetch).not.toHaveBeenCalled();
+		expect(updateReviewFooters).not.toHaveBeenCalled();
 	});
 
-	test("marks only the current PR with the indicator", () => {
-		const footer = generateFooter(102, topToBase, "#");
-		const lines = listLines(footer);
+	test("propagates Rust synchronization failures", async () => {
+		const { service, updateReviewFooters } = mockPrService();
+		updateReviewFooters.mockRejectedValueOnce(new Error("forge update failed"));
 
-		expect(lines.find((l) => l.includes("#102"))).toContain("👈");
-		expect(lines.find((l) => l.includes("#101"))).not.toContain("👈");
+		await expect(updatePrDescriptionTables(service, "project", [101, 100])).rejects.toThrow(
+			"forge update failed",
+		);
 	});
 });
 
-describe("updateBody", () => {
-	test("adds no footer when the stack has a single PR", () => {
-		expect(updateBody("My description", 123, [123], "#")).toBe("My description");
+describe("syncStackAfterReviewCreation", () => {
+	test("returns the created review and warns when stack synchronization fails", async () => {
+		const { service, updateReviewFooters } = mockPrService();
+		const createdReview = { number: 101 } as PullRequest;
+		updateReviewFooters.mockRejectedValueOnce(new Error("forge update failed"));
+		vi.spyOn(console, "error").mockImplementationOnce(() => undefined);
+
+		const result = await syncStackAfterReviewCreation(
+			service,
+			"project",
+			createdReview,
+			[101, 100],
+			"#",
+		);
+
+		expect(result).toBe(createdReview);
+		expect(showWarning).toHaveBeenCalledWith(
+			"Pull request created with incomplete stack information",
+			"PR #101 was created, but its stack information could not be synchronized. forge update failed",
+		);
+	});
+});
+
+describe("updateStackPrs", () => {
+	test("sends reviews base-to-top with chained target branches", async () => {
+		const { service, updateReviewFooters } = mockPrService({
+			100: "Base",
+			101: "Middle",
+			102: "Top",
+		});
+
+		await updateStackPrs(
+			service,
+			"project",
+			[segment("top", 102), segment("middle", 101), segment("base", 100)],
+			"main",
+		);
+
+		expect(updateReviewFooters).toHaveBeenCalledWith("project", [
+			{
+				number: 100,
+				body: "Base",
+				updateDescription: true,
+				unitSymbol: "#",
+				targetBranch: "main",
+			},
+			{
+				number: 101,
+				body: "Middle",
+				updateDescription: true,
+				unitSymbol: "#",
+				targetBranch: "base",
+			},
+			{
+				number: 102,
+				body: "Top",
+				updateDescription: true,
+				unitSymbol: "#",
+				targetBranch: "middle",
+			},
+		]);
 	});
 
-	test("removes an existing footer when the stack shrinks to a single PR", () => {
-		const body = `My description\n\n${generateFooter(123, [124, 123], "#")}`;
-		expect(body).toContain("in a stack");
-		expect(updateBody(body, 123, [123], "#")).toBe("My description");
-	});
+	test("uses an unpublished branch as the next published review target", async () => {
+		const { service, updateReviewFooters } = mockPrService();
 
-	test("preserves content after the footer when removing it", () => {
-		const body = `Head\n\n${STACKING_FOOTER_BOUNDARY_TOP}\nfooter\n${STACKING_FOOTER_BOUNDARY_BOTTOM}\n\nTail`;
-		expect(updateBody(body, 123, [123], "#")).toBe("Head\n\nTail");
-	});
+		await updateStackPrs(
+			service,
+			"project",
+			[segment("top", 102), segment("unpublished"), segment("base", 100)],
+			"main",
+		);
 
-	test("adds a footer when the stack has multiple PRs", () => {
-		const result = updateBody("My description", 123, [124, 123], "#");
-		expect(result).toContain("My description");
-		expect(result).toContain("part 1 of 2 in a stack");
+		expect(updateReviewFooters).toHaveBeenCalledWith("project", [
+			{
+				number: 100,
+				body: null,
+				updateDescription: true,
+				unitSymbol: "#",
+				targetBranch: "main",
+			},
+			{
+				number: 102,
+				body: null,
+				updateDescription: true,
+				unitSymbol: "#",
+				targetBranch: "unpublished",
+			},
+		]);
 	});
+});
 
-	test("leaves a footer-less body untouched instead of rewriting it", () => {
-		const body = "\nMy description with trailing space \n";
-		expect(updateBody(body, 123, [123], "#")).toBe(body);
-	});
+describe("unstackPRs", () => {
+	test("submits each former stack member as a one-review cleanup batch", async () => {
+		const { service, updateReviewFooters } = mockPrService({ 100: "Base", 101: "Top" });
 
-	test("does not drop content when only the top boundary is present", () => {
-		const body = `Intro\n\n${STACKING_FOOTER_BOUNDARY_TOP}\ndangling text`;
-		expect(updateBody(body, 123, [123], "#")).toBe(body);
+		await unstackPRs(service, "project", [100, 101], "main");
+
+		expect(updateReviewFooters).toHaveBeenCalledTimes(2);
+		expect(updateReviewFooters).toHaveBeenCalledWith("project", [
+			{
+				number: 100,
+				body: "Base",
+				updateDescription: true,
+				unitSymbol: "",
+				targetBranch: "main",
+			},
+		]);
+		expect(updateReviewFooters).toHaveBeenCalledWith("project", [
+			{
+				number: 101,
+				body: "Top",
+				updateDescription: true,
+				unitSymbol: "",
+				targetBranch: "main",
+			},
+		]);
 	});
 });

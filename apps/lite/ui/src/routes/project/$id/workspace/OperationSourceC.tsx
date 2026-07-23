@@ -39,21 +39,13 @@ export const OperationSourceC: FC<
 	);
 	// We don't necessarily wrap in an array here in order to preserve reference identity.
 	const dragSource = useAppSelector((state) => {
-		if (source._tag !== "Commit" || !headInfoIndex) return source;
+		if (source._tag !== "Commit" && source._tag !== "File") return source;
 
-		const isCheckedCommit = projectSlice.selectors.selectCommitChecked(
-			state,
-			projectId,
-			source.commitId,
-		);
-		if (!isCheckedCommit) return source;
+		const isChecked = projectSlice.selectors.selectOperandChecked(state, projectId, source);
+		if (!isChecked) return source;
 
-		const checkedCommitOperands = projectSlice.selectors.selectCheckedCommitOperands(
-			state,
-			projectId,
-			headInfoIndex,
-		);
-		return checkedCommitOperands.length > 0 ? checkedCommitOperands : source;
+		const checkedOperands = projectSlice.selectors.selectCheckedOperands(state, projectId);
+		return checkedOperands.length > 0 ? checkedOperands : source;
 	});
 	const dragSources = Array.isArray(dragSource) ? dragSource : [dragSource];
 

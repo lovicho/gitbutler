@@ -132,23 +132,22 @@ const Controls: FC<{
 	);
 };
 
-const CheckedCommitOperationControls: FC<{ checkedCommitCount: number; projectId: string }> = ({
-	checkedCommitCount,
+const CheckedOperandOperationControls: FC<{ checkedOperandCount: number; projectId: string }> = ({
+	checkedOperandCount,
 	projectId,
 }) => {
 	const dispatch = useAppDispatch();
 
 	const cancel = () => {
-		dispatch(projectSlice.actions.clearCheckedCommits({ projectId }));
+		dispatch(projectSlice.actions.clearCheckedOperands({ projectId }));
 	};
 
 	return (
 		<Container>
 			<ControlsRow>
 				<Label>
-					{new Intl.NumberFormat().format(checkedCommitCount)}{" "}
-					{new Intl.PluralRules().select(checkedCommitCount) === "one" ? "commit" : "commits"}{" "}
-					checked
+					{new Intl.NumberFormat().format(checkedOperandCount)}{" "}
+					{new Intl.PluralRules().select(checkedOperandCount) === "one" ? "item" : "items"} checked
 				</Label>
 				<Controls onCancel={cancel} />
 			</ControlsRow>
@@ -356,18 +355,16 @@ export const OperationControls: FC<{ outlineNavigationIndex: NavigationIndex<Ope
 		...headInfoQueryOptions(projectId),
 		select: getHeadInfoIndex,
 	});
-	const checkedCommitCount = useAppSelector((state) =>
-		headInfoIndex
-			? projectSlice.selectors.selectCheckedCommitCount(state, projectId, headInfoIndex)
-			: 0,
+	const checkedOperandCount = useAppSelector((state) =>
+		projectSlice.selectors.selectCheckedOperandCount(state, projectId),
 	);
 
 	return Match.value(outlineMode).pipe(
 		Match.tagsExhaustive({
 			Default: () =>
-				checkedCommitCount > 0 && (
-					<CheckedCommitOperationControls
-						checkedCommitCount={checkedCommitCount}
+				checkedOperandCount > 0 && (
+					<CheckedOperandOperationControls
+						checkedOperandCount={checkedOperandCount}
 						projectId={projectId}
 					/>
 				),

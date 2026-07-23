@@ -51,6 +51,7 @@ export class GitConfigService {
 			config: {
 				signCommits: config.signCommits ?? null,
 				gitbutlerGerritMode: config.gitbutlerGerritMode ?? null,
+				gitbutlerReviewStackingDescription: config.gitbutlerReviewStackingDescription ?? null,
 				gitbutlerForgeReviewTemplatePath: config.gitbutlerForgeReviewTemplatePath ?? null,
 				gitbutlerGitlabProjectId: config.gitbutlerGitlabProjectId ?? null,
 				gitbutlerGitlabUpstreamProjectId: config.gitbutlerGitlabUpstreamProjectId ?? null,

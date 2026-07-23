@@ -215,7 +215,7 @@ fn show_edit_mode_status(ctx: &mut Context, out: &mut OutputChannel) -> anyhow::
     crate::command::legacy::resolve::show_resolve_status(ctx, out)
 }
 
-pub(crate) async fn worktree(
+pub(crate) fn worktree(
     ctx: &mut Context,
     out: &mut OutputChannel,
     flags: StatusFlags,

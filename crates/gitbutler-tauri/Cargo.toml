@@ -104,8 +104,6 @@ windows = []
 devtools = ["tauri/devtools"]
 ## Enable filesystem reveal integration.
 opener = ["dep:opener"]
-## Enables the revamped commands in but.
-but-2 = ["but?/but-2"]
 ## Switch mutation responses to the graph-based workspace projection.
 ## Forwarded to `but-api`; never enable by default. See `but-api`'s feature docs.
 graph-workspace = ["but-api/graph-workspace", "but?/graph-workspace"]

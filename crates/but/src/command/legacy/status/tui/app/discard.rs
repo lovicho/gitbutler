@@ -3,17 +3,17 @@ use std::sync::Arc;
 use but_core::{DiffSpec, DryRun};
 use but_ctx::Context;
 use gitbutler_oplog::entry::{OperationKind, SnapshotDetails};
-use gix::{ObjectId, refs::Category};
+use gix::{
+    ObjectId,
+    refs::{Category, FullName},
+};
 use nonempty::NonEmpty;
 
 use crate::{
     CliId,
     command::legacy::status::tui::{
         Message, ReloadCause, SelectAfterReload,
-        app::{
-            App, Modal,
-            mark::{MarkableRef, commits_on_branch},
-        },
+        app::{App, Modal},
         confirm::Confirm,
         message_on_drop,
         mode::Mode,
@@ -136,14 +136,23 @@ impl App {
                         },
                     )
                 }
-                CliId::Branch { name, stack_id, .. } => {
-                    let Some(stack_id) = *stack_id else {
-                        return Ok(());
+                CliId::Branch { name, .. } => {
+                    let commits = {
+                        let (_guard, _, ws, _) = ctx.workspace_and_db()?;
+                        let ref_name = Category::LocalBranch.to_full_name(&**name)?;
+                        let Some((_, segment)) =
+                            ws.find_segment_and_stack_by_refname(ref_name.as_ref())
+                        else {
+                            return Ok(());
+                        };
+                        segment
+                            .commits
+                            .iter()
+                            .map(|commit| commit.id)
+                            .collect::<Vec<_>>()
                     };
 
                     let name = name.to_owned();
-
-                    let commits = commits_on_branch(ctx, stack_id, &name)?;
 
                     self.to_be_discarded = Vec::from([Arc::clone(cli_id)]);
                     let select_after_reload = self
@@ -169,9 +178,7 @@ impl App {
                                 |mut tx| {
                                     tx.remove_reference(refname.as_ref())?;
                                     if !commits.is_empty() {
-                                        tx.discard_commits(
-                                            commits.into_iter().map(|(commit, _, _)| commit),
-                                        )?;
+                                        tx.discard_commits(commits)?;
                                     }
                                     Ok(())
                                 },
@@ -261,22 +268,11 @@ impl App {
             return Ok(());
         };
 
-        if normal_mode.marks.is_empty() {
-            return Ok(());
-        }
-
-        let commits_to_discard = normal_mode
-            .marks
-            .iter()
-            .filter_map(|mark| match mark {
-                MarkableRef::Commit(mark) => Some(mark.commit_id),
-                _ => None,
-            })
-            .collect::<Vec<_>>();
-
         enum ChangesToDiscard {
             Uncommitted(Vec<DiffSpec>),
             CommittedFiles(ObjectId, Vec<DiffSpec>),
+            Commits(NonEmpty<ObjectId>),
+            BranchesWithCommits(NonEmpty<(FullName, Vec<ObjectId>)>),
         }
 
         let changes_to_discard = {
@@ -285,13 +281,42 @@ impl App {
             let mut builder = DiffSpecBuilder::new(&mut db, &repo, &ws, context_lines);
 
             match &normal_mode.marks {
-                Marks::Empty | Marks::Commits(..) => None,
-                Marks::Branches(..) => return Ok(()),
+                Marks::Empty => return Ok(()),
+                Marks::Commits(commits) => {
+                    ChangesToDiscard::Commits(commits.as_ref().map(|commit| commit.commit_id))
+                }
+                Marks::Branches(branches) => {
+                    let branches_with_commits = branches
+                        .iter()
+                        .filter_map(|branch| -> Option<anyhow::Result<_>> {
+                            let ref_name = match Category::LocalBranch.to_full_name(&*branch.name) {
+                                Ok(ref_name) => ref_name,
+                                Err(err) => return Some(Err(err.into())),
+                            };
+                            let (_, segment) =
+                                ws.find_segment_and_stack_by_refname(ref_name.as_ref())?;
+                            let commits = segment
+                                .commits
+                                .iter()
+                                .map(|commit| commit.id)
+                                .collect::<Vec<_>>();
+
+                            Some(Ok((ref_name, commits)))
+                        })
+                        .collect::<anyhow::Result<Vec<_>>>()?;
+                    let Some(branches_with_commits) = NonEmpty::from_vec(branches_with_commits)
+                    else {
+                        return Ok(());
+                    };
+
+                    ChangesToDiscard::BranchesWithCommits(branches_with_commits)
+                }
                 Marks::Hunks(hunks) => {
                     for hunk in hunks {
                         builder.push_changes_from_uncommitted(hunk)?;
                     }
-                    Some(ChangesToDiscard::Uncommitted(builder.into_diff_specs()))
+                    builder.reconcile_worktree_diff_specs()?;
+                    ChangesToDiscard::Uncommitted(builder.into_diff_specs())
                 }
                 Marks::CommittedFiles(files) => {
                     let commit = files.head.commit_id;
@@ -307,10 +332,7 @@ impl App {
                         builder
                             .push_changes_from_committed_file(file.commit_id, file.path.as_ref())?;
                     }
-                    Some(ChangesToDiscard::CommittedFiles(
-                        commit,
-                        builder.into_diff_specs(),
-                    ))
+                    ChangesToDiscard::CommittedFiles(commit, builder.into_diff_specs())
                 }
             }
         };
@@ -340,25 +362,35 @@ impl App {
                     snapshot_details,
                     DryRun::No,
                     |mut tx| {
-                        if !commits_to_discard.is_empty() {
-                            tx.discard_commits(commits_to_discard)?;
-                        }
-
-                        if let Some(changes_to_discard) = changes_to_discard {
-                            match changes_to_discard {
-                                ChangesToDiscard::Uncommitted(changes) => {
-                                    if !changes.is_empty() {
-                                        but_workspace::discard_workspace_changes(
-                                            tx.repo(),
-                                            changes,
-                                            tx.context_lines(),
-                                        )?;
-                                    }
+                        match changes_to_discard {
+                            ChangesToDiscard::Uncommitted(changes) => {
+                                if !changes.is_empty() {
+                                    but_workspace::discard_workspace_changes(
+                                        tx.repo(),
+                                        changes,
+                                        tx.context_lines(),
+                                    )?;
                                 }
-                                ChangesToDiscard::CommittedFiles(commit, changes) => {
-                                    if !changes.is_empty() {
-                                        tx.discard_changes_from_commit(commit, changes)?;
-                                    }
+                            }
+                            ChangesToDiscard::CommittedFiles(commit, changes) => {
+                                if !changes.is_empty() {
+                                    tx.discard_changes_from_commit(commit, changes)?;
+                                }
+                            }
+                            ChangesToDiscard::Commits(commits) => {
+                                tx.discard_commits(commits)?;
+                            }
+                            ChangesToDiscard::BranchesWithCommits(branches_with_commits) => {
+                                for (ref_name, _) in &branches_with_commits {
+                                    tx.remove_reference(ref_name.as_ref())?;
+                                }
+                                let mut commits = branches_with_commits
+                                    .iter()
+                                    .flat_map(|(_, commits)| commits)
+                                    .copied()
+                                    .peekable();
+                                if commits.peek().is_some() {
+                                    tx.discard_commits(commits)?;
                                 }
                             }
                         }
@@ -366,6 +398,7 @@ impl App {
                         Ok(())
                     },
                 )?;
+
                 let select_after_reload = select_after_reload.map(|selection| match selection {
                     SelectAfterReload::Commit(target_commit_id) => {
                         let remapped_target_commit_id = workspace
@@ -387,10 +420,12 @@ impl App {
                 });
 
                 drop(drop_to_be_discarded);
+
                 messages.extend([
                     Message::ClearMarks,
                     Message::Reload(select_after_reload, ReloadCause::Mutation),
                 ]);
+
                 Ok(())
             },
         );

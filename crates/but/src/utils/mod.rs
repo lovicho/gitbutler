@@ -2,9 +2,9 @@ use std::io::Write;
 
 mod output_channel;
 pub(crate) use output_channel::PromptLine;
-pub use output_channel::experimental::*;
 pub use output_channel::{
-    Confirm, ConfirmDefault, ConfirmOrEmpty, InputOutputChannel, OutputChannel, WriteWithUtils,
+    CliOutput, CliOutputHuman, Confirm, ConfirmDefault, ConfirmOrEmpty, InputOutputChannel,
+    IntermediateChannel, OutputChannel, WriteWithUtils,
 };
 
 mod object_id;

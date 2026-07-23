@@ -102,7 +102,11 @@ export const useOutlineTreeHotkeys = ({
 	const selectedBranchCommitsChecked = useAppSelector((state) =>
 		selectedBranchSegment && selectedBranchSegment.commits.length > 0
 			? selectedBranchSegment.commits.every((commit) =>
-					projectSlice.selectors.selectCommitChecked(state, projectId, commit.id),
+					projectSlice.selectors.selectOperandChecked(
+						state,
+						projectId,
+						commitOperand({ commitId: commit.id }),
+					),
 				)
 			: false,
 	);
@@ -221,9 +225,11 @@ export const useOutlineTreeHotkeys = ({
 		if (!selectedBranchSegment) return;
 
 		dispatch(
-			projectSlice.actions.checkCommits({
+			projectSlice.actions.checkOperands({
 				projectId,
-				commitIds: selectedBranchSegment.commits.map((commit) => commit.id),
+				operands: selectedBranchSegment.commits.map((commit) =>
+					commitOperand({ commitId: commit.id }),
+				),
 				checked: !selectedBranchCommitsChecked,
 			}),
 		);
@@ -373,14 +379,11 @@ export const useOutlineTreeHotkeys = ({
 		selection,
 		getKey: operandIdentityKey,
 		operationSourcesForItem: (operand) => {
-			if (!headInfoIndex) return [operand];
-
-			const checkedCommits = projectSlice.selectors.selectCheckedCommitOperands(
+			const checkedOperands = projectSlice.selectors.selectCheckedOperands(
 				store.getState(),
 				projectId,
-				headInfoIndex,
 			);
-			return checkedCommits.length > 0 ? checkedCommits : [operand];
+			return checkedOperands.length > 0 ? checkedOperands : [operand];
 		},
 		selectSectionPredicate: (operand) => operand._tag === "Branch",
 	});

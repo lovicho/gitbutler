@@ -117,7 +117,6 @@ impl CliOutputHuman for MoveOutcome {
     }
 }
 
-#[cfg_attr(not(feature = "but-2"), expect(dead_code))]
 pub fn r#move(
     ctx: &mut Context,
     _out: IntermediateChannel<'_>,

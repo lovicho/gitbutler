@@ -51,20 +51,20 @@ export const CommitRow: FC<
 > = ({ commit, projectId, dryRunCommit, checkCommit, ...restProps }) => {
 	const { data: forgeInfo } = useQuery(forgeInfoOptions(projectId));
 	const mforgeUrl = forgeInfo && commitForgeUrl(commit, forgeInfo);
+	const commitOperandV: CommitOperand = {
+		commitId: commit.id,
+	};
+	const operand = commitOperand(commitOperandV);
 
 	const isHighlighted = useAppSelector((state) =>
 		projectSlice.selectors.selectHighlightedCommitIds(state, projectId).includes(commit.id),
 	);
 	const isChecked = useAppSelector((state) =>
-		projectSlice.selectors.selectCommitChecked(state, projectId, commit.id),
+		projectSlice.selectors.selectOperandChecked(state, projectId, operand),
 	);
 
 	const dispatch = useAppDispatch();
 	const navigationIndex = assert(use(NavigationIndexContext));
-	const commitOperandV: CommitOperand = {
-		commitId: commit.id,
-	};
-	const operand = commitOperand(commitOperandV);
 	const isDefaultMode = useAppSelector(
 		(state) => projectSlice.selectors.selectOutlineModeState(state, projectId)._tag === "Default",
 	);

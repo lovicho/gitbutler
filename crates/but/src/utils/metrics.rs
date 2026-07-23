@@ -114,7 +114,7 @@ impl Subcommands {
             Subcommands::Rub { .. } => Rub,
             #[cfg(feature = "legacy")]
             Subcommands::Diff { .. } => Diff,
-            #[cfg(all(feature = "legacy", feature = "but-2"))]
+            #[cfg(feature = "legacy")]
             Subcommands::_Diff2(..) => Diff2,
             #[cfg(feature = "legacy")]
             Subcommands::Show { .. } => Show,
@@ -145,14 +145,13 @@ impl Subcommands {
             #[cfg(feature = "legacy")]
             Subcommands::Worktree(worktree::Platform { cmd: _ }) => Worktree,
             Subcommands::Gui { .. } => Gui,
-            #[cfg(feature = "but-2")]
             Subcommands::_Open { .. } => Open,
             #[cfg(feature = "legacy")]
             Subcommands::Commit(crate::args::commit::Platform { cmd, .. }) => match cmd {
                 None => Commit,
                 Some(crate::args::commit::Subcommands::Empty { .. }) => CommitEmpty,
             },
-            #[cfg(all(feature = "legacy", feature = "but-2"))]
+            #[cfg(feature = "legacy")]
             Subcommands::_Commit2(..) => Commit2,
             #[cfg(feature = "legacy")]
             Subcommands::Push(_) => Push,
@@ -206,7 +205,6 @@ impl Subcommands {
             },
             Subcommands::Completions { .. } => Completions,
             Subcommands::Help { .. } => Unknown,
-            #[cfg(feature = "but-2")]
             Subcommands::_Expand { .. } => Unknown,
             Subcommands::Alias(alias_args::Platform { cmd }) => match cmd {
                 None | Some(alias_args::Subcommands::List) => AliasCheck,
@@ -234,9 +232,9 @@ impl Subcommands {
             Subcommands::Unstage { .. } => Unstage,
             #[cfg(feature = "legacy")]
             Subcommands::Squash { .. } => Squash,
-            #[cfg(all(feature = "legacy", feature = "but-2"))]
+            #[cfg(feature = "legacy")]
             Subcommands::_Squash2(..) => Squash2,
-            #[cfg(all(feature = "legacy", feature = "but-2"))]
+            #[cfg(feature = "legacy")]
             Subcommands::_Move2(..) => Move2,
             #[cfg(feature = "legacy")]
             Subcommands::Land { .. } => Land,

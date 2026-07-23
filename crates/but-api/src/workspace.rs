@@ -228,13 +228,7 @@ pub fn set_target_ref_and_init_project(
     let guard = ctx.exclusive_worktree_access();
     {
         let repo = ctx.repo.get()?;
-        let mut meta = ctx.meta()?;
-        but_workspace::init::set_target_ref_and_init_project(
-            &repo,
-            &mut meta,
-            target_ref,
-            push_remote,
-        )?;
+        but_workspace::init::set_target_ref_and_init_project(&repo, target_ref, push_remote)?;
     }
     ctx.invalidate_workspace_cache()?;
     #[cfg(feature = "legacy")]
@@ -258,8 +252,7 @@ pub fn set_push_remote(ctx: &mut but_ctx::Context, push_remote: String) -> anyho
     let guard = ctx.exclusive_worktree_access();
     {
         let repo = ctx.repo.get()?;
-        let mut meta = ctx.meta()?;
-        but_workspace::init::set_push_remote(&repo, &mut meta, push_remote)?;
+        but_workspace::init::set_push_remote(&repo, push_remote)?;
     }
     ctx.invalidate_workspace_cache()?;
     #[cfg(feature = "legacy")]
@@ -583,7 +576,7 @@ pub fn workspace_integrate_upstream_only_with_perm(
         }
 
         let materialized = rebase.materialize()?;
-        project_meta.persist_to_local_config(&repo)?;
+        project_meta.persist(&repo)?;
 
         if let Some(ref_name) = materialized.workspace.ref_name()
             && let Some(ws_meta) = ws_meta
@@ -591,7 +584,6 @@ pub fn workspace_integrate_upstream_only_with_perm(
         {
             let mut md = materialized.meta.workspace(ref_name)?;
             *md = ws_meta;
-            md.set_project_meta(project_meta);
             materialized.meta.set_workspace(&md)?;
         }
 

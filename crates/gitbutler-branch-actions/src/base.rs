@@ -2,14 +2,14 @@ use std::time;
 
 use anyhow::{Context as _, Result, anyhow};
 use but_core::{
-    RefMetadata, WORKSPACE_REF_NAME,
+    WORKSPACE_REF_NAME,
     git_config::{edit_repo_config, ensure_config_value},
+    ref_metadata::ProjectMeta,
     sync::RepoShared,
 };
 use but_ctx::Context;
 use but_error::Code;
 use but_graph::FirstParent;
-use but_meta::virtual_branches_legacy_types::Target;
 use gitbutler_project::{FetchResult, Project};
 use gitbutler_reference::{Refname, RemoteRefname};
 use gitbutler_repo::first_parent_commit_ids_until;
@@ -105,62 +105,24 @@ pub fn bootstrap_default_target_if_missing(ctx: &Context) -> Result<bool> {
         return Ok(false);
     }
 
-    // Only heal when the legacy store this function repairs — `virtual_branches.toml` and the
-    // branch-order database — has no target. A ported repository also keeps its target in Git
-    // config, and reading that here made the repo look configured while the TOML/DB was empty, so
-    // this recovery never ran and setting the target branch afterwards deadlocked. Probe with a
-    // handle that doesn't reconcile the store back on drop, unlike `ctx.legacy_meta()`.
-    let legacy_meta = but_meta::VirtualBranchesTomlMetadata::from_path_read_only(
-        ctx.project_data_dir().join("virtual_branches.toml"),
-    )?;
-    if legacy_meta
-        .workspace(WORKSPACE_REF_NAME.try_into()?)?
-        .project_meta()
-        .target_ref
-        .is_some()
-    {
+    if ctx.project_meta()?.target_ref.is_some() {
         return Ok(false);
     }
 
-    let target = match target_to_recover(ctx, &repo) {
-        Ok(Some(target)) => target,
+    let project_meta = match inferred_default_target(&repo) {
+        Ok(Some(project_meta)) => project_meta,
         Ok(None) => return Ok(false),
         Err(err) => {
             tracing::debug!(
                 error = ?err,
-                "could not determine a default target to recover; leaving it uninitialized"
+                "failed to infer default target; leaving default target uninitialized"
             );
             return Ok(false);
         }
     };
-    ctx.set_default_target(target)?;
+    ctx.set_project_meta(project_meta)?;
     set_exclude_decoration(ctx)?;
     Ok(true)
-}
-
-/// The target to restore into the legacy store: the one that survived in project metadata (Git
-/// config, for ported repos) when it still resolves, otherwise one inferred from the remote.
-///
-/// Preferring the survivor keeps a custom target from being silently replaced by an inferred
-/// default; inference is the fallback for when nothing survives (for example a never-ported repo).
-fn target_to_recover(ctx: &Context, repo: &gix::Repository) -> Result<Option<Target>> {
-    let project_meta = ctx.project_meta()?;
-    if let Some(target_ref) = project_meta.target_ref
-        && let Some(mut target) = target_from_ref(repo, target_ref.as_ref())?
-    {
-        // Keep the base commit and push remote that survived in Git config; the ref only fills in
-        // what config doesn't carry. Recomputing the base from the ref tip would advance the
-        // workspace's frame of reference (see `Target.sha`), and re-deriving the remote would drop
-        // a configured fork push remote.
-        if let Some(sha) = project_meta.target_commit_id {
-            target.sha = sha;
-        }
-        if let Some(push_remote) = project_meta.push_remote {
-            target.push_remote_name = Some(push_remote);
-        }
-        return Ok(Some(target));
-    }
-    inferred_default_target(repo)
 }
 
 #[instrument(skip(ctx, perm), err(Debug))]
@@ -217,19 +179,6 @@ pub(crate) fn set_base_branch(
         .try_find_reference(target_branch_ref.to_string().as_str())?
         .ok_or(anyhow!("remote branch '{target_branch_ref}' not found"))?;
 
-    let remote = repo
-        .find_remote(target_branch_ref.remote())
-        .context(format!(
-            "failed to find remote for branch {target_branch_ref}"
-        ))?;
-    let remote_url = remote
-        .url(gix::remote::Direction::Fetch)
-        .map(|url| url.to_bstring().to_string())
-        .context(format!(
-            "failed to get remote url for {}",
-            target_branch_ref.remote()
-        ))?;
-
     let target_branch_head = target_branch
         .peel_to_commit()
         .context(format!(
@@ -251,14 +200,13 @@ pub(crate) fn set_base_branch(
             "Failed to calculate merge base between {current_head_commit} and {target_branch_head}"
         ))?;
 
-    let target = Target {
-        branch: target_branch_ref.clone(),
-        remote_url,
-        sha: target_commit_oid,
-        push_remote_name: None,
+    let project_meta = ProjectMeta {
+        target_ref: Some(target_branch_ref.to_string().try_into()?),
+        target_commit_id: Some(target_commit_oid),
+        push_remote: None,
     };
-
-    ctx.set_default_target(target.clone())?;
+    project_meta.remote_url_with_fallback(&repo)?;
+    ctx.set_project_meta(project_meta)?;
     let mut vb_state = ctx.virtual_branches();
 
     // TODO: make sure this is a real branch
@@ -275,7 +223,7 @@ pub(crate) fn set_base_branch(
         // put them into a virtual branch
 
         let changes = but_core::diff::worktree_changes(&*ctx.repo.get()?)?.changes;
-        if !changes.is_empty() || current_head_commit != target.sha {
+        if !changes.is_empty() || current_head_commit != target_commit_oid {
             let (upstream, branch_matches_target) = if let Refname::Local(head_name) = &head_name {
                 let upstream_name = target_branch_ref.with_branch(head_name.branch());
                 if upstream_name.eq(target_branch_ref) {
@@ -443,47 +391,23 @@ pub(crate) fn target_to_base_branch(
 }
 
 /// Infer the default target from the Git repository without mutating workspace refs.
-fn inferred_default_target(repo: &gix::Repository) -> Result<Option<Target>> {
+fn inferred_default_target(repo: &gix::Repository) -> Result<Option<ProjectMeta>> {
     let Some(target_ref) = but_workspace::init::infer_default_target_ref(repo)? else {
         return Ok(None);
     };
-    target_from_ref(repo, target_ref.as_ref())
-}
-
-/// Build a legacy [`Target`] from an existing remote-tracking `target_ref`, resolving its remote,
-/// URL and current commit. Returns `None` when `target_ref` isn't a remote branch or no longer
-/// resolves to a commit, so callers can fall back to inference.
-fn target_from_ref(
-    repo: &gix::Repository,
-    target_ref: &gix::refs::FullNameRef,
-) -> Result<Option<Target>> {
     let remote_names = repo.remote_names();
-    let Some((remote_name, _)) =
-        but_core::extract_remote_name_and_short_name(target_ref, &remote_names)
-    else {
-        return Ok(None);
-    };
-    let Some(mut reference) = repo.try_find_reference(target_ref)? else {
-        return Ok(None);
-    };
-    let Ok(sha) = reference.peel_to_commit().map(|commit| commit.id) else {
-        return Ok(None);
-    };
-    let remote_url = repo
-        .find_remote(remote_name.as_str())
-        .ok()
-        .and_then(|remote| {
-            remote
-                .url(gix::remote::Direction::Fetch)
-                .map(ToOwned::to_owned)
-        })
-        .map(|url| url.to_bstring().to_string())
-        .unwrap_or_default();
-    Ok(Some(Target {
-        branch: target_ref.as_bstr().to_string().parse()?,
-        remote_url,
-        sha,
-        push_remote_name: Some(remote_name),
+    let (remote_name, _) =
+        but_core::extract_remote_name_and_short_name(target_ref.as_ref(), &remote_names)
+            .with_context(|| format!("failed to determine remote for branch '{target_ref}'"))?;
+    let sha = repo
+        .find_reference(target_ref.as_ref())?
+        .peel_to_commit()
+        .with_context(|| format!("inferred target '{target_ref}' did not point to a commit"))?
+        .id;
+    Ok(Some(ProjectMeta {
+        target_ref: Some(target_ref),
+        target_commit_id: Some(sha),
+        push_remote: Some(remote_name),
     }))
 }
 

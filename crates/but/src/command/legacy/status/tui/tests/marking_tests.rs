@@ -307,30 +307,6 @@ fn marking_and_squashing_branches() {
 }
 
 #[test]
-fn cannot_mark_and_discard_commit_and_move_multiple_branches_yet() {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
-    env.setup_metadata(&["A", "B"]);
-
-    let mut tui = test_tui(env);
-
-    tui.input('j');
-    tui.input(' ');
-    tui.input(' ').assert_rendered_term_svg_eq(file![
-        "snapshots/cannot_mark_and_discard_commit_and_move_multiple_branches_yet_001.svg"
-    ]);
-
-    tui.input('x').assert_rendered_term_svg_eq(file![
-        "snapshots/cannot_mark_and_discard_commit_and_move_multiple_branches_yet_001.svg"
-    ]);
-    tui.input('c').assert_rendered_term_svg_eq(file![
-        "snapshots/cannot_mark_and_discard_commit_and_move_multiple_branches_yet_001.svg"
-    ]);
-    tui.input('m').assert_rendered_term_svg_eq(file![
-        "snapshots/cannot_mark_and_discard_commit_and_move_multiple_branches_yet_001.svg"
-    ]);
-}
-
-#[test]
 fn fix_backstack_with_marks_in_squash_mode_from_commit_file_list() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
     env.setup_metadata(&["A"]);

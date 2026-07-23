@@ -1,0 +1,39 @@
+.badge {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 16px;
+	height: 16px;
+	padding-inline: 5px;
+	border-radius: 10px;
+}
+
+.fillGray {
+	background-color: var(--badge-fillGray-bg, var(--fill-gray-bg));
+	color: var(--badge-fillGray-fg, var(--fill-gray-fg));
+}
+
+.lightGray {
+	background-color: var(
+		--badge-lightGray-bg,
+		light-dark(hsl(0 0% 83.9% / 0.45), hsl(0 0% 0% / 0.5))
+	);
+	color: var(--badge-lightGray-fg, var(--text-1));
+}
+
+.safe {
+	--_bg: light-dark(var(--clr-safe-50), var(--clr-safe-30));
+	background-color: var(--badge-safe-bg, color-mix(in srgb, var(--_bg) 25%, var(--bg-1)));
+	color: var(--badge-safe-fg, light-dark(var(--text-safe), var(--clr-safe-60)));
+}
+
+.warn {
+	background-color: var(--badge-warn-bg, color-mix(in srgb, var(--clr-warn-50) 18%, transparent));
+	color: var(--badge-warn-fg, var(--clr-warn-40));
+}
+
+.danger {
+	--_bg: light-dark(var(--clr-danger-50), var(--clr-danger-30));
+	background-color: var(--badge-danger-bg, color-mix(in srgb, var(--_bg) 22%, var(--bg-1)));
+	color: var(--badge-danger-fg, light-dark(var(--text-danger), var(--clr-danger-60)));
+}

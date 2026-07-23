@@ -2,7 +2,10 @@ use but_testsupport::Sandbox;
 use crossterm::event::{KeyCode, KeyModifiers};
 use snapbox::{file, str};
 
-use crate::command::legacy::status::tui::{backstack::BackstackEntry, tests::utils::test_tui};
+use crate::command::legacy::status::tui::{
+    backstack::BackstackEntry,
+    tests::utils::{Shift, test_tui},
+};
 
 #[test]
 fn discard_prompt_can_be_cancelled() {
@@ -528,4 +531,85 @@ fn global_file_list_stays_open_after_marking_and_discarding_all_files_in_a_commi
             "snapshots/global_file_list_stays_open_after_marking_and_discarding_all_files_in_a_commit_002.svg"
         ])
         .assert_backstack_eq([BackstackEntry::ShowFileList]);
+}
+
+#[test]
+fn marking_and_discarding_multiple_branches() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+    env.setup_metadata(&["A", "B"]);
+
+    let mut tui = test_tui(env);
+
+    tui.input('j');
+    tui.input('b');
+    tui.input('n');
+
+    tui.input('g');
+    tui.input('b');
+    tui.input('n').assert_rendered_term_svg_eq(file![
+        "snapshots/marking_and_discarding_multiple_branches_001.svg"
+    ]);
+
+    tui.input('g');
+    tui.input(Shift('j'));
+    tui.input(Shift('j'));
+    tui.input(' ');
+    tui.input(' ');
+    tui.input(' ').assert_rendered_term_svg_eq(file![
+        "snapshots/marking_and_discarding_multiple_branches_002.svg"
+    ]);
+
+    tui.input('x').assert_rendered_term_svg_eq(file![
+        "snapshots/marking_and_discarding_multiple_branches_003.svg"
+    ]);
+    tui.input('y').assert_rendered_term_svg_eq(file![
+        "snapshots/marking_and_discarding_multiple_branches_004.svg"
+    ]);
+}
+
+#[test]
+fn marking_and_discarding_multiple_branches_fails_with_dependencies() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.file("file", "content");
+
+    let mut tui = test_tui(env);
+
+    // create a stack of two branches where the top has a dependency on the bottom
+    tui.input('c');
+    tui.input('e');
+    tui.input('b');
+    tui.env().append_file("file", "new line");
+    tui.reload();
+    tui.input('g');
+    tui.input('c');
+    tui.input('e');
+    tui.input('j');
+    tui.input('b');
+
+    // create a new branch without any dependencies
+    tui.input('g');
+    tui.input('b');
+    tui.input('n');
+
+    tui.input(Shift('f')).assert_rendered_term_svg_eq(file![
+        "snapshots/marking_and_discarding_multiple_branches_fails_with_dependencies_001.svg"
+    ]);
+
+    // mark and discard two branches:
+    // 1. the one without dependencies
+    // 2. the bottom branch in the stack which the top dependes on
+    tui.input('g');
+    tui.input(Shift('j'));
+    tui.input(' ');
+    tui.input(Shift('j'));
+    tui.input(' ');
+    tui.input('x').assert_rendered_term_svg_eq(file![
+        "snapshots/marking_and_discarding_multiple_branches_fails_with_dependencies_002.svg"
+    ]);
+    tui.input('y');
+    tui.reload().assert_rendered_term_svg_eq(file![
+        "snapshots/marking_and_discarding_multiple_branches_fails_with_dependencies_003.svg"
+    ]);
 }

@@ -200,7 +200,7 @@ fi
 
 # Enable experimental features
 if [ "$CHANNEL" != "release" ]; then
-	FEATURES="$FEATURES irc but-2"
+	FEATURES="$FEATURES irc"
 fi
 
 # update the version in the tauri release config

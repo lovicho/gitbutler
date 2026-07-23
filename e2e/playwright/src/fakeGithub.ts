@@ -33,7 +33,20 @@ export type FakeGitHubServer = {
 	apiBaseUrl: string;
 	repositoryUrl: string;
 	setListed: (listed: boolean) => void;
+	getReview: (number: number) => FakeGitHubReview | undefined;
+	getReviews: () => FakeGitHubReview[];
+	getReviewUpdateCount: () => number;
 	close: () => Promise<void>;
+};
+
+export type FakeGitHubReview = ReturnType<typeof pullRequestPayload>;
+
+type ReviewMutation = {
+	title?: string;
+	head?: string;
+	base?: string;
+	body?: string | null;
+	draft?: boolean;
 };
 
 export async function startFakeGitHubServer({
@@ -65,20 +78,53 @@ export async function startFakeGitHubServer({
 		title,
 		isFork,
 	};
-	let currentReview = pullRequestPayload(options);
+	const reviews = new Map<number, FakeGitHubReview>([[reviewNumber, pullRequestPayload(options)]]);
+	let nextReviewNumber = reviewNumber;
+	let reviewUpdateCount = 0;
 	let isListed = listed;
 
 	const sockets = new Set<Socket>();
 	const server = http.createServer((request, response) => {
 		handleRequest(request, response, options, {
-			get review() {
-				return currentReview;
-			},
 			get listed() {
 				return isListed;
 			},
-			setReview(review) {
-				currentReview = review;
+			listReviews() {
+				return [...reviews.values()].sort((a, b) => a.number - b.number);
+			},
+			getReview(number) {
+				return reviews.get(number);
+			},
+			createReview(input) {
+				const requestedHead = input.head ?? options.sourceBranch;
+				const number = nextReviewNumber++;
+				const created = pullRequestPayload(
+					{
+						...options,
+						reviewNumber: number,
+						title: input.title ?? options.title,
+						sourceBranch: unqualifiedHeadRef(requestedHead),
+					},
+					requestedHead,
+					input,
+				);
+				reviews.set(number, created);
+				return created;
+			},
+			updateReview(number, input) {
+				const current = reviews.get(number);
+				if (!current) return undefined;
+				reviewUpdateCount += 1;
+				const updated = {
+					...current,
+					title: input.title ?? current.title,
+					body: input.body === undefined ? current.body : input.body,
+					draft: input.draft ?? current.draft,
+					base: input.base ? { ...current.base, ref: input.base } : current.base,
+					updated_at: "2026-06-01T00:01:00Z",
+				};
+				reviews.set(number, updated);
+				return updated;
 			},
 		}).catch((error: unknown) => {
 			response.writeHead(500, { "Content-Type": "application/json" });
@@ -106,6 +152,15 @@ export async function startFakeGitHubServer({
 		setListed: (value) => {
 			isListed = value;
 		},
+		getReview: (number) => {
+			const review = reviews.get(number);
+			return review ? structuredClone(review) : undefined;
+		},
+		getReviews: () =>
+			[...reviews.values()]
+				.sort((a, b) => a.number - b.number)
+				.map((review) => structuredClone(review)),
+		getReviewUpdateCount: () => reviewUpdateCount,
 		close: async () =>
 			await new Promise<void>((resolve, reject) => {
 				server.close((error) => (error ? reject(error) : resolve()));
@@ -119,14 +174,15 @@ async function handleRequest(
 	response: ServerResponse,
 	options: ResolvedFakeGitHubOptions,
 	state: {
-		readonly review: ReturnType<typeof pullRequestPayload>;
 		readonly listed: boolean;
-		setReview: (review: ReturnType<typeof pullRequestPayload>) => void;
+		listReviews: () => FakeGitHubReview[];
+		getReview: (number: number) => FakeGitHubReview | undefined;
+		createReview: (input: ReviewMutation) => FakeGitHubReview;
+		updateReview: (number: number, input: ReviewMutation) => FakeGitHubReview | undefined;
 	},
 ) {
 	const url = new URL(request.url ?? "/", "http://127.0.0.1");
 	const pullPath = `/api/v3/repos/${options.owner}/${options.repo}/pulls`;
-	const review = state.review;
 
 	if (request.method === "GET" && url.pathname === "/api/v3/user") {
 		return json(response, {
@@ -140,32 +196,24 @@ async function handleRequest(
 	}
 
 	if (request.method === "GET" && url.pathname === pullPath) {
-		return json(response, state.listed ? [review] : []);
+		return json(response, state.listed ? state.listReviews() : []);
 	}
 
-	if (request.method === "GET" && url.pathname === `${pullPath}/${options.reviewNumber}`) {
-		return json(response, review);
+	const reviewNumber = reviewNumberFromPath(url.pathname, pullPath);
+	if (request.method === "GET" && reviewNumber !== undefined) {
+		const review = state.getReview(reviewNumber);
+		return review ? json(response, review) : json(response, { message: "Not Found" }, 404);
 	}
 
 	if (request.method === "POST" && url.pathname === pullPath) {
-		const body = JSON.parse(await readBody(request)) as {
-			title?: string;
-			head?: string;
-			base?: string;
-			body?: string | null;
-			draft?: boolean;
-		};
-		const requestedHead = body.head ?? options.sourceBranch;
-		const created = pullRequestPayload(
-			{
-				...options,
-				title: body.title ?? options.title,
-				sourceBranch: unqualifiedHeadRef(requestedHead),
-			},
-			requestedHead,
-		);
-		state.setReview(created);
-		return json(response, created, 201);
+		const input = JSON.parse(await readBody(request)) as ReviewMutation;
+		return json(response, state.createReview(input), 201);
+	}
+
+	if (request.method === "PATCH" && reviewNumber !== undefined) {
+		const input = JSON.parse(await readBody(request)) as ReviewMutation;
+		const review = state.updateReview(reviewNumber, input);
+		return review ? json(response, review) : json(response, { message: "Not Found" }, 404);
 	}
 
 	const repositoryPath = `/${options.owner}/${options.repo}.git`;
@@ -191,15 +239,16 @@ function pullRequestPayload(
 		isFork,
 	}: ResolvedFakeGitHubOptions,
 	headLabel = `${repoOwner}:${sourceBranch}`,
+	input: ReviewMutation = {},
 ) {
 	return {
 		html_url: `http://127.0.0.1/${owner}/${repo}/pull/${reviewNumber}`,
 		number: reviewNumber,
 		title,
-		body: null,
+		body: input.body ?? null,
 		user: null,
 		labels: [],
-		draft: false,
+		draft: input.draft ?? false,
 		merge_commit_sha: null,
 		head: {
 			label: headLabel,
@@ -220,7 +269,7 @@ function pullRequestPayload(
 			},
 		},
 		base: {
-			ref: "master",
+			ref: input.base ?? "master",
 			sha: "0000000000000000000000000000000000000000",
 			repo: {
 				ssh_url: `git@example.com:${owner}/${repo}.git`,
@@ -242,6 +291,12 @@ function pullRequestPayload(
 		closed_at: null,
 		requested_reviewers: [],
 	};
+}
+
+function reviewNumberFromPath(pathname: string, pullPath: string): number | undefined {
+	if (!pathname.startsWith(`${pullPath}/`)) return undefined;
+	const value = Number(pathname.slice(pullPath.length + 1));
+	return Number.isSafeInteger(value) ? value : undefined;
 }
 
 function unqualifiedHeadRef(head: string): string {
@@ -268,7 +323,7 @@ async function serveGitRequest(
 			REQUEST_METHOD: request.method ?? "GET",
 			CONTENT_TYPE: request.headers["content-type"] ?? "",
 			CONTENT_LENGTH: request.headers["content-length"] ?? "",
-			HTTP_GIT_PROTOCOL: request.headers["git-protocol"] ?? "",
+			HTTP_GIT_PROTOCOL: headerValue(request.headers["git-protocol"]),
 			REMOTE_ADDR: request.socket.remoteAddress ?? "127.0.0.1",
 		},
 	});
@@ -303,6 +358,10 @@ async function serveGitRequest(
 	response.setHeader("Connection", "close");
 	response.writeHead(status);
 	response.end(output.subarray(headerEnd + 4));
+}
+
+function headerValue(value: string | string[] | undefined): string {
+	return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
 }
 
 async function readBody(request: IncomingMessage): Promise<string> {

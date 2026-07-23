@@ -24,7 +24,7 @@
 	import { type PullRequest } from "$lib/forge/interface/types";
 	import { PrPersistedStore } from "$lib/forge/prContents";
 	import { PR_SERVICE } from "$lib/forge/prService.svelte";
-	import { updatePrDescriptionTables as updatePrStackInfo } from "$lib/forge/shared/prFooter";
+	import { syncStackAfterReviewCreation } from "$lib/forge/shared/prFooter";
 	import { showToast } from "$lib/notifications/toasts";
 	import { SETTINGS_SERVICE } from "$lib/settings/appSettings";
 	import { requiresPush } from "$lib/stacks/stack";
@@ -296,16 +296,11 @@
 			// If we now have two or more pull requests we add a stack table to the description.
 			prNumbers[currentIndex] = pr.number;
 			const definedPrNumbers = prNumbers.filter(isDefined);
-			if (definedPrNumbers.length > 0) {
-				updatePrStackInfo(prService, projectId, definedPrNumbers, forgeInfo?.unit.symbol);
-			}
-
-			// Show success notification
 			const unit = forgeInfo?.unit.abbr || "PR";
 			const symbol = forgeInfo?.unit.symbol || "#";
 			chipToasts.success(`${unit} ${symbol}${pr.number} created successfully`);
 
-			return pr;
+			return await syncStackAfterReviewCreation(prService, projectId, pr, definedPrNumbers, symbol);
 		} catch (err: any) {
 			console.error(err);
 			const toast = mapErrorToToast(err);

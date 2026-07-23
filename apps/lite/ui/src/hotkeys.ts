@@ -231,6 +231,10 @@ export const changesFileHotkeys = {
 		hotkey: "A",
 		meta: { group: "File", name: "Absorb" },
 	},
+	checkFile: {
+		hotkey: "Space",
+		meta: { group: "File", name: "Check file" },
+	},
 	openInEditor: {
 		hotkey: "E",
 		meta: { group: "File", name: "Open in editor" },

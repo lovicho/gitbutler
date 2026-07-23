@@ -117,14 +117,14 @@ fn print_grouped_with_truncation(
                 SubcommandDiscriminant::Status => Group::Inspection,
                 #[cfg(feature = "legacy")]
                 SubcommandDiscriminant::Diff => Group::Inspection,
-                #[cfg(all(feature = "legacy", feature = "but-2"))]
+                #[cfg(feature = "legacy")]
                 SubcommandDiscriminant::_Diff2 => Group::Inspection,
                 #[cfg(feature = "legacy")]
                 SubcommandDiscriminant::Show => Group::Inspection,
 
                 #[cfg(feature = "legacy")]
                 SubcommandDiscriminant::Commit => Group::BranchingAndCommitting,
-                #[cfg(all(feature = "legacy", feature = "but-2"))]
+                #[cfg(feature = "legacy")]
                 SubcommandDiscriminant::_Commit2 => Group::BranchingAndCommitting,
                 #[cfg(feature = "legacy")]
                 SubcommandDiscriminant::Stage => Group::BranchingAndCommitting,
@@ -166,10 +166,10 @@ fn print_grouped_with_truncation(
                 SubcommandDiscriminant::Amend => Group::EditingCommits,
                 #[cfg(feature = "legacy")]
                 SubcommandDiscriminant::Squash => Group::EditingCommits,
-                #[cfg(all(feature = "legacy", feature = "but-2"))]
+                #[cfg(feature = "legacy")]
                 SubcommandDiscriminant::_Squash2 => Group::EditingCommits,
                 SubcommandDiscriminant::Move => Group::EditingCommits,
-                #[cfg(all(feature = "legacy", feature = "but-2"))]
+                #[cfg(feature = "legacy")]
                 SubcommandDiscriminant::_Move2 => Group::EditingCommits,
 
                 #[cfg(feature = "legacy")]
@@ -196,9 +196,7 @@ fn print_grouped_with_truncation(
                 SubcommandDiscriminant::Tui => Group::OtherCommands,
 
                 SubcommandDiscriminant::Edit => continue,
-                #[cfg(feature = "but-2")]
                 SubcommandDiscriminant::_Open => continue,
-                #[cfg(feature = "but-2")]
                 SubcommandDiscriminant::_Expand => continue,
                 SubcommandDiscriminant::Metrics => continue,
                 SubcommandDiscriminant::Onboarding => continue,

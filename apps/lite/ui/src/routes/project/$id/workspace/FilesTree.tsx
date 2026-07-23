@@ -6,9 +6,15 @@ import {
 	listEditorsQueryOptions,
 } from "#ui/api/queries.ts";
 import { getHeadInfoIndex } from "#ui/api/ref-info.ts";
-import { uncommittedChangesFileParent, fileOperand, type FileParent } from "#ui/operands.ts";
+import {
+	uncommittedChangesFileParent,
+	fileOperand,
+	operandEquals,
+	operandIdentityKey,
+	type FileParent,
+} from "#ui/operands.ts";
 import { projectSlice } from "#ui/projects/state.ts";
-import { useAppDispatch, useAppSelector } from "#ui/store.ts";
+import { useAppDispatch, useAppSelector, useAppStore } from "#ui/store.ts";
 import { classes } from "#ui/components/classes.ts";
 import { mergeProps, useRender } from "@base-ui/react";
 import { useQuery } from "@tanstack/react-query";
@@ -24,8 +30,10 @@ import { useMergedRefs } from "@base-ui/utils/useMergedRefs";
 import { FileRow } from "./FileRow.tsx";
 import type { FileRowItem } from "./file-row.ts";
 import { useOpenInEditor } from "#ui/api/mutations.ts";
+import { checkedRange, navigationIndexRange } from "#ui/checking.ts";
 
 const useFilesTreeHotkeys = ({
+	checkFile,
 	navigationIndex,
 	onFileSelection,
 	projectId,
@@ -33,6 +41,7 @@ const useFilesTreeHotkeys = ({
 	fileParent,
 	selection,
 }: {
+	checkFile: (evt: { path: string; shiftKey: boolean }) => void;
 	navigationIndex: NavigationIndex<string>;
 	onFileSelection: (selection: string) => void;
 	projectId: string;
@@ -51,6 +60,7 @@ const useFilesTreeHotkeys = ({
 	});
 	const { mutate: openInEditor } = useOpenInEditor();
 
+	const store = useAppStore();
 	const dispatch = useAppDispatch();
 
 	const selectedChangesFile = fileParent._tag === "UncommittedChanges" ? selection : null;
@@ -77,6 +87,16 @@ const useFilesTreeHotkeys = ({
 		focusSelectionScope("outline");
 	};
 
+	const toggleSelectedFileChecked = (event: KeyboardEvent) => {
+		if (selection === null) return;
+		// Leave activation of a directly focused checkbox to the checkbox itself.
+		if (event.target !== ref.current) return;
+
+		event.preventDefault();
+		event.stopPropagation();
+		checkFile({ path: selection, shiftKey: event.shiftKey });
+	};
+
 	useHotkeys([
 		{
 			hotkey: changesFileHotkeys.absorb.hotkey,
@@ -86,6 +106,29 @@ const useFilesTreeHotkeys = ({
 				enabled: selectedChangesFile !== null && isDefaultMode,
 				target: ref,
 				meta: changesFileHotkeys.absorb.meta,
+			},
+		},
+		{
+			hotkey: changesFileHotkeys.checkFile.hotkey,
+			callback: toggleSelectedFileChecked,
+			options: {
+				conflictBehavior: "allow",
+				enabled: selection !== null && isDefaultMode,
+				preventDefault: false,
+				stopPropagation: false,
+				target: ref,
+				meta: changesFileHotkeys.checkFile.meta,
+			},
+		},
+		{
+			hotkey: "Shift+Space",
+			callback: toggleSelectedFileChecked,
+			options: {
+				conflictBehavior: "allow",
+				enabled: selection !== null && isDefaultMode,
+				preventDefault: false,
+				stopPropagation: false,
+				target: ref,
 			},
 		},
 		{
@@ -117,7 +160,14 @@ const useFilesTreeHotkeys = ({
 		selection,
 		ref,
 		getKey: (path) => path,
-		operationSourcesForItem: (path) => [fileOperand({ parent: fileParent, path })],
+		operationSourcesForItem: (path) => {
+			const operand = fileOperand({ parent: fileParent, path });
+			const checkedOperands = projectSlice.selectors.selectCheckedOperands(
+				store.getState(),
+				projectId,
+			);
+			return checkedOperands.length > 0 ? checkedOperands : [operand];
+		},
 	});
 };
 
@@ -146,10 +196,66 @@ export const FilesTree: FC<
 		...headInfoQueryOptions(projectId),
 		select: getHeadInfoIndex,
 	});
+	const checkedOperandKeys = useAppSelector((state) =>
+		projectSlice.selectors.selectCheckedOperandKeys(state, projectId),
+	);
+	const store = useAppStore();
+	const dispatch = useAppDispatch();
 
 	const ref = useRef<HTMLDivElement>(null);
 
+	const fileCheckRangeAnchor = useRef<string>(null);
+	const fileCheckRangeEnd = useRef<string>(null);
+
+	const rangeResolver = navigationIndexRange<string, string>({
+		navigationIndex,
+		getKey: (path) => path,
+		filterMap: (path) => path,
+	});
+	const getCheckedRange = checkedRange(rangeResolver);
+
+	const checkFile = ({ path, shiftKey }: { path: string; shiftKey: boolean }): void => {
+		const checkedOperands = projectSlice.selectors.selectCheckedOperands(
+			store.getState(),
+			projectId,
+		);
+		const checkedFilePaths = new Set(
+			checkedOperands.flatMap((operand) =>
+				operand._tag === "File" && operandEquals(operand.parent, fileParent) ? operand.path : [],
+			),
+		);
+		const nextFileRange = getCheckedRange({
+			checked: checkedFilePaths,
+			rangeAnchor: fileCheckRangeAnchor.current,
+			rangeEnd: fileCheckRangeEnd.current,
+		})({
+			item: path,
+			shiftKey,
+		});
+
+		fileCheckRangeAnchor.current = nextFileRange.rangeAnchor;
+		fileCheckRangeEnd.current = nextFileRange.rangeEnd;
+
+		const checkedFiles = nextFileRange.checked.difference(checkedFilePaths);
+		const uncheckedFiles = checkedFilePaths.difference(nextFileRange.checked);
+		dispatch(
+			projectSlice.actions.checkOperands({
+				projectId,
+				operands: Array.from(checkedFiles, (path) => fileOperand({ parent: fileParent, path })),
+				checked: true,
+			}),
+		);
+		dispatch(
+			projectSlice.actions.checkOperands({
+				projectId,
+				operands: Array.from(uncheckedFiles, (path) => fileOperand({ parent: fileParent, path })),
+				checked: false,
+			}),
+		);
+	};
+
 	useFilesTreeHotkeys({
+		checkFile,
 		navigationIndex,
 		onFileSelection,
 		projectId,
@@ -176,39 +282,43 @@ export const FilesTree: FC<
 			) : (
 				// oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- Tree items need ARIA group semantics.
 				<div role="group">
-					{items.map((item) => (
-						<TreeItem
-							key={item.path}
-							isSelected={selection !== null && selection === item.path}
-							aria-label={
-								item._tag === "Change"
-									? `${item.change.status.type} ${item.change.path}`
-									: `Conflict ${item.path}`
-							}
-							path={item.path}
-							render={
-								<OperationSourceC
-									projectId={projectId}
-									source={fileOperand({ parent: fileParent, path: item.path })}
-									outline="outside"
-									render={
-										<FileRow
-											item={item}
-											headInfoIndex={headInfoIndex}
-											inert={!navigationIndexIncludes(navigationIndex, item.path, (path) => path)}
-											isSelected={selection !== null && selection === item.path}
-											onSelect={() => onFileSelection(item.path)}
-											projectId={projectId}
-											fileParent={fileParent}
-											branchNameByCommitId={(cid) =>
-												headInfoIndex?.commitContextById(cid)?.segment.refName?.displayName
-											}
-										/>
-									}
-								/>
-							}
-						/>
-					))}
+					{items.map((item) => {
+						const operand = fileOperand({ parent: fileParent, path: item.path });
+						return (
+							<TreeItem
+								key={item.path}
+								isSelected={selection !== null && selection === item.path}
+								aria-label={
+									item._tag === "Change"
+										? `${item.change.status.type} ${item.change.path}`
+										: `Conflict ${item.path}`
+								}
+								path={item.path}
+								render={
+									<OperationSourceC
+										projectId={projectId}
+										source={operand}
+										outline="outside"
+										render={
+											<FileRow
+												item={item}
+												inert={!navigationIndexIncludes(navigationIndex, item.path, (path) => path)}
+												isSelected={selection !== null && selection === item.path}
+												isChecked={checkedOperandKeys.has(operandIdentityKey(operand))}
+												onSelect={() => onFileSelection(item.path)}
+												checkFile={checkFile}
+												projectId={projectId}
+												fileParent={fileParent}
+												branchNameByCommitId={(cid) =>
+													headInfoIndex?.commitContextById(cid)?.segment.refName?.displayName
+												}
+											/>
+										}
+									/>
+								}
+							/>
+						);
+					})}
 				</div>
 			)}
 		</div>

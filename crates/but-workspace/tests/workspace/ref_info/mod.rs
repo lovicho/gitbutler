@@ -6,7 +6,7 @@
 use snapbox::prelude::*;
 use std::borrow::Cow;
 
-use but_core::{RefMetadata, WORKSPACE_REF_NAME, ref_metadata::StackId};
+use but_core::{WORKSPACE_REF_NAME, ref_metadata::StackId};
 use but_workspace::{legacy::StacksFilter, ref_info};
 use gix::prelude::ObjectIdExt;
 
@@ -20,10 +20,20 @@ pub fn head_info(
     meta: &but_meta::VirtualBranchesTomlMetadata,
     mut opts: but_workspace::ref_info::Options,
 ) -> anyhow::Result<but_workspace::RefInfo> {
-    opts.project_meta = meta
-        .workspace(WORKSPACE_REF_NAME.try_into()?)?
-        .project_meta();
+    if opts.project_meta == Default::default() {
+        opts.project_meta = project_meta(repo)?;
+    }
     but_workspace::head_info(repo, meta, opts)
+}
+
+fn project_meta(repo: &gix::Repository) -> anyhow::Result<but_core::ref_metadata::ProjectMeta> {
+    let project_meta = but_core::ref_metadata::ProjectMeta::resolve(repo)?;
+    if project_meta == Default::default() && repo.try_find_reference(WORKSPACE_REF_NAME)?.is_some()
+    {
+        with_workspace_commit::utils::project_meta(repo)
+    } else {
+        Ok(project_meta)
+    }
 }
 
 #[deprecated(
@@ -38,9 +48,7 @@ pub fn stacks_v3(
     but_workspace::legacy::stacks_v3(
         repo,
         meta,
-        &meta
-            .workspace(WORKSPACE_REF_NAME.try_into()?)?
-            .project_meta(),
+        &project_meta(repo)?,
         but_graph::init::Options::limited(),
         filter,
         ref_name_override,
@@ -59,9 +67,7 @@ pub fn stack_details_v3(
         stack_id,
         repo,
         meta,
-        &meta
-            .workspace(WORKSPACE_REF_NAME.try_into()?)?
-            .project_meta(),
+        &project_meta(repo)?,
         but_graph::init::Options::limited(),
     )
 }

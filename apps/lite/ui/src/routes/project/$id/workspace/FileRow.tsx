@@ -1,4 +1,3 @@
-import type { HeadInfoIndex } from "#ui/api/ref-info.ts";
 import { FileIcon } from "#ui/components/FileIcon.tsx";
 import rowStyles from "./Row.module.css";
 import { showNativeContextMenu, showNativeMenuFromTrigger } from "#ui/native-menu.ts";
@@ -7,6 +6,7 @@ import { projectSlice } from "#ui/projects/state.ts";
 import { useAppSelector } from "#ui/store.ts";
 import { Icon } from "#ui/components/Icon.tsx";
 import { classes } from "#ui/components/classes.ts";
+import { changesFileHotkeys } from "#ui/hotkeys.ts";
 import { Toolbar, Tooltip } from "@base-ui/react";
 import { Match } from "effect";
 import type { ComponentProps, FC } from "react";
@@ -24,9 +24,19 @@ export const FileRow: FC<
 		projectId: string;
 		fileParent: FileParent;
 		branchNameByCommitId: (commitId: string) => string | undefined;
-		headInfoIndex: HeadInfoIndex | undefined;
+		isChecked: boolean;
+		checkFile: (evt: { path: string; shiftKey: boolean }) => void;
 	} & Omit<ComponentProps<typeof Row>, "projectId">
-> = ({ item, projectId, fileParent, branchNameByCommitId, headInfoIndex, id, ...restProps }) => {
+> = ({
+	item,
+	projectId,
+	fileParent,
+	branchNameByCommitId,
+	isChecked,
+	checkFile,
+	id,
+	...restProps
+}) => {
 	const relativePath = item._tag === "Change" ? item.change.path : item.path;
 
 	const isDefaultMode = useAppSelector(
@@ -38,12 +48,6 @@ export const FileRow: FC<
 		path: relativePath,
 		change: item._tag === "Change" ? item.change : undefined,
 	});
-
-	const hasCheckedCommits = useAppSelector((state) =>
-		headInfoIndex
-			? projectSlice.selectors.selectHasCheckedCommits(state, projectId, headInfoIndex)
-			: false,
-	);
 
 	const lastSepIdx = relativePath.lastIndexOf("/");
 	const directoryPath = lastSepIdx !== -1 ? relativePath.slice(0, lastSepIdx) : null;
@@ -74,15 +78,24 @@ export const FileRow: FC<
 						disableHoverablePopup
 					>
 						<RowCheckbox
-							disabled={hasCheckedCommits || !isDefaultMode}
+							disabled={!isDefaultMode}
 							aria-label={`Check file ${relativePath}`}
+							checked={isChecked}
 							className={styles.checkbox}
 							nativeButton
 							render={<Tooltip.Trigger />}
+							onCheckedChange={(_checked, { event }) => {
+								const shiftKey =
+									(event instanceof MouseEvent || event instanceof KeyboardEvent) &&
+									event.shiftKey === true;
+								checkFile({ path: relativePath, shiftKey });
+							}}
 						/>
 						<Tooltip.Portal>
 							<Tooltip.Positioner sideOffset={4}>
-								<Tooltip.Popup render={<TooltipPopup />}>Check file</Tooltip.Popup>
+								<Tooltip.Popup render={<TooltipPopup kbd={changesFileHotkeys.checkFile.hotkey} />}>
+									{changesFileHotkeys.checkFile.meta.name}
+								</Tooltip.Popup>
 							</Tooltip.Positioner>
 						</Tooltip.Portal>
 					</Tooltip.Root>

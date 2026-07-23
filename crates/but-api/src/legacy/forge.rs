@@ -225,7 +225,6 @@ pub fn list_reviews(
         let project_meta = ctx.project_meta()?;
         let repo = ctx.repo.get()?;
         let forge_repo_info = but_forge::derive_forge_repo_info(&remote_url(&project_meta, &repo)?);
-
         (
             but_forge_storage::Controller::from_path(but_path::app_data_dir()?),
             forge_repo_info,
@@ -755,7 +754,6 @@ pub async fn merge_review(
         let project_meta = ctx.project_meta()?;
         let repo = ctx.repo.get()?;
         let forge_repo_info = but_forge::derive_forge_repo_info(&remote_url(&project_meta, &repo)?);
-
         (
             but_forge_storage::Controller::from_path(but_path::app_data_dir()?),
             forge_repo_info,
@@ -786,7 +784,6 @@ pub async fn set_review_auto_merge(
         let project_meta = ctx.project_meta()?;
         let repo = ctx.repo.get()?;
         let forge_repo_info = but_forge::derive_forge_repo_info(&remote_url(&project_meta, &repo)?);
-
         (
             but_forge_storage::Controller::from_path(but_path::app_data_dir()?),
             forge_repo_info,
@@ -877,16 +874,28 @@ pub async fn update_review_footers(
     ctx: ThreadSafeContext,
     reviews: Vec<but_forge::ForgeReviewUpdate>,
 ) -> Result<()> {
-    let (storage, forge_repo_info, preferred_forge_user) = {
+    let (storage, forge_repo_info, preferred_forge_user, description_mode) = {
         let ctx = ctx.into_thread_local();
         let project_meta = ctx.project_meta()?;
         let repo = ctx.repo.get()?;
         let forge_repo_info = but_forge::derive_forge_repo_info(&remote_url(&project_meta, &repo)?);
+        let description_mode = match repo.git_settings()?.gitbutler_review_stacking_description {
+            Some(but_core::ReviewStackingDescription::Top) => {
+                but_forge::ReviewStackingDescription::Top
+            }
+            Some(but_core::ReviewStackingDescription::Disabled) => {
+                but_forge::ReviewStackingDescription::Disabled
+            }
+            Some(but_core::ReviewStackingDescription::Bottom) | None => {
+                but_forge::ReviewStackingDescription::Bottom
+            }
+        };
 
         (
             but_forge_storage::Controller::from_path(but_path::app_data_dir()?),
             forge_repo_info,
             ctx.legacy_project.preferred_forge_user.clone(),
+            description_mode,
         )
     };
 
@@ -895,6 +904,7 @@ pub async fn update_review_footers(
         &forge_repo_info.context("No forge could be determined for this repository branch")?,
         &reviews,
         &storage,
+        description_mode,
     )
     .await
 }

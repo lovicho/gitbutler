@@ -54,6 +54,7 @@ import { OperationControls } from "#ui/routes/project/$id/workspace/OperationCon
 import { WorkspacePageErrorBoundary } from "./WorkspacePageErrorBoundary.tsx";
 import { Settings } from "./Settings.tsx";
 import type { OutlineMode } from "#ui/outline/mode.ts";
+import { useStateReconciler as useReconcileState } from "#ui/reconcile.ts";
 
 // This must be unique as to not collide with other IDs, and stable because it's
 // stored in local storage.
@@ -279,6 +280,8 @@ const ProjectPicker: FC<ProjectPickerProps> = (p) => {
 };
 
 const WorkspacePage: FC = () => {
+	useReconcileState();
+
 	const dispatch = useAppDispatch();
 
 	const { id: projectId } = useParams({ from: "/project/$id/workspace" });

@@ -4,7 +4,6 @@ import { useMergedRefs } from "@base-ui/utils/useMergedRefs";
 import { type ComponentProps, type FC, type MouseEvent, useLayoutEffect, useRef } from "react";
 import styles from "./Row.module.css";
 import { mergeProps, useRender } from "@base-ui/react";
-import { Match } from "effect";
 
 const isFromInteractiveDescendant = (event: MouseEvent<HTMLDivElement>): boolean => {
 	if (!(event.target instanceof Element)) return false;
@@ -103,32 +102,6 @@ export const RowLabel: FC<
 			),
 		}),
 	});
-
-export type RowBubbleVariant = "fillGray" | "lightGray" | "safe" | "warn" | "danger";
-
-export const RowBubble: FC<
-	{
-		variant: RowBubbleVariant;
-	} & ComponentProps<"span">
-> = ({ variant, ...props }) => (
-	<span
-		{...props}
-		className={classes(
-			props.className,
-			"text-11",
-			"text-semibold",
-			styles.bubble,
-			Match.value(variant).pipe(
-				Match.when("fillGray", () => styles.bubbleFillGray),
-				Match.when("lightGray", () => styles.bubbleLightGray),
-				Match.when("safe", () => styles.bubbleClrSafe),
-				Match.when("warn", () => styles.bubbleClrWarn),
-				Match.when("danger", () => styles.bubbleClrDanger),
-				Match.exhaustive,
-			),
-		)}
-	/>
-);
 
 /** @public */
 export const RowBubbleGroup: FC<ComponentProps<"span">> = (props) => (

@@ -224,7 +224,7 @@ pub async fn handle_args(args: impl Iterator<Item = OsString>) -> Result<()> {
         out.request_pager();
     }
 
-    #[cfg(all(feature = "legacy", feature = "but-2"))]
+    #[cfg(feature = "legacy")]
     if matches!(&args.cmd, Some(Subcommands::_Diff2(_))) {
         out.request_pager();
     }
@@ -416,10 +416,7 @@ async fn match_subcommand(
         cmd => cmd,
     };
 
-    #[cfg(feature = "but-2")]
     let is_expand = matches!(&cmd, Subcommands::_Expand { .. });
-    #[cfg(not(feature = "but-2"))]
-    let is_expand = false;
     let show_agent_skill_notice = out.format().is_human_text()
         && !out.can_prompt()
         && !is_expand
@@ -476,9 +473,8 @@ async fn match_subcommand(
                 .emit_metrics(metrics_ctx)
                 .map_err(CliError::from)
         }
-        #[cfg(feature = "but-2")]
         Subcommands::_Open { id, program_id } => {
-            let mut ctx = setup::init_ctx(
+            let ctx = setup::init_ctx(
                 &args,
                 InitCtxOptions {
                     background_sync: BackgroundSync::Disabled,
@@ -486,7 +482,7 @@ async fn match_subcommand(
                 },
                 out,
             )?;
-            command::open::open(&mut ctx, id, program_id).emit_metrics(metrics_ctx)
+            command::open::open(&ctx, id, program_id).emit_metrics(metrics_ctx)
         }
         Subcommands::Completions { shell } => command::completions::generate_completions(shell)
             .emit_metrics(metrics_ctx)
@@ -500,10 +496,7 @@ async fn match_subcommand(
             command::help::print(out, topic)?;
             Ok(())
         }
-        #[cfg(feature = "but-2")]
         Subcommands::_Expand { cli_id } => {
-            use crate::utils::OutputChannelExt;
-
             let ctx = but_ctx::Context::discover(&args.current_dir)?;
             let outcome = command::expand::handle(&ctx, cli_id).emit_metrics(metrics_ctx)?;
             out.print_cli_output(outcome)?;
@@ -728,7 +721,7 @@ async fn match_subcommand(
                         out,
                     )
                     .map_err(CliError::from);
-                    maybe_run_status_after(status_after, &result, &mut ctx, out).await;
+                    run_status_after_if_ok(status_after, &result, &mut ctx, out);
                     result
                 }
                 Some(branch::Subcommands::Move { .. }) => Err(bad_input(
@@ -831,7 +824,7 @@ async fn match_subcommand(
                 },
             )
             .emit_metrics(metrics_ctx);
-            maybe_run_status_after(status_after, &result, &mut ctx, out).await;
+            run_status_after_if_ok(status_after, &result, &mut ctx, out);
             result.map_err(CliError::from)
         }
         #[cfg(feature = "legacy")]
@@ -879,7 +872,6 @@ async fn match_subcommand(
                 flags,
                 command::legacy::status::StatusRenderMode::Oneshot,
             )
-            .await
             .emit_metrics(metrics_ctx)
             .map_err(CliError::from)
         }
@@ -937,7 +929,6 @@ async fn match_subcommand(
                 StatusFlags::for_tui(),
                 StatusRenderMode::Tui(_options),
             )
-            .await
             .emit_metrics(metrics_ctx)
             .map_err(CliError::from)
         }
@@ -964,7 +955,7 @@ async fn match_subcommand(
             )
             .context("Rubbed the wrong way.")
             .emit_metrics(metrics_ctx);
-            maybe_run_status_after(status_after, &result, &mut ctx, out).await;
+            run_status_after_if_ok(status_after, &result, &mut ctx, out);
             result.show_root_cause_error_then_exit_without_destructors(output)
         }
         #[cfg(feature = "legacy")]
@@ -1163,12 +1154,12 @@ async fn match_subcommand(
                 }
             };
 
-            maybe_run_status_after(status_after, &result, &mut ctx, out).await;
+            run_status_after_if_ok(status_after, &result, &mut ctx, out);
             result
         }
-        #[cfg(all(feature = "legacy", feature = "but-2"))]
+        #[cfg(feature = "legacy")]
         Subcommands::_Commit2(commit_args) => {
-            use crate::utils::{IntermediateChannel, OutputChannelExt};
+            use crate::utils::IntermediateChannel;
 
             let status_after = args.status_after;
             let mut ctx = setup::init_ctx(
@@ -1188,11 +1179,12 @@ async fn match_subcommand(
             )
             .emit_metrics(metrics_ctx)?;
             out.print_cli_output(outcome)?;
+            run_status_after_if_requested(status_after, &mut ctx, out);
             Ok(())
         }
-        #[cfg(all(feature = "legacy", feature = "but-2"))]
+        #[cfg(feature = "legacy")]
         Subcommands::_Squash2(squash_args) => {
-            use crate::utils::{IntermediateChannel, OutputChannelExt};
+            use crate::utils::IntermediateChannel;
 
             let status_after = args.status_after;
             let mut ctx = setup::init_ctx(
@@ -1212,11 +1204,12 @@ async fn match_subcommand(
             )
             .emit_metrics(metrics_ctx)?;
             out.print_cli_output(outcome)?;
+            run_status_after_if_requested(status_after, &mut ctx, out);
             Ok(())
         }
-        #[cfg(all(feature = "legacy", feature = "but-2"))]
+        #[cfg(feature = "legacy")]
         Subcommands::_Move2(move_args) => {
-            use crate::utils::{IntermediateChannel, OutputChannelExt};
+            use crate::utils::IntermediateChannel;
 
             let status_after = args.status_after;
             let mut ctx = setup::init_ctx(
@@ -1233,13 +1226,13 @@ async fn match_subcommand(
                 command::legacy::move2::r#move(&mut ctx, IntermediateChannel::new(out), move_args)
                     .emit_metrics(metrics_ctx)?;
             out.print_cli_output_human(outcome)?;
+            run_status_after_if_requested(status_after, &mut ctx, out);
             Ok(())
         }
-        #[cfg(all(feature = "legacy", feature = "but-2"))]
+        #[cfg(feature = "legacy")]
         Subcommands::_Diff2(diff_args) => {
-            use crate::utils::{IntermediateChannel, OutputChannelExt};
+            use crate::utils::IntermediateChannel;
 
-            let status_after = args.status_after;
             let mut ctx = setup::init_ctx(
                 &args,
                 InitCtxOptions {
@@ -1248,7 +1241,6 @@ async fn match_subcommand(
                 },
                 out,
             )?;
-            out.begin_status_after(status_after);
 
             let outcome =
                 command::legacy::diff2::diff(&mut ctx, IntermediateChannel::new(out), diff_args)
@@ -1352,7 +1344,7 @@ async fn match_subcommand(
             out.begin_status_after(status_after);
             let result = command::legacy::absorb::handle(&mut ctx, out, source.as_deref(), dry_run)
                 .emit_metrics(metrics_ctx);
-            maybe_run_status_after(status_after, &result, &mut ctx, out).await;
+            run_status_after_if_ok(status_after, &result, &mut ctx, out);
             result.map_err(CliError::from)
         }
         #[cfg(feature = "legacy")]
@@ -1629,7 +1621,7 @@ async fn match_subcommand(
                 }
             }
             let result = result.emit_metrics(metrics_ctx);
-            maybe_run_status_after(status_after, &result, &mut ctx, out).await;
+            run_status_after_if_ok(status_after, &result, &mut ctx, out);
             result.show_root_cause_error_then_exit_without_destructors(output)
         }
         #[cfg(feature = "legacy")]
@@ -1674,7 +1666,7 @@ async fn match_subcommand(
             let result = command::legacy::rub::handle_amend(&mut ctx, out, files, commit)
                 .context("Failed to amend.")
                 .emit_metrics(metrics_ctx);
-            maybe_run_status_after(status_after, &result, &mut ctx, out).await;
+            run_status_after_if_ok(status_after, &result, &mut ctx, out);
             result.show_root_cause_error_then_exit_without_destructors(output)
         }
         #[cfg(feature = "legacy")]
@@ -1715,7 +1707,7 @@ async fn match_subcommand(
                     .map_err(command::legacy::rub::stage_cli_error)
                     .emit_metrics(metrics_ctx)
             };
-            maybe_run_status_after(status_after, &result, &mut ctx, out).await;
+            run_status_after_if_ok(status_after, &result, &mut ctx, out);
             result
         }
         #[cfg(feature = "legacy")]
@@ -1763,7 +1755,7 @@ async fn match_subcommand(
             )
             .context("Failed to squash commits.")
             .emit_metrics(metrics_ctx);
-            maybe_run_status_after(status_after, &result, &mut ctx, out).await;
+            run_status_after_if_ok(status_after, &result, &mut ctx, out);
             result.show_root_cause_error_then_exit_without_destructors(output)
         }
         #[cfg(feature = "legacy")]
@@ -1791,7 +1783,7 @@ async fn match_subcommand(
             out.begin_status_after(status_after);
             let result = command::r#move::handle(&mut ctx, out, &source, &target, after)
                 .emit_metrics(metrics_ctx);
-            maybe_run_status_after(status_after, &result, &mut ctx, out).await;
+            run_status_after_if_ok(status_after, &result, &mut ctx, out);
             result.show_root_cause_error_then_exit_without_destructors(output)
         }
         #[cfg(feature = "legacy")]
@@ -1944,18 +1936,14 @@ fn is_not_in_git_repository_error(err: &anyhow::Error) -> bool {
 /// Errors from the status query itself are logged to stderr but never mask
 /// the mutation's success.
 #[cfg(feature = "legacy")]
-async fn maybe_run_status_after<T, E>(
+fn run_status_after_if_ok<T, E>(
     status_after: bool,
     result: &Result<T, E>,
     ctx: &mut but_ctx::Context,
     out: &mut OutputChannel,
 ) {
-    if !status_after {
-        return;
-    }
     if result.is_ok() {
-        let mutation_json = out.take_json_buffer();
-        run_status_after(ctx, out, mutation_json).await;
+        run_status_after_if_requested(status_after, ctx, out);
     } else {
         // Mutation failed — don't drain the buffer here. OutputChannel::drop
         // will flush any buffered JSON (e.g. structured illegal_move details)
@@ -1963,9 +1951,22 @@ async fn maybe_run_status_after<T, E>(
     }
 }
 
+#[cfg(feature = "legacy")]
+fn run_status_after_if_requested(
+    status_after: bool,
+    ctx: &mut but_ctx::Context,
+    out: &mut OutputChannel,
+) {
+    if !status_after {
+        return;
+    }
+    let mutation_json = out.take_json_buffer();
+    run_status_after(ctx, out, mutation_json);
+}
+
 /// Ignore mutation status output in non-legacy builds until a non-legacy status command exists.
 #[cfg(not(feature = "legacy"))]
-async fn maybe_run_status_after<T, E>(
+fn run_status_after_if_ok<T, E>(
     _status_after: bool,
     _result: &Result<T, E>,
     _ctx: &mut but_ctx::Context,
@@ -1986,7 +1987,7 @@ async fn maybe_run_status_after<T, E>(
 /// always emitted (with a `"status_error"` field on failure); in human mode
 /// a warning is printed to stderr.
 #[cfg(feature = "legacy")]
-async fn run_status_after(
+fn run_status_after(
     ctx: &mut but_ctx::Context,
     out: &mut OutputChannel,
     mutation_json: Option<serde_json::Value>,
@@ -2006,8 +2007,7 @@ async fn run_status_after(
             out,
             StatusFlags::all_false(),
             command::legacy::status::StatusRenderMode::Oneshot,
-        )
-        .await;
+        );
         let status_json = out.take_json_buffer().unwrap_or(serde_json::Value::Null);
 
         let mut combined = match status_result {
@@ -2050,9 +2050,7 @@ async fn run_status_after(
                 ..StatusFlags::all_false()
             },
             command::legacy::status::StatusRenderMode::Oneshot,
-        )
-        .await
-        {
+        ) {
             eprintln!(
                 "warning: status after mutation failed: {err:#}. Run 'but status' separately to check workspace state."
             );

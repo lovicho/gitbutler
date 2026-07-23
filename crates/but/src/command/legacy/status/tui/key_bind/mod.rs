@@ -100,6 +100,7 @@ pub fn default_key_binds() -> KeyBinds {
                 builder.details_top().register();
                 builder.details_bottom().register();
                 builder.toggle_full_screen_details().register();
+                builder.open_in_program().register();
 
                 builder
                     .key_bind("hide details", press().code(KeyCode::Char('d')), || {
@@ -799,6 +800,13 @@ impl KeyBindsBuilder<'_> {
         .long_description("Copy selection picker")
     }
 
+    fn open_in_program(&mut self) -> KeyBindsInModesBuilder<'_> {
+        self.key_bind("open", press().code(KeyCode::Char('o')), || {
+            Message::PickProgramThenOpen
+        })
+        .long_description("Open selection in program")
+    }
+
     fn back(&mut self) -> KeyBindsInModesBuilder<'_> {
         self.key_bind("back", press().code(KeyCode::Esc), || Message::Back)
             .hide_from_hotbar()
@@ -1068,6 +1076,8 @@ fn register_normal_mode_key_binds(builder: &mut KeyBindsBuilder<'_>, without_mar
         builder.copy().register();
         builder.copy_picker().register();
     }
+
+    builder.open_in_program().register();
 
     builder.reload().register();
     builder.back().hide_from_hotbar().register();

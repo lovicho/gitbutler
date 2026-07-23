@@ -942,4 +942,15 @@ pub mod utils {
             worktree_tips: vec![],
         }
     }
+
+    pub fn target_meta() -> but_core::ref_metadata::ProjectMeta {
+        but_core::ref_metadata::ProjectMeta {
+            target_ref: Some(
+                "refs/remotes/origin/main"
+                    .try_into()
+                    .expect("valid target ref"),
+            ),
+            ..Default::default()
+        }
+    }
 }

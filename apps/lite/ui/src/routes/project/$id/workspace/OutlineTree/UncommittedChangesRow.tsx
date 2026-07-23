@@ -17,7 +17,8 @@ import { Toolbar } from "@base-ui/react";
 import type { AbsorptionTarget, TreeChange, UnifiedPatch } from "@gitbutler/but-sdk";
 import type { FC } from "react";
 import { getRowButtonClassName } from "../Row-utils.ts";
-import { Row, RowBubble, RowLabel, RowLabelContainer, RowToolbar } from "../Row.tsx";
+import { Badge } from "#ui/components/Badge.tsx";
+import { Row, RowLabel, RowLabelContainer, RowToolbar } from "../Row.tsx";
 import { useQueries } from "@tanstack/react-query";
 import { treeChangeDiffsQueryOptions } from "#ui/api/queries.ts";
 import styles from "./UncommittedChangesRow.module.css";
@@ -108,7 +109,7 @@ export const UncommittedChangesRow: FC<{
 			<RowLabelContainer>
 				<RowLabel heading>Uncommitted changes</RowLabel>
 
-				<RowBubble variant="fillGray">{changes.length}</RowBubble>
+				<Badge variant="fillGray">{changes.length}</Badge>
 
 				{(lineStats.linesAdded > 0 || lineStats.linesRemoved > 0) && (
 					<span className={classes("text-12", styles.lineStats)}>

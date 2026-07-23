@@ -36,14 +36,8 @@ import { projectSlice } from "#ui/projects/state.ts";
 import { focusSelectionScope } from "#ui/selection-scopes.ts";
 import { useAppDispatch, useAppSelector } from "#ui/store.ts";
 import { prForgeUrl } from "#ui/pr.ts";
-import {
-	RowBubble,
-	type RowBubbleVariant,
-	RowLabel,
-	RowLabelContainer,
-	RowLabelFooter,
-	RowToolbar,
-} from "../Row.tsx";
+import { Badge, type BadgeVariant } from "#ui/components/Badge.tsx";
+import { RowLabel, RowLabelContainer, RowLabelFooter, RowToolbar } from "../Row.tsx";
 import { getRowButtonClassName } from "../Row-utils.ts";
 import { InlineEditor } from "./InlineEditor.tsx";
 import { insertBlankCommitMenuItem } from "./insertBlankCommitMenuItem.ts";
@@ -56,46 +50,46 @@ const CIBubble: FC<{ checks: AggregateCIChecks }> = (p) => {
 	switch (p.checks.status) {
 		case "success":
 			return (
-				<RowBubble aria-label="CI checks succeeded" variant="safe">
+				<Badge aria-label="CI checks succeeded" variant="safe">
 					<Icon name="tick" size={12} />
-				</RowBubble>
+				</Badge>
 			);
 		case "failure":
 			return (
-				<RowBubble aria-label="CI checks failed" variant="danger">
+				<Badge aria-label="CI checks failed" variant="danger">
 					<Icon name="cross" size={12} />
-				</RowBubble>
+				</Badge>
 			);
 		case "in_progress": {
-			const [variant, label]: [RowBubbleVariant, string] =
+			const [variant, label]: [BadgeVariant, string] =
 				p.checks.failure.length > 0
 					? ["danger", "CI checks in progress, some failed"]
 					: p.checks.actionRequired.length > 0
 						? ["warn", "CI checks in progress, some action required"]
 						: ["lightGray", "CI checks in progress"];
 			return (
-				<RowBubble aria-label={label} variant={variant}>
+				<Badge aria-label={label} variant={variant}>
 					<Icon name="spinner" size={12} />
-				</RowBubble>
+				</Badge>
 			);
 		}
 		case "cancelled":
 			return (
-				<RowBubble aria-label="CI checks cancelled" variant="warn">
-					<Icon name="warning" size={12} />
-				</RowBubble>
+				<Badge aria-label="CI checks cancelled" variant="lightGray">
+					<Icon name="cross" size={12} />
+				</Badge>
 			);
 		case "action_required":
 			return (
-				<RowBubble aria-label="CI checks action required" variant="warn">
+				<Badge aria-label="CI checks action required" variant="warn">
 					<Icon name="warning" size={12} />
-				</RowBubble>
+				</Badge>
 			);
 		case "unknown":
 			return (
-				<RowBubble aria-label="CI checks status unknown" variant="warn">
-					<Icon name="warning" size={12} />
-				</RowBubble>
+				<Badge aria-label="CI checks status unknown" variant="lightGray">
+					<Icon name="question" size={12} />
+				</Badge>
 			);
 	}
 };
@@ -425,7 +419,7 @@ export const BranchRow: FC<
 								onClick={(evt) => void openPRInBrowser(evt)}
 								className={classes(rowStyles.fadedText, styles.labelMetaItem)}
 							>
-								<Icon name="pr" />
+								<Icon name="pr" size={14} />
 								PR
 							</a>
 						)}

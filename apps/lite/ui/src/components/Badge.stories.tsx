@@ -1,0 +1,79 @@
+import preview from "#storybook/preview";
+import { Badge, type BadgeVariant } from "./Badge.tsx";
+import { Icon } from "./Icon.tsx";
+
+const meta = preview.meta({
+	component: Badge,
+	argTypes: {
+		variant: {
+			control: "select",
+			options: ["fillGray", "lightGray", "safe", "warn", "danger"] satisfies Array<BadgeVariant>,
+		},
+	},
+	args: {
+		children: "42",
+		variant: "fillGray",
+	},
+});
+
+export const Default = meta.story({ args: { variant: "fillGray", children: "42" } });
+
+export const AllVariants = meta.story({
+	render: () => (
+		<div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+			<Badge variant="fillGray">fillGray</Badge>
+			<Badge variant="lightGray">lightGray</Badge>
+			<Badge variant="safe">safe</Badge>
+			<Badge variant="warn">warn</Badge>
+			<Badge variant="danger">danger</Badge>
+		</div>
+	),
+});
+
+export const WithIcon = meta.story({
+	render: () => (
+		<div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+			<Badge variant="safe">
+				<Icon name="tick" size={12} />
+			</Badge>
+			<Badge variant="danger">
+				<Icon name="cross" size={12} />
+			</Badge>
+			<Badge variant="lightGray">
+				<Icon name="spinner" size={12} />
+			</Badge>
+			<Badge variant="warn">
+				<Icon name="warning" size={12} />
+			</Badge>
+		</div>
+	),
+});
+
+export const CIChecks = meta.story({
+	render: () => (
+		<div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+			{(
+				[
+					{ label: "success", variant: "safe", icon: "tick" },
+					{ label: "failure", variant: "danger", icon: "cross" },
+					{ label: "in progress", variant: "lightGray", icon: "spinner" },
+					{ label: "in progress (some failed)", variant: "danger", icon: "spinner" },
+					{ label: "cancelled", variant: "lightGray", icon: "cross" },
+					{ label: "action required", variant: "warn", icon: "warning" },
+					{ label: "unknown", variant: "lightGray", icon: "question" },
+				] satisfies ReadonlyArray<{
+					label: string;
+					variant: BadgeVariant;
+					icon: Parameters<typeof Icon>[0]["name"];
+				}>
+			).map(({ label, variant, icon }) => (
+				<div key={label} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+					<Badge variant={variant}>
+						<Icon name={icon} size={12} />
+					</Badge>
+					<span style={{ fontSize: 12 }}>{label}</span>
+				</div>
+			))}
+		</div>
+	),
+});

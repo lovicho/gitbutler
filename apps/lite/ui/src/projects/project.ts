@@ -1,7 +1,9 @@
-import type { HeadInfoIndex } from "#ui/api/ref-info.ts";
 import {
+	branchFileParent,
 	branchOperand,
+	commitFileParent,
 	commitOperand,
+	fileOperand,
 	hunkOperand,
 	operandEquals,
 	operandIdentityKey,
@@ -38,8 +40,10 @@ export type SelectionState = {
 
 type DetailsSelectionScope = Extract<SelectionScope, "uncommitted-files" | "outline">;
 
+type CheckableOperand = Extract<Operand, { _tag: "Commit" | "File" }>;
+
 type WorkspaceState = {
-	checkedCommitIds: Record<string, true>;
+	checkedOperands: Record<string, CheckableOperand>;
 	detailsSelectionScope: DetailsSelectionScope | null;
 	highlightedCommitIds: Array<string>;
 	mode: OutlineMode;
@@ -54,7 +58,7 @@ const createInitialSelectionState = (): SelectionState => ({
 });
 
 const createInitialWorkspaceState = (): WorkspaceState => ({
-	checkedCommitIds: {},
+	checkedOperands: {},
 	detailsSelectionScope: null,
 	highlightedCommitIds: [],
 	mode: defaultOutlineMode,
@@ -177,6 +181,21 @@ export const projectReducers = {
 			operandEquals(branchOperand(workspaceState.mode.operand), oldBranchOperand)
 		)
 			workspaceState.mode = renameBranchOutlineMode({ operand: newBranch });
+
+		const oldFileParent = branchFileParent(oldBranch);
+		const newFileParent = branchFileParent(newBranch);
+		for (const [key, operand] of Object.entries(workspaceState.checkedOperands)) {
+			if (
+				operand._tag !== "File" ||
+				operand.parent._tag !== "Branch" ||
+				!operandEquals(operand.parent, oldFileParent)
+			)
+				continue;
+
+			const newOperand = fileOperand({ parent: newFileParent, path: operand.path });
+			delete workspaceState.checkedOperands[key];
+			workspaceState.checkedOperands[operandIdentityKey(newOperand)] = newOperand;
+		}
 	},
 	enterTransferMode: (state: ProjectState, { mode }: { mode: TransferMode }) => {
 		state.workspace.mode = transferOutlineMode(mode);
@@ -278,35 +297,26 @@ export const projectReducers = {
 	) => {
 		state.workspace.highlightedCommitIds = commitIds ?? [];
 	},
-	checkCommit: (
+	checkOperand: (
 		state: ProjectState,
-		{ commitId, checked }: { commitId: string; checked: boolean },
+		{ operand, checked }: { operand: CheckableOperand; checked: boolean },
 	) => {
-		const checkedCommitIds = state.workspace.checkedCommitIds;
-		if (checked) checkedCommitIds[commitId] = true;
-		else delete checkedCommitIds[commitId];
+		const key = operandIdentityKey(operand);
+		if (checked) state.workspace.checkedOperands[key] = operand;
+		else delete state.workspace.checkedOperands[key];
 	},
-	checkCommits: (
+	checkOperands: (
 		state: ProjectState,
-		{ commitIds, checked }: { commitIds: Array<string>; checked: boolean },
+		{ operands, checked }: { operands: Array<CheckableOperand>; checked: boolean },
 	) => {
-		const checkedCommitIds = state.workspace.checkedCommitIds;
-		for (const commitId of commitIds) {
-			if (checked) checkedCommitIds[commitId] = true;
-			else delete checkedCommitIds[commitId];
+		for (const operand of operands) {
+			const key = operandIdentityKey(operand);
+			if (checked) state.workspace.checkedOperands[key] = operand;
+			else delete state.workspace.checkedOperands[key];
 		}
 	},
-	setCheckedCommits: (state: ProjectState, { commitIds }: { commitIds: Array<string> }) => {
-		state.workspace.checkedCommitIds = commitIds.reduce(
-			(acc, commitId) => {
-				acc[commitId] = true;
-				return acc;
-			},
-			{} as Record<string, true>,
-		);
-	},
-	clearCheckedCommits: (state: ProjectState) => {
-		state.workspace.checkedCommitIds = {};
+	clearCheckedOperands: (state: ProjectState) => {
+		state.workspace.checkedOperands = {};
 	},
 	updateRewrittenCommitReferences: (
 		state: ProjectState,
@@ -320,12 +330,24 @@ export const projectReducers = {
 				workspaceState.selection.outline = commitOperand({ commitId: newId });
 		}
 
-		for (const oldId of Object.keys(workspaceState.checkedCommitIds)) {
-			const newId = replacedCommits[oldId];
-			if (newId !== undefined) {
-				delete workspaceState.checkedCommitIds[oldId];
-				workspaceState.checkedCommitIds[newId] = true;
+		for (const [key, operand] of Object.entries(workspaceState.checkedOperands)) {
+			let newOperand: CheckableOperand | null = null;
+			if (operand._tag === "Commit") {
+				const newId = replacedCommits[operand.commitId];
+				if (newId !== undefined) newOperand = commitOperand({ commitId: newId });
+			} else if (operand.parent._tag === "Commit") {
+				const newId = replacedCommits[operand.parent.commitId];
+				if (newId !== undefined) {
+					newOperand = fileOperand({
+						parent: commitFileParent({ commitId: newId }),
+						path: operand.path,
+					});
+				}
 			}
+			if (!newOperand) continue;
+
+			delete workspaceState.checkedOperands[key];
+			workspaceState.checkedOperands[operandIdentityKey(newOperand)] = newOperand;
 		}
 
 		if (workspaceState.mode._tag === "RewordCommit") {
@@ -339,19 +361,32 @@ export const projectReducers = {
 	},
 };
 
-const selectCheckedCommits = createSelector(
-	(state: ProjectState) => state.workspace.checkedCommitIds,
-	(_state: ProjectState, headInfoIndex: HeadInfoIndex) => headInfoIndex,
-	(checkedCommitIds, headInfoIndex) =>
+const selectCheckedOperands = createSelector(
+	(state: ProjectState) => state.workspace.checkedOperands,
+	(checkedOperands): Array<CheckableOperand> => Object.values(checkedOperands),
+);
+
+const selectCheckedOperandKeys = createSelector(
+	(state: ProjectState) => state.workspace.checkedOperands,
+	(checkedOperands): Set<string> => new Set(Object.keys(checkedOperands)),
+);
+
+const selectCheckedCommitIds = createSelector(
+	selectCheckedOperands,
+	(checkedOperands): Set<string> =>
 		new Set(
-			Object.keys(checkedCommitIds).filter(
-				(commitId) => headInfoIndex.commitContextById(commitId) !== undefined,
-			),
+			checkedOperands.flatMap((operand) => (operand._tag === "Commit" ? [operand.commitId] : [])),
 		),
 );
 
-const selectCheckedCommitOperands = createSelector(selectCheckedCommits, (checkedCommitIds) =>
-	Array.from(checkedCommitIds).map((commitId) => commitOperand({ commitId })),
+const selectCheckedOperandCount = createSelector(
+	selectCheckedOperands,
+	(checkedOperands) => checkedOperands.length,
+);
+
+const selectHasCheckedOperands = createSelector(
+	selectCheckedOperands,
+	(checkedOperands) => checkedOperands.length > 0,
 );
 
 export const projectSelectors = {
@@ -380,6 +415,7 @@ export const projectSelectors = {
 		);
 		return selection !== null && operandEquals(selection, operand);
 	},
+	selectPrimaryOutlineSelection: (state: ProjectState) => state.workspace.selection.outline,
 	selectSelectionOutline: (state: ProjectState, navigationIndex: NavigationIndex<Operand>) =>
 		resolveNavigationIndexSelection(
 			navigationIndex,
@@ -400,12 +436,11 @@ export const projectSelectors = {
 		),
 	selectOutlineModeState: (state: ProjectState) => state.workspace.mode,
 	selectHighlightedCommitIds: (state: ProjectState) => state.workspace.highlightedCommitIds,
-	selectCommitChecked: (state: ProjectState, commitId: string) =>
-		state.workspace.checkedCommitIds[commitId] === true,
-	selectCheckedCommits,
-	selectCheckedCommitOperands,
-	selectCheckedCommitCount: (state: ProjectState, headInfoIndex: HeadInfoIndex) =>
-		selectCheckedCommits(state, headInfoIndex).size,
-	selectHasCheckedCommits: (state: ProjectState, headInfoIndex: HeadInfoIndex) =>
-		selectCheckedCommits(state, headInfoIndex).size > 0,
+	selectOperandChecked: (state: ProjectState, operand: CheckableOperand) =>
+		state.workspace.checkedOperands[operandIdentityKey(operand)] !== undefined,
+	selectCheckedOperands,
+	selectCheckedOperandKeys,
+	selectCheckedCommitIds,
+	selectCheckedOperandCount,
+	selectHasCheckedOperands,
 };

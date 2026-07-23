@@ -284,7 +284,7 @@ impl Context {
         let project_data_dir = repo.gitbutler_storage_path()?;
         #[cfg(not(feature = "legacy"))]
         {
-            Ok(Context {
+            Context {
                 gitdir: gitdir.clone(),
                 project_data_dir: project_data_dir.clone(),
                 settings,
@@ -297,7 +297,7 @@ impl Context {
                 app_cache_dir,
                 workspace: Default::default(),
             }
-            .with_repo(repo))
+            .with_repo(repo)
         }
         #[cfg(feature = "legacy")]
         {
@@ -308,7 +308,7 @@ impl Context {
             let legacy_project = LegacyProject::find_by_worktree_dir(worktree_dir)
                 .unwrap_or_else(|_| default_legacy_project_at_repo(&repo));
             let cache_mode = CacheMode::Disk;
-            Ok(Context {
+            Context {
                 settings,
                 gitdir: gitdir.clone(),
                 project_data_dir: project_data_dir.clone(),
@@ -322,7 +322,7 @@ impl Context {
                 app_cache_dir,
                 workspace: Default::default(),
             }
-            .with_repo(repo))
+            .with_repo(repo)
         }
     }
 
@@ -430,7 +430,7 @@ impl Context {
                 .unwrap_or_else(|_| default_legacy_project_at_repo(&repo));
             let gitdir = repo.git_dir().to_owned();
             let cache_mode = CacheMode::Disk;
-            Ok(Context {
+            Context {
                 settings: app_settings(but_path::app_config_dir()?)?,
                 gitdir: gitdir.clone(),
                 project_data_dir: project_data_dir.clone(),
@@ -444,14 +444,14 @@ impl Context {
                 app_cache_dir,
                 workspace: Default::default(),
             }
-            .with_repo(repo))
+            .with_repo(repo)
         }
 
         #[cfg(not(feature = "legacy"))]
         {
             let gitdir = repo.git_dir().to_owned();
             let cache_mode = CacheMode::Disk;
-            Ok(crate::Context {
+            crate::Context {
                 gitdir: gitdir.clone(),
                 project_data_dir: project_data_dir.clone(),
                 settings: app_settings(but_path::app_config_dir()?)?,
@@ -464,7 +464,7 @@ impl Context {
                 app_cache_dir,
                 workspace: Default::default(),
             }
-            .with_repo(repo))
+            .with_repo(repo)
         }
     }
 
@@ -500,7 +500,7 @@ impl Context {
             };
 
         let cache_mode = CacheMode::Disk;
-        Ok(Context {
+        Context {
             #[cfg(feature = "legacy")]
             legacy_project: default_legacy_project_at_repo(&repo),
             gitdir: gitdir.clone(),
@@ -515,13 +515,25 @@ impl Context {
             app_cache_dir,
             workspace: Default::default(),
         }
-        .with_repo(repo))
+        .with_repo(repo)
     }
 
     /// Use `repo` instead of the default repository that would be opened on first query.
-    pub fn with_repo(mut self, repo: gix::Repository) -> Self {
+    pub fn with_repo(mut self, repo: gix::Repository) -> anyhow::Result<Self> {
+        if !ProjectMeta::is_ported_repo(&repo)? {
+            let configured = ProjectMeta::resolve(&repo)?;
+            let project_meta = if configured == ProjectMeta::default() {
+                but_meta::legacy_storage::read_legacy_project_meta(
+                    &self.project_data_dir.join("virtual_branches.toml"),
+                )?
+                .unwrap_or_default()
+            } else {
+                configured
+            };
+            project_meta.persist(&repo)?;
+        }
         self.repo.assign(repo);
-        self
+        Ok(self)
     }
 
     /// Use an in-memory application cache instead of cache files on disk.
@@ -775,12 +787,6 @@ impl Context {
         let graph = but_graph::Graph::from_head(&repo, &meta, self.project_meta()?, options)?;
         graph.into_workspace()
     }
-
-    fn meta_inner_read_only(&self) -> anyhow::Result<but_meta::VirtualBranchesTomlMetadata> {
-        but_meta::VirtualBranchesTomlMetadata::from_path_read_only(
-            self.project_data_dir().join("virtual_branches.toml"),
-        )
-    }
 }
 
 /// Non-project/global data access. Only for when no project is available (yet).
@@ -797,29 +803,23 @@ impl Context {
 
 /// Utilities
 impl Context {
-    /// Return project metadata from Git config, falling back to the legacy workspace metadata
-    /// if it wasn't ported yet.
+    /// Return project metadata from Git config.
     ///
     /// This always reads the current on-disk state, so target changes made by other processes
     /// or through other repository handles are observed even by long-lived instances.
-    /// It never writes - porting happens on the first [`Self::set_project_meta()`] or
-    /// [`Self::set_default_target()`](Self::set_default_target).
     pub fn project_meta(&self) -> anyhow::Result<ProjectMeta> {
         let repo = self.repo.get()?;
-        // The legacy fallback opens a database and parses TOML - only pay for that
-        // when the repository wasn't ported to Git configuration yet.
-        ProjectMeta::resolve_with(&repo, || self.meta_inner_read_only())
+        ProjectMeta::resolve(&repo)
     }
 
-    /// Store project metadata in Git config and back-fill the legacy workspace metadata.
+    /// Store project metadata in Git config.
     ///
     /// Note that the cached repository handle needs no reload: [`Self::project_meta()`]
     /// re-reads the on-disk configuration on every call.
     pub fn set_project_meta(&self, project_meta: ProjectMeta) -> anyhow::Result<()> {
         {
             let repo = self.repo.get()?;
-            let mut meta = self.meta()?;
-            project_meta.persist(&repo, &mut meta)?;
+            project_meta.persist(&repo)?;
         }
         self.invalidate_workspace_cache()?;
         Ok(())

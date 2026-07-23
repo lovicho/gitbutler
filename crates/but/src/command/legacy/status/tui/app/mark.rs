@@ -1,14 +1,12 @@
 use std::{convert::Infallible, ops::Deref};
 
-use anyhow::Context as _;
-use but_core::{ChangeId, ref_metadata::StackId};
-use but_ctx::Context;
+use but_core::ChangeId;
 use but_hunk_assignment::HunkAssignment;
 use nonempty::NonEmpty;
 use strum::VariantArray;
 
 use crate::{
-    CliId, IdMap,
+    CliId,
     command::legacy::status::{
         StatusOutputLine,
         output::StatusOutputLineData,
@@ -1014,42 +1012,4 @@ fn propagate_marks_from_parent_to_children(
         }
     }
     Ok(())
-}
-
-pub fn commits_on_branch(
-    ctx: &Context,
-    stack_id: StackId,
-    name: &str,
-) -> anyhow::Result<Vec<(gix::ObjectId, String, Option<ChangeId>)>> {
-    let guard = ctx.shared_worktree_access();
-    let id_map = IdMap::new_from_context(ctx, None, guard.read_permission())?;
-
-    let segment = id_map
-        .stacks()
-        .iter()
-        .filter(|stack| stack.id.is_some_and(|id| id == stack_id))
-        .flat_map(|stack| &stack.segments)
-        .find(|segment| {
-            segment
-                .branch_name()
-                .is_some_and(|branch_name| branch_name == name)
-        })
-        .context("segment not found")?;
-
-    let commits = segment
-        .workspace_commits
-        .iter()
-        .map(|commit| {
-            (
-                commit.commit_id(),
-                commit.short_id.clone(),
-                commit
-                    .change_id
-                    .as_ref()
-                    .map(|change_id| change_id.change_id.clone()),
-            )
-        })
-        .collect::<Vec<_>>();
-
-    Ok(commits)
 }

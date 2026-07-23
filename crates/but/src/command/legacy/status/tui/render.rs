@@ -109,6 +109,9 @@ pub fn render_app(app: &App, frame: &mut Frame) {
         Some(Modal::CopySelectionPicker { picker, .. }) => {
             picker.render(app.has_focus, frame.area(), frame);
         }
+        Some(Modal::ProgramPicker { picker, .. }) => {
+            picker.render(app.has_focus, frame.area(), frame)
+        }
         Some(Modal::Help { help, .. }) => help.render(frame.area(), frame),
         None => {}
     }

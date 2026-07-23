@@ -6,6 +6,9 @@ use std::{
 };
 
 use bstr::{BStr, ByteSlice};
+use but_api::open::{
+    list_builtin_program_specs, list_user_defined_program_specs, program::ProgramSpec,
+};
 use but_ctx::Context;
 use crossterm::event::Event;
 use gitbutler_operating_modes::OperatingMode;
@@ -15,11 +18,14 @@ use ratatui::prelude::*;
 
 use crate::{
     CliId,
-    command::legacy::status::{
-        FilesStatusFlag, StatusFlags, StatusOutputLine, TuiLaunchOptions, TuiOutcome,
-        TuiRunOptions,
-        output::StatusOutputLineData,
-        tui::{copy_selection_picker::Clipboard, details::Details, remember_selection},
+    command::{
+        legacy::status::{
+            FilesStatusFlag, StatusFlags, StatusOutputLine, TuiLaunchOptions, TuiOutcome,
+            TuiRunOptions,
+            output::StatusOutputLineData,
+            tui::{copy_selection_picker::Clipboard, details::Details, remember_selection},
+        },
+        open::{self, Openable},
     },
     theme::Theme,
     tui::TerminalGuard,
@@ -212,6 +218,7 @@ impl App {
             Some(Modal::GotoBranchPicker { key_binds, .. })
             | Some(Modal::ApplyStackPicker { key_binds, .. })
             | Some(Modal::CopySelectionPicker { key_binds, .. })
+            | Some(Modal::ProgramPicker { key_binds, .. })
             | Some(Modal::Help { key_binds, .. }) => key_binds,
             None => {
                 if let Mode::Normal(NormalMode { marks }) = &*self.mode
@@ -408,6 +415,10 @@ impl App {
             Message::CopyToClipboard(text) => {
                 self.clipboard.set_text(text)?;
             }
+            Message::PickProgramThenOpen => self.handle_pick_program_then_open(ctx)?,
+            Message::OpenInProgram(program, to_open) => {
+                self.handle_open_in_program(&program, &to_open, terminal_guard, messages)?;
+            }
             Message::ShowToast { kind, text } => {
                 self.toasts.insert(kind, text);
             }
@@ -448,6 +459,14 @@ impl App {
                         }
                         Modal::Confirm { .. } | Modal::Help { .. } => {
                             self.modal = Some(modal);
+                        }
+                        Modal::ProgramPicker { picker, key_binds } => {
+                            self.modal = picker
+                                .handle_message(fuzzy_picker_message, ctx, messages)?
+                                .map(|picker| Modal::ProgramPicker {
+                                    picker: Box::new(picker),
+                                    key_binds,
+                                });
                         }
                     }
                 }
@@ -1313,6 +1332,88 @@ impl App {
         Ok(())
     }
 
+    fn handle_pick_program_then_open(&mut self, ctx: &Context) -> anyhow::Result<()> {
+        let selection = if matches!(&*self.mode, Mode::Details(..)) {
+            self.details.selected_section_cli_id()
+        } else {
+            self.cursor
+                .selected_line(&self.status_lines)
+                .and_then(|selection| selection.data.cli_id())
+        };
+
+        let Some(selection) = selection else {
+            return Ok(());
+        };
+
+        let to_open = match &**selection {
+            CliId::UncommittedHunkOrFile(uncommitted) => {
+                Openable::try_from_uncommitted(&*ctx.repo.get()?, uncommitted)?
+            }
+            CliId::CommittedFile { path, .. } => {
+                Openable::try_from_relpath(&*ctx.repo.get()?, path.as_bstr())?
+            }
+            _ => {
+                return Ok(());
+            }
+        };
+
+        let builtin_program_specs = list_builtin_program_specs();
+        let user_defined_program_specs = list_user_defined_program_specs();
+        let mut all_program_specs = user_defined_program_specs
+            .iter()
+            .chain(builtin_program_specs)
+            .cloned();
+
+        let mut items = NonEmpty::new(
+            all_program_specs
+                .next()
+                .expect("BUG: Program specs cannot be empty"),
+        );
+        items.extend(all_program_specs);
+
+        self.modal = Some(Modal::ProgramPicker {
+            picker: Box::new(FuzzyPicker::new(
+                items,
+                self.theme,
+                |item, _ctx, messages| {
+                    messages.push(Message::OpenInProgram(item, to_open));
+                    Ok(())
+                },
+            )),
+            key_binds: fuzzy_picker_key_binds(),
+        });
+
+        Ok(())
+    }
+
+    fn handle_open_in_program<T>(
+        &mut self,
+        program: &ProgramSpec,
+        to_open: &Openable,
+        terminal_guard: &mut T,
+        messages: &mut Vec<Message>,
+    ) -> anyhow::Result<()>
+    where
+        T: TerminalGuard,
+    {
+        let _suspend_guard = if program.requires_terminal() {
+            Some(terminal_guard.suspend()?)
+        } else {
+            None
+        };
+
+        open::run(program, to_open)?;
+
+        if !program.requires_terminal() {
+            messages.push(Message::ShowToast {
+                kind: ToastKind::Info,
+                text: format!("File opened in {} in the background", program.name).into(),
+            });
+        }
+
+        Ok(())
+    }
+
     /// Returns the currently selected commit id when the selected line is a commit.
     fn selected_commit_id(&self) -> Option<gix::ObjectId> {
         let selection = self.cursor.selected_line(&self.status_lines)?;
@@ -1528,6 +1629,10 @@ pub enum Modal {
         picker: Box<FuzzyPicker<ApplyBranchItem>>,
         key_binds: KeyBinds,
     },
+    ProgramPicker {
+        picker: Box<FuzzyPicker<ProgramSpec>>,
+        key_binds: KeyBinds,
+    },
     Help {
         help: Box<Help>,
         key_binds: KeyBinds,
@@ -1539,7 +1644,8 @@ impl Modal {
         match self {
             Modal::CopySelectionPicker { .. }
             | Modal::GotoBranchPicker { .. }
-            | Modal::ApplyStackPicker { .. } => {
+            | Modal::ApplyStackPicker { .. }
+            | Modal::ProgramPicker { .. } => {
                 Some(Message::FuzzyPicker(FuzzyPickerMessage::Input(event)))
             }
             Modal::Help { help, .. } if help.is_search_focused() => {
@@ -1614,6 +1720,25 @@ impl FuzzyPickerItem for GotoBranchItem {
             Self::Branch(..) => theme.local_branch,
             Self::Uncommitted => theme.info,
         }
+    }
+}
+
+impl FuzzyPickerItem for ProgramSpec {
+    fn columns(&self, searchable: SearchableToken) -> impl IntoIterator<Item = Col<'_>> {
+        [
+            Col {
+                text: self.id.clone().into(),
+                searchable: None,
+            },
+            Col {
+                text: self.name.clone().into(),
+                searchable: Some(searchable),
+            },
+        ]
+    }
+
+    fn style(&self, theme: &'static Theme) -> Style {
+        theme.info
     }
 }
 

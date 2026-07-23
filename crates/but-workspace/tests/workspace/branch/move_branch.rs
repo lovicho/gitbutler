@@ -7,7 +7,7 @@ use snapbox::IntoData;
 
 use crate::ref_info::with_workspace_commit::utils::{
     StackState, add_stack_with_segments, named_writable_scenario_with_description,
-    named_writable_scenario_with_description_and_graph,
+    named_writable_scenario_with_description_and_graph, project_meta,
 };
 
 #[test]
@@ -654,9 +654,7 @@ fn move_empty_branch_on_top_of_empty_branch_in_same_stack() -> anyhow::Result<()
     );
     add_stack_with_segments(&mut meta, 1, "B", StackState::InWorkspace, &["A"]);
 
-    let project_meta = meta
-        .workspace(but_core::WORKSPACE_REF_NAME.try_into()?)?
-        .project_meta();
+    let project_meta = project_meta(&repo)?;
     let graph = but_graph::Graph::from_head(
         &repo,
         &meta,
@@ -721,9 +719,7 @@ fn move_empty_branch_on_top_of_empty_branch_across_stacks() -> anyhow::Result<()
     add_stack_with_segments(&mut meta, 1, "A", StackState::InWorkspace, &[]);
     add_stack_with_segments(&mut meta, 2, "B", StackState::InWorkspace, &[]);
 
-    let project_meta = meta
-        .workspace(but_core::WORKSPACE_REF_NAME.try_into()?)?
-        .project_meta();
+    let project_meta = project_meta(&repo)?;
     let graph = but_graph::Graph::from_head(
         &repo,
         &meta,
@@ -1276,7 +1272,6 @@ fn set_workspace_metadata(
     if let Some((ws_meta, ref_name)) = ws_meta.zip(ws.ref_name()) {
         let mut md = meta.workspace(ref_name)?;
         *md = ws_meta;
-        md.set_project_meta(ws.graph.project_meta.clone());
         meta.set_workspace(&md)?;
     }
     Ok(())
@@ -1308,14 +1303,8 @@ mod single_branch_mode {
         BranchOrderMetadata::from_paths(repo.path().join("virtual-branches.toml"), repo.path())
     }
 
-    fn project_meta(meta: &impl RefMetadata) -> but_core::ref_metadata::ProjectMeta {
-        meta.workspace(
-            but_core::WORKSPACE_REF_NAME
-                .try_into()
-                .expect("valid workspace ref"),
-        )
-        .map(|workspace| workspace.project_meta())
-        .unwrap_or_default()
+    fn project_meta(repo: &gix::Repository) -> but_core::ref_metadata::ProjectMeta {
+        but_core::ref_metadata::ProjectMeta::resolve(repo).unwrap_or_default()
     }
 
     fn ad_hoc_workspace_with_three_non_empty_branches(
@@ -1326,7 +1315,8 @@ mod single_branch_mode {
         BranchOrderMetadata,
         but_core::ref_metadata::ProjectMeta,
     )> {
-        let (tmp, repo, legacy_meta) = named_writable_scenario("single-branch-three-branch-stack")?;
+        let (tmp, repo, _legacy_meta) =
+            named_writable_scenario("single-branch-three-branch-stack")?;
         if head != "C" {
             invoke_bash(&format!("git checkout {head}\n"), &repo);
         }
@@ -1337,7 +1327,8 @@ mod single_branch_mode {
             r("refs/heads/A").to_owned(),
             r("refs/heads/main").to_owned(),
         ])?;
-        Ok((tmp, repo, meta, project_meta(&legacy_meta)))
+        let project_meta = project_meta(&repo);
+        Ok((tmp, repo, meta, project_meta))
     }
 
     /// `move_branch` returns the reordered chain instead of persisting it (so callers can skip
@@ -1449,11 +1440,8 @@ mod single_branch_mode {
         BranchOrderMetadata,
         but_core::ref_metadata::ProjectMeta,
     )> {
-        let (tmp, repo, legacy_meta) = named_writable_scenario("single-branch-with-3-commits")?;
-        let project_meta = legacy_meta
-            .workspace(but_core::WORKSPACE_REF_NAME.try_into()?)
-            .map(|w| w.project_meta())
-            .unwrap_or_default();
+        let (tmp, repo, _legacy_meta) = named_writable_scenario("single-branch-with-3-commits")?;
+        let project_meta = crate::ref_info::with_workspace_commit::utils::project_meta(&repo)?;
         let mut meta = branch_order_meta(&repo)?;
 
         let main_ref = r("refs/heads/main");

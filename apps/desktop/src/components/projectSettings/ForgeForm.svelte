@@ -3,6 +3,7 @@
 	import GitHubAccountBadge from "$components/forge/GitHubAccountBadge.svelte";
 	import GitLabAccountBadge from "$components/forge/GitLabAccountBadge.svelte";
 	import ForgeAccountConfig from "$components/projectSettings/ForgeAccountConfig.svelte";
+	import { GIT_CONFIG_SERVICE } from "$lib/config/gitConfigService";
 	import {
 		bitbucketAccountIdentifierToString,
 		stringToBitbucketAccountIdentifier,
@@ -30,6 +31,7 @@
 		ForgeName,
 		GithubAccountIdentifier,
 		GitlabAccountIdentifier,
+		ReviewStackingDescription,
 	} from "@gitbutler/but-sdk";
 
 	type ForgeSelection = ForgeName | "default";
@@ -49,6 +51,12 @@
 	const forgeInfo = $derived(forgeInfoQuery.response);
 	const determinedForgeType = $derived(forgeInfo?.name ?? "default");
 	const projectsService = inject(PROJECTS_SERVICE);
+	const gitConfigService = inject(GIT_CONFIG_SERVICE);
+	const gitConfigQuery = $derived(gitConfigService.gbConfig(projectId));
+	const reviewStackingDescription = $derived(
+		(gitConfigQuery.response?.gitbutlerReviewStackingDescription ??
+			"bottom") as ReviewStackingDescription,
+	);
 	const projectQuery = $derived(projectsService.getProject(projectId));
 	const project = $derived(projectQuery.response);
 
@@ -102,6 +110,10 @@
 			details: account,
 		});
 	}
+
+	async function updateReviewStackingDescription(value: ReviewStackingDescription) {
+		await gitConfigService.setGbConfig(projectId, { gitbutlerReviewStackingDescription: value });
+	}
 </script>
 
 <CardGroup>
@@ -141,6 +153,38 @@
 				{/snippet}
 			</Select>
 		{/if}
+	</CardGroup.Item>
+
+	<CardGroup.Item>
+		{#snippet title()}
+			Stack information in review descriptions
+		{/snippet}
+
+		{#snippet caption()}
+			Choose where GitButler-managed stack information appears. Changes apply on the next review
+			sync. The default is Bottom.
+		{/snippet}
+
+		<div data-testid="review-stacking-description-select">
+			<Select
+				value={reviewStackingDescription}
+				options={[
+					{ label: "Bottom", value: "bottom" },
+					{ label: "Top", value: "top" },
+					{ label: "Disabled", value: "disabled" },
+				]}
+				wide
+				onselect={(value) => updateReviewStackingDescription(value as ReviewStackingDescription)}
+			>
+				{#snippet itemSnippet({ item, highlighted })}
+					<div data-testid={`review-stacking-description-option-${item.value}`}>
+						<SelectItem selected={item.value === reviewStackingDescription} {highlighted}>
+							{item.label}
+						</SelectItem>
+					</div>
+				{/snippet}
+			</Select>
+		</div>
 	</CardGroup.Item>
 
 	{#if forgeInfo?.name === "github"}

@@ -128,7 +128,7 @@ pub(crate) mod function {
 
     use but_core::{
         ObjectStorageExt as _, RefMetadata, RepositoryExt as _,
-        ref_metadata::{ProjectMeta, ProjectedWorkspaceStack, StackId},
+        ref_metadata::{ProjectedWorkspaceStack, StackId},
     };
     use but_graph::init::Overlay;
     use gix::{
@@ -590,13 +590,8 @@ pub(crate) mod function {
             workspace_ref_name,
             workspace_ref_expected,
         )?;
-        // Fully remove the workspace, which includes the target branch.
-        // For this we will need more flexibility, on-demand inference or
-        // git-configuration based configuration, so there is always a fallback.
+        // Fully remove the workspace metadata. Project metadata remains independent in Git config.
         meta.remove(workspace_ref_name)?;
-        // The project metadata ported to repo-local Git config mirrors the just-removed
-        // workspace metadata, so clear it as well or the deleted target would keep resolving.
-        ProjectMeta::remove_from_local_config(repo)?;
 
         let overlay = Overlay::default().with_entrypoint(
             ref_to_checkout.commit_id,

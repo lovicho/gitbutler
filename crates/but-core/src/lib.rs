@@ -98,6 +98,7 @@ pub mod cmd;
 /// Various settings
 pub mod settings;
 pub use settings::git::types::GitConfigSettings;
+pub use settings::git::ui::ReviewStackingDescription;
 
 pub mod snapshot;
 

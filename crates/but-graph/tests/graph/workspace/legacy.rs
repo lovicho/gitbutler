@@ -1,9 +1,7 @@
 use but_graph::Graph;
 
-use super::project_meta;
 use crate::init::utils::{
-    add_workspace_with_target, add_workspace_without_target, read_only_in_memory_scenario,
-    standard_options,
+    add_workspace, add_workspace_with_target, read_only_in_memory_scenario, standard_options,
 };
 
 #[test]
@@ -12,9 +10,9 @@ fn distinguishes_target_base_from_ref_tip() -> anyhow::Result<()> {
     let base_id = repo.rev_parse_single(":/M2")?.detach();
     let target_tip_id = repo.rev_parse_single("origin/main")?.detach();
 
-    add_workspace_with_target(&mut meta, base_id);
+    let project_meta = add_workspace_with_target(&mut meta, base_id);
 
-    let ws = Graph::from_head(&repo, &*meta, project_meta(&*meta), standard_options())?
+    let ws = Graph::from_head(&repo, &*meta, project_meta, standard_options())?
         .validated()?
         .into_workspace()?;
 
@@ -32,11 +30,16 @@ fn distinguishes_target_base_from_ref_tip() -> anyhow::Result<()> {
 fn target_helpers_return_none_without_target() -> anyhow::Result<()> {
     let (repo, mut meta) = read_only_in_memory_scenario("ws/no-target-without-ws-commit")?;
 
-    add_workspace_without_target(&mut meta);
+    add_workspace(&mut meta);
 
-    let ws = Graph::from_head(&repo, &*meta, project_meta(&*meta), standard_options())?
-        .validated()?
-        .into_workspace()?;
+    let ws = Graph::from_head(
+        &repo,
+        &*meta,
+        but_core::ref_metadata::ProjectMeta::default(),
+        standard_options(),
+    )?
+    .validated()?
+    .into_workspace()?;
 
     assert_eq!(ws.target_base_commit_id(), None);
     assert_eq!(ws.target_ref_tip_commit_id(), None);

@@ -109,7 +109,6 @@ impl CliOutput for CommitOutcome {
     }
 }
 
-#[cfg_attr(not(feature = "but-2"), expect(dead_code))]
 pub fn commit(
     ctx: &mut Context,
     mut out: IntermediateChannel<'_>,

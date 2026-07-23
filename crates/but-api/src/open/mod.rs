@@ -702,7 +702,7 @@ pub fn open_in_editor(
     ctx: &mut but_ctx::Context,
     editor_id: String,
     path: String,
-    line_nr: Option<i32>,
+    line_nr: Option<u32>,
 ) -> anyhow::Result<()> {
     let repo = ctx.repo.get()?;
     let workdir_path = gix::path::realpath(repo.workdir().context("project must have a workdir")?)?;

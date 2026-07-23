@@ -1,4 +1,6 @@
+import { showWarning } from "$lib/notifications/toasts";
 import { isDefined } from "@gitbutler/ui/utils/typeguards";
+import type { PullRequest } from "$lib/forge/interface/types";
 import type { PrService } from "$lib/forge/prService.svelte";
 import type { Segment } from "@gitbutler/but-sdk";
 
@@ -23,25 +25,53 @@ export async function updatePrDescriptionTables(
 	unitSymbol = "#",
 ) {
 	if (prService && prNumbers.length > 1) {
+		// Review creation tracks segments top-to-base; the Rust API accepts base-to-top.
+		const baseToTopPrNumbers = [...prNumbers].reverse();
 		const prs = await Promise.all(
-			prNumbers.map(async (id) => await prService.fetch(projectId, id)),
+			baseToTopPrNumbers.map(async (id) => await prService.fetch(projectId, id)),
 		);
-		const updates = prs.filter(isDefined).map((pr) => ({
-			prNumber: pr.number,
-			description: updateBody(pr.body, pr.number, prNumbers, unitSymbol),
-		}));
-		await Promise.all(
-			updates.map(async ({ prNumber, description }) => {
-				await prService.update(projectId, prNumber, { description });
-			}),
+		await prService.updateReviewFooters(
+			projectId,
+			prs.filter(isDefined).map((pr) => ({
+				number: pr.number,
+				body: pr.body ?? null,
+				updateDescription: true,
+				unitSymbol,
+				targetBranch: null,
+			})),
 		);
 	}
+}
+
+/**
+ * Synchronizes stack descriptions after a review has been created. The review creation is already
+ * durable at this point, so synchronization failures are reported as partial success.
+ */
+export async function syncStackAfterReviewCreation(
+	prService: PrService,
+	projectId: string,
+	createdReview: PullRequest,
+	prNumbers: number[],
+	unitSymbol = "#",
+): Promise<PullRequest> {
+	try {
+		await updatePrDescriptionTables(prService, projectId, prNumbers, unitSymbol);
+	} catch (error) {
+		console.error(error);
+		const message = error instanceof Error ? error.message : String(error);
+		showWarning(
+			"Pull request created with incomplete stack information",
+			`PR ${unitSymbol}${createdReview.number} was created, but its stack information could not be synchronized. ${message}`,
+		);
+	}
+
+	return createdReview;
 }
 
 type PrUpdate = {
 	prNumber: number;
 	targetBase: string;
-	description: string;
+	body: string | null;
 };
 
 export async function updateStackPrs(
@@ -52,7 +82,6 @@ export async function updateStackPrs(
 	unitSymbol = "#",
 ) {
 	if (branchDetails.length <= 1) return;
-	const allPrNumbers = branchDetails.map((b) => b.metadata?.review.pullRequest).filter(isDefined);
 	const updates: PrUpdate[] = [];
 	let prevBranch: string | undefined = undefined;
 
@@ -75,17 +104,22 @@ export async function updateStackPrs(
 
 		updates.push({
 			prNumber,
-			description: updateBody(pr.body, pr.number, allPrNumbers, unitSymbol),
+			body: pr.body ?? null,
 			targetBase: prevBranch ?? baseBranchName,
 		});
 		prevBranch = branchName;
 	}
 
 	if (updates.length > 0) {
-		await Promise.all(
-			updates.map(async ({ prNumber, targetBase, description }) => {
-				await prService.update(projectId, prNumber, { description, targetBase });
-			}),
+		await prService.updateReviewFooters(
+			projectId,
+			updates.map(({ prNumber, targetBase, body }) => ({
+				number: prNumber,
+				body,
+				updateDescription: true,
+				unitSymbol,
+				targetBranch: targetBase,
+			})),
 		);
 	}
 }
@@ -103,77 +137,18 @@ export async function unstackPRs(
 		const prs = await Promise.all(
 			prNumbers.map(async (id) => await prService.fetch(projectId, id)),
 		);
-		const updates = prs.filter(isDefined).map((pr) => ({
-			prNumber: pr.number,
-			description: clearFooter(pr.body),
-		}));
-
 		await Promise.all(
-			updates.map(async ({ prNumber, description }) => {
-				await prService.update(projectId, prNumber, {
-					description,
-					targetBase: baseBranchName,
-				});
+			prs.filter(isDefined).map(async (pr) => {
+				await prService.updateReviewFooters(projectId, [
+					{
+						number: pr.number,
+						body: pr.body ?? null,
+						updateDescription: true,
+						unitSymbol: "",
+						targetBranch: baseBranchName,
+					},
+				]);
 			}),
 		);
 	}
-}
-
-/**
- * Replaces or inserts a new footer into an existing body of text.
- *
- * If there is only one PR in the stack there is no stack to advertise, so we add
- * no footer and strip any existing one - mirroring the single-PR guard in
- * `update_body` in `but-forge`. A body without a footer is returned untouched so
- * we don't needlessly rewrite PRs (including ones not opened through GitButler).
- */
-export function updateBody(
-	body: string | undefined,
-	prNumber: number,
-	allPrNumbers: number[],
-	symbol: string,
-) {
-	if (allPrNumbers.length <= 1) {
-		return clearFooter(body) ?? "";
-	}
-	return composeBody(body, generateFooter(prNumber, allPrNumbers, symbol));
-}
-
-/**
- * Remove the footer from an existing body of text.
- */
-function clearFooter(body: string | undefined) {
-	if (!body?.includes(STACKING_FOOTER_BOUNDARY_TOP)) return body;
-	if (!body.includes(STACKING_FOOTER_BOUNDARY_BOTTOM)) return body;
-	return composeBody(body);
-}
-
-/**
- * Rebuild a PR body from its parts: the text before any existing footer, an
- * optional new footer, and the text after any existing footer. Omitting the
- * footer removes it.
- */
-function composeBody(body: string | undefined, footer?: string): string {
-	const head = (body?.split(STACKING_FOOTER_BOUNDARY_TOP).at(0) || "").trim();
-	const tail = (body?.split(STACKING_FOOTER_BOUNDARY_BOTTOM).at(1) || "").trim();
-	return [head, footer, tail].filter(Boolean).join("\n\n");
-}
-
-/**
- * Generates a footer for use in pull request descriptions when part of a stack.
- */
-export function generateFooter(forPrNumber: number, allPrNumbers: number[], symbol: string) {
-	const stackLength = allPrNumbers.length;
-	const stackIndex = allPrNumbers.findIndex((number) => number === forPrNumber);
-	const nth = stackLength - stackIndex;
-	let footer = "";
-	footer += STACKING_FOOTER_BOUNDARY_TOP + "\n";
-	footer += "---\n";
-	footer += `This is **part ${nth} of ${stackLength} in a stack** made with GitButler:\n`;
-	allPrNumbers.forEach((prNumber, i) => {
-		const current = i === stackIndex;
-		footer += `- <kbd>&nbsp;${stackLength - i}&nbsp;</kbd> ${symbol}${prNumber} ${current ? "👈 " : ""}\n`;
-	});
-	footer += STACKING_FOOTER_BOUNDARY_BOTTOM;
-	return footer;
 }

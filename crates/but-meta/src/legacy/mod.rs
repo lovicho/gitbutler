@@ -9,7 +9,7 @@ use std::{
 };
 
 use anyhow::{Context as _, bail};
-use bstr::ByteSlice;
+use bstr::ByteSlice as _;
 use but_core::{
     RefMetadata, WORKSPACE_REF_NAME, is_workspace_ref_name,
     ref_metadata::{
@@ -18,15 +18,11 @@ use but_core::{
         ValueInfo, Workspace, WorkspaceCommitRelation, WorkspaceStack, WorkspaceStackBranch,
     },
 };
-use gitbutler_reference::RemoteRefname;
-use gix::{
-    reference::Category,
-    refs::{FullName, FullNameRef},
-};
+use gix::refs::{FullName, FullNameRef};
 use itertools::Itertools;
 use tracing::instrument;
 
-use crate::virtual_branches_legacy_types::{Stack, StackBranch, Target, VirtualBranches};
+use crate::virtual_branches_legacy_types::{Stack, StackBranch, VirtualBranches};
 
 #[cfg(feature = "legacy")]
 pub mod storage;
@@ -274,13 +270,12 @@ impl Snapshot {
             },
             write_on_drop: false,
         });
+        let project_meta = ProjectMeta::resolve(repo)?;
         let graph = but_graph::Graph::from_commit_traversal(
             commit_id,
             reference.name().to_owned(),
             &*sideeffect_free_meta,
-            sideeffect_free_meta
-                .workspace(reference.name())?
-                .project_meta(),
+            project_meta,
             but_graph::init::Options::limited(),
         )?;
         graph.into_workspace()
@@ -553,19 +548,6 @@ impl VirtualBranchesTomlMetadata {
             }
         }
         Ok(())
-    }
-
-    /// Set the legacy default target and materialize the change immediately.
-    ///
-    /// This exists for transitional callers that still have to initialize the old
-    /// `default_target` shape, which stores fields that don't exist in workspace metadata.
-    pub fn set_default_target(
-        &mut self,
-        target: impl Into<crate::virtual_branches_legacy_types::Target>,
-    ) -> anyhow::Result<()> {
-        self.snapshot.content.default_target = Some(target.into());
-        self.snapshot.set_changed_to_necessitate_write();
-        self.write_unreconciled()
     }
 }
 
@@ -847,65 +829,7 @@ impl RefMetadata for VirtualBranchesTomlMetadata {
             self.data_mut().branches.remove(&sid);
         }
 
-        let new_target_branch = value
-            .target_ref()
-            .as_ref()
-            .map(|rn| branch_from_ref_name(rn.as_ref()))
-            .transpose()?;
-        // We don't support initialising this yet, for now just changes.
-        let mut changed_target = false;
-        match (&mut self.data_mut().default_target, new_target_branch) {
-            (existing @ Some(_), None) => {
-                // Have to clear everything then due to limitations of the data structure.
-                *existing = None;
-                changed_target = true;
-            }
-            (target @ None, Some(new)) => {
-                // Without a commit id the null id would be the only representable placeholder,
-                // but legacy consumers that resolve `default_target.sha` cannot handle it.
-                // Leave the target unset until a writer provides a commit id.
-                match value.target_commit_id().filter(|id| !id.is_null()) {
-                    Some(sha) => {
-                        *target = Some(Target {
-                            branch: new,
-                            remote_url: String::new(),
-                            sha,
-                            push_remote_name: value.push_remote().map(ToOwned::to_owned),
-                        });
-                        changed_target = true;
-                    }
-                    None => {
-                        tracing::warn!(
-                            target_ref = %new,
-                            "Not persisting the default target without a commit id \
-                            to avoid a null sha in virtual_branches.toml"
-                        );
-                    }
-                }
-            }
-            (Some(existing), Some(new)) => {
-                if existing.branch != new {
-                    existing.branch = new;
-                    changed_target = true;
-                }
-                if let Some(new_id) = value.target_commit_id().filter(|id| !id.is_null())
-                    && new_id != existing.sha
-                {
-                    existing.sha = new_id;
-                    changed_target = true;
-                }
-            }
-            (None, None) => {}
-        }
-
-        if let Some(target) = self.data_mut().default_target.as_mut()
-            && target.push_remote_name.as_deref() != value.push_remote()
-        {
-            target.push_remote_name = value.push_remote().map(ToOwned::to_owned);
-            changed_target = true;
-        }
-
-        if changed_target || self.snapshot.content != previous_content {
+        if self.snapshot.content != previous_content {
             self.snapshot.set_changed_to_necessitate_write();
         }
         Ok(())
@@ -1233,41 +1157,8 @@ impl RefMetadata for BranchOrderMetadata {
     }
 }
 
-fn branch_from_ref_name(ref_name: &FullNameRef) -> anyhow::Result<RemoteRefname> {
-    let (category, short_name) = ref_name
-        .category_and_short_name()
-        .context("couldn't classify supposed remote tracking branch")?;
-    if category != Category::RemoteBranch {
-        bail!(
-            "Cannot set target branches to a branch that isn't a remote tracking branch: '{short_name}'"
-        );
-    }
-
-    // TODO: remove this as we don't handle symbolic names with slashes correctly.
-    //       At least try to not always set this value, but this test is also ambiguous.
-    let slash_pos = short_name
-        .find_byte(b'/')
-        .context("remote branch didn't have '/' in the name, but should be 'origin/foo'")?;
-    Ok(RemoteRefname::new(
-        short_name[..slash_pos].to_str_lossy().as_ref(),
-        short_name[slash_pos + 1..].to_str_lossy().as_ref(),
-    ))
-}
-
 impl VirtualBranchesTomlMetadata {
     fn workspace_from_data(data: &VirtualBranches) -> Workspace {
-        let (target_branch, target_commit_id, push_remote) = data
-            .default_target
-            .as_ref()
-            .map(|target| {
-                (
-                    gix::refs::FullName::try_from(target.branch.to_string()).ok(),
-                    (!target.sha.is_null()).then_some(target.sha),
-                    target.push_remote_name.clone(),
-                )
-            })
-            .unwrap_or_default();
-
         let stacks: Vec<_> = data
             .branches
             .values()
@@ -1275,9 +1166,9 @@ impl VirtualBranchesTomlMetadata {
             .cloned()
             .collect();
 
-        Workspace::new(
-            managed_ref_info(),
-            stacks
+        Workspace {
+            ref_info: managed_ref_info(),
+            stacks: stacks
                 .iter()
                 // We aren't able to handle these well, so let's ignore them.
                 .filter(|stack| !stack.heads.is_empty())
@@ -1304,12 +1195,7 @@ impl VirtualBranchesTomlMetadata {
                         .collect(),
                 })
                 .collect(),
-            but_core::ref_metadata::ProjectMeta {
-                target_ref: target_branch,
-                target_commit_id,
-                push_remote,
-            },
-        )
+        }
     }
 
     fn remove_branch(&mut self, ref_name: &FullNameRef) -> anyhow::Result<Option<StackBranch>> {
@@ -1400,14 +1286,13 @@ fn standard_time() -> gix::date::Time {
 }
 
 fn default_workspace() -> Workspace {
-    Workspace::new(
-        RefInfo {
+    Workspace {
+        ref_info: RefInfo {
             created_at: Some(standard_time()),
             updated_at: None,
         },
-        Vec::new(),
-        Default::default(),
-    )
+        stacks: Vec::new(),
+    }
 }
 
 fn full_branch_name(name: &str) -> Option<gix::refs::FullName> {

@@ -46,7 +46,7 @@ fn context_with_three_branch_stack_options(
         target_commit_id: Some(target_commit_id),
         push_remote: Some("origin".into()),
     }
-    .persist_to_local_config(&repo)?;
+    .persist(&repo)?;
 
     let ctx = but_ctx::Context::from_repo_for_testing(repo)?.with_memory_app_cache();
     let mut meta = ctx.meta()?;

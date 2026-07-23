@@ -152,7 +152,6 @@ pub trait DiffLineWriter {
     }
 }
 
-#[cfg(feature = "but-2")]
 pub struct WithSyntaxHighlighting<'a, T> {
     inner: T,
     strings: Strings,
@@ -162,7 +161,6 @@ pub struct WithSyntaxHighlighting<'a, T> {
     theme: &'static Theme,
 }
 
-#[cfg(feature = "but-2")]
 impl<'a, T> WithSyntaxHighlighting<'a, T> {
     pub fn new(
         inner: T,
@@ -181,7 +179,6 @@ impl<'a, T> WithSyntaxHighlighting<'a, T> {
     }
 }
 
-#[cfg(feature = "but-2")]
 impl<T> DiffLineWriter for WithSyntaxHighlighting<'_, T>
 where
     T: DiffLineWriter,

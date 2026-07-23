@@ -19,7 +19,10 @@ type CommitIndex = {
 export type HeadInfoIndex = {
 	stackContextById: (stackId: string) => StackIndex | undefined;
 	branchContextByRefBytes: (ref: Array<number>) => (StackIndex & SegmentIndex) | undefined;
-	commitContextById: (commitId: string) => (StackIndex & SegmentIndex & CommitIndex) | undefined;
+	/** Prefer lookups by commit ID which is globally unique. */
+	commitContextById: (
+		commitOrChangeId: string,
+	) => (StackIndex & SegmentIndex & CommitIndex) | undefined;
 };
 
 const headInfoIndexCache = new WeakMap<RefInfo, HeadInfoIndex>();
@@ -45,22 +48,25 @@ const buildHeadInfoIndex = (headInfo: RefInfo): HeadInfoIndex => {
 			}
 
 			for (const [commitIndex, commit] of segment.commits.entries()) {
-				commitContextById.set(commit.id, {
+				const ctx = {
 					stack,
 					stackIndex,
 					segment,
 					segmentIndex,
 					commit,
 					commitIndex,
-				});
+				};
+				commitContextById.set(commit.id, ctx);
+				// Change IDs aren't globally unique, in which case this is last write wins.
+				commitContextById.set(commit.changeId, ctx);
 			}
 		}
 	}
 
 	return {
-		stackContextById: (id: string) => stackContextById.get(id),
+		stackContextById: (stackId: string) => stackContextById.get(stackId),
 		branchContextByRefBytes: (ref: Array<number>) => branchContextByRef.get(branchRefKey(ref)),
-		commitContextById: (id: string) => commitContextById.get(id),
+		commitContextById: (commitOrChangeId: string) => commitContextById.get(commitOrChangeId),
 	};
 };
 

@@ -361,19 +361,12 @@ pub fn apply(
                 WorkspaceReferenceNaming::Given(name) => name,
             };
             let mut current_unmanaged_head_branch_name = ws.ref_name().map(|rn| rn.to_owned());
-            if let Some(ref current_head_ref) = current_unmanaged_head_branch_name
-                && let Some(next_ws_md) = meta.workspace_opt(next_ws_ref_name.as_ref())?
-            {
+            if let Some(ref current_head_ref) = current_unmanaged_head_branch_name {
                 // If our current branch is related to the next workspace's target, don't add it to the
                 // soon-to-be-created workspace.
                 // This is a 'trick' to allow callers to prevent 'main' to be added to the workspace automatically
                 // even though the new workspace is supposed to have it as target.
-                let is_branch_target = next_ws_md
-                    .is_branch_the_target_or_its_local_tracking_branch(
-                        current_head_ref.as_ref(),
-                        repo,
-                    )?;
-                if is_branch_target {
+                if ws.is_branch_the_target_or_its_local_tracking_branch(current_head_ref.as_ref()) {
                     current_unmanaged_head_branch_name.take();
                 }
             }

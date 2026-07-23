@@ -1704,6 +1704,11 @@ export type ForgeReviewUpdate = {
   number: number;
   /** The current body/description of the review, which may be None if no description is set. */
   body: string | null;
+  /**
+   * Whether the description should be synchronized. If false, the current description is
+   * fetched from the forge before applying the configured stacking policy.
+   */
+  updateDescription?: boolean;
   /** The platform-specific symbol for this review type (e.g., "#" for GitHub pull requests and "!" for MRs). */
   unitSymbol: string;
   /** If set, update the base/target branch of this review to the given value. */
@@ -1769,6 +1774,7 @@ export type FullRefName = {
 export type GitConfigSettings = {
   signCommits: boolean | null;
   gitbutlerGerritMode: boolean | null;
+  gitbutlerReviewStackingDescription: ReviewStackingDescription | null;
   gitbutlerForgeReviewTemplatePath: string | null;
   gitbutlerGitlabProjectId: string | null;
   gitbutlerGitlabUpstreamProjectId: string | null;
@@ -2520,6 +2526,9 @@ export type ReviewMergeStatus = {
    */
   isMergeable: boolean;
 };
+
+/** Controls where GitButler puts stack information in review descriptions. */
+export type ReviewStackingDescription = "bottom" | "top" | "disabled";
 
 export type ReviewState = "open" | "closed";
 

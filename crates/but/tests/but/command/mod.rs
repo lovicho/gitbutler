@@ -14,16 +14,16 @@ mod branch;
 mod clean;
 #[cfg(feature = "legacy")]
 mod commit;
-#[cfg(all(feature = "legacy", feature = "but-2"))]
+#[cfg(feature = "legacy")]
 mod commit2;
 mod config;
 #[cfg(feature = "legacy")]
 mod diff;
-#[cfg(all(feature = "legacy", feature = "but-2"))]
+#[cfg(feature = "legacy")]
 mod diff2;
 #[cfg(feature = "legacy")]
 mod discard;
-#[cfg(all(feature = "legacy", feature = "but-2"))]
+#[cfg(feature = "legacy")]
 mod expand;
 #[cfg(unix)]
 mod external;
@@ -34,10 +34,10 @@ mod help;
 mod land;
 #[cfg(feature = "legacy")]
 mod r#move;
-#[cfg(all(feature = "legacy", feature = "but-2"))]
+#[cfg(feature = "legacy")]
 mod move2;
 mod onboarding;
-#[cfg(feature = "but-2")]
+#[cfg(feature = "legacy")]
 mod open;
 #[cfg(feature = "legacy")]
 mod pick;
@@ -56,7 +56,7 @@ mod setup;
 mod skill;
 #[cfg(feature = "legacy")]
 mod squash;
-#[cfg(all(feature = "legacy", feature = "but-2"))]
+#[cfg(feature = "legacy")]
 mod squash2;
 #[cfg(feature = "legacy")]
 mod stage;
@@ -160,7 +160,6 @@ mod util {
     }
 
     /// Return the CLI ID of the commit on `branch_name` containing `file_path` in `status` output.
-    #[cfg(feature = "but-2")]
     pub fn branch_commit_cli_id_for_file(
         status: &serde_json::Value,
         branch_name: &str,

@@ -1626,10 +1626,26 @@ pub struct ForgeReviewUpdate {
     pub number: i64,
     /// The current body/description of the review, which may be None if no description is set.
     pub body: Option<String>,
+    /// Whether the description should be synchronized. If false, the current description is
+    /// fetched from the forge before applying the configured stacking policy.
+    #[serde(default = "default_update_description")]
+    pub update_description: bool,
     /// The platform-specific symbol for this review type (e.g., "#" for GitHub pull requests and "!" for MRs).
     pub unit_symbol: String,
     /// If set, update the base/target branch of this review to the given value.
     pub target_branch: Option<String>,
+}
+
+fn default_update_description() -> bool {
+    true
+}
+
+/// Controls the managed GitButler stack block in review descriptions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReviewStackingDescription {
+    Bottom,
+    Top,
+    Disabled,
 }
 
 #[cfg(feature = "export-schema")]
@@ -1640,6 +1656,7 @@ impl From<ForgeReview> for ForgeReviewUpdate {
         ForgeReviewUpdate {
             number: review.number,
             body: review.body,
+            update_description: true,
             unit_symbol: review.unit_symbol,
             target_branch: Some(review.target_branch),
         }
@@ -1651,6 +1668,7 @@ impl From<ForgeReviewTargetUpdate> for ForgeReviewUpdate {
         ForgeReviewUpdate {
             number: update.number,
             body: None,
+            update_description: false,
             unit_symbol: String::new(),
             target_branch: Some(update.target_branch),
         }
@@ -1665,6 +1683,7 @@ pub async fn sync_reviews(
     forge_repo_info: &crate::forge::ForgeRepoInfo,
     reviews: &[ForgeReviewUpdate],
     storage: &but_forge_storage::Controller,
+    description_mode: ReviewStackingDescription,
 ) -> Result<()> {
     let crate::forge::ForgeRepoInfo {
         forge, owner, repo, ..
@@ -1672,25 +1691,42 @@ pub async fn sync_reviews(
 
     let mut errors: Vec<String> = Vec::new();
 
-    // Skip body updates when no review has footer content (e.g. push-only target updates).
-    let has_footer_content = reviews.iter().any(|r| !r.unit_symbol.is_empty());
-
     match forge {
         ForgeName::GitHub => {
             let preferred_account = preferred_forge_user.as_ref().and_then(|user| user.github());
             let pr_numbers: Vec<i64> = reviews.iter().map(|r| r.number).collect();
 
             for review in reviews {
-                let updated_body = if has_footer_content {
-                    Some(update_body(
-                        review.body.as_deref(),
+                // Hydrate target-only callers so policy changes are still applied on the next
+                // stack sync. A failed read must not prevent the independent target update below.
+                let current_body = if !review.update_description {
+                    match but_github::pr::get(
+                        preferred_account,
+                        owner,
+                        repo,
+                        review.number.try_into()?,
+                        storage,
+                    )
+                    .await
+                    {
+                        Ok(review) => Some(review.body),
+                        Err(err) => {
+                            errors.push(format!("PR #{} description: {err}", review.number));
+                            None
+                        }
+                    }
+                } else {
+                    Some(review.body.clone())
+                };
+                let updated_body = current_body.map(|body| {
+                    update_body_with_mode(
+                        body.as_deref(),
                         review.number,
                         &pr_numbers,
-                        &review.unit_symbol,
-                    ))
-                } else {
-                    None
-                };
+                        "#",
+                        description_mode,
+                    )
+                });
 
                 let params = but_github::UpdatePullRequestParams {
                     owner,
@@ -1713,16 +1749,33 @@ pub async fn sync_reviews(
             let mr_iids: Vec<i64> = reviews.iter().map(|r| r.number).collect();
 
             for review in reviews {
-                let updated_body = if has_footer_content {
-                    Some(update_body(
-                        review.body.as_deref(),
+                let current_body = if !review.update_description {
+                    match but_gitlab::mr::get(
+                        preferred_account,
+                        project_id.clone(),
+                        review.number.try_into()?,
+                        storage,
+                    )
+                    .await
+                    {
+                        Ok(review) => Some(review.description),
+                        Err(err) => {
+                            errors.push(format!("MR !{} description: {err}", review.number));
+                            None
+                        }
+                    }
+                } else {
+                    Some(review.body.clone())
+                };
+                let updated_body = current_body.map(|body| {
+                    update_body_with_mode(
+                        body.as_deref(),
                         review.number,
                         &mr_iids,
-                        &review.unit_symbol,
-                    ))
-                } else {
-                    None
-                };
+                        "!",
+                        description_mode,
+                    )
+                });
 
                 let params = but_gitlab::UpdateMergeRequestParams {
                     project_id: project_id.clone(),
@@ -1745,16 +1798,34 @@ pub async fn sync_reviews(
             let pr_ids: Vec<i64> = reviews.iter().map(|r| r.number).collect();
 
             for review in reviews {
-                let updated_body = if has_footer_content {
-                    Some(update_body(
-                        review.body.as_deref(),
+                let current_body = if !review.update_description {
+                    match but_bitbucket::pr::get(
+                        preferred_account,
+                        owner,
+                        repo,
+                        review.number.try_into()?,
+                        storage,
+                    )
+                    .await
+                    {
+                        Ok(review) => Some(review.description),
+                        Err(err) => {
+                            errors.push(format!("PR #{} description: {err}", review.number));
+                            None
+                        }
+                    }
+                } else {
+                    Some(review.body.clone())
+                };
+                let updated_body = current_body.map(|body| {
+                    update_body_with_mode(
+                        body.as_deref(),
                         review.number,
                         &pr_ids,
-                        &review.unit_symbol,
-                    ))
-                } else {
-                    None
-                };
+                        "#",
+                        description_mode,
+                    )
+                });
 
                 let params = but_bitbucket::UpdatePullRequestParams {
                     workspace: owner,
@@ -1831,33 +1902,126 @@ pub fn compute_review_target_updates(
 ///
 /// # Returns
 /// The updated body with the footer replaced, inserted, or removed
+#[cfg(test)]
 fn update_body(body: Option<&str>, pr_number: i64, all_pr_numbers: &[i64], symbol: &str) -> String {
+    update_body_with_mode(
+        body,
+        pr_number,
+        all_pr_numbers,
+        symbol,
+        ReviewStackingDescription::Bottom,
+    )
+}
+
+fn update_body_with_mode(
+    body: Option<&str>,
+    pr_number: i64,
+    all_pr_numbers: &[i64],
+    symbol: &str,
+    mode: ReviewStackingDescription,
+) -> String {
     let body = body.unwrap_or("");
-    let head = body
-        .split(STACKING_FOOTER_BOUNDARY_TOP)
-        .next()
-        .unwrap_or("")
-        .trim();
-    let tail = body
-        .split(STACKING_FOOTER_BOUNDARY_BOTTOM)
-        .nth(1)
-        .unwrap_or("")
-        .trim();
-
-    // If there's only one PR, don't add a footer
-    if all_pr_numbers.len() == 1 {
-        if tail.is_empty() {
-            return head.to_string();
+    let user_body = match strip_managed_footers(body) {
+        ManagedFooter::Complete { user_body } => user_body,
+        ManagedFooter::Malformed => {
+            // Never infer a boundary from incomplete or out-of-order markers: they may be user
+            // content. In particular, don't add another managed block alongside them.
+            return body.to_string();
         }
-        return format!("{head}\n\n{tail}");
+        ManagedFooter::Absent => {
+            return match (all_pr_numbers.len(), mode) {
+                (0 | 1, _) | (_, ReviewStackingDescription::Disabled) => body.to_string(),
+                (_, ReviewStackingDescription::Bottom) => compose_body(
+                    body,
+                    &generate_footer_with_mode(
+                        pr_number,
+                        all_pr_numbers,
+                        symbol,
+                        ReviewStackingDescription::Bottom,
+                    ),
+                    "",
+                ),
+                (_, ReviewStackingDescription::Top) => compose_body(
+                    "",
+                    &generate_footer_with_mode(
+                        pr_number,
+                        all_pr_numbers,
+                        symbol,
+                        ReviewStackingDescription::Top,
+                    ),
+                    body,
+                ),
+            };
+        }
+    };
+
+    if all_pr_numbers.len() <= 1 || mode == ReviewStackingDescription::Disabled {
+        return user_body;
     }
 
-    let footer = generate_footer(pr_number, all_pr_numbers, symbol);
-    if tail.is_empty() {
-        format!("{head}\n\n{footer}")
-    } else {
-        format!("{head}\n\n{footer}\n\n{tail}")
+    let footer = generate_footer_with_mode(pr_number, all_pr_numbers, symbol, mode);
+    match mode {
+        ReviewStackingDescription::Bottom => compose_body(&user_body, &footer, ""),
+        ReviewStackingDescription::Top => compose_body("", &footer, &user_body),
+        ReviewStackingDescription::Disabled => unreachable!("handled above"),
     }
+}
+
+enum ManagedFooter {
+    Absent,
+    Complete { user_body: String },
+    Malformed,
+}
+
+fn strip_managed_footers(body: &str) -> ManagedFooter {
+    let mut remainder = body;
+    let mut user_parts = Vec::new();
+    let mut found = false;
+
+    loop {
+        let top = remainder.find(STACKING_FOOTER_BOUNDARY_TOP);
+        let bottom = remainder.find(STACKING_FOOTER_BOUNDARY_BOTTOM);
+        match (top, bottom) {
+            (None, None) => {
+                if !found {
+                    return ManagedFooter::Absent;
+                }
+                user_parts.push(remainder);
+                return ManagedFooter::Complete {
+                    user_body: user_parts
+                        .into_iter()
+                        .map(str::trim)
+                        .filter(|part| !part.is_empty())
+                        .collect::<Vec<_>>()
+                        .join("\n\n"),
+                };
+            }
+            (None, Some(_)) => return ManagedFooter::Malformed,
+            (Some(top), Some(bottom)) if bottom < top => {
+                return ManagedFooter::Malformed;
+            }
+            (Some(top), _) => {
+                let after_top = top + STACKING_FOOTER_BOUNDARY_TOP.len();
+                let Some(bottom) = remainder[after_top..]
+                    .find(STACKING_FOOTER_BOUNDARY_BOTTOM)
+                    .map(|bottom| bottom + after_top)
+                else {
+                    return ManagedFooter::Malformed;
+                };
+                user_parts.push(&remainder[..top]);
+                remainder = &remainder[bottom + STACKING_FOOTER_BOUNDARY_BOTTOM.len()..];
+                found = true;
+            }
+        }
+    }
+}
+
+fn compose_body(head: &str, footer: &str, tail: &str) -> String {
+    [head.trim(), footer.trim(), tail.trim()]
+        .into_iter()
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n\n")
 }
 
 /// Generates a footer for use in pull request descriptions when part of a stack.
@@ -1869,7 +2033,22 @@ fn update_body(body: Option<&str>, pr_number: i64, all_pr_numbers: &[i64], symbo
 ///
 /// # Returns
 /// A formatted markdown footer string with stack information
+#[cfg(test)]
 fn generate_footer(for_pr_number: i64, all_pr_numbers: &[i64], symbol: &str) -> String {
+    generate_footer_with_mode(
+        for_pr_number,
+        all_pr_numbers,
+        symbol,
+        ReviewStackingDescription::Bottom,
+    )
+}
+
+fn generate_footer_with_mode(
+    for_pr_number: i64,
+    all_pr_numbers: &[i64],
+    symbol: &str,
+    mode: ReviewStackingDescription,
+) -> String {
     let stack_length = all_pr_numbers.len();
     let stack_index = all_pr_numbers
         .iter()
@@ -1880,7 +2059,9 @@ fn generate_footer(for_pr_number: i64, all_pr_numbers: &[i64], symbol: &str) -> 
     let mut footer = String::new();
     footer.push_str(STACKING_FOOTER_BOUNDARY_TOP);
     footer.push('\n');
-    footer.push_str("---\n");
+    if mode == ReviewStackingDescription::Bottom {
+        footer.push_str("---\n");
+    }
     footer.push_str(&format!(
         "This is **part {nth} of {stack_length} in a stack** made with GitButler:\n"
     ));
@@ -1898,6 +2079,9 @@ fn generate_footer(for_pr_number: i64, all_pr_numbers: &[i64], symbol: &str) -> 
         ));
     }
 
+    if mode == ReviewStackingDescription::Top {
+        footer.push_str("---\n");
+    }
     footer.push_str(STACKING_FOOTER_BOUNDARY_BOTTOM);
     footer
 }
@@ -2358,7 +2542,8 @@ mod tests {
         let result = update_body(Some(&body), 456, &[456, 457], "!");
 
         assert!(result.starts_with("Head content"));
-        assert!(result.ends_with("Tail content"));
+        assert!(result.contains("Head content\n\nTail content"));
+        assert!(result.ends_with(STACKING_FOOTER_BOUNDARY_BOTTOM));
         assert!(result.contains("!456"));
         assert!(result.contains("!457"));
         assert!(!result.contains("Old footer"));
@@ -2420,6 +2605,186 @@ mod tests {
         assert!(!result.contains(STACKING_FOOTER_BOUNDARY_TOP));
     }
 
+    #[test]
+    fn update_body_top_places_footer_before_user_content() {
+        let result = update_body_with_mode(
+            Some("User description"),
+            101,
+            &[100, 101],
+            "#",
+            ReviewStackingDescription::Top,
+        );
+
+        assert!(
+            result.starts_with(STACKING_FOOTER_BOUNDARY_TOP),
+            "top mode places the managed block first"
+        );
+        assert!(
+            result.ends_with("User description"),
+            "top mode preserves user content after the managed block"
+        );
+    }
+
+    #[test]
+    fn update_body_bottom_produces_stack_information_after_user_content() {
+        let result = update_body_with_mode(
+            Some("User description"),
+            101,
+            &[100, 101],
+            "#",
+            ReviewStackingDescription::Bottom,
+        );
+
+        assert_eq!(
+            result,
+            "User description\n\n\
+             <!-- GitButler Footer Boundary Top -->\n\
+             ---\n\
+             This is **part 2 of 2 in a stack** made with GitButler:\n\
+             - <kbd>&nbsp;2&nbsp;</kbd> #101 👈 \n\
+             - <kbd>&nbsp;1&nbsp;</kbd> #100\n\
+             <!-- GitButler Footer Boundary Bottom -->",
+            "bottom mode separates user content from the complete stack information section"
+        );
+    }
+
+    #[test]
+    fn update_body_top_produces_stack_information_before_user_content() {
+        let result = update_body_with_mode(
+            Some("User description"),
+            101,
+            &[100, 101],
+            "#",
+            ReviewStackingDescription::Top,
+        );
+
+        assert_eq!(
+            result,
+            "<!-- GitButler Footer Boundary Top -->\n\
+             This is **part 2 of 2 in a stack** made with GitButler:\n\
+             - <kbd>&nbsp;2&nbsp;</kbd> #101 👈 \n\
+             - <kbd>&nbsp;1&nbsp;</kbd> #100\n\
+             ---\n\
+             <!-- GitButler Footer Boundary Bottom -->\n\n\
+             User description",
+            "top mode puts the separator below the complete stack information section"
+        );
+    }
+
+    #[test]
+    fn update_body_relocates_footer_between_bottom_and_top() {
+        let bottom = update_body_with_mode(
+            Some("User description"),
+            100,
+            &[100, 101],
+            "#",
+            ReviewStackingDescription::Bottom,
+        );
+        let top = update_body_with_mode(
+            Some(&bottom),
+            100,
+            &[100, 101],
+            "#",
+            ReviewStackingDescription::Top,
+        );
+        let bottom_again = update_body_with_mode(
+            Some(&top),
+            100,
+            &[100, 101],
+            "#",
+            ReviewStackingDescription::Bottom,
+        );
+
+        assert!(
+            top.starts_with(STACKING_FOOTER_BOUNDARY_TOP),
+            "changing to top relocates the existing block"
+        );
+        assert!(
+            bottom_again.starts_with("User description"),
+            "changing back to bottom restores user content first"
+        );
+        assert_eq!(
+            bottom_again.matches(STACKING_FOOTER_BOUNDARY_TOP).count(),
+            1,
+            "mode changes keep exactly one managed block"
+        );
+    }
+
+    #[test]
+    fn update_body_disabled_removes_footer_and_preserves_user_content() {
+        let body = format!("Head\n\n{}\n\nTail", generate_footer(100, &[100, 101], "#"));
+        let result = update_body_with_mode(
+            Some(&body),
+            100,
+            &[100, 101],
+            "#",
+            ReviewStackingDescription::Disabled,
+        );
+
+        assert_eq!(result, "Head\n\nTail");
+    }
+
+    #[test]
+    fn update_body_leaves_malformed_boundaries_untouched() {
+        let cases = [
+            format!("Intro\n\n{STACKING_FOOTER_BOUNDARY_TOP}\ndangling"),
+            format!("dangling\n{STACKING_FOOTER_BOUNDARY_BOTTOM}\n\nTail"),
+            format!("{STACKING_FOOTER_BOUNDARY_BOTTOM}\ntext\n{STACKING_FOOTER_BOUNDARY_TOP}"),
+        ];
+
+        for body in cases {
+            let result = update_body_with_mode(
+                Some(&body),
+                100,
+                &[100, 101],
+                "#",
+                ReviewStackingDescription::Bottom,
+            );
+            assert_eq!(
+                result, body,
+                "incomplete or out-of-order boundaries may be user content"
+            );
+        }
+    }
+
+    #[test]
+    fn update_body_is_idempotent_for_each_mode() {
+        for mode in [
+            ReviewStackingDescription::Bottom,
+            ReviewStackingDescription::Top,
+            ReviewStackingDescription::Disabled,
+        ] {
+            let once = update_body_with_mode(Some("Description"), 100, &[100, 101], "#", mode);
+            let twice = update_body_with_mode(Some(&once), 100, &[100, 101], "#", mode);
+            assert_eq!(twice, once, "repeating {mode:?} does not rewrite the body");
+        }
+    }
+
+    #[test]
+    fn update_body_collapses_duplicate_managed_blocks() {
+        let first = generate_footer(100, &[100, 101], "#");
+        let second = generate_footer(100, &[100, 101, 102], "#");
+        let body = format!("Head\n\n{first}\n\nMiddle\n\n{second}\n\nTail");
+
+        let result = update_body_with_mode(
+            Some(&body),
+            100,
+            &[100, 101, 102],
+            "#",
+            ReviewStackingDescription::Bottom,
+        );
+
+        assert!(
+            result.starts_with("Head\n\nMiddle\n\nTail"),
+            "content around duplicate blocks is preserved in order"
+        );
+        assert_eq!(
+            result.matches(STACKING_FOOTER_BOUNDARY_TOP).count(),
+            1,
+            "synchronization repairs duplicate managed blocks"
+        );
+    }
+
     // --- compute_review_target_updates tests ---
 
     fn heads(specs: &[(&str, Option<i64>)]) -> Vec<(String, Option<i64>)> {
@@ -2467,6 +2832,50 @@ mod tests {
         assert_eq!(result[1].target_branch, "branch-a");
         assert_eq!(result[2].number, 3);
         assert_eq!(result[2].target_branch, "branch-b");
+    }
+
+    #[test]
+    fn target_updates_request_remote_description_hydration() {
+        let update: ForgeReviewUpdate = ForgeReviewTargetUpdate {
+            number: 42,
+            target_branch: "parent".to_string(),
+        }
+        .into();
+
+        assert!(
+            !update.update_description,
+            "target-only updates ask sync_reviews to hydrate the remote description"
+        );
+        assert_eq!(update.body, None);
+        assert_eq!(update.target_branch.as_deref(), Some("parent"));
+    }
+
+    #[test]
+    fn review_update_defaults_to_description_sync_when_field_is_omitted() {
+        let omitted: ForgeReviewUpdate = serde_json::from_value(serde_json::json!({
+            "number": 42,
+            "body": "Caller-provided description",
+            "unitSymbol": "#",
+            "targetBranch": null
+        }))
+        .expect("an update from an older caller should deserialize");
+        let explicit_false: ForgeReviewUpdate = serde_json::from_value(serde_json::json!({
+            "number": 42,
+            "body": null,
+            "updateDescription": false,
+            "unitSymbol": "",
+            "targetBranch": "parent"
+        }))
+        .expect("a target-only update should deserialize");
+
+        assert!(
+            omitted.update_description,
+            "older callers that omit the field should synchronize their provided description"
+        );
+        assert!(
+            !explicit_false.update_description,
+            "target-only callers should still be able to request remote hydration"
+        );
     }
 
     #[test]

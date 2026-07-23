@@ -623,10 +623,8 @@ export const OutlineTree: FC<
 		items: commitTargetComboboxItems,
 		outlineSelection,
 	});
-	const hasCheckedCommits = useAppSelector((state) =>
-		headInfoIndex
-			? projectSlice.selectors.selectHasCheckedCommits(state, projectId, headInfoIndex)
-			: false,
+	const hasCheckedOperands = useAppSelector((state) =>
+		projectSlice.selectors.selectHasCheckedOperands(state, projectId),
 	);
 	const store = useAppStore();
 	const dispatch = useAppDispatch();
@@ -642,12 +640,9 @@ export const OutlineTree: FC<
 	const getCheckedRange = checkedRange(rangeResolver);
 
 	const checkCommit = ({ commitId, shiftKey }: { commitId: string; shiftKey: boolean }): void => {
-		if (!headInfoIndex) return;
-
-		const checkedCommitIds = projectSlice.selectors.selectCheckedCommits(
+		const checkedCommitIds = projectSlice.selectors.selectCheckedCommitIds(
 			store.getState(),
 			projectId,
-			headInfoIndex,
 		);
 		const nextCommitRange = getCheckedRange({
 			checked: checkedCommitIds,
@@ -660,10 +655,21 @@ export const OutlineTree: FC<
 
 		commitCheckRangeAnchor.current = nextCommitRange.rangeAnchor;
 		commitCheckRangeEnd.current = nextCommitRange.rangeEnd;
+
+		const checkedCommits = nextCommitRange.checked.difference(checkedCommitIds);
+		const uncheckedCommits = checkedCommitIds.difference(nextCommitRange.checked);
 		dispatch(
-			projectSlice.actions.setCheckedCommits({
+			projectSlice.actions.checkOperands({
 				projectId,
-				commitIds: Array.from(nextCommitRange.checked),
+				operands: Array.from(checkedCommits, (commitId) => commitOperand({ commitId })),
+				checked: true,
+			}),
+		);
+		dispatch(
+			projectSlice.actions.checkOperands({
+				projectId,
+				operands: Array.from(uncheckedCommits, (commitId) => commitOperand({ commitId })),
+				checked: false,
 			}),
 		);
 	};
@@ -681,7 +687,7 @@ export const OutlineTree: FC<
 					{...props}
 					id={layoutId}
 					orientation="vertical"
-					data-has-checked-commits={hasCheckedCommits || undefined}
+					data-has-checked-operands={hasCheckedOperands || undefined}
 					className={classes(props.className, styles.tree)}
 					defaultLayout={outlineLayout.defaultLayout}
 					onLayoutChanged={outlineLayout.onLayoutChanged}

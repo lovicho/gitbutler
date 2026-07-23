@@ -313,22 +313,22 @@ pub enum Subcommands {
     #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
     Commit(commit::Platform),
 
-    #[cfg(all(feature = "legacy", feature = "but-2"))]
+    #[cfg(feature = "legacy")]
     #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
     #[clap(hide = true, name = "_commit2")]
     _Commit2(commit2::Platform),
 
-    #[cfg(all(feature = "legacy", feature = "but-2"))]
+    #[cfg(feature = "legacy")]
     #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
     #[clap(hide = true, name = "_squash2")]
     _Squash2(squash2::Platform),
 
-    #[cfg(all(feature = "legacy", feature = "but-2"))]
+    #[cfg(feature = "legacy")]
     #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
     #[clap(hide = true, name = "_move2")]
     _Move2(move2::Platform),
 
-    #[cfg(all(feature = "legacy", feature = "but-2"))]
+    #[cfg(feature = "legacy")]
     #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
     #[clap(hide = true, name = "_diff2")]
     _Diff2(diff2::Platform),
@@ -337,7 +337,6 @@ pub enum Subcommands {
     ///
     /// This is not considered a feature of the CLI and should not be relied upon. It is only for
     /// testing and debugging.
-    #[cfg(feature = "but-2")]
     #[clap(hide = true, name = "_expand")]
     _Expand {
         /// CLI ID to parse.
@@ -970,7 +969,6 @@ pub enum Subcommands {
     },
 
     /// Open files in the workspace using any defined program.
-    #[cfg(feature = "but-2")]
     #[clap(hide = true, name = "_open")]
     #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
     _Open {
