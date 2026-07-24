@@ -25,14 +25,14 @@ fn land_first_branch_into_origin() -> anyhow::Result<()> {
 
     env.but("branch new first-branch").assert().success();
     env.file("file1.txt", "content1");
-    env.but("commit first-branch -m 'first commit on branch A'")
+    env.but("commit -b first-branch -m 'first commit on branch A'")
         .assert()
         .success();
     let first_branch_tip = env.invoke_git("rev-parse first-branch");
 
     env.but("branch new second-branch").assert().success();
     env.file("file2.txt", "content2");
-    env.but("commit second-branch -m 'second commit on branch B'")
+    env.but("commit -b second-branch -m 'second commit on branch B'")
         .assert()
         .success();
 
@@ -99,7 +99,7 @@ fn land_fast_forwards_self_remote() -> anyhow::Result<()> {
     env.but("setup").assert().success();
     env.but("branch new first-branch").assert().success();
     env.file("file1.txt", "content1");
-    env.but("commit first-branch -m 'first commit on branch A'")
+    env.but("commit -b first-branch -m 'first commit on branch A'")
         .assert()
         .success();
     let first_branch_tip = env.invoke_git("rev-parse first-branch");
@@ -200,7 +200,7 @@ fn land_no_ff_creates_signed_merge_commit() -> anyhow::Result<()> {
 
     env.but("branch new first-branch").assert().success();
     env.file("file1.txt", "content1");
-    env.but("commit first-branch -m 'first commit on branch A'")
+    env.but("commit -b first-branch -m 'first commit on branch A'")
         .assert()
         .success();
 
@@ -256,14 +256,16 @@ fn land_refuses_non_bottom_stack_segment() -> anyhow::Result<()> {
     // Build a 2-segment stack: bottom-seg, then top-seg stacked on top of it.
     env.but("branch new bottom-seg").assert().success();
     env.file("bottom.txt", "bottom");
-    env.but("commit bottom-seg -m 'bottom commit'")
+    env.but("commit -b bottom-seg -m 'bottom commit'")
         .assert()
         .success();
     env.but("branch new top-seg --anchor bottom-seg")
         .assert()
         .success();
     env.file("top.txt", "top");
-    env.but("commit top-seg -m 'top commit'").assert().success();
+    env.but("commit -b top-seg -m 'top commit'")
+        .assert()
+        .success();
 
     let target_before = env.invoke_git("rev-parse gb-local/main");
 
@@ -305,14 +307,14 @@ fn land_rename_no_silent_mismerge() -> anyhow::Result<()> {
     let base = "l1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\n";
     env.but("branch new seed").assert().success();
     env.file("foo.txt", base);
-    env.but("commit seed -m 'add foo'").assert().success();
+    env.but("commit -b seed -m 'add foo'").assert().success();
     env.but("land seed --yes").assert().success();
 
     // Branch renames foo.txt -> bar.txt (keeping it similar so the rename is detectable) and edits line 5.
     env.but("branch new rename-branch").assert().success();
     std::fs::remove_file(env.projects_root().join("foo.txt"))?;
     env.file("bar.txt", "l1\nl2\nl3\nl4\nBRANCH\nl6\nl7\nl8\n");
-    env.but("commit rename-branch -m 'rename foo to bar'")
+    env.but("commit -b rename-branch -m 'rename foo to bar'")
         .assert()
         .success();
 
@@ -372,7 +374,7 @@ fn land_without_yes_refuses_non_interactively() -> anyhow::Result<()> {
     env.but("setup").assert().success();
     env.but("branch new first-branch").assert().success();
     env.file("file1.txt", "content1");
-    env.but("commit first-branch -m 'first commit on branch A'")
+    env.but("commit -b first-branch -m 'first commit on branch A'")
         .assert()
         .success();
 

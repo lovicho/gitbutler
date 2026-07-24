@@ -1,7 +1,9 @@
 mod git {
     use std::io::Write;
 
-    use but_core::{GitConfigSettings, RepositoryExt, ReviewStackingDescription};
+    use but_core::{
+        GitConfigSettings, GitHubStackingMode, RepositoryExt, ReviewStackingDescription,
+    };
     use but_testsupport::gix_testtools;
 
     #[test]
@@ -25,6 +27,7 @@ mod git {
             gitbutler_sign_commits: Some(true),
             gitbutler_gerrit_mode: Some(false),
             gitbutler_review_stacking_description: None,
+            gitbutler_github_stacking_mode: None,
             gitbutler_forge_review_template_path: None,
             gitbutler_gitlab_project_id: None,
             gitbutler_gitlab_upstream_project_id: None,
@@ -86,6 +89,7 @@ mod git {
             gitbutler_sign_commits: Some(true),
             gitbutler_gerrit_mode: Some(false),
             gitbutler_review_stacking_description: None,
+            gitbutler_github_stacking_mode: None,
             gitbutler_forge_review_template_path: Some("template.md".into()),
             gitbutler_gitlab_project_id: Some("project-id".into()),
             gitbutler_gitlab_upstream_project_id: Some("upstream-project-id".into()),
@@ -99,6 +103,7 @@ mod git {
             gitbutler_sign_commits: Some(true),
             gitbutler_gerrit_mode: Some(false),
             gitbutler_review_stacking_description: None,
+            gitbutler_github_stacking_mode: None,
             gitbutler_forge_review_template_path: Some("".into()),
             gitbutler_gitlab_project_id: Some(String::new()),
             gitbutler_gitlab_upstream_project_id: Some(String::new()),
@@ -171,6 +176,27 @@ mod git {
                 repo.git_settings()?.gitbutler_review_stacking_description,
                 Some(value),
                 "the configured review stacking description should round-trip"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn github_stacking_mode_round_trips() -> anyhow::Result<()> {
+        for value in [GitHubStackingMode::Disabled, GitHubStackingMode::Native] {
+            let tmp = gix_testtools::tempfile::TempDir::new()?;
+            gix::init(tmp.path())?;
+            let repo = gix::open_opts(tmp.path(), gix::open::Options::isolated())?;
+            repo.set_git_settings(&GitConfigSettings {
+                gitbutler_github_stacking_mode: Some(value),
+                ..Default::default()
+            })?;
+
+            let repo = but_testsupport::open_repo(repo.path())?;
+            assert_eq!(
+                repo.git_settings()?.gitbutler_github_stacking_mode,
+                Some(value),
+                "the configured GitHub stacking mode should round-trip"
             );
         }
         Ok(())

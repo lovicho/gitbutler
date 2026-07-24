@@ -1,19 +1,9 @@
 use bstr::ByteSlice;
 
-use crate::{command::util, utils::Sandbox};
-
-fn find_uncommitted_cli_id(status: &serde_json::Value, path_contains: &str) -> Option<String> {
-    status["uncommittedChanges"]
-        .as_array()?
-        .iter()
-        .find(|change| {
-            change["filePath"]
-                .as_str()
-                .map(|path| path.contains(path_contains))
-                .unwrap_or(false)
-        })
-        .and_then(|change| change["cliId"].as_str().map(ToOwned::to_owned))
-}
+use crate::{
+    command::util::{self, commit_file_with_worktree_changes_as_two_hunks},
+    utils::{CommandExt as _, Sandbox},
+};
 
 #[test]
 fn discard_removes_selected_change() -> anyhow::Result<()> {
@@ -22,16 +12,24 @@ fn discard_removes_selected_change() -> anyhow::Result<()> {
 
     env.file("src/discard-me.ts", "export const value = true;\n");
 
-    let status = util::status_json(&env)?;
-    let cli_id = find_uncommitted_cli_id(&status, "discard-me").expect("should find CLI ID");
+    env.but("discard src/discard-me.ts").assert().success();
 
-    env.but(format!("discard {cli_id}")).assert().success();
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ g0 [A]
+┊●   tpm add A
+┊│     tpm:t A A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
 
-    let status = util::status_json(&env)?;
-    assert!(
-        find_uncommitted_cli_id(&status, "discard-me").is_none(),
-        "discarded file should no longer appear in uncommitted changes"
-    );
+Hint: run `but help` for all commands
+
+"#]]);
     assert!(
         !env.projects_root().join("src/discard-me.ts").exists(),
         "discarding a new file should remove it from the worktree"
@@ -41,44 +39,36 @@ fn discard_removes_selected_change() -> anyhow::Result<()> {
 }
 
 #[test]
-fn discard_by_path_prefix_removes_only_matching_files() {
+fn discard_rejects_path_prefixes() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
     env.setup_metadata(&["A"]);
 
     env.file("path/to/first.txt", "first\n");
     env.file("path/to/second.txt", "second\n");
-    env.file("path/other/third.txt", "third\n");
 
-    env.but("status")
+    env.but("discard path/to/")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: Bad input 'path/to/' for '<CHANGES>'
+
+Path prefixes cannot be discarded
+
+Hint: Use uncommitted file or hunk CLI IDs instead
+
+"#]]);
+
+    env.but("status -f")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
 ╭┄ zz [uncommitted]
-┊   up A path/other/third.txt
 ┊   ms A path/to/first.txt
 ┊   rr A path/to/second.txt
 ┊
 ┊╭┄ g0 [A]
 ┊●   tpm add A
-├╯
-┊
-┴ 0dc3733 (common base) 2000-01-02 add M
-
-Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
-
-"#]]);
-
-    env.but("discard path/to/").assert().success();
-
-    env.but("status")
-        .assert()
-        .success()
-        .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted]
-┊   up A path/other/third.txt
-┊
-┊╭┄ g0 [A]
-┊●   tpm add A
+┊│     tpm:t A A
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -96,12 +86,8 @@ fn concurrent_discard_to_independent_files_succeeds() -> anyhow::Result<()> {
     env.file("src/a/discard.ts", "export const a = true;\n");
     env.file("src/b/discard.ts", "export const b = true;\n");
 
-    let status = util::status_json(&env)?;
-    let id_a = find_uncommitted_cli_id(&status, "a/discard").expect("should find first CLI ID");
-    let id_b = find_uncommitted_cli_id(&status, "b/discard").expect("should find second CLI ID");
-
-    let child_a = util::but_std_cmd(&env, &format!("discard {id_a}")).spawn()?;
-    let child_b = util::but_std_cmd(&env, &format!("discard {id_b}")).spawn()?;
+    let child_a = util::but_std_cmd(&env, "discard src/a/discard.ts").spawn()?;
+    let child_b = util::but_std_cmd(&env, "discard src/b/discard.ts").spawn()?;
 
     let out_a = child_a.wait_with_output()?;
     let out_b = child_b.wait_with_output()?;
@@ -117,15 +103,22 @@ fn concurrent_discard_to_independent_files_succeeds() -> anyhow::Result<()> {
         out_b.stderr.as_bstr()
     );
 
-    let status = util::status_json(&env)?;
-    assert_eq!(
-        status["uncommittedChanges"]
-            .as_array()
-            .map(|changes| changes.len())
-            .unwrap_or(0),
-        0,
-        "both discarded files should be removed from the workspace"
-    );
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ g0 [A]
+┊●   tpm add A
+┊│     tpm:t A A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
 
     Ok(())
 }
@@ -136,7 +129,7 @@ fn discard_reverts_simple_rename() -> anyhow::Result<()> {
     env.setup_metadata(&["A"]);
 
     env.file("src/rename-source.ts", "export const source = true;\n");
-    env.but("commit A -m 'seed rename source'")
+    env.but("commit -b A -m 'seed rename source'")
         .assert()
         .success();
 
@@ -145,11 +138,7 @@ fn discard_reverts_simple_rename() -> anyhow::Result<()> {
         env.projects_root().join("src/rename-target.ts"),
     )?;
 
-    let status = util::status_json(&env)?;
-    let cli_id =
-        find_uncommitted_cli_id(&status, "rename-target").expect("should find renamed file CLI ID");
-
-    env.but(format!("discard {cli_id}")).assert().success();
+    env.but("discard src/rename-target.ts").assert().success();
 
     assert!(
         env.projects_root().join("src/rename-source.ts").exists(),
@@ -174,7 +163,7 @@ fn discard_rename_does_not_discard_unrelated_changes() -> anyhow::Result<()> {
     env.setup_metadata(&["A"]);
 
     env.file("src/rename-source-only.ts", "export const source = 1;\n");
-    env.but("commit A -m 'seed rename source only'")
+    env.but("commit -b A -m 'seed rename source only'")
         .assert()
         .success();
 
@@ -184,11 +173,9 @@ fn discard_rename_does_not_discard_unrelated_changes() -> anyhow::Result<()> {
     )?;
     env.file("src/keep-me.ts", "export const keep = true;\n");
 
-    let status_before = util::status_json(&env)?;
-    let cli_id = find_uncommitted_cli_id(&status_before, "rename-target-only")
-        .expect("should find renamed file CLI ID");
-
-    env.but(format!("discard {cli_id}")).assert().success();
+    env.but("discard src/rename-target-only.ts")
+        .assert()
+        .success();
 
     assert!(
         env.projects_root()
@@ -203,15 +190,25 @@ fn discard_rename_does_not_discard_unrelated_changes() -> anyhow::Result<()> {
         "discard should remove renamed target path"
     );
 
-    let status_after = util::status_json(&env)?;
-    assert!(
-        find_uncommitted_cli_id(&status_after, "rename-target-only").is_none(),
-        "discarded renamed file should no longer appear in uncommitted changes"
-    );
-    assert!(
-        find_uncommitted_cli_id(&status_after, "keep-me").is_some(),
-        "discarding a rename should not discard unrelated uncommitted changes"
-    );
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted]
+┊   tz A src/keep-me.ts
+┊
+┊╭┄ g0 [A]
+┊●   1 seed rename source only
+┊│     1:l A src/rename-source-only.ts
+┊●   tpm add A
+┊│     tpm:t A A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
+
+"#]]);
 
     let git_status = env.invoke_git("status --porcelain");
     assert!(
@@ -232,7 +229,7 @@ fn discard_the_whole_uncommitted_changes() -> anyhow::Result<()> {
     env.setup_metadata(&["A"]);
 
     env.file("src/rename-source-only.ts", "export const source = 1;\n");
-    env.but("commit A -m 'seed rename source only'")
+    env.but("commit -b A -m 'seed rename source only'")
         .assert()
         .success();
 
@@ -257,15 +254,24 @@ fn discard_the_whole_uncommitted_changes() -> anyhow::Result<()> {
         "discard should remove renamed target path"
     );
 
-    let status_after = util::status_json(&env)?;
-    assert!(
-        find_uncommitted_cli_id(&status_after, "rename-target-only").is_none(),
-        "discarded renamed file should no longer appear in uncommitted changes"
-    );
-    assert!(
-        find_uncommitted_cli_id(&status_after, "keep-me").is_none(),
-        "the added file should be gone as well"
-    );
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ g0 [A]
+┊●   1 seed rename source only
+┊│     1:l A src/rename-source-only.ts
+┊●   tpm add A
+┊│     tpm:t A A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
 
     assert_eq!(
         env.invoke_git("status --porcelain"),
@@ -285,7 +291,7 @@ fn discarding_multiple_hunks_in_a_file_works() -> anyhow::Result<()> {
     let file_path = "src/some_file.txt";
 
     env.file(file_path, content);
-    env.but("commit A -m 'seed rename source only'")
+    env.but("commit -b A -m 'seed rename source only'")
         .assert()
         .success();
 
@@ -298,7 +304,475 @@ fn discarding_multiple_hunks_in_a_file_works() -> anyhow::Result<()> {
     );
 
     let content_after_discard = env.read_file(file_path)?;
-    assert_eq!(content_after_discard, content);
+    assert_eq!(
+        content_after_discard, content,
+        "discarding all hunks should restore the committed contents"
+    );
 
     Ok(())
+}
+
+#[test]
+fn discard_multiple_uncommitted_files_outputs_json() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    env.file("first-uncommitted.txt", "first\n");
+    env.file("second-uncommitted.txt", "second\n");
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted]
+┊   rv A first-uncommitted.txt
+┊   xs A second-uncommitted.txt
+┊
+┊╭┄ g0 [A]
+┊●   tpm add A
+┊│     tpm:t A A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
+
+"#]]);
+
+    env.but("--format json discard first-uncommitted.txt second-uncommitted.txt")
+        .allow_json()
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+{
+  "paths": [
+    "first-uncommitted.txt",
+    "second-uncommitted.txt"
+  ]
+}
+
+"#]]);
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ g0 [A]
+┊●   tpm add A
+┊│     tpm:t A A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}
+
+#[test]
+fn discard_multiple_branches_outputs_shell() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    env.file("branch-b.txt", "branch B\n");
+    env.but("commit -b B -m 'add branch B'").assert().success();
+    env.file("branch-c.txt", "branch C\n");
+    env.but("commit -b C -m 'add branch C'").assert().success();
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ g0 [C]
+┊●   1#0 add branch C
+┊│     1#0:n A branch-c.txt
+├╯
+┊
+┊╭┄ h0 [B]
+┊●   1#1 add branch B
+┊│     1#1:q A branch-b.txt
+├╯
+┊
+┊╭┄ i0 [A]
+┊●   tpm add A
+┊│     tpm:t A A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    env.but("--format shell discard B C")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+B
+C
+
+"#]]);
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ g0 [A]
+┊●   tpm add A
+┊│     tpm:t A A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    assert!(
+        !env.projects_root().join("branch-b.txt").exists(),
+        "discarding branch B should remove its changes"
+    );
+    assert!(
+        !env.projects_root().join("branch-c.txt").exists(),
+        "discarding branch C should remove its changes"
+    );
+}
+
+#[test]
+fn discard_multiple_commits_outputs_human() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    env.file("first-commit.txt", "first\n");
+    env.but("commit -b A -m 'first discardable commit'")
+        .assert()
+        .success();
+    let first = env.invoke_git("rev-parse refs/heads/A");
+
+    env.file("second-commit.txt", "second\n");
+    env.but("commit -b A -m 'second discardable commit'")
+        .assert()
+        .success();
+    let second = env.invoke_git("rev-parse refs/heads/A");
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ g0 [A]
+┊●   1#0 second discardable commit
+┊│     1#0:r A second-commit.txt
+┊●   1#1 first discardable commit
+┊│     1#1:m A first-commit.txt
+┊●   tpm add A
+┊│     tpm:t A A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    env.but(format!("discard {first} {second}"))
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+Discarded commits a921d28, 8775df1
+
+"#]]);
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ g0 [A]
+┊●   tpm add A
+┊│     tpm:t A A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    assert!(
+        !env.projects_root().join("first-commit.txt").exists(),
+        "discarding the first commit should remove its changes"
+    );
+    assert!(
+        !env.projects_root().join("second-commit.txt").exists(),
+        "discarding the second commit should remove its changes"
+    );
+}
+
+#[test]
+fn discard_committed_files_outputs_new_commit_in_json() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    env.file("discarded-from-commit.txt", "discard me\n");
+    env.file("retained-in-commit.txt", "retain me\n");
+    env.but("commit -b A -m 'files to selectively discard'")
+        .assert()
+        .success();
+    let source = env.invoke_git("rev-parse refs/heads/A");
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ g0 [A]
+┊●   1 files to selectively discard
+┊│     1:n A discarded-from-commit.txt
+┊│     1:x A retained-in-commit.txt
+┊●   tpm add A
+┊│     tpm:t A A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    env.but(format!(
+        "--format json discard {source}:discarded-from-commit.txt"
+    ))
+    .allow_json()
+    .assert()
+    .success()
+    .stdout_eq(snapbox::str![[r#"
+{
+  "source": "c61e0f8eb6e54760c5a265d93044bf29b7a5716a",
+  "paths": [
+    "discarded-from-commit.txt"
+  ],
+  "newCommit": "372ab397ba61d3368a1a9e769f39af3997c4e1ad"
+}
+
+"#]]);
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ g0 [A]
+┊●   1 files to selectively discard
+┊│     1:x A retained-in-commit.txt
+┊●   tpm add A
+┊│     tpm:t A A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    assert!(
+        !env.projects_root()
+            .join("discarded-from-commit.txt")
+            .exists(),
+        "discarding a committed file should remove its changes"
+    );
+    assert!(
+        env.projects_root().join("retained-in-commit.txt").exists(),
+        "discarding one committed file should retain other committed files"
+    );
+}
+
+#[test]
+fn discard_rejects_mixed_sources() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    env.file("committed.txt", "committed\n");
+    env.but("commit -b A -m 'committed source'")
+        .assert()
+        .success();
+    let commit = env.invoke_git("rev-parse refs/heads/A");
+    env.file("uncommitted.txt", "uncommitted\n");
+
+    env.but(format!("discard A {commit}"))
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: Bad input for '<CHANGES>'
+
+Cannot mix different types of sources
+
+Hint: Discard branches, commits, committed files, or uncommitted changes separately
+
+"#]]);
+    env.but(format!("discard {commit} {commit}:committed.txt"))
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: Bad input for '<CHANGES>'
+
+Cannot mix different types of sources
+
+Hint: Discard branches, commits, committed files, or uncommitted changes separately
+
+"#]]);
+    env.but("discard zz uncommitted.txt")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: Bad input for '<CHANGES>'
+
+Cannot mix different types of sources
+
+Hint: Discard branches, commits, committed files, or uncommitted changes separately
+
+"#]]);
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted]
+┊   ln A uncommitted.txt
+┊
+┊╭┄ g0 [A]
+┊●   1 committed source
+┊│     1:z A committed.txt
+┊●   tpm add A
+┊│     tpm:t A A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
+
+"#]]);
+}
+
+#[test]
+fn discard_rejects_committed_files_from_multiple_commits() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    env.file("first-committed.txt", "first\n");
+    env.but("commit -b A -m 'first committed source'")
+        .assert()
+        .success();
+    let first = env.invoke_git("rev-parse refs/heads/A");
+
+    env.file("second-committed.txt", "second\n");
+    env.but("commit -b A -m 'second committed source'")
+        .assert()
+        .success();
+    let second = env.invoke_git("rev-parse refs/heads/A");
+
+    env.but(format!(
+        "discard {first}:first-committed.txt {second}:second-committed.txt"
+    ))
+    .assert()
+    .failure()
+    .stderr_eq(snapbox::str![[r#"
+Error: Bad input for '<CHANGES>'
+
+All committed files must come from the same commit
+
+Hint: Discard committed files from each commit separately
+
+"#]]);
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ g0 [A]
+┊●   1#0 second committed source
+┊│     1#0:q A second-committed.txt
+┊●   1#1 first committed source
+┊│     1#1:t A first-committed.txt
+┊●   tpm add A
+┊│     tpm:t A A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}
+
+#[test]
+fn discard_an_uncommitted_hunk() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+    commit_file_with_worktree_changes_as_two_hunks(&env, "A", "hunks.txt");
+
+    env.but("diff")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+──────────────╮
+lw:2 hunks.txt│
+──────────────╯
+   1  │-first
+     1│+firsta
+   2 2│ line
+   3 3│ line
+   4 4│ line
+──────────────╮
+lw:e hunks.txt│
+──────────────╯
+    6  6│ line
+    7  7│ line
+    8  8│ line
+    9   │-last
+       9│+lasta
+
+"#]]);
+
+    env.but("discard lw:2")
+        .assert()
+        .success()
+        .stdout_eq("Discarded uncommitted changes from hunks.txt\n");
+
+    env.but("diff")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+──────────────╮
+lw:e hunks.txt│
+──────────────╯
+    6  6│ line
+    7  7│ line
+    8  8│ line
+    9   │-last
+       9│+lasta
+
+"#]]);
+
+    let content = env.read_file("hunks.txt").expect("hunks.txt should exist");
+    assert!(
+        content.starts_with("first\n"),
+        "the discarded first hunk should be restored"
+    );
+    assert!(
+        content.ends_with("lasta\n"),
+        "the undiscarded last hunk should remain"
+    );
 }

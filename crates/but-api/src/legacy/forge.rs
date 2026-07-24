@@ -23,6 +23,25 @@ pub fn push_remote_url(project_meta: &ProjectMeta, repo: &gix::Repository) -> Re
     project_meta.push_remote_url(repo)
 }
 
+fn base_and_push_repo_info(
+    project_meta: &ProjectMeta,
+    repo: &gix::Repository,
+) -> Result<(but_forge::ForgeRepoInfo, Option<but_forge::ForgeRepoInfo>)> {
+    let base_remote_url = remote_url(project_meta, repo)?;
+    let push_remote_url = push_remote_url(project_meta, repo)?;
+    let forge_repo_info = but_forge::derive_forge_repo_info(&base_remote_url)
+        .context("No forge could be determined for this repository branch")?;
+    let forge_push_repo_info = if base_remote_url != push_remote_url {
+        Some(
+            but_forge::derive_forge_repo_info(&push_remote_url)
+                .context("Failed to derive forge information for the push repository")?,
+        )
+    } else {
+        None
+    };
+    Ok((forge_repo_info, forge_push_repo_info))
+}
+
 fn review_template_content(file: FileInfo) -> Result<String> {
     if file.size.is_none() {
         return Ok(String::new());
@@ -489,6 +508,85 @@ mod tests {
     }
 
     #[test]
+    fn unchanged_review_targets_do_not_need_pre_push_flattening() {
+        let reviews = [
+            (
+                but_forge::ForgeReviewTargetUpdate {
+                    number: 1,
+                    target_branch: "main".into(),
+                },
+                Some("main".into()),
+            ),
+            (
+                but_forge::ForgeReviewTargetUpdate {
+                    number: 2,
+                    target_branch: "bottom".into(),
+                },
+                Some("bottom".into()),
+            ),
+        ];
+
+        assert!(
+            review_target_flattening_plan(&reviews).is_none(),
+            "an ordinary push should not contact the forge before pushing"
+        );
+    }
+
+    #[test]
+    fn reordered_review_targets_are_temporarily_flattened_to_trunk() {
+        let reviews = [
+            (
+                but_forge::ForgeReviewTargetUpdate {
+                    number: 1,
+                    target_branch: "main".into(),
+                },
+                Some("old-bottom".into()),
+            ),
+            (
+                but_forge::ForgeReviewTargetUpdate {
+                    number: 2,
+                    target_branch: "new-bottom".into(),
+                },
+                Some("main".into()),
+            ),
+        ];
+
+        let (trunk, reviews_to_flatten) =
+            review_target_flattening_plan(&reviews).expect("the reviewed stack was reordered");
+        assert_eq!(trunk, "main");
+        assert_eq!(
+            reviews_to_flatten,
+            std::collections::HashSet::from([1]),
+            "only reviews not already targeting trunk need a preparatory update"
+        );
+    }
+
+    #[test]
+    fn unknown_review_targets_do_not_need_pre_push_flattening() {
+        let reviews = [
+            (
+                but_forge::ForgeReviewTargetUpdate {
+                    number: 1,
+                    target_branch: "main".into(),
+                },
+                Some("main".into()),
+            ),
+            (
+                but_forge::ForgeReviewTargetUpdate {
+                    number: 2,
+                    target_branch: "bottom".into(),
+                },
+                None,
+            ),
+        ];
+
+        assert!(
+            review_target_flattening_plan(&reviews).is_none(),
+            "missing cache data must not cause remote mutations before a push"
+        );
+    }
+
+    #[test]
     fn review_remote_name_collision_gets_suffix() -> Result<()> {
         let tmp = tempfile::tempdir()?;
         git_at_dir(tmp.path()).args(["init"]).run();
@@ -741,18 +839,8 @@ pub async fn publish_review_only(
         let ctx = ctx.into_thread_local();
         let project_meta = ctx.project_meta()?;
         let repo = ctx.repo.get()?;
-        let base_remote_url = remote_url(&project_meta, &repo)?;
-        let push_remote_url = push_remote_url(&project_meta, &repo)?;
-        let forge_repo_info = but_forge::derive_forge_repo_info(&base_remote_url)
-            .context("No forge could be determined for this repository branch")?;
-        let forge_push_repo_info = if base_remote_url != push_remote_url {
-            let info = but_forge::derive_forge_repo_info(&push_remote_url).context(
-                "Failed to derive forge repository information from the push remote URL.",
-            )?;
-            Some(info)
-        } else {
-            None
-        };
+        let (forge_repo_info, forge_push_repo_info) =
+            base_and_push_repo_info(&project_meta, &repo)?;
 
         (
             but_forge_storage::Controller::from_path(but_path::app_data_dir()?),
@@ -919,12 +1007,22 @@ pub async fn update_review_footers(
     ctx: ThreadSafeContext,
     reviews: Vec<but_forge::ForgeReviewUpdate>,
 ) -> Result<()> {
-    let (storage, forge_repo_info, preferred_forge_user, description_mode) = {
+    let cache_ctx = ctx.clone();
+    let (
+        storage,
+        forge_repo_info,
+        forge_push_repo_info,
+        preferred_forge_user,
+        description_mode,
+        github_stacking_mode,
+    ) = {
         let ctx = ctx.into_thread_local();
         let project_meta = ctx.project_meta()?;
         let repo = ctx.repo.get()?;
-        let forge_repo_info = but_forge::derive_forge_repo_info(&remote_url(&project_meta, &repo)?);
-        let description_mode = match repo.git_settings()?.gitbutler_review_stacking_description {
+        let (forge_repo_info, forge_push_repo_info) =
+            base_and_push_repo_info(&project_meta, &repo)?;
+        let settings = repo.git_settings()?;
+        let description_mode = match settings.gitbutler_review_stacking_description {
             Some(but_core::ReviewStackingDescription::Top) => {
                 but_forge::ReviewStackingDescription::Top
             }
@@ -935,23 +1033,234 @@ pub async fn update_review_footers(
                 but_forge::ReviewStackingDescription::Bottom
             }
         };
+        let github_stacking_mode = match settings.gitbutler_github_stacking_mode {
+            Some(but_core::GitHubStackingMode::Native) => but_forge::GitHubStackingMode::Native,
+            Some(but_core::GitHubStackingMode::Disabled) => but_forge::GitHubStackingMode::Disabled,
+            None => but_forge::GitHubStackingMode::Unconfigured,
+        };
 
         (
             but_forge_storage::Controller::from_path(but_path::app_data_dir()?),
             forge_repo_info,
+            forge_push_repo_info,
             ctx.legacy_project.preferred_forge_user.clone(),
             description_mode,
+            github_stacking_mode,
         )
     };
 
     but_forge::sync_reviews(
         &preferred_forge_user,
-        &forge_repo_info.context("No forge could be determined for this repository branch")?,
+        &forge_repo_info,
+        &forge_push_repo_info,
         &reviews,
         &storage,
         description_mode,
+        github_stacking_mode,
+    )
+    .await?;
+
+    let ctx = cache_ctx.into_thread_local();
+    cache_review_target_updates(&ctx, &reviews)
+}
+
+fn cache_review_target_updates(
+    ctx: &Context,
+    updates: &[but_forge::ForgeReviewUpdate],
+) -> Result<()> {
+    let targets = updates
+        .iter()
+        .filter_map(|update| {
+            update
+                .target_branch
+                .as_ref()
+                .map(|target| (update.number, target))
+        })
+        .collect::<std::collections::HashMap<_, _>>();
+    if targets.is_empty() {
+        return Ok(());
+    }
+
+    let cached_reviews = {
+        let db = ctx.db.get_cache()?;
+        but_forge::list_cached_forge_reviews(&db)?
+    };
+    let mut db = ctx.db.get_cache_mut()?;
+    for mut review in cached_reviews {
+        let Some(target) = targets.get(&review.number) else {
+            continue;
+        };
+        review.target_branch = (*target).clone();
+        but_forge::cache_review(&mut db, &review)?;
+    }
+    Ok(())
+}
+
+/// Prepare native forge state before temporarily flattening review targets for a reordered push.
+pub(crate) async fn prepare_review_target_updates(
+    ctx: ThreadSafeContext,
+    reviews: Vec<but_forge::ForgeReviewTargetUpdate>,
+) -> Result<()> {
+    let (
+        storage,
+        forge_repo_info,
+        forge_push_repo_info,
+        preferred_forge_user,
+        github_stacking_mode,
+    ) = {
+        let ctx = ctx.into_thread_local();
+        let project_meta = ctx.project_meta()?;
+        let repo = ctx.repo.get()?;
+        let (forge_repo_info, forge_push_repo_info) =
+            base_and_push_repo_info(&project_meta, &repo)?;
+        let github_stacking_mode = match repo.git_settings()?.gitbutler_github_stacking_mode {
+            Some(but_core::GitHubStackingMode::Native) => but_forge::GitHubStackingMode::Native,
+            Some(but_core::GitHubStackingMode::Disabled) => but_forge::GitHubStackingMode::Disabled,
+            None => but_forge::GitHubStackingMode::Unconfigured,
+        };
+        (
+            but_forge_storage::Controller::from_path(but_path::app_data_dir()?),
+            forge_repo_info,
+            forge_push_repo_info,
+            ctx.legacy_project.preferred_forge_user.clone(),
+            github_stacking_mode,
+        )
+    };
+    let reviews = reviews.into_iter().map(Into::into).collect::<Vec<_>>();
+    but_forge::prepare_review_target_updates(
+        &preferred_forge_user,
+        &forge_repo_info,
+        &forge_push_repo_info,
+        &reviews,
+        &storage,
+        github_stacking_mode,
     )
     .await
+}
+
+/// The original remote targets changed while preparing a reviewed stack for push.
+pub(crate) struct ReviewTargetFlattening {
+    original_targets: Vec<but_forge::ForgeReviewTargetUpdate>,
+}
+
+/// Temporarily point a reordered reviewed stack at trunk before its refs are pushed.
+///
+/// This prevents any stale stacked base from containing a rewritten review head while the remote
+/// refs transition to their new topology. The regular post-push synchronization restores the
+/// desired stacked targets.
+pub(crate) async fn flatten_review_targets_before_push(
+    ctx: ThreadSafeContext,
+    reviews: &[(but_forge::ForgeReviewTargetUpdate, Option<String>)],
+) -> Result<Option<ReviewTargetFlattening>> {
+    let Some((trunk, reviews_to_flatten)) = review_target_flattening_plan(reviews) else {
+        return Ok(None);
+    };
+
+    let desired = reviews
+        .iter()
+        .map(|(desired, _)| desired.clone())
+        .collect::<Vec<_>>();
+    prepare_review_target_updates(ctx.clone(), desired).await?;
+
+    let mut flattening = ReviewTargetFlattening {
+        original_targets: Vec::new(),
+    };
+    for (review, current_target) in reviews {
+        if !reviews_to_flatten.contains(&review.number) {
+            continue;
+        }
+        let current_target = current_target
+            .as_ref()
+            .expect("the flattening plan requires every current target");
+        let update_result = update_review(
+            ctx.clone(),
+            review
+                .number
+                .try_into()
+                .context("Review number cannot be represented as usize")?,
+            None,
+            None,
+            None,
+            Some(trunk.clone()),
+        )
+        .await;
+        if let Err(err) = update_result {
+            let err = err.context(format!(
+                "Failed to temporarily retarget review #{} before pushing reordered refs",
+                review.number
+            ));
+            if let Err(restore_err) = restore_review_targets(ctx, &flattening).await {
+                return Err(err.context(format!(
+                    "Additionally failed to restore already-retargeted reviews: {restore_err:#}"
+                )));
+            }
+            return Err(err);
+        }
+        flattening
+            .original_targets
+            .push(but_forge::ForgeReviewTargetUpdate {
+                number: review.number,
+                target_branch: current_target.clone(),
+            });
+    }
+    Ok(Some(flattening))
+}
+
+pub(crate) async fn restore_review_targets(
+    ctx: ThreadSafeContext,
+    flattening: &ReviewTargetFlattening,
+) -> Result<()> {
+    let mut errors = Vec::new();
+    for review in &flattening.original_targets {
+        if let Err(err) = update_review(
+            ctx.clone(),
+            review
+                .number
+                .try_into()
+                .context("Review number cannot be represented as usize")?,
+            None,
+            None,
+            None,
+            Some(review.target_branch.clone()),
+        )
+        .await
+        {
+            errors.push(format!(
+                "Failed to restore review #{} to `{}`: {err}",
+                review.number, review.target_branch
+            ));
+        }
+    }
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        anyhow::bail!(
+            "Could not restore all review targets after the push failed:\n{}",
+            errors.join("\n")
+        )
+    }
+}
+
+fn review_target_flattening_plan(
+    reviews: &[(but_forge::ForgeReviewTargetUpdate, Option<String>)],
+) -> Option<(String, std::collections::HashSet<i64>)> {
+    if reviews.iter().any(|(_, current)| current.is_none()) {
+        return None;
+    }
+    let targets_changed = reviews
+        .iter()
+        .any(|(desired, current)| current.as_deref() != Some(desired.target_branch.as_str()));
+    if !targets_changed {
+        return None;
+    }
+
+    let trunk = reviews.first()?.0.target_branch.clone();
+    let reviews_to_flatten = reviews
+        .iter()
+        .filter(|(_, current)| current.as_deref() != Some(trunk.as_str()))
+        .map(|(review, _)| review.number)
+        .collect();
+    Some((trunk, reviews_to_flatten))
 }
 
 /// Synchronize every review in the workspace stack containing `branch`.
@@ -1157,6 +1466,52 @@ fn review_updates_for_branch(
     Ok(review_updates_for_stack(stack, &base_branch)
         .into_iter()
         .map(Into::into)
+        .collect())
+}
+
+pub(crate) fn review_target_updates_for_branch(
+    ctx: &Context,
+    branch: &gix::refs::FullNameRef,
+) -> Result<
+    Vec<(
+        gix::refs::FullName,
+        but_forge::ForgeReviewTargetUpdate,
+        Option<String>,
+    )>,
+> {
+    let info = crate::legacy::workspace::head_info(ctx)?;
+    let (stack, _) = stack_and_segment_for_branch(&info, branch)?;
+    if !stack
+        .segments
+        .iter()
+        .any(|segment| review_number(segment).is_some())
+    {
+        return Ok(Vec::new());
+    }
+    let base_branch = {
+        let guard = ctx.shared_worktree_access();
+        gitbutler_branch_actions::base::get_base_branch_data(ctx, guard.read_permission())?
+            .short_name
+    };
+    let updates = review_updates_for_stack(stack, &base_branch);
+    let db = ctx.db.get_cache()?;
+    let cached_targets = but_forge::list_cached_forge_reviews(&db)?
+        .into_iter()
+        .map(|review| (review.number, review.target_branch))
+        .collect::<std::collections::HashMap<_, _>>();
+    let reviewed_refs = stack.segments.iter().rev().filter_map(|segment| {
+        review_number(segment)?;
+        segment
+            .ref_info
+            .as_ref()
+            .map(|ref_info| ref_info.ref_name.clone())
+    });
+    Ok(reviewed_refs
+        .zip(updates)
+        .map(|(branch, update)| {
+            let current_target = cached_targets.get(&update.number).cloned();
+            (branch, update, current_target)
+        })
         .collect())
 }
 

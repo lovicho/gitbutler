@@ -137,11 +137,6 @@ fn applied_stacks_with_options(
     ))
 }
 
-pub fn applied_stack(ctx: &Context, stack_id: Option<StackId>) -> anyhow::Result<HeadInfoStack> {
-    let stacks = applied_stacks(ctx)?;
-    applied_stack_from_stacks(stacks, stack_id)
-}
-
 pub fn applied_stack_with_expensive_commit_info(
     ctx: &Context,
     stack_id: Option<StackId>,

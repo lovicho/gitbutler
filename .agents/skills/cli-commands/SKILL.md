@@ -233,7 +233,7 @@ is fine.
 
 For examples of this structure in practice see
 
-- `crates/but/src/command/legacy/commit2.rs`
-- `crates/but/src/command/legacy/move2.rs`
-- `crates/but/src/command/legacy/squash2.rs`
-- `crates/but/src/command/legacy/diff2.rs`
+- `crates/but/src/command/legacy/commit.rs`
+- `crates/but/src/command/legacy/move.rs`
+- `crates/but/src/command/legacy/squash.rs`
+- `crates/but/src/command/legacy/diff.rs`

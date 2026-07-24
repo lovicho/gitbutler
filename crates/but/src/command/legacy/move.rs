@@ -15,7 +15,7 @@ use crate::{
     CliResult, IdMap,
     args::{
         atoms::{BranchArg, BranchOrCommit, CliIdArg, Purpose, ResolvedCliIdArg},
-        move2::Platform,
+        r#move::Platform,
     },
     bad_input,
     id::CommittedFileId,

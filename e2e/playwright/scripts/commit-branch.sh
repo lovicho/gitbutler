@@ -7,5 +7,5 @@ message="$2"
 directory="${3:-local-clone}"
 
 pushd "$directory"
-"$BUT" commit "$branch" --message "$message"
+"$BUT" commit --branch "$branch" --message "$message"
 popd

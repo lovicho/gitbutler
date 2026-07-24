@@ -124,8 +124,6 @@ fn print_grouped_with_truncation(
 
                 #[cfg(feature = "legacy")]
                 SubcommandDiscriminant::Commit => Group::BranchingAndCommitting,
-                #[cfg(feature = "legacy")]
-                SubcommandDiscriminant::_Commit2 => Group::BranchingAndCommitting,
                 SubcommandDiscriminant::Branch => Group::BranchingAndCommitting,
                 #[cfg(feature = "legacy")]
                 SubcommandDiscriminant::Discard => Group::BranchingAndCommitting,
@@ -151,8 +149,6 @@ fn print_grouped_with_truncation(
                 SubcommandDiscriminant::Pr => Group::ServerInteractions,
 
                 #[cfg(feature = "legacy")]
-                SubcommandDiscriminant::Rub => Group::EditingCommits,
-                #[cfg(feature = "legacy")]
                 SubcommandDiscriminant::Absorb => Group::EditingCommits,
                 #[cfg(feature = "legacy")]
                 SubcommandDiscriminant::Reword => Group::EditingCommits,
@@ -163,10 +159,7 @@ fn print_grouped_with_truncation(
                 #[cfg(feature = "legacy")]
                 SubcommandDiscriminant::Squash => Group::EditingCommits,
                 #[cfg(feature = "legacy")]
-                SubcommandDiscriminant::_Squash2 => Group::EditingCommits,
                 SubcommandDiscriminant::Move => Group::EditingCommits,
-                #[cfg(feature = "legacy")]
-                SubcommandDiscriminant::_Move2 => Group::EditingCommits,
 
                 #[cfg(feature = "legacy")]
                 SubcommandDiscriminant::Oplog => Group::OperationHistory,
@@ -380,9 +373,9 @@ Inspection:
   show         Shows detailed information about a commit or branch
 
 Branching and Committing:
-  commit       Commit changes to a stack
+  commit       Create a commit
   branch       Commands for managing branches
-  discard      Discard uncommitted changes from the worktree
+  discard      Discard branches, commits, or changes
   resolve      Resolve conflicts in a commit
   unapply      Unapply a branch from the workspace
   apply        Apply a branch to the workspace
@@ -390,13 +383,12 @@ Branching and Committing:
   pick         Cherry-pick a commit from an unapplied branch into an applied v…
 
 Editing Commits:
-  rub          Combines two entities together to perform an operation like ame…
+  squash       Squash commits, branches, or changes
+  move         Move commits and changes around
   absorb       Amends changes into the appropriate commits where they belong
   reword       Edit the commit message of the specified commit
-  uncommit     Uncommit changes from a commit or file-in-commit to the unstage…
-  amend        Amend one or more file changes into a specific commit and rebas…
-  squash       Squash commits together
-  move         Move a commit or branch to a different location
+  uncommit     Uncommit changes from commits or committed files to the uncommi…
+  amend        Amend uncommitted changes into a commit or branch
 
 Operation History:
   oplog        Commands for viewing and managing operation history
@@ -484,9 +476,6 @@ Checkout the full docs here: https://docs.gitbutler.com/cli-overview
 
 Branching and Committing:
   branch       Commands for managing branches
-
-Editing Commits:
-  move         Move a commit or branch to a different location
 
 Other Commands:
   gui          Open the GitButler GUI for the current project

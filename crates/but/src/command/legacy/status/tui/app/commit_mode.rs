@@ -10,7 +10,7 @@ use ratatui::{backend::Backend, prelude::Span};
 use crate::{
     CliId,
     command::legacy::{
-        commit2, reword2,
+        commit, reword2,
         status::{
             output::StatusOutputLineData,
             tui::{
@@ -330,10 +330,10 @@ impl App {
         }
 
         let target = match &**data {
-            CliId::Branch(branch) => commit2::CommitRelativeToTarget::BranchTip {
+            CliId::Branch(branch) => commit::CommitRelativeToTarget::BranchTip {
                 name: Category::LocalBranch.to_full_name(&*branch.name)?,
             },
-            CliId::Commit(CommitId { commit_id, .. }) => commit2::CommitRelativeToTarget::Commit {
+            CliId::Commit(CommitId { commit_id, .. }) => commit::CommitRelativeToTarget::Commit {
                 commit_id: *commit_id,
                 side: targeting::Side::from(*insert_side),
             },
@@ -343,7 +343,7 @@ impl App {
             | CliId::Uncommitted { .. }
             | CliId::Stack { .. } => return Ok(()),
         };
-        let commit_op = commit2::CommitOperation::CommitAt(commit2::CommitAtOperation { target });
+        let commit_op = commit::CommitOperation::CommitAt(commit::CommitAtOperation { target });
 
         commit_with(ctx, terminal_guard, messages, mode, commit_op)?;
 
@@ -374,18 +374,16 @@ impl App {
 
         let commit_op = match &**data {
             CliId::UncommittedHunkOrFile(..) | CliId::Uncommitted { .. } => {
-                commit2::CommitOperation::CommitToNewBranch(commit2::CommitToNewBranchOperation {
+                commit::CommitOperation::CommitToNewBranch(commit::CommitToNewBranchOperation {
                     branch_name: None,
                 })
             }
-            CliId::Branch(branch) => {
-                commit2::CommitOperation::CommitAt(commit2::CommitAtOperation {
-                    target: commit2::CommitRelativeToTarget::BranchBucket {
-                        name: Category::LocalBranch.to_full_name(&*branch.name)?,
-                        side: targeting::Side::Above,
-                    },
-                })
-            }
+            CliId::Branch(branch) => commit::CommitOperation::CommitAt(commit::CommitAtOperation {
+                target: commit::CommitRelativeToTarget::BranchBucket {
+                    name: Category::LocalBranch.to_full_name(&*branch.name)?,
+                    side: targeting::Side::Above,
+                },
+            }),
 
             CliId::PathPrefix { .. }
             | CliId::CommittedFile { .. }
@@ -446,7 +444,7 @@ fn commit_with<T>(
     terminal_guard: &mut T,
     messages: &mut Vec<Message>,
     mode: &CommitMode,
-    commit_op: commit2::CommitOperation,
+    commit_op: commit::CommitOperation,
 ) -> anyhow::Result<()>
 where
     T: TerminalGuard,
@@ -465,10 +463,10 @@ where
     );
 
     let commit_selection = match &**source {
-        CommitSource::Marks(hunks) => commit2::CommitSelection::Changes(Box::new(hunks.clone())),
-        CommitSource::UncommittedArea(..) => commit2::CommitSelection::AllChanges,
+        CommitSource::Marks(hunks) => commit::CommitSelection::Changes(Box::new(hunks.clone())),
+        CommitSource::UncommittedArea(..) => commit::CommitSelection::AllChanges,
         CommitSource::Uncommitted(hunk) => {
-            commit2::CommitSelection::Changes(Box::new(NonEmpty::new(hunk.clone())))
+            commit::CommitSelection::Changes(Box::new(NonEmpty::new(hunk.clone())))
         }
         CommitSource::Stack(..) => {
             anyhow::bail!("committing stack assignments is not supported. Use `but commit`")
@@ -492,10 +490,10 @@ where
         .then(|| terminal_guard.suspend())
         .transpose()?;
 
-    let commit2::CommitOutcome {
+    let commit::CommitOutcome {
         new_commit,
         branch_name: _,
-    } = commit2::run(
+    } = commit::run(
         ctx,
         &mut meta,
         guard.write_permission(),

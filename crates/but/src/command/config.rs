@@ -6,7 +6,12 @@
 use std::fmt::{Display, Write};
 
 use anyhow::{Context as _, Result};
-use but_core::git_config::{remove_config_value, set_config_value};
+#[cfg(feature = "legacy")]
+use but_core::{GitConfigSettings, GitHubStackingMode};
+use but_core::{
+    RepositoryExt,
+    git_config::{remove_config_value, set_config_value},
+};
 use but_ctx::Context;
 use but_llm::{
     AI_ANTHROPIC_KEY_OPTION_KEY, AI_ANTHROPIC_MODEL_NAME_KEY, AI_ANTHROPIC_SECRET_HANDLE,
@@ -25,6 +30,8 @@ use gix::bstr::ByteSlice as _;
 use serde::Serialize;
 
 use super::git_config::edit_git_config;
+#[cfg(feature = "legacy")]
+use crate::args::config::GitHubStacksStatus;
 use crate::{
     args::config::{
         AiKeyOption, AiSubcommand, FeatureFlag, FeatureStatus, ForgeSubcommand, MetricsStatus,
@@ -97,6 +104,10 @@ pub async fn exec(
             push_remote,
         }) => target_config(ctx, out, branch, push_remote).await,
         Some(Subcommands::PushRemote { remote }) => push_remote_config(ctx, out, remote),
+        #[cfg(feature = "legacy")]
+        Some(Subcommands::Forge {
+            cmd: Some(ForgeSubcommand::GithubStacks { status }),
+        }) => github_stacks_config(ctx, out, status),
         Some(Subcommands::Forge { cmd }) => forge_config(out, cmd).await,
         Some(Subcommands::Metrics { status }) => metrics_config(out, status).await,
         Some(Subcommands::Feature { flag, status }) => feature_config(out, flag, status),
@@ -664,8 +675,75 @@ pub(crate) async fn forge_config(
         Some(ForgeSubcommand::Auth) => forge_auth(out).await,
         Some(ForgeSubcommand::ListUsers) => forge_show_overview(out).await,
         Some(ForgeSubcommand::Forget { username }) => forge_forget(username, out).await,
+        #[cfg(feature = "legacy")]
+        Some(ForgeSubcommand::GithubStacks { .. }) => {
+            anyhow::bail!("GitHub stacks configuration requires a repository")
+        }
         None => forge_show_overview(out).await,
     }
+}
+
+#[cfg(feature = "legacy")]
+pub(crate) fn github_stacks_config(
+    ctx: &mut Context,
+    out: &mut OutputChannel,
+    status: Option<GitHubStacksStatus>,
+) -> Result<()> {
+    let configured = {
+        let repo = ctx.repo.get()?;
+        match status {
+            Some(status) => {
+                let mode = match status {
+                    GitHubStacksStatus::Enable => GitHubStackingMode::Native,
+                    GitHubStacksStatus::Disable => GitHubStackingMode::Disabled,
+                };
+                repo.set_git_settings(&GitConfigSettings {
+                    gitbutler_github_stacking_mode: Some(mode),
+                    ..Default::default()
+                })?;
+                mode
+            }
+            None => repo
+                .git_settings()?
+                .gitbutler_github_stacking_mode
+                .unwrap_or(GitHubStackingMode::Disabled),
+        }
+    };
+    let enabled = configured == GitHubStackingMode::Native;
+    if let Some(out) = out.for_human() {
+        let t = theme::get();
+        let symbol = if status.is_some() {
+            &t.sym().success
+        } else {
+            &t.sym().dot
+        };
+        writeln!(
+            out,
+            "{} Native GitHub stacks are {} for this repository",
+            symbol,
+            if enabled {
+                t.success.paint("enabled")
+            } else {
+                t.hint.paint("disabled")
+            }
+        )?;
+        if enabled {
+            writeln!(
+                out,
+                "{}",
+                t.hint.paint(
+                    "The repository must be enrolled in GitHub's stacked pull requests preview."
+                )
+            )?;
+        }
+    } else if let Some(out) = out.for_shell() {
+        writeln!(out, "{}", if enabled { "enabled" } else { "disabled" })?;
+    } else if let Some(out) = out.for_json() {
+        out.write_value(serde_json::json!({
+            "mode": if enabled { "native" } else { "disabled" },
+        }))?;
+    }
+    Ok(())
 }
 
 /// Show overview of forge configuration (same as list-users)

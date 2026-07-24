@@ -252,7 +252,7 @@ nk:e a.txt│
 
 "#]]);
 
-    env.but("commit A -m 'partial change to a.txt 1'")
+    env.but("commit -b A -m 'partial change to a.txt 1'")
         .assert()
         .success();
 
@@ -281,7 +281,7 @@ nk:f a.txt│
 
 "#]]);
 
-    env.but("commit A -m 'partial change to a.txt 2'")
+    env.but("commit -b A -m 'partial change to a.txt 2'")
         .assert()
         .success();
 
@@ -308,7 +308,7 @@ nk:1 a.txt│
 
 "#]]);
 
-    env.but("commit A -m 'partial change to a.txt 3'")
+    env.but("commit -b A -m 'partial change to a.txt 3'")
         .assert()
         .success();
 

@@ -115,6 +115,13 @@ import type { IconName } from "#ui/components/iconNames.ts";
 import { draftPRQueryOptions, usePersistDraftPR } from "#ui/pr.ts";
 import { combineHashes, hash } from "#ui/hash.ts";
 import { assert } from "#ui/assert.ts";
+import {
+	type DiffLineContextMenuTarget,
+	useDiffLineContextMenu,
+} from "./diff-line-context-menu.ts";
+import { useDiffHunkDrag } from "./diff-hunk-drag.ts";
+import type { DiffLineTarget } from "./diff-line-target.ts";
+import { useHunkMenuItems } from "./useHunkMenuItems.ts";
 
 type BranchTab = "diff" | "pr";
 
@@ -362,6 +369,7 @@ const DiffContents: FC<{
 		select: (cfg) => cfg.theme,
 	});
 	const { mutate: openInEditor } = useOpenInEditor();
+	const hunkMenuItems = useHunkMenuItems({ projectId });
 
 	const diffSelection = useAppSelector((state) =>
 		projectSlice.selectors.selectSelectionDiff(state, projectId, navigationIndex),
@@ -493,6 +501,57 @@ const DiffContents: FC<{
 		);
 	};
 
+	const getHunkOperandAtLine = ({
+		itemId,
+		lineNumber,
+		side,
+	}: DiffLineTarget): HunkOperand | null => {
+		const file = fileByItemId.get(itemId);
+		if (file?.patch?.type !== "Patch") return null;
+
+		const selection = contiguousSelectionByLine({
+			hunks: file.item.fileDiff.hunks,
+			line: lineNumber,
+			side,
+		});
+		if (!selection) return null;
+
+		return {
+			parent: {
+				parent: fileParent,
+				path: file.change.path,
+			},
+			...selection,
+			isResultOfBinaryToTextConversion: file.patch.subject.isResultOfBinaryToTextConversion,
+		};
+	};
+
+	const handleLineContextMenu = ({ event, ...target }: DiffLineContextMenuTarget): void => {
+		const file = fileByItemId.get(target.itemId);
+		if (!file) return;
+		const operand = getHunkOperandAtLine(target);
+		if (!operand) return;
+
+		void showNativeContextMenu(
+			event,
+			hunkMenuItems({
+				change: file.change,
+				lineNumber: target.lineNumber,
+				operand,
+			}),
+		);
+	};
+
+	useDiffLineContextMenu({
+		viewerRef,
+		onContextMenu: handleLineContextMenu,
+	});
+
+	const handleHunkPostRender = useDiffHunkDrag({
+		projectId,
+		getHunkOperand: getHunkOperandAtLine,
+	});
+
 	const handleSetCollapsed = (itemId: string) => (collapsed: boolean) => {
 		const s = new Set(collapsedItems);
 
@@ -563,6 +622,7 @@ const DiffContents: FC<{
 				// as defined in the metrics. We'll see an additional set of logs if there are other issues
 				// with our metrics.
 				__devOnlyValidateItemHeights: false,
+				onPostRender: handleHunkPostRender,
 				itemMetrics: {
 					// Computed custom header height.
 					diffHeaderHeight: 38,
@@ -592,6 +652,8 @@ const DiffContents: FC<{
           [data-column-number] {
             --mix-selection-light: 0%;
             --mix-selection-dark: 0%;
+
+            cursor: default;
           }
         `,
 			}}

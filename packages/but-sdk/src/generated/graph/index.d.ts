@@ -1797,6 +1797,7 @@ export type GitConfigSettings = {
   signCommits: boolean | null;
   gitbutlerGerritMode: boolean | null;
   gitbutlerReviewStackingDescription: ReviewStackingDescription | null;
+  gitbutlerGithubStackingMode: GitHubStackingMode | null;
   gitbutlerForgeReviewTemplatePath: string | null;
   gitbutlerGitlabProjectId: string | null;
   gitbutlerGitlabUpstreamProjectId: string | null;
@@ -1810,6 +1811,9 @@ export type GitHubOAuthAppSettings = {
   /** Client ID for the GitHub OAuth application. Set this to use custom (non-GitButler) OAuth application. */
   oauthClientId: string;
 };
+
+/** Controls whether GitButler registers reviewed stacks with GitHub's native stacks API. */
+export type GitHubStackingMode = "disabled" | "native";
 
 export type GithubAccountIdentifier = {
   type: "oAuthUsername";

@@ -3,8 +3,6 @@ use super::*;
 #[cfg(feature = "legacy")]
 mod amend;
 #[cfg(feature = "legacy")]
-mod commit;
-#[cfg(feature = "legacy")]
 mod reword;
 
 mod config_ai {
@@ -416,16 +414,8 @@ fn status_short_is_not_shown_in_help() {
 fn status_after_is_hidden_noop_compatibility_flag() {
     use clap::Parser;
 
-    let args = Args::try_parse_from([
-        "but",
-        "move",
-        "source",
-        "target",
-        "--format",
-        "json",
-        "--status-after",
-    ])
-    .expect("parse legacy status-after flag");
+    let args = Args::try_parse_from(["but", "branch", "--format", "json", "--status-after"])
+        .expect("parse legacy status-after flag");
 
     assert!(matches!(dbg!(args.format.format), OutputFormat::Json));
     assert!(args.legacy_status_after);

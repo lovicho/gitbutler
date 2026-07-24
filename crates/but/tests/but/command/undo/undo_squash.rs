@@ -9,18 +9,18 @@ use crate::{
     utils::Sandbox,
 };
 
-// squash2: SquashCommits
+// squash: SquashCommits
 #[test]
 fn undo_squash_commits() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack-two-commits");
     env.setup_metadata(&["A"]);
 
     run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but("_squash2 y -t z -u").assert().success();
+        env.but("squash y -t z -u").assert().success();
     });
 }
 
-// squash2: UncommittedToCommit
+// squash: UncommittedToCommit
 #[test]
 fn undo_uncommitted_hunk_to_commit() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
@@ -30,14 +30,14 @@ fn undo_uncommitted_hunk_to_commit() {
 
     run_mutate_undo_roundtrip_test(&env, |env| {
         env.but(format!(
-            "_squash2 uncommitted-to-commit.txt -t {target_cli_id} -u"
+            "squash uncommitted-to-commit.txt -t {target_cli_id} -u"
         ))
         .assert()
         .success();
     });
 }
 
-// squash2: UncommittedAreaToCommit
+// squash: UncommittedAreaToCommit
 #[test]
 fn undo_uncommitted_area_to_commit() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
@@ -46,13 +46,13 @@ fn undo_uncommitted_area_to_commit() {
     let target_cli_id = branch_commit_cli_ids(&status_json(&env).unwrap(), "A")[0].clone();
 
     run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but(format!("_squash2 zz -t {target_cli_id} -u"))
+        env.but(format!("squash zz -t {target_cli_id} -u"))
             .assert()
             .success();
     });
 }
 
-// squash2: CommitToUncommittedArea
+// squash: CommitToUncommittedArea
 #[test]
 fn undo_commit_to_uncommitted_area() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
@@ -67,13 +67,13 @@ fn undo_commit_to_uncommitted_area() {
     let source_cli_id = branch_commit_cli_ids(&status_json(&env).unwrap(), "A")[0].clone();
 
     run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but(format!("_squash2 {source_cli_id} -t zz"))
+        env.but(format!("squash {source_cli_id} -t zz"))
             .assert()
             .success();
     });
 }
 
-// squash2: CommittedFileToCommit
+// squash: CommittedFileToCommit
 #[test]
 fn undo_committed_file_to_commit() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
@@ -86,14 +86,14 @@ fn undo_committed_file_to_commit() {
 
     run_mutate_undo_roundtrip_test(&env, |env| {
         env.but(format!(
-            "_squash2 {source_cli_id}:source-a.txt -t {target_cli_id} -u"
+            "squash {source_cli_id}:source-a.txt -t {target_cli_id} -u"
         ))
         .assert()
         .success();
     });
 }
 
-// squash2: CommittedFileToUncommittedArea
+// squash: CommittedFileToUncommittedArea
 #[test]
 fn undo_committed_file_to_uncommitted_area() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
@@ -102,7 +102,7 @@ fn undo_committed_file_to_uncommitted_area() {
     let source_cli_id = branch_commit_cli_ids(&status_json(&env).unwrap(), "A")[0].clone();
 
     run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but(format!("_squash2 {source_cli_id}:file-to-zz-a.txt -t zz"))
+        env.but(format!("squash {source_cli_id}:file-to-zz-a.txt -t zz"))
             .assert()
             .success();
     });

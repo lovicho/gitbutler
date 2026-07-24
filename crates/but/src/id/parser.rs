@@ -1,12 +1,7 @@
-use anyhow::Context as _;
 use bstr::BStr;
 use but_ctx::Context;
 
-use crate::{
-    CliId, IdMap,
-    id::{CommitId, CommittedFileId, SourceScope},
-    utils::OutputChannel,
-};
+use crate::{CliId, IdMap, id::SourceScope};
 
 #[derive(Debug)]
 pub(crate) struct IdResolutionError(String);
@@ -43,7 +38,7 @@ fn parse_scoped(
 /// turns everything else into a targeted error naming what the selector is.
 ///
 /// This is the single home of that policy — `but commit --changes`, amend,
-/// stage, unstage, and discard all resolve through it so they cannot diverge.
+/// stage, and unstage all resolve through it so they cannot diverge.
 pub(crate) fn resolve_uncommitted_part(
     ctx: &mut Context,
     id_map: &IdMap,
@@ -79,16 +74,6 @@ pub(crate) fn parse_sources(
     source: &str,
 ) -> anyhow::Result<Vec<CliId>> {
     parse_sources_scoped(ctx, id_map, source, SourceScope::Any)
-}
-
-/// Like [parse_sources], but selectors resolve only against uncommitted files
-/// and hunks. For commands whose sources must be uncommitted (e.g. discard).
-pub(crate) fn parse_uncommitted_sources(
-    ctx: &mut Context,
-    id_map: &IdMap,
-    source: &str,
-) -> anyhow::Result<Vec<CliId>> {
-    parse_sources_scoped(ctx, id_map, source, SourceScope::UncommittedOnly)
 }
 
 fn parse_sources_scoped(
@@ -204,115 +189,6 @@ fn get_all_files_in_display_order(id_map: &IdMap) -> anyhow::Result<Vec<CliId>> 
     Ok(files.into_iter().map(|(_, cli_id)| cli_id).collect())
 }
 
-/// Internal helper for parsing sources with disambiguation prompts.
-pub fn parse_sources_with_disambiguation(
-    ctx: &mut Context,
-    id_map: &IdMap,
-    source: &str,
-    out: &mut OutputChannel,
-) -> anyhow::Result<Vec<CliId>> {
-    parse_sources_with_disambiguation_scoped(ctx, id_map, source, out, SourceScope::Any)
-}
-
-/// Like [parse_sources_with_disambiguation], but selectors resolve only
-/// against uncommitted files and hunks. Use for arguments that must name
-/// uncommitted changes, such as `--changes`.
-pub(crate) fn parse_uncommitted_sources_with_disambiguation(
-    ctx: &mut Context,
-    id_map: &IdMap,
-    source: &str,
-    out: &mut OutputChannel,
-) -> anyhow::Result<Vec<CliId>> {
-    parse_sources_with_disambiguation_scoped(ctx, id_map, source, out, SourceScope::UncommittedOnly)
-}
-
-fn parse_sources_with_disambiguation_scoped(
-    ctx: &mut Context,
-    id_map: &IdMap,
-    source: &str,
-    out: &mut OutputChannel,
-    scope: SourceScope,
-) -> anyhow::Result<Vec<CliId>> {
-    // Check if it's a list (contains ',')
-    if source.contains(',') {
-        return parse_list_with_disambiguation(ctx, id_map, source, out, scope);
-    }
-
-    // Check if it's a valid range (e.g., "g0-h2" where both sides are uncommitted files).
-    // If the string contains '-' but isn't a valid range (e.g., a filename like "my-file.rs"
-    // or a branch name like "feature-auth"), fall through to single-entity parsing.
-    if source.contains('-')
-        && let Some(range_result) = try_parse_range(ctx, id_map, source, scope)?
-    {
-        return Ok(range_result);
-    }
-
-    // Single source (including strings with dashes that aren't valid ranges)
-    let source_result = parse_scoped(ctx, id_map, source, scope)?;
-    if source_result.is_empty() {
-        return Err(IdResolutionError::new(format!(
-            "Source '{source}' not found. If you just performed a Git operation (squash, rebase, etc.), try running 'but status' to refresh the current state."
-        ))
-        .into());
-    }
-
-    if source_result.len() > 1 {
-        // Ambiguous - prompt the user to disambiguate
-        let selected = prompt_for_disambiguation(source, source_result, "the source", out)?;
-        return Ok(vec![selected]);
-    }
-
-    Ok(vec![source_result[0].clone()])
-}
-
-/// Internal helper for parsing comma-separated lists with disambiguation support.
-fn parse_list_with_disambiguation(
-    ctx: &mut Context,
-    id_map: &IdMap,
-    source: &str,
-    out: &mut OutputChannel,
-    scope: SourceScope,
-) -> anyhow::Result<Vec<CliId>> {
-    let parts: Vec<&str> = source.split(',').collect();
-    let mut result = Vec::new();
-
-    for part in parts {
-        let part = part.trim();
-
-        // Skip empty parts (e.g., from input like "," or "a,,b")
-        if part.is_empty() {
-            continue;
-        }
-
-        let matches = parse_scoped(ctx, id_map, part, scope)?;
-        if matches.is_empty() {
-            return Err(IdResolutionError::new(format!(
-                "Item '{part}' in list not found. If you just performed a Git operation (squash, rebase, etc.), try running 'but status' to refresh the current state."
-            ))
-            .into());
-        }
-
-        if matches.len() == 1 {
-            result.push(matches[0].clone());
-        } else {
-            // Ambiguous - prompt the user to disambiguate
-            let selected =
-                prompt_for_disambiguation(part, matches, &format!("item '{part}' in list"), out)?;
-            result.push(selected);
-        }
-    }
-
-    // If all parts were empty, return an error
-    if result.is_empty() {
-        return Err(IdResolutionError::new(format!(
-            "Source list '{source}' contains no valid items"
-        ))
-        .into());
-    }
-
-    Ok(result)
-}
-
 fn parse_list(
     ctx: &mut Context,
     id_map: &IdMap,
@@ -356,110 +232,4 @@ fn parse_list(
     }
 
     Ok(result)
-}
-
-/// Prompts the user to disambiguate between multiple CLI ID matches.
-///
-/// # Arguments
-/// * `entity_str` - The original string the user typed
-/// * `matches` - The possible matches (must not be empty)
-/// * `context` - Description of what we're resolving (e.g., "source", "target")
-/// * `out` - Output channel to check if environment is interactive
-///
-/// # Returns
-/// The selected CliId from the user's choice
-///
-/// # Errors
-/// Returns an error if the environment is non-interactive or if the user cancels the selection
-pub fn prompt_for_disambiguation(
-    entity_str: &str,
-    matches: Vec<CliId>,
-    context: &str,
-    out: &mut OutputChannel,
-) -> anyhow::Result<CliId> {
-    // Defensive check
-    if matches.is_empty() {
-        return Err(anyhow::anyhow!(
-            "Internal error: prompt_for_disambiguation called with empty matches"
-        ));
-    }
-
-    let Some(mut input) = out.prepare_for_terminal_input() else {
-        // In non-interactive mode, show all options and error
-        let options_str = matches
-            .iter()
-            .enumerate()
-            .map(|(i, id)| {
-                format!(
-                    "  {}. {} ({})",
-                    i + 1,
-                    id.to_short_string(),
-                    id.kind_for_humans()
-                )
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        return Err(IdResolutionError::new(format!(
-            "'{entity_str}' is ambiguous for {context}. Cannot prompt in non-interactive mode. Matches:\n{options_str}"
-        ))
-        .into());
-    };
-
-    // Build options with clear descriptions
-    let options = matches
-        .into_iter()
-        .map(|id| {
-            let short_id = id.to_short_string();
-            let kind = id.kind_for_humans();
-
-            // Add additional context based on the type
-            let label = match &id {
-                CliId::Commit(CommitId { commit_id, .. }) => {
-                    format!(
-                        "{} - {} (commit {})",
-                        short_id,
-                        kind,
-                        &commit_id.to_string()[..7]
-                    )
-                }
-                CliId::Branch(branch) => {
-                    format!("{short_id} - {kind} (branch '{}')", branch.name)
-                }
-                CliId::CommittedFile(CommittedFileId {
-                    path, commit_id, ..
-                }) => {
-                    format!(
-                        "{} - {} (file '{}' in commit {})",
-                        short_id,
-                        kind,
-                        path,
-                        &commit_id.to_string()[..7]
-                    )
-                }
-                CliId::UncommittedHunkOrFile(uncommitted) => {
-                    if uncommitted.is_entire_file {
-                        let first_hunk = uncommitted.hunk_assignments.first();
-                        format!("{} - {} (file '{}')", short_id, kind, first_hunk.path)
-                    } else {
-                        format!("{short_id} - {kind} (hunk)")
-                    }
-                }
-                _ => format!("{short_id} - {kind}"),
-            };
-            (label, id)
-        })
-        .collect::<Vec<_>>();
-    let options = nonempty::NonEmpty::from_vec(options)
-        .context("Internal error: prompt_for_disambiguation called with empty matches")?;
-
-    input
-        .prompt_select(
-            format!(
-                "'{entity_str}' matches multiple objects for {context}. Which one did you mean?"
-            ),
-            &options,
-        )?
-        .cloned()
-        .ok_or_else(|| anyhow::anyhow!("Selection aborted"))
 }

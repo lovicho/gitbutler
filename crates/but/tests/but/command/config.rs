@@ -3,6 +3,57 @@ use snapbox::str;
 
 #[cfg(feature = "legacy")]
 #[test]
+fn github_stacks_configuration_is_repository_local() {
+    let env = Sandbox::open_with_default_settings("repo-with-remote-and-head");
+
+    env.but("config forge github-stacks enable")
+        .assert()
+        .success()
+        .stdout_eq(str![[r#"
+✓ Native GitHub stacks are enabled for this repository
+The repository must be enrolled in GitHub's stacked pull requests preview.
+
+"#]]);
+    assert_eq!(
+        env.invoke_git("config --local --get gitbutler.githubStackingMode"),
+        "native"
+    );
+    env.but("--format shell config forge github-stacks")
+        .assert()
+        .success()
+        .stdout_eq("enabled\n");
+    env.but("--format json config forge github-stacks disable")
+        .allow_json()
+        .assert()
+        .success()
+        .stdout_eq(str![[r#"
+{
+  "mode": "disabled"
+}
+
+"#]]);
+    assert_eq!(
+        env.invoke_git("config --local --get gitbutler.githubStackingMode"),
+        "disabled"
+    );
+}
+
+#[cfg(feature = "legacy")]
+#[test]
+fn github_stacks_configuration_requires_a_repository() {
+    Sandbox::empty()
+        .but("config forge github-stacks enable")
+        .assert()
+        .failure()
+        .stderr_eq(str![[r#"
+Error: No git repository found at .
+Please run 'but setup' to initialize the project.
+
+"#]]);
+}
+
+#[cfg(feature = "legacy")]
+#[test]
 fn target_configures_distinct_push_remote_for_fork() {
     let env = Sandbox::open_with_default_settings("repo-with-remote-and-head");
     env.but("setup").assert().success();

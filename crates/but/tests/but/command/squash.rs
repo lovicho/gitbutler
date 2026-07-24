@@ -1,821 +1,2450 @@
-use anyhow::Context as _;
-use bstr::ByteSlice;
-use snapbox::IntoData;
 use snapbox::str;
 
-use crate::{command::util, utils::Sandbox};
+use crate::{
+    command::util::{
+        branch_commit_cli_id_for_file, branch_commit_cli_ids,
+        commit_file_with_worktree_changes_as_two_hunks, commit_two_files_as_two_hunks_each,
+        status_json_with_files as status_json,
+    },
+    utils::{CommandExt, Sandbox},
+};
 
-/// Helper to create multiple commits on a branch for testing
-fn setup_branch_with_commits(env: &Sandbox, branch: &str, num_commits: usize) {
-    let branch_prefix = branch.replace('/', "_");
-    for i in 1..=num_commits {
-        env.file(
-            format!("{branch_prefix}-file{i}.txt"),
-            format!("content for commit {i}\n"),
-        );
-        env.but(format!("commit {branch} -m 'commit {i}'"))
-            .assert()
-            .success();
+fn uncommitted_contains_file(status: &serde_json::Value, file_path: &str) -> bool {
+    status["uncommittedChanges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|change| change["filePath"].as_str().unwrap() == file_path)
+}
+
+fn uncommitted_cli_id_for_file(status: &serde_json::Value, file_path: &str) -> Option<String> {
+    status["uncommittedChanges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find_map(|change| {
+            (change["filePath"].as_str().unwrap() == file_path)
+                .then(|| change["cliId"].as_str().unwrap().to_string())
+        })
+}
+
+fn branch_commits_contain_file(
+    status: &serde_json::Value,
+    branch_name: &str,
+    file_path: &str,
+) -> bool {
+    status["stacks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|stack| stack["branches"].as_array().unwrap().iter())
+        .filter(|branch| branch["name"].as_str().unwrap() == branch_name)
+        .flat_map(|branch| branch["commits"].as_array().unwrap().iter())
+        .flat_map(|commit| commit["changes"].as_array().unwrap().iter())
+        .any(|change| change["filePath"].as_str().unwrap() == file_path)
+}
+
+fn one_branch_three_commits() -> Sandbox {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.file("one", "content of one");
+    env.file("two", "content of two");
+    env.file("three", "content of three");
+
+    env.but("commit -m 'add one' one").assert().success();
+    env.but("commit -m 'add two' two").assert().success();
+    env.but("commit -m 'add three' three").assert().success();
+
+    env
+}
+
+fn two_branches() -> Sandbox {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.file("one", "content of one");
+    env.file("two", "content of two");
+    env.file("three", "content of three");
+    env.file("four", "content of four");
+
+    env.but("commit -b one -m 'add one' one").assert().success();
+    env.but("commit -b one -m 'add two' two").assert().success();
+
+    env.but("commit -b second -m 'add three' three")
+        .assert()
+        .success();
+    env.but("commit -b second -m 'add four' four")
+        .assert()
+        .success();
+
+    env
+}
+
+fn scenario_with_uncommitted_changes() -> Sandbox {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.file("one", "content of one");
+    env.file("two", "content of two");
+    env.file("three", "content of three");
+
+    env.but("commit --empty --no-message").assert().success();
+
+    env
+}
+
+#[test]
+fn squash_two_commits() {
+    let env = one_branch_three_commits();
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ br [a-branch-1]
+┊●   1#0 add three
+┊│     1#0:o A three
+┊●   1#1 add two
+┊│     1#1:t A two
+┊●   1#2 add one
+┊│     1#2:k A one
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    env.but("squash 1#0 --target 1#1 --message 'squashed'")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+Squashed f55169f into f63361f to create 7251301
+
+"#]]);
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ br [a-branch-1]
+┊●   1#0 squashed
+┊│     1#0:o A three
+┊│     1#0:t A two
+┊●   1#1 add one
+┊│     1#1:k A one
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    env.but("undo").assert().success();
+
+    env.but("squash 1#0 --target 1#1 --message 'squashed' --format json")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+{
+  "new_commit": "725130139e9f0178e29afbe9eff6a988afbca3fa"
+}
+
+"#]]);
+
+    env.but("undo").assert().success();
+
+    env.but("squash 1#0 --target 1#1 --message 'squashed' --format shell")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+725130139e9f0178e29afbe9eff6a988afbca3fa
+
+"#]]);
+}
+
+#[test]
+fn squash_multiple_sources() {
+    let env = one_branch_three_commits();
+
+    env.but("squash 1#0 1#1 --target 1#2 --message 'squashed'")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+Squashed f55169f, f63361f into ea345ba to create e355a10
+
+"#]]);
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ br [a-branch-1]
+┊●   1 squashed
+┊│     1:k A one
+┊│     1:o A three
+┊│     1:t A two
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}
+
+#[test]
+fn use_target_message() {
+    let env = one_branch_three_commits();
+
+    env.but("squash 1#0 --target 1#1 --use-target-message")
+        .assert()
+        .success();
+
+    env.but("status -fv")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ br [a-branch-1]
+┊● 1#0 author 2000-01-01 00:00:00 +0000 (sha 5ab5165)
+┊│     add two
+┊│     1#0:o A three
+┊│     1#0:t A two
+┊● 1#1 author 2000-01-01 00:00:00 +0000 (sha ea345ba)
+┊│     add one
+┊│     1#1:k A one
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}
+
+#[test]
+fn use_source_message() {
+    let env = one_branch_three_commits();
+
+    env.but("squash 1#0 --target 1#1 --use-source-message")
+        .assert()
+        .success();
+
+    env.but("status -fv")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ br [a-branch-1]
+┊● 1#0 author 2000-01-01 00:00:00 +0000 (sha c441d34)
+┊│     add three
+┊│     1#0:o A three
+┊│     1#0:t A two
+┊● 1#1 author 2000-01-01 00:00:00 +0000 (sha ea345ba)
+┊│     add one
+┊│     1#1:k A one
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}
+
+#[test]
+fn squash_whole_branch() {
+    let env = one_branch_three_commits();
+
+    env.but("squash a-branch-1 -m 'squashed a branch'")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![["
+Squashed branch 'a-branch-1' to create commit a694042
+
+"]]);
+
+    env.but("status -fv")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ br [a-branch-1]
+┊● 1 author 2000-01-01 00:00:00 +0000 (sha a694042)
+┊│     squashed a branch
+┊│     1:k A one
+┊│     1:o A three
+┊│     1:t A two
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}
+
+#[test]
+fn squash_whole_branch_into_commit_on_same_branch() {
+    let env = one_branch_three_commits();
+
+    env.but("squash a-branch-1 -t 1#1 --use-target-message")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+Squashed branch 'a-branch-1' to create commit 17b59a2
+
+"#]]);
+
+    env.but("status -fv")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ br [a-branch-1]
+┊● 1 author 2000-01-01 00:00:00 +0000 (sha 17b59a2)
+┊│     add two
+┊│     1:k A one
+┊│     1:o A three
+┊│     1:t A two
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}
+
+#[test]
+fn squash_whole_branch_into_commit_on_other_branch() {
+    let env = one_branch_three_commits();
+
+    env.but("commit -b target-branch -m 'new commit on new branch'")
+        .assert()
+        .success();
+
+    env.file("file", "new file");
+    env.but("commit file -b add-file-branch -m 'add file'")
+        .assert()
+        .success();
+
+    env.but("status -fv")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ fi [add-file-branch]
+┊● 1#0 author 2000-01-01 00:00:00 +0000 (sha e528488)
+┊│     add file
+┊│     1#0:q A file
+├╯
+┊
+┊╭┄ ta [target-branch]
+┊● 1#1 author 2000-01-01 00:00:00 +0000 (sha d1d6a19) (no changes)
+┊│     new commit on new branch
+├╯
+┊
+┊╭┄ br [a-branch-1]
+┊● 1#2 author 2000-01-01 00:00:00 +0000 (sha f55169f)
+┊│     add three
+┊│     1#2:o A three
+┊● 1#3 author 2000-01-01 00:00:00 +0000 (sha f63361f)
+┊│     add two
+┊│     1#3:t A two
+┊● 1#4 author 2000-01-01 00:00:00 +0000 (sha ea345ba)
+┊│     add one
+┊│     1#4:k A one
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    env.but("squash a-branch-1 add-file-branch -t 1#1 --use-target-message")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+Squashed branches 'a-branch-1', 'add-file-branch' to create commit 44aa30a
+
+"#]]);
+
+    env.but("status -fv")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ ta [target-branch]
+┊● 1 author 2000-01-01 00:00:00 +0000 (sha 44aa30a)
+┊│     new commit on new branch
+┊│     1:q A file
+┊│     1:k A one
+┊│     1:o A three
+┊│     1:t A two
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}
+
+#[test]
+fn squash_multiple_branches_into_commit_on_one_of_the_branch_sources() {
+    let env = one_branch_three_commits();
+
+    env.but("commit -b target-branch -m 'target commit'")
+        .assert()
+        .success();
+    env.but("commit -b target-branch -m 'random commit on target-branch'")
+        .assert()
+        .success();
+
+    env.file("file", "new file");
+    env.but("commit file -b add-file-branch -m 'add file'")
+        .assert()
+        .success();
+
+    env.but("status -fv")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ fi [add-file-branch]
+┊● 1#0 author 2000-01-01 00:00:00 +0000 (sha e528488)
+┊│     add file
+┊│     1#0:q A file
+├╯
+┊
+┊╭┄ ta [target-branch]
+┊● 1#1 author 2000-01-01 00:00:00 +0000 (sha a489b93) (no changes)
+┊│     random commit on target-branch
+┊● 1#2 author 2000-01-01 00:00:00 +0000 (sha 561a8d8) (no changes)
+┊│     target commit
+├╯
+┊
+┊╭┄ br [a-branch-1]
+┊● 1#3 author 2000-01-01 00:00:00 +0000 (sha f55169f)
+┊│     add three
+┊│     1#3:o A three
+┊● 1#4 author 2000-01-01 00:00:00 +0000 (sha f63361f)
+┊│     add two
+┊│     1#4:t A two
+┊● 1#5 author 2000-01-01 00:00:00 +0000 (sha ea345ba)
+┊│     add one
+┊│     1#5:k A one
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    env.but("squash target-branch a-branch-1 add-file-branch -t 1#2 --use-target-message")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+Squashed branches 'target-branch', 'a-branch-1', 'add-file-branch' to create commit 0653794
+
+"#]]);
+
+    env.but("status -fv")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ ta [target-branch]
+┊● 1 author 2000-01-01 00:00:00 +0000 (sha 0653794)
+┊│     target commit
+┊│     1:q A file
+┊│     1:k A one
+┊│     1:o A three
+┊│     1:t A two
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}
+
+#[test]
+fn squash_reword_with_editor() {
+    let env = one_branch_three_commits();
+
+    env.file(
+        ".git/editor.sh",
+        "printf 'message from editor\\n' > \"$1\"\n",
+    );
+    let editor_path = env.projects_root().join(".git/editor.sh");
+    let editor_command = format!("sh {}", editor_path.display());
+
+    env.but("squash a-branch-1")
+        .env("GIT_EDITOR", editor_command)
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![["
+Squashed branch 'a-branch-1' to create commit 7b3d915
+
+"]]);
+
+    env.but("status -fv")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ br [a-branch-1]
+┊● 1 author 2000-01-01 00:00:00 +0000 (sha 7b3d915)
+┊│     message from editor
+┊│     1:k A one
+┊│     1:o A three
+┊│     1:t A two
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}
+
+#[test]
+fn squash_combine_messages_with_editor() {
+    let env = one_branch_three_commits();
+
+    env.file(".git/editor.sh", "true");
+    let editor_path = env.projects_root().join(".git/editor.sh");
+    let editor_command = format!("sh {}", editor_path.display());
+
+    env.but("squash a-branch-1")
+        .env("GIT_EDITOR", editor_command)
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+Squashed branch 'a-branch-1' to create commit abb21d9
+
+"#]]);
+
+    env.but("status -fv")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ br [a-branch-1]
+┊● 1 author 2000-01-01 00:00:00 +0000 (sha abb21d9)
+┊│     add one  add three  add two
+┊│     1:k A one
+┊│     1:o A three
+┊│     1:t A two
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}
+
+#[test]
+fn cannot_squash_nothing() {
+    let env = one_branch_three_commits();
+
+    env.but("squash")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+error: the following required arguments were not provided:
+  <SOURCES>...
+
+Usage: but squash <SOURCES>...
+
+For more information, try '--help'.
+
+"#]]);
+}
+
+#[test]
+fn cannot_squash_only_target() {
+    let env = one_branch_three_commits();
+
+    env.but("squash --target 1#0")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+error: the following required arguments were not provided:
+  <SOURCES>...
+
+Usage: but squash --target <TARGET> <SOURCES>...
+
+For more information, try '--help'.
+
+"#]]);
+}
+
+#[test]
+fn cannot_mix_sources() {
+    let env = one_branch_three_commits();
+
+    env.but("squash a-branch-1 1#0 --target 1#2")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: Cannot mix different types of sources
+
+"#]]);
+}
+
+#[test]
+fn cannot_squash_multiple_commits_without_target() {
+    let env = one_branch_three_commits();
+
+    env.but("squash 1#0 1#2")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: When --target isn't used the source must be exactly one branch
+
+"#]]);
+}
+
+#[test]
+fn cannot_squash_multiple_branches_without_target() {
+    let env = one_branch_three_commits();
+
+    env.but("commit --no-message -b second-branch")
+        .assert()
+        .success();
+
+    env.but("squash a-branch-1 second-branch")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: When --target isn't used the source must be exactly one branch
+
+"#]]);
+}
+
+#[test]
+fn cannot_squash_branch_with_just_one_commit() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.file("one", "content of one");
+    env.but("commit -m 'add one' one -b the-branch")
+        .assert()
+        .success();
+
+    env.but("squash the-branch -u")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: Need at least 2 commits to squash
+
+"#]]);
+}
+
+#[test]
+fn cannot_squash_commit_into_itself() {
+    let env = one_branch_three_commits();
+
+    env.but("squash 1#0 -t 1#0")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: Cannot squash a commit into itself
+
+"#]]);
+}
+
+#[test]
+fn cannot_squash_empty_branch_into_itself() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.but("branch new empty-branch").assert().success();
+
+    env.but("squash empty-branch")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: Cannot squash empty branch into itself
+
+"#]]);
+}
+
+#[test]
+fn cannot_squash_empty_branch_into_commit() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.but("commit -m 'target commit'").assert().success();
+
+    env.but("branch new empty-branch").assert().success();
+
+    env.but("squash empty-branch -t 1")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: Need at least 2 commits to squash
+
+"#]]);
+}
+
+#[test]
+fn aborts_on_conflicts() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.file("file.txt", "file content");
+    env.but("commit -m 'add file'").assert().success();
+
+    env.file("file.txt", "changed file content");
+    env.but("commit -m 'change file'").assert().success();
+
+    env.remove_file("file.txt");
+    env.but("commit -m 'remove file'").assert().success();
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ br [a-branch-1]
+┊●   1#0 remove file
+┊│     1#0:u D file.txt
+┊●   1#1 change file
+┊│     1#1:u M file.txt
+┊●   1#2 add file
+┊│     1#2:u A file.txt
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    env.but("squash 1#0 -t 1#2")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: Cannot squash commits that would result in merge conflicts
+
+"#]]);
+}
+
+#[test]
+fn cannot_squash_into_commits_on_unapplied_branches() {
+    let env = two_branches();
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ se [second]
+┊●   1#0 add four
+┊│     1#0:q A four
+┊●   1#1 add three
+┊│     1#1:o A three
+├╯
+┊
+┊╭┄ on [one]
+┊●   1#2 add two
+┊│     1#2:t A two
+┊●   1#3 add one
+┊│     1#3:k A one
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    env.but("unapply second").assert().success();
+
+    // Unapplied commits have no change ID in the workspace map, so use the commit ID intentionally.
+    env.but("squash 1#0 -t d15f721")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: Could not find target: 'd15f721'
+
+Hint: --target must be an applied commit, branch, or zz. Run `but status` for applicable targets.
+
+"#]]);
+}
+
+#[test]
+fn cannot_squash_unapplied_branch() {
+    let env = two_branches();
+
+    env.but("unapply second").assert().success();
+
+    env.but("squash second")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: Could not find branch: 'second'
+
+Hint: Run `but status` for applicable targets.
+
+"#]]);
+}
+
+#[test]
+fn cannot_squash_branch_with_one_commit_into_that_one_commit() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ g0 [A]
+┊●   tpm add A
+┊│     tpm:t A A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    env.but("squash A -t tpm")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: Need at least 2 commits to squash
+
+"#]]);
+}
+
+#[test]
+fn squash_with_duplicate_commit_sources() {
+    let env = one_branch_three_commits();
+
+    env.but("squash 1#0 1#0 -t 1#1 -u")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+Squashed f55169f into f63361f to create 5ab5165
+
+"#]]);
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ br [a-branch-1]
+┊●   1#0 add two
+┊│     1#0:o A three
+┊│     1#0:t A two
+┊●   1#1 add one
+┊│     1#1:k A one
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}
+
+#[test]
+fn squash_with_duplicate_branch_sources() {
+    let env = two_branches();
+
+    env.but("squash one one -t 1#0 -u")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+Squashed branch 'one' to create commit 00e6751
+
+"#]]);
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ se [second]
+┊●   1#0 add four
+┊│     1#0:q A four
+┊│     1#0:k A one
+┊│     1#0:t A two
+┊●   1#1 add three
+┊│     1#1:o A three
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}
+
+#[test]
+fn amend_uncommitted_files_into_commit() {
+    let env = scenario_with_uncommitted_changes();
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted]
+┊   kl   A one
+┊   or   A three
+┊   twop A two
+┊
+┊╭┄ br [a-branch-1]
+┊●   1 (no commit message) (no changes)
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
+
+"#]]);
+
+    env.but("squash one two -t 1 -u")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+Amended 7adb8e6 to create d2f176a
+
+"#]]);
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted]
+┊   or A three
+┊
+┊╭┄ br [a-branch-1]
+┊●   1 (no commit message)
+┊│     1:k A one
+┊│     1:t A two
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
+
+"#]]);
+}
+
+#[test]
+fn amend_all_uncommitted_changes_into_commit() {
+    let env = scenario_with_uncommitted_changes();
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted]
+┊   kl   A one
+┊   or   A three
+┊   twop A two
+┊
+┊╭┄ br [a-branch-1]
+┊●   1 (no commit message) (no changes)
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
+
+"#]]);
+
+    env.but("squash zz -t 1 -u")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+Amended 7adb8e6 to create 0e76889
+
+"#]]);
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ br [a-branch-1]
+┊●   1 (no commit message)
+┊│     1:k A one
+┊│     1:o A three
+┊│     1:t A two
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}
+
+#[test]
+fn amend_uncommitted_hunks_into_commits() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    let lines = std::iter::repeat_n("line\n", 10).collect::<Vec<_>>();
+    env.file("file", lines.concat());
+
+    env.but("commit -b my-branch --no-message")
+        .assert()
+        .success();
+
+    env.prepend_file("file", "top");
+    env.append_file("file", "bottom");
+
+    env.but("diff")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+─────────╮
+qs:9 file│
+─────────╯
+     1│+topline
+   1 2│ line
+   2 3│ line
+   3 4│ line
+─────────╮
+qs:d file│
+─────────╯
+    7  8│ line
+    8  9│ line
+    9 10│ line
+   10   │-line
+      11│+bottom
+
+"#]]);
+
+    env.but("squash qs:9 -t 1 -u")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+Amended bcf07e2 to create cb08f3a
+
+"#]]);
+
+    env.but("diff")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+─────────╮
+qs:d file│
+─────────╯
+    8  8│ line
+    9  9│ line
+   10 10│ line
+   11   │-line
+      11│+bottom
+
+"#]]);
+}
+
+#[test]
+fn amend_all_uncommitted_changes_when_zz_is_empty() {
+    let env = one_branch_three_commits();
+
+    env.but("squash zz -t 1#0 -u")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+Amended f55169f to create f55169f
+
+"#]]);
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ br [a-branch-1]
+┊●   1#0 add three
+┊│     1#0:o A three
+┊●   1#1 add two
+┊│     1#1:t A two
+┊●   1#2 add one
+┊│     1#2:k A one
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}
+
+#[test]
+fn amend_committed_file() {
+    let env = one_branch_three_commits();
+
+    env.but("squash 1#0:o -t 1#1 -u")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+Amended f63361f to create 5ab5165
+
+"#]]);
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ br [a-branch-1]
+┊●   1#0 add three (no changes)
+┊●   1#1 add two
+┊│     1#1:o A three
+┊│     1#1:t A two
+┊●   1#2 add one
+┊│     1#2:k A one
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}
+
+#[test]
+fn cannot_amend_files_from_different_commits() {
+    let env = one_branch_three_commits();
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ br [a-branch-1]
+┊●   1#0 add three
+┊│     1#0:o A three
+┊●   1#1 add two
+┊│     1#1:t A two
+┊●   1#2 add one
+┊│     1#2:k A one
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    env.but("squash 1#0:o 1#1:t -t 1#2 -u")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: All committed files must come from the same commit. Found files from f55169f and f63361f
+
+"#]]);
+}
+
+#[test]
+fn cannot_amend_files_in_ways_that_cause_conflicts() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.file("file", "file content");
+    env.but("commit -m 'add file'").assert().success();
+
+    env.file("file", "changed");
+    env.but("commit -m 'change file'").assert().success();
+
+    env.remove_file("file");
+    env.but("commit -m 'remove file'").assert().success();
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ br [a-branch-1]
+┊●   1#0 remove file
+┊│     1#0:q D file
+┊●   1#1 change file
+┊│     1#1:q M file
+┊●   1#2 add file
+┊│     1#2:q A file
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    env.but("squash 1#0:q -t 1#2 -u")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: Failed to apply changes to destination commit - merge conflict
+
+"#]]);
+}
+
+#[test]
+fn squash_into_branch_tip() {
+    let env = one_branch_three_commits();
+
+    env.file("file", "file content");
+
+    env.but("squash file -t a-branch-1 -u")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+Amended f55169f to create 13baa98
+
+"#]]);
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ br [a-branch-1]
+┊●   1#0 add three
+┊│     1#0:q A file
+┊│     1#0:o A three
+┊●   1#1 add two
+┊│     1#1:t A two
+┊●   1#2 add one
+┊│     1#2:k A one
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}
+
+#[test]
+fn squash_into_empty_branch() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.file("file", "file content");
+
+    env.but("branch new bottom").assert().success();
+    env.but("squash file -t bottom -u")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: --target cannot be an empty branch
+
+"#]]);
+
+    // middle and bottom are stil empty even if they're stacked
+    env.but("branch new middle -a bottom").assert().success();
+    env.but("squash file -t middle -u")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: --target cannot be an empty branch
+
+"#]]);
+    env.but("squash file -t bottom -u")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: --target cannot be an empty branch
+
+"#]]);
+
+    env.but("commit --empty -b bottom --no-message")
+        .assert()
+        .success();
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted]
+┊   qs A file
+┊
+┊╭┄ mi [middle] (no commits)
+┊│
+┊├┄ bo [bottom]
+┊●   1 (no commit message) (no changes)
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
+
+"#]]);
+    // middle should be considered empty even though there are commits on its parent
+    env.but("squash file -t middle -u")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: --target cannot be an empty branch
+
+"#]]);
+}
+
+#[test]
+fn cannot_squash_into_targets_that_dont_exist() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.file("file", "file content");
+
+    env.but("squash file -t does-not-exist -u")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: Could not find target: 'does-not-exist'
+
+Hint: --target must be an applied commit, branch, or zz. Run `but status` for applicable targets.
+
+"#]]);
+}
+
+#[test]
+fn squash_into_zz_to_uncommit_commit() {
+    let env = one_branch_three_commits();
+
+    env.but("squash 1#0 -t zz")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+Uncommitted f55169f
+
+"#]]);
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted]
+┊   or A three
+┊
+┊╭┄ br [a-branch-1]
+┊●   1#0 add two
+┊│     1#0:t A two
+┊●   1#1 add one
+┊│     1#1:k A one
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
+
+"#]]);
+
+    env.but("undo").assert().success();
+
+    env.but("squash 1#0 -t zz --format json")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#""#]]);
+}
+
+#[test]
+fn squash_into_zz_to_uncommit_file() {
+    let env = one_branch_three_commits();
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ br [a-branch-1]
+┊●   1#0 add three
+┊│     1#0:o A three
+┊●   1#1 add two
+┊│     1#1:t A two
+┊●   1#2 add one
+┊│     1#2:k A one
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    env.but("squash 1#0:o -t zz")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+Uncommitted from f55169f
+
+"#]]);
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted]
+┊   or A three
+┊
+┊╭┄ br [a-branch-1]
+┊●   1#0 add three (no changes)
+┊●   1#1 add two
+┊│     1#1:t A two
+┊●   1#2 add one
+┊│     1#2:k A one
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
+
+"#]]);
+}
+
+#[test]
+fn cannot_uncommit_files_in_ways_that_cause_conflicts() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.file("file", "file content");
+    env.but("commit -m 'add file'").assert().success();
+
+    env.file("file", "changed");
+    env.but("commit -m 'change file'").assert().success();
+
+    env.remove_file("file");
+    env.but("commit -m 'remove file'").assert().success();
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ br [a-branch-1]
+┊●   1#0 remove file
+┊│     1#0:q D file
+┊●   1#1 change file
+┊│     1#1:q M file
+┊●   1#2 add file
+┊│     1#2:q A file
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    env.but("squash 1#2 -t zz")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: Cannot uncommit commits that would result in merge conflicts
+
+"#]]);
+
+    env.but("squash 1#2:q -t zz")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: Cannot uncommit hunks that would result in merge conflicts
+
+"#]]);
+}
+
+#[test]
+fn cannot_use_source_message_with_uncommitted_changes() {
+    let env = one_branch_three_commits();
+
+    env.file("file", "file content");
+
+    env.but("squash file -t a-branch-1 --use-source-message")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: --use-source-message cannot be used when squashing uncommitted changes
+
+"#]]);
+
+    env.but("squash zz -t a-branch-1 --use-source-message")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: --use-source-message cannot be used when squashing uncommitted changes
+
+"#]]);
+}
+
+#[test]
+fn cannot_use_source_message_when_moving_committed_files() {
+    let env = one_branch_three_commits();
+
+    env.but("squash 1#0:o -t 1#1 --use-source-message")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: --use-source-message cannot be used when moving committed changes
+
+"#]]);
+}
+
+#[test]
+fn committed_file_to_uncommitted_area() -> anyhow::Result<()> {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+
+    env.setup_metadata(&["A", "B"]);
+    commit_two_files_as_two_hunks_each(&env, "A", "a.txt", "b.txt", "first commit");
+    commit_two_files_as_two_hunks_each(&env, "A", "a.txt", "b.txt", "second commit");
+
+    env.but("--format json status -f")
+        .allow_json()
+        .assert()
+        .success()
+        // .stderr_eq(snapbox::str![""])
+        .stdout_eq(snapbox::str![[r#"
+...
+{
+  "uncommittedChanges": [],
+  "stacks": [
+    {
+      "cliId": "i0",
+      "assignedChanges": [],
+      "branches": [
+        {
+          "cliId": "g0",
+          "name": "A",
+          "commits": [
+            {
+...
+              "changes": [
+                {
+                  "cliId": "1#0:n",
+                  "filePath": "a.txt",
+                  "changeType": "modified"
+                },
+                {
+                  "cliId": "1#0:p",
+                  "filePath": "b.txt",
+                  "changeType": "modified"
+                }
+              ]
+            },
+            {
+...
+              "changes": [
+                {
+                  "cliId": "1#1:n",
+                  "filePath": "a.txt",
+                  "changeType": "added"
+                },
+                {
+                  "cliId": "1#1:p",
+                  "filePath": "b.txt",
+                  "changeType": "added"
+                }
+              ]
+            },
+            {
+...
+              "changes": [
+                {
+                  "cliId": "t:t",
+                  "filePath": "A",
+                  "changeType": "added"
+                }
+              ]
+            }
+...
+
+"#]]);
+
+    env.but("squash 1#0:p -t zz").assert().success();
+
+    // Verify that `status` reflects the move.
+    env.but("--format json status -f")
+        .allow_json()
+        .assert()
+        .success()
+        .stderr_eq(snapbox::str![""])
+        .stdout_eq(snapbox::str![[r#"
+{
+  "uncommittedChanges": [
+    {
+      "cliId": "pn",
+      "filePath": "b.txt",
+      "changeType": "modified"
     }
-}
-
-fn branch_commit_count(env: &Sandbox, branch: &str) -> anyhow::Result<usize> {
-    let status = util::status_json(env)?;
-    let branch = util::find_branch(&status, branch)?;
-    Ok(branch["commits"]
-        .as_array()
-        .map(|commits| commits.len())
-        .unwrap_or(0))
-}
-
-#[test]
-fn squash_requires_at_least_two_commits() -> anyhow::Result<()> {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    env.setup_metadata(&["A"]);
-
-    // Only one commit exists (from scenario)
-    // Try to squash a single commit - should fail
-    let working_directory_before = util::working_directory_snapshot(&env)?;
-    env.but("squash c0").assert().failure().stderr_eq(str![[r#"
-Failed to squash commits. No matching branch or commit found for 'c0'
-
-"#]]);
-    let working_directory_after = util::working_directory_snapshot(&env)?;
-    assert_eq!(working_directory_before, working_directory_after);
-
-    Ok(())
-}
-
-#[test]
-fn squash_branch_with_single_commit_fails() -> anyhow::Result<()> {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    env.setup_metadata(&["A"]);
-
-    // Branch A has only 1 commit from the scenario
-    // Try to squash branch with single commit - should fail
-    let working_directory_before = util::working_directory_snapshot(&env)?;
-    env.but("squash A").assert().failure().stderr_eq(str![[r#"
-Failed to squash commits. Branch 'A' has only one commit, nothing to squash
-
-"#]]);
-    let working_directory_after = util::working_directory_snapshot(&env)?;
-    assert_eq!(working_directory_before, working_directory_after);
-
-    Ok(())
-}
-
-#[test]
-fn squash_nonexistent_commit_fails() -> anyhow::Result<()> {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    env.setup_metadata(&["A"]);
-
-    setup_branch_with_commits(&env, "A", 1);
-
-    // Try to squash with nonexistent commit ID
-    let working_directory_before = util::working_directory_snapshot(&env)?;
-    env.but("squash nonexistent c0")
-        .assert()
-        .failure()
-        .stderr_eq(str![[r#"
-Failed to squash commits. No matching commit found for 'nonexistent'
-
-"#]]);
-    let working_directory_after = util::working_directory_snapshot(&env)?;
-    assert_eq!(working_directory_before, working_directory_after);
-
-    Ok(())
-}
-
-#[test]
-fn squash_branch_by_name_succeeds() -> anyhow::Result<()> {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    env.setup_metadata(&["A"]);
-
-    // Create more commits on branch A (scenario already has 1)
-    setup_branch_with_commits(&env, "A", 2);
-
-    // Squash all commits in branch A by using branch name
-    // This should succeed as we have 3 commits total
-    let working_directory_before = util::working_directory_snapshot(&env)?;
-    env.but("squash A").assert().success();
-    let working_directory_after = util::working_directory_snapshot(&env)?;
-    assert_eq!(working_directory_before, working_directory_after);
-
-    Ok(())
-}
-
-#[test]
-fn squash_with_drop_message_flag_succeeds() -> anyhow::Result<()> {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    env.setup_metadata(&["A"]);
-
-    // Create 1 more commit (scenario has 1, so we'll have 2 total)
-    setup_branch_with_commits(&env, "A", 1);
-
-    // Squash branch with --drop-message flag
-    let working_directory_before = util::working_directory_snapshot(&env)?;
-    env.but("squash A --drop-message").assert().success();
-    let working_directory_after = util::working_directory_snapshot(&env)?;
-    assert_eq!(working_directory_before, working_directory_after);
-
-    Ok(())
-}
-
-#[test]
-fn squash_with_custom_message_succeeds() -> anyhow::Result<()> {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    env.setup_metadata(&["A"]);
-
-    // Create 1 more commit
-    setup_branch_with_commits(&env, "A", 1);
-
-    // Squash with custom message
-    let working_directory_before = util::working_directory_snapshot(&env)?;
-    env.but("squash A -m 'Custom squash message'")
-        .assert()
-        .success();
-    let working_directory_after = util::working_directory_snapshot(&env)?;
-    assert_eq!(working_directory_before, working_directory_after);
-
-    Ok(())
-}
-
-#[test]
-fn squash_mutually_exclusive_flags_fails() -> anyhow::Result<()> {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    env.setup_metadata(&["A"]);
-
-    setup_branch_with_commits(&env, "A", 1);
-
-    // Try to use both --drop-message and --message flags - should fail
-    let working_directory_before = util::working_directory_snapshot(&env)?;
-    env.but("squash A -m 'Custom message' --drop-message")
-        .assert()
-        .failure();
-    let working_directory_after = util::working_directory_snapshot(&env)?;
-    assert_eq!(working_directory_before, working_directory_after);
-
-    Ok(())
-}
-
-#[test]
-fn squash_with_invalid_range_format_fails() -> anyhow::Result<()> {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    env.setup_metadata(&["A"]);
-
-    setup_branch_with_commits(&env, "A", 2);
-
-    // Try to use invalid range format with triple dots
-    let working_directory_before = util::working_directory_snapshot(&env)?;
-    env.but("squash c0..c1..c2")
-        .assert()
-        .failure()
-        .stderr_eq(str![[r#"
-Failed to squash commits. Range format should be 'start..end', got 'c0..c1..c2'
+  ],
+  "stacks": [
+    {
+      "cliId": "j0",
+      "assignedChanges": [],
+      "branches": [
+        {
+          "cliId": "g0",
+          "name": "A",
+          "commits": [
+            {
+...
+              "changes": [
+                {
+                  "cliId": "1#0:n",
+                  "filePath": "a.txt",
+                  "changeType": "modified"
+                }
+              ]
+            },
+            {
+...
+              "changes": [
+                {
+                  "cliId": "1#1:n",
+                  "filePath": "a.txt",
+                  "changeType": "added"
+                },
+                {
+                  "cliId": "1#1:p",
+                  "filePath": "b.txt",
+                  "changeType": "added"
+                }
+              ]
+            },
+            {
+...
+              "changes": [
+                {
+                  "cliId": "t:t",
+                  "filePath": "A",
+                  "changeType": "added"
+                }
+...
+    },
+    {
+      "cliId": "k0",
+      "assignedChanges": [],
+      "branches": [
+        {
+          "cliId": "h0",
+          "name": "B",
+          "commits": [
+            {
+...
+              "changes": [
+                {
+                  "cliId": "l:p",
+                  "filePath": "B",
+                  "changeType": "added"
+                }
+              ]
+            }
+...
 
 "#]]);
-    let working_directory_after = util::working_directory_snapshot(&env)?;
-    assert_eq!(working_directory_before, working_directory_after);
 
     Ok(())
 }
 
 #[test]
-fn squash_with_empty_range_part_fails() -> anyhow::Result<()> {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    env.setup_metadata(&["A"]);
+fn uncommitted_hunk_to_commit() -> anyhow::Result<()> {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
 
-    setup_branch_with_commits(&env, "A", 2);
-
-    // Try range with empty start
-    let working_directory_before = util::working_directory_snapshot(&env)?;
-    env.but("squash ..c1").assert().failure();
-    let working_directory_after = util::working_directory_snapshot(&env)?;
-    assert_eq!(working_directory_before, working_directory_after);
-
-    Ok(())
-}
-
-#[test]
-fn squash_comma_list_with_nonexistent_commit_fails() -> anyhow::Result<()> {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    env.setup_metadata(&["A"]);
-
-    // Try comma-separated list with only nonexistent commits
-    // This tests the comma parsing path without needing real commit IDs
-    let working_directory_before = util::working_directory_snapshot(&env)?;
-    env.but("squash nonexistent1,nonexistent2")
-        .assert()
-        .failure()
-        .stderr_eq(str![[r#"
-Failed to squash commits. Commit 'nonexistent1' not found
-
-"#]]);
-    let working_directory_after = util::working_directory_snapshot(&env)?;
-    assert_eq!(working_directory_before, working_directory_after);
-
-    Ok(())
-}
-
-#[test]
-fn squash_range_with_nonexistent_endpoint_fails() -> anyhow::Result<()> {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    env.setup_metadata(&["A"]);
-
-    // Try range with nonexistent endpoints
-    // This tests the range parsing path without needing real commit IDs
-    let working_directory_before = util::working_directory_snapshot(&env)?;
-    env.but("squash nonexistent1..nonexistent2")
-        .assert()
-        .failure()
-        .stderr_eq(str![[r#"
-Failed to squash commits. Start of range 'nonexistent1' must match exactly one commit
-
-"#]]);
-    let working_directory_after = util::working_directory_snapshot(&env)?;
-    assert_eq!(working_directory_before, working_directory_after);
-
-    Ok(())
-}
-
-#[test]
-fn squash_ai_conflicts_with_message() -> anyhow::Result<()> {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    env.setup_metadata(&["A"]);
-
-    setup_branch_with_commits(&env, "A", 1);
-
-    // Try to use both --ai and --message flags - should fail
-    let working_directory_before = util::working_directory_snapshot(&env)?;
-    env.but("squash A --ai -m 'Custom message'")
-        .assert()
-        .failure()
-        .stderr_eq(str![[r#"
-error: the argument '--ai[=<AI>]' cannot be used with '--message <MESSAGE>'
-
-Usage: but squash --ai[=<AI>] <COMMITS>...
-
-For more information, try '--help'.
-
-"#]]);
-    let working_directory_after = util::working_directory_snapshot(&env)?;
-    assert_eq!(working_directory_before, working_directory_after);
-
-    Ok(())
-}
-
-#[test]
-fn squash_ai_conflicts_with_drop_message() -> anyhow::Result<()> {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    env.setup_metadata(&["A"]);
-
-    setup_branch_with_commits(&env, "A", 1);
-
-    // Try to use both --ai and --drop-message flags - should fail
-    let working_directory_before = util::working_directory_snapshot(&env)?;
-    env.but("squash A --ai --drop-message")
-        .assert()
-        .failure()
-        .stderr_eq(str![[r#"
-error: the argument '--ai[=<AI>]' cannot be used with '--drop-message'
-
-Usage: but squash --ai[=<AI>] <COMMITS>...
-
-For more information, try '--help'.
-
-"#]]);
-    let working_directory_after = util::working_directory_snapshot(&env)?;
-    assert_eq!(working_directory_before, working_directory_after);
-
-    Ok(())
-}
-
-#[test]
-fn concurrent_squashes_on_independent_branches_succeed() -> anyhow::Result<()> {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    env.setup_metadata(&["A"]);
-
-    env.but("branch new branchB").assert().success();
-    setup_branch_with_commits(&env, "A", 1);
-    setup_branch_with_commits(&env, "branchB", 2);
-    let working_directory_before = util::working_directory_snapshot(&env)?;
-
-    let child_a = util::but_std_cmd(&env, "squash A").spawn()?;
-    let child_b = util::but_std_cmd(&env, "squash branchB").spawn()?;
-
-    let out_a = child_a.wait_with_output()?;
-    let out_b = child_b.wait_with_output()?;
-
-    assert!(
-        out_a.status.success(),
-        "squash on A failed: {}",
-        out_a.stderr.as_bstr()
-    );
-    assert!(
-        out_b.status.success(),
-        "squash on branchB failed: {}",
-        out_b.stderr.as_bstr()
-    );
-    let working_directory_after = util::working_directory_snapshot(&env)?;
-    assert_eq!(working_directory_before, working_directory_after);
-
-    assert_eq!(branch_commit_count(&env, "A")?, 1);
-    assert_eq!(branch_commit_count(&env, "branchB")?, 1);
-
-    Ok(())
-}
-
-#[test]
-fn squash_multiple_commits_from_list_succeeds() -> anyhow::Result<()> {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    env.setup_metadata(&["A"]);
-
-    setup_branch_with_commits(&env, "A", 3);
-
-    let status_before = util::status_json(&env)?;
-    let branch_a_before = util::find_branch(&status_before, "A")?;
-    let commits_before = branch_a_before["commits"]
-        .as_array()
-        .context("Missing commits for branch A")?;
-
-    let source_top = commits_before[0]["cliId"]
-        .as_str()
-        .context("Missing top source commit cliId")?;
-    let source_second = commits_before[1]["cliId"]
-        .as_str()
-        .context("Missing second source commit cliId")?;
-    let target = commits_before[2]["cliId"]
-        .as_str()
-        .context("Missing target commit cliId")?;
-
-    let working_directory_before = util::working_directory_snapshot(&env)?;
-    env.but(format!("squash {source_top},{source_second},{target}"))
-        .assert()
-        .success()
-        .stdout_eq(str![[r#"
-Squashed 2 commits → [..]
-
-"#]]);
-    let working_directory_after = util::working_directory_snapshot(&env)?;
-    assert_eq!(working_directory_before, working_directory_after);
-
-    let status_after = util::status_json(&env)?;
-    let branch_a_after = util::find_branch(&status_after, "A")?;
-    let commits_after = branch_a_after["commits"]
-        .as_array()
-        .context("Missing commits for branch A after squash")?;
-
-    assert_eq!(
-        commits_after.len(),
-        2,
-        "A should have 2 commits after squashing 2 sources into 1 target"
-    );
-
-    Ok(())
-}
-
-#[test]
-fn squash_list_with_bottom_target_keeps_target_message_first() -> anyhow::Result<()> {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    env.setup_metadata(&["A"]);
-    setup_branch_with_commits(&env, "A", 3);
-
-    snapbox::assert_data_eq!(
-        env.git_log(),
-        snapbox::str![[r#"
-* ec2758d (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-* 8a1f552 (A) commit 3
-* 39dd878 commit 2
-* 8128859 commit 1
-* 9477ae7 add A
-* 0dc3733 (origin/main, origin/HEAD, main, gitbutler/target) add M
-
-"#]]
-    );
-
-    let status_before = util::status_json(&env)?;
-    let branch_a_before = util::find_branch(&status_before, "A")?;
-    let commits_before = branch_a_before["commits"]
-        .as_array()
-        .context("Missing commits for branch A")?;
-
-    let source_top = commits_before[0]["cliId"]
-        .as_str()
-        .context("Missing top source commit cliId")?;
-    let source_second = commits_before[1]["cliId"]
-        .as_str()
-        .context("Missing second source commit cliId")?;
-    let target = commits_before[2]["cliId"]
-        .as_str()
-        .context("Missing target commit cliId")?;
-
-    let working_directory_before = util::working_directory_snapshot(&env)?;
-    env.but(format!("squash {source_top},{source_second},{target}"))
-        .assert()
-        .success();
-    let working_directory_after = util::working_directory_snapshot(&env)?;
-    assert_eq!(working_directory_before, working_directory_after);
-
-    let log_after = env.git_log();
-    assert!(
-        log_after.contains("(A) commit 1"),
-        "expected squashed branch tip message to be target-first (commit 1), got:\n{log_after}"
-    );
-
-    Ok(())
-}
-
-#[test]
-fn squash_list_with_middle_target_keeps_target_message_first() -> anyhow::Result<()> {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    env.setup_metadata(&["A"]);
-    setup_branch_with_commits(&env, "A", 3);
-
-    snapbox::assert_data_eq!(
-        env.git_log(),
-        snapbox::str![[r#"
-* ec2758d (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-* 8a1f552 (A) commit 3
-* 39dd878 commit 2
-* 8128859 commit 1
-* 9477ae7 add A
-* 0dc3733 (origin/main, origin/HEAD, main, gitbutler/target) add M
-
-"#]]
-    );
-
-    let status_before = util::status_json(&env)?;
-    let branch_a_before = util::find_branch(&status_before, "A")?;
-    let commits_before = branch_a_before["commits"]
-        .as_array()
-        .context("Missing commits for branch A")?;
-
-    let source_top = commits_before[0]["cliId"]
-        .as_str()
-        .context("Missing top source commit cliId")?;
-    let target = commits_before[1]["cliId"]
-        .as_str()
-        .context("Missing second source commit cliId")?;
-    let source_third = commits_before[2]["cliId"]
-        .as_str()
-        .context("Missing target commit cliId")?;
-
-    let working_directory_before = util::working_directory_snapshot(&env)?;
-    env.but(format!("squash {source_top},{source_third},{target}"))
-        .assert()
-        .success()
-        .stdout_eq(str![[r#"
-Squashed 2 commits → [..]
-
-"#]]);
-    let working_directory_after = util::working_directory_snapshot(&env)?;
-    assert_eq!(working_directory_before, working_directory_after);
-
-    let log_after = env.git_log();
-    assert!(
-        log_after.contains("(A) commit 2"),
-        "expected squashed branch tip message to be target-first (commit 2), got:\n{log_after}"
-    );
-
-    Ok(())
-}
-
-#[test]
-fn squash_multiple_commits_keeps_squashed_commit_content() -> anyhow::Result<()> {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    env.setup_metadata(&["A"]);
-    setup_branch_with_commits(&env, "A", 3);
-
-    snapbox::assert_data_eq!(
-        env.git_log(),
-        snapbox::str![[r#"
-* ec2758d (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-* 8a1f552 (A) commit 3
-* 39dd878 commit 2
-* 8128859 commit 1
-* 9477ae7 add A
-* 0dc3733 (origin/main, origin/HEAD, main, gitbutler/target) add M
-
-"#]]
-    );
-
-    let status_before = util::status_json(&env)?;
-    let branch_a_before = util::find_branch(&status_before, "A")?;
-    let commits_before = branch_a_before["commits"]
-        .as_array()
-        .context("Missing commits for branch A")?;
-
-    let target_message_before = commits_before[2]["message"]
-        .as_str()
-        .context("Missing target commit message")?
-        .to_string();
-    let source_top_message = commits_before[0]["message"]
-        .as_str()
-        .context("Missing top source commit message")?
-        .to_string();
-    let source_second_message = commits_before[1]["message"]
-        .as_str()
-        .context("Missing second source commit message")?
-        .to_string();
-    let source_top = commits_before[0]["cliId"]
-        .as_str()
-        .context("Missing top source commit cliId")?;
-    let source_second = commits_before[1]["cliId"]
-        .as_str()
-        .context("Missing second source commit cliId")?;
-    let target = commits_before[2]["cliId"]
-        .as_str()
-        .context("Missing target commit cliId")?;
-
-    let working_directory_before = util::working_directory_snapshot(&env)?;
-    env.but(format!("squash {source_top},{source_second},{target}"))
-        .assert()
-        .success();
-    let working_directory_after = util::working_directory_snapshot(&env)?;
-    assert_eq!(working_directory_before, working_directory_after);
-
-    let status_after = util::status_json(&env)?;
-    let branch_a_after = util::find_branch(&status_after, "A")?;
-    let commits_after = branch_a_after["commits"]
-        .as_array()
-        .context("Missing commits for branch A after squash")?;
-    assert_eq!(commits_after.len(), 2);
-
-    let squashed_message = commits_after[0]["message"]
-        .as_str()
-        .context("Missing squashed commit message")?;
-    assert_eq!(
-        squashed_message,
-        format!("{target_message_before}\n\n{source_top_message}\n\n{source_second_message}")
-    );
-
-    let repo = env.open_repo();
-    let first_blob = repo.rev_parse_single(b"A:A-file1.txt")?.object()?;
-    let second_blob = repo.rev_parse_single(b"A:A-file2.txt")?.object()?;
-    let third_blob = repo.rev_parse_single(b"A:A-file3.txt")?.object()?;
-
-    snapbox::assert_data_eq!(
-        first_blob.data.as_bstr().to_string(),
-        snapbox::str![[r#"
-content for commit 1
-
-"#]]
-    );
-    snapbox::assert_data_eq!(
-        second_blob.data.as_bstr().to_string(),
-        snapbox::str![[r#"
-content for commit 2
-
-"#]]
-    );
-    snapbox::assert_data_eq!(
-        third_blob.data.as_bstr().to_string(),
-        snapbox::str![[r#"
-content for commit 3
-
-"#]]
-    );
-
-    let log_after = env.git_log();
-    assert!(
-        log_after.contains("(A) commit 1"),
-        "expected squashed A tip message to start with target commit message, got:\n{log_after}"
-    );
-
-    Ok(())
-}
-
-#[test]
-fn squash_multiple_commits_from_different_branches_on_same_stack_succeeds() -> anyhow::Result<()> {
-    let env = Sandbox::init_scenario_with_target_and_default_settings(
-        "two-stacks-one-single-and-ready-to-mingle-one-double",
-    );
+    // Must set metadata to match the scenario
     env.setup_metadata(&["A", "B"]);
 
-    env.file("c-extra.txt", "another change on C\n");
-    env.but("commit C -m 'extra on C'").assert().success();
+    commit_file_with_worktree_changes_as_two_hunks(&env, "A", "a.txt");
 
-    let status_before = util::status_json(&env)?;
-    let branch_b_before = util::find_branch(&status_before, "B")?;
-    let branch_c_before = util::find_branch(&status_before, "C")?;
+    let target_cli_id = branch_commit_cli_ids(&status_json(&env)?, "A")[0].clone();
+    // The amended commit is identified by its change ID, from a freshly built
+    // map that knows the post-amend workspace.
+    env.but(format!("squash zz:a.txt:#0 -t {target_cli_id} -u"))
+        .assert()
+        .success();
 
-    let b_commits_before = branch_b_before["commits"]
-        .as_array()
-        .context("Missing commits for branch B")?;
-    let c_commits_before = branch_c_before["commits"]
-        .as_array()
-        .context("Missing commits for branch C")?;
-
-    let source_b = b_commits_before[0]["cliId"]
-        .as_str()
-        .context("Missing source commit from B")?;
-    let source_c = c_commits_before[0]["cliId"]
-        .as_str()
-        .context("Missing source commit from C")?;
-    let target_c = c_commits_before[1]["cliId"]
-        .as_str()
-        .context("Missing target commit from C")?;
-
-    let working_directory_before = util::working_directory_snapshot(&env)?;
-    env.but(format!("squash {source_b} {source_c} {target_c}"))
+    // Verify that only one hunk was assigned ("a.txt" still appears in the
+    // uncommitted area because there is one hunk still unassigned).
+    env.but("--format json status -f")
+        .allow_json()
         .assert()
         .success()
-        .stdout_eq(str![[r#"
-Squashed 2 commits → [..]
+        .stderr_eq(snapbox::str![])
+        .stdout_eq(snapbox::str![[r#"
+{
+  "uncommittedChanges": [
+    {
+      "cliId": "nk",
+      "filePath": "a.txt",
+      "changeType": "modified"
+    }
+  ],
+...
 
 "#]]);
-    let working_directory_after = util::working_directory_snapshot(&env)?;
-    assert_eq!(working_directory_before, working_directory_after);
 
-    let status_after = util::status_json(&env)?;
-    let branch_b_after = util::find_branch(&status_after, "B")?;
-    let branch_c_after = util::find_branch(&status_after, "C")?;
+    // Verify that the commit indeed received the hunk.
+    snapbox::assert_data_eq!(
+        env.open_repo()
+            .rev_parse_single("A:a.txt")?
+            .object()?
+            .try_into_blob()?
+            .take_data(),
+        str![[r#"
+firsta
+line
+line
+line
+line
+line
+line
+line
+last
 
-    let b_commits_after = branch_b_after["commits"]
-        .as_array()
-        .context("Missing commits for branch B after squash")?;
-    let c_commits_after = branch_c_after["commits"]
-        .as_array()
-        .context("Missing commits for branch C after squash")?;
-
-    assert_eq!(
-        b_commits_after.len() + c_commits_after.len(),
-        1,
-        "B and C should have a single squashed commit left in total"
+"#]],
     );
 
     Ok(())
 }
 
-#[test]
-fn squash_branch_c_in_three_stacks_keeps_content_and_updates_graph() -> anyhow::Result<()> {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("three-stacks");
-    env.setup_metadata(&["A", "B", "C"]);
-
-    let normalized_log = env.git_log().replace("  \n", "\n");
-    snapbox::assert_data_eq!(
-        normalized_log,
-        snapbox::str![[r#"
-*-.   205e798 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
-|\ \
-| | * a748762 (B) B: another 10 lines at the bottom
-| | * 62e05ba B: 10 lines at the bottom
-| * | add59d2 (A) A: 10 lines on top
-| |/
-* | 930563a (C) C: add another 10 lines to new file
-* | 68a2fc3 C: add 10 lines to new file
-* | 984fd1c C: new file with 10 lines
-|/
-* 8f0d338 (tag: base, origin/main, origin/HEAD, main) base
-
-"#]]
-        .raw()
-    );
-
-    let working_directory_before = util::working_directory_snapshot(&env)?;
-    env.but("squash C").assert().success();
-    let working_directory_after = util::working_directory_snapshot(&env)?;
-    assert_eq!(working_directory_before, working_directory_after);
-
-    let status_after = util::status_json(&env)?;
-    let branch_c_after = util::find_branch(&status_after, "C")?;
-    let commits_after = branch_c_after["commits"]
-        .as_array()
-        .context("Missing commits for branch C after squash")?;
-    assert_eq!(commits_after.len(), 1);
-
-    let repo = env.open_repo();
-    let new_file_blob = repo.rev_parse_single(b"C:new-file")?.object()?;
-    snapbox::assert_data_eq!(
-        new_file_blob.data.as_bstr().to_string(),
-        snapbox::str![[r#"
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-28
-29
-30
-
-"#]]
-    );
-
-    let normalized_log = env.git_log().replace("  \n", "\n");
-    assert!(
-        normalized_log.contains("(C) C: new file with 10 lines"),
-        "expected squashed C tip message to begin with target commit message, got:\n{normalized_log}"
-    );
-
-    Ok(())
-}
+// Regression: filenames with dashes should not be misinterpreted as ranges.
+// Before the fix, "my-file.txt" would be split on '-' and treated as a range
+// from "my" to "file.txt", which would fail.
 
 #[test]
-fn squash_all_c_commits_into_second_commit_of_b_keeps_new_file_content() -> anyhow::Result<()> {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("three-stacks");
-    env.setup_metadata(&["A", "B", "C"]);
+fn uncommitted_hunk_to_commit_smoke() -> anyhow::Result<()> {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+    env.setup_metadata(&["A", "B"]);
 
-    let status_before = util::status_json(&env)?;
-    let branch_b_before = util::find_branch(&status_before, "B")?;
-    let branch_c_before = util::find_branch(&status_before, "C")?;
+    env.file("uncommitted-to-commit.txt", "content\n");
 
-    let b_commits_before = branch_b_before["commits"]
-        .as_array()
-        .context("Missing commits for branch B")?;
-    let c_commits_before = branch_c_before["commits"]
-        .as_array()
-        .context("Missing commits for branch C")?;
+    let before = status_json(&env)?;
+    let target_cli_id = branch_commit_cli_ids(&before, "A")[0].clone();
 
-    let b_second_commit = b_commits_before[1]["cliId"]
-        .as_str()
-        .context("Missing second commit cliId in B")?;
-    let c_commit_ids = c_commits_before
-        .iter()
-        .map(|commit| {
-            commit["cliId"]
-                .as_str()
-                .context("Missing cliId for commit in C")
-        })
-        .collect::<anyhow::Result<Vec<_>>>()?;
-
-    let working_directory_before = util::working_directory_snapshot(&env)?;
     env.but(format!(
-        "squash {} {b_second_commit}",
-        c_commit_ids.join(" ")
+        "squash uncommitted-to-commit.txt -t {target_cli_id} -u"
     ))
     .assert()
     .success();
-    let working_directory_after = util::working_directory_snapshot(&env)?;
-    assert_eq!(working_directory_before, working_directory_after);
 
-    let repo = env.open_repo();
-    let new_file_blob = repo.rev_parse_single(b"B:new-file")?.object()?;
-    snapbox::assert_data_eq!(
-        new_file_blob.data.as_bstr().to_string(),
-        snapbox::str![[r#"
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-28
-29
-30
-
-"#]]
+    let after = status_json(&env)?;
+    assert!(
+        !uncommitted_contains_file(&after, "uncommitted-to-commit.txt"),
+        "file should no longer be uncommitted"
+    );
+    assert!(
+        branch_commits_contain_file(&after, "A", "uncommitted-to-commit.txt"),
+        "file should appear in commits on branch A"
     );
 
     Ok(())
 }
 
-// Note: Happy-path tests for range (c0..c2) and comma-list (c0,c1,c2) notation
-// are not included because:
-// 1. Commit IDs are dynamically assigned and not predictable in tests
-// 2. The parsing logic is thoroughly tested through error cases
-// 3. All three input methods (range, list, multiple args) use the same
-//    handle_multi_commit_squash function that's proven to work via branch squashing
-// 4. Branch squashing tests verify the underlying API integration works correctly
+#[test]
+fn uncommitted_area_to_commit_smoke() -> anyhow::Result<()> {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+    env.setup_metadata(&["A", "B"]);
+
+    env.file("zz-to-commit.txt", "content\n");
+
+    let before = status_json(&env)?;
+    let target_cli_id = branch_commit_cli_ids(&before, "A")[0].clone();
+
+    env.but(format!("squash zz -t {target_cli_id} -u"))
+        .assert()
+        .success();
+
+    let after = status_json(&env)?;
+    assert!(
+        !uncommitted_contains_file(&after, "zz-to-commit.txt"),
+        "file should no longer be uncommitted"
+    );
+    assert!(
+        branch_commits_contain_file(&after, "A", "zz-to-commit.txt"),
+        "file should appear in commits on branch A"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn uncommitted_to_commit_consumes_renames() -> anyhow::Result<()> {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+    env.setup_metadata(&["A", "B"]);
+
+    let original = (1..=120)
+        .map(|line| line.to_string())
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    env.file("rename-source.txt", &original);
+    env.but("commit -b A -m 'seed rename source'")
+        .assert()
+        .success();
+
+    std::fs::rename(
+        env.projects_root().join("rename-source.txt"),
+        env.projects_root().join("rename-target.txt"),
+    )?;
+    env.file(
+        "rename-target.txt",
+        original.replace("40\n41\n42\n", "40\nchanged\n42\n"),
+    );
+
+    let before = status_json(&env)?;
+    let target_cli_id = branch_commit_cli_ids(&before, "A")[0].clone();
+
+    env.but(format!("squash zz -t {target_cli_id} -u"))
+        .assert()
+        .success();
+
+    let after = status_json(&env)?;
+    assert!(
+        !uncommitted_contains_file(&after, "rename-target.txt"),
+        "renamed file should no longer be uncommitted"
+    );
+    assert_eq!(
+        env.invoke_git("status --porcelain"),
+        "",
+        "expected all zz changes to be committed"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn uncommitted_file_to_commit_consumes_renames() -> anyhow::Result<()> {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+    env.setup_metadata(&["A", "B"]);
+
+    let original = (1..=120)
+        .map(|line| line.to_string())
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    env.file("rename-source-single.txt", &original);
+    env.but("commit -b A -m 'seed rename source single'")
+        .assert()
+        .success();
+
+    std::fs::rename(
+        env.projects_root().join("rename-source-single.txt"),
+        env.projects_root().join("rename-target-single.txt"),
+    )?;
+    env.file(
+        "rename-target-single.txt",
+        original.replace("70\n71\n72\n", "70\nchanged\n72\n"),
+    );
+
+    let before = status_json(&env)?;
+    let source_file_cli_id = uncommitted_cli_id_for_file(&before, "rename-target-single.txt")
+        .expect("renamed uncommitted file should be present in status");
+    let target_cli_id = branch_commit_cli_ids(&before, "A")[0].clone();
+
+    env.but(format!("squash {source_file_cli_id} -t {target_cli_id} -u"))
+        .assert()
+        .success();
+
+    let after = status_json(&env)?;
+    assert!(
+        !uncommitted_contains_file(&after, "rename-target-single.txt"),
+        "renamed file should no longer be uncommitted"
+    );
+
+    let remaining = env.invoke_git("status --porcelain");
+    assert_eq!(
+        remaining, "",
+        "expected selected renamed file to be committed; remaining status:\n{remaining}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn uncommitted_deleted_file_to_commit_keeps_unrelated_deleted_file() -> anyhow::Result<()> {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+    env.setup_metadata(&["A", "B"]);
+
+    env.file("a.txt", "a\n");
+    env.file("b.txt", "b\n");
+    env.file("c.txt", "c\n");
+    env.but("commit -b A -m 'Add a.txt, b.txt, and c.txt'")
+        .assert()
+        .success();
+
+    std::fs::remove_file(env.projects_root().join("a.txt"))?;
+    std::fs::remove_file(env.projects_root().join("b.txt"))?;
+
+    let before = status_json(&env)?;
+    let source_file_cli_id = uncommitted_cli_id_for_file(&before, "a.txt")
+        .expect("a.txt deletion should be present in the uncommitted area");
+    let target_cli_id = branch_commit_cli_ids(&before, "A")[0].clone();
+    assert!(
+        uncommitted_contains_file(&before, "b.txt"),
+        "b.txt deletion should start in the uncommitted area"
+    );
+
+    env.but(format!("squash {source_file_cli_id} -t {target_cli_id} -u"))
+        .assert()
+        .success();
+
+    let after = status_json(&env)?;
+    assert!(
+        !uncommitted_contains_file(&after, "a.txt"),
+        "selected a.txt deletion should be amended into the target commit"
+    );
+    assert!(
+        uncommitted_contains_file(&after, "b.txt"),
+        "unrelated b.txt deletion should remain uncommitted"
+    );
+    assert!(
+        !env.projects_root().join("a.txt").exists(),
+        "selected a.txt deletion should stay applied to the worktree"
+    );
+    assert!(
+        !env.projects_root().join("b.txt").exists(),
+        "unrelated b.txt deletion should stay applied to the worktree"
+    );
+    assert!(
+        env.projects_root().join("c.txt").exists(),
+        "untouched c.txt should stay in the worktree"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn commit_to_uncommitted_smoke() -> anyhow::Result<()> {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+    env.setup_metadata(&["A", "B"]);
+
+    commit_two_files_as_two_hunks_each(&env, "A", "a.txt", "b.txt", "first commit");
+
+    let before = status_json(&env)?;
+    let commit_cli_ids_before = branch_commit_cli_ids(&before, "A");
+    let source_cli_id = commit_cli_ids_before[0].clone();
+
+    env.but(format!("squash {source_cli_id} -t zz"))
+        .assert()
+        .success();
+
+    let after = status_json(&env)?;
+    let commit_cli_ids_after = branch_commit_cli_ids(&after, "A");
+
+    assert_eq!(
+        commit_cli_ids_after.len() + 1,
+        commit_cli_ids_before.len(),
+        "uncommitting a commit should remove that commit from branch history"
+    );
+    assert!(
+        !commit_cli_ids_after.contains(&source_cli_id),
+        "source commit should no longer be present after uncommit"
+    );
+
+    assert!(
+        uncommitted_contains_file(&after, "a.txt") && uncommitted_contains_file(&after, "b.txt"),
+        "uncommitting a commit should move its changes into uncommitted"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn commit_to_commit_smoke() -> anyhow::Result<()> {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+    env.setup_metadata(&["A", "B"]);
+
+    commit_two_files_as_two_hunks_each(&env, "A", "a.txt", "b.txt", "first commit");
+    commit_two_files_as_two_hunks_each(&env, "A", "a.txt", "b.txt", "second commit");
+
+    let before = status_json(&env)?;
+    let commit_cli_ids_before = branch_commit_cli_ids(&before, "A");
+    let source_cli_id = commit_cli_ids_before[0].clone();
+    let target_cli_id = commit_cli_ids_before[1].clone();
+
+    env.but(format!("squash {source_cli_id} -t {target_cli_id} -u"))
+        .assert()
+        .success();
+
+    let after = status_json(&env)?;
+    let commit_cli_ids_after = branch_commit_cli_ids(&after, "A");
+    assert_eq!(
+        commit_cli_ids_after.len() + 1,
+        commit_cli_ids_before.len(),
+        "squashing should reduce commit count by one"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn commit_without_message_to_commit() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    env.file("one.txt", "one.txt contents");
+    env.but("commit -m 'add one.txt' one.txt")
+        .assert()
+        .success();
+
+    env.but("status --no-hint")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ g0 [A]
+┊●   1 add one.txt
+┊●   tpm add A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+"#]]);
+
+    env.but("commit --empty --no-message").assert().success();
+
+    env.but("status --no-hint")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ g0 [A]
+┊●   1#0 (no commit message) (no changes)
+┊●   1#1 add one.txt
+┊●   tpm add A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+"#]]);
+
+    env.but("squash 1#0 -t 1#1 -u").assert().success();
+
+    env.but("status --no-hint")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ g0 [A]
+┊●   1 add one.txt
+┊●   tpm add A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+"#]]);
+}
+
+#[test]
+fn commit_to_commit_without_message() -> anyhow::Result<()> {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    env.file("one.txt", "one.txt contents");
+    env.but("commit -m 'add one.txt' one.txt")
+        .assert()
+        .success();
+    env.but("commit --empty --no-message").assert().success();
+
+    env.but("squash 1#1 -t 1#0 --use-source-message")
+        .assert()
+        .success();
+
+    let status = status_json(&env)?;
+    let branch = status["stacks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|stack| stack["branches"].as_array().unwrap().iter())
+        .find(|branch| branch["name"].as_str().unwrap() == "A")
+        .unwrap();
+    let commit_messages = branch["commits"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|commit| commit["message"].as_str().unwrap().trim_end_matches('\n'))
+        .collect::<Vec<_>>();
+
+    assert_eq!(commit_messages, vec!["add one.txt", "add A"]);
+
+    Ok(())
+}
+
+#[test]
+fn committed_file_to_commit_smoke() -> anyhow::Result<()> {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    commit_two_files_as_two_hunks_each(&env, "A", "source-a.txt", "source-b.txt", "source commit");
+    commit_two_files_as_two_hunks_each(&env, "A", "target-a.txt", "target-b.txt", "target commit");
+
+    let before = status_json(&env)?;
+    let source_cli_id = branch_commit_cli_id_for_file(&before, "A", "source-a.txt")
+        .expect("source commit with file");
+    let target_cli_id = branch_commit_cli_id_for_file(&before, "A", "target-a.txt")
+        .expect("target commit with file");
+
+    env.but(format!(
+        "squash {source_cli_id}:source-a.txt -t {target_cli_id} -u"
+    ))
+    .assert()
+    .success();
+
+    let after = status_json(&env)?;
+    let branch = after["stacks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|stack| stack["branches"].as_array().unwrap().iter())
+        .find(|branch| branch["name"].as_str() == Some("A"))
+        .expect("branch A should remain in status");
+    let commit_contains_file = |message: &str, file_path: &str| {
+        branch["commits"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|commit| {
+                commit["message"]
+                    .as_str()
+                    .is_some_and(|actual| actual.trim_end_matches('\n') == message)
+            })
+            .unwrap_or_else(|| panic!("commit '{message}' should remain in branch A"))["changes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|change| change["filePath"].as_str() == Some(file_path))
+    };
+    assert!(
+        !commit_contains_file("create source-a.txt and source-b.txt", "source-a.txt"),
+        "moved file should be absent from the rewritten source commit"
+    );
+    assert!(
+        commit_contains_file("create target-a.txt and target-b.txt", "source-a.txt"),
+        "moved file should be present in the rewritten target commit"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn squash_amending_modified_and_renamed_file() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.file("file", "content");
+    env.file("file-2", "content-2");
+
+    env.but("commit -m 'add files'").assert().success();
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ br [a-branch-1]
+┊●   1 add files
+┊│     1:q A file
+┊│     1:k A file-2
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    env.file("file-2", "new content");
+    env.rename_file("file-2", "file");
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted]
+┊   qs M file
+┊   kw D file-2
+┊
+┊╭┄ br [a-branch-1]
+┊●   1 add files
+┊│     1:q A file
+┊│     1:k A file-2
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
+
+"#]]);
+
+    env.but("squash zz -t 1 -u").assert().success();
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ br [a-branch-1]
+┊●   1 add files
+┊│     1:q A file
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}
+
+#[test]
+fn doesnt_open_editor_if_no_sources_have_message() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    env.file(".git/editor.sh", "false");
+    let editor_path = env.projects_root().join(".git/editor.sh");
+    let editor_command = format!("sh {}", editor_path.display());
+
+    env.but("commit --empty --no-message").assert().success();
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ g0 [A]
+┊●   1 (no commit message) (no changes)
+┊●   tpm add A
+┊│     tpm:t A A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    env.but("squash 1 -t tpm")
+        .env("GIT_EDITOR", editor_command)
+        .assert()
+        .success();
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ g0 [A]
+┊●   tpm add A
+┊│     tpm:t A A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}
+
+#[test]
+fn doesnt_open_editor_if_no_target_has_message() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    env.file(".git/editor.sh", "false");
+    let editor_path = env.projects_root().join(".git/editor.sh");
+    let editor_command = format!("sh {}", editor_path.display());
+
+    env.but("commit --empty --no-message").assert().success();
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ g0 [A]
+┊●   1 (no commit message) (no changes)
+┊●   tpm add A
+┊│     tpm:t A A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    env.but("squash tpm -t 1")
+        .env("GIT_EDITOR", editor_command)
+        .assert()
+        .success();
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ g0 [A]
+┊●   1 add A
+┊│     1:t A A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}
+
+#[test]
+fn doesnt_open_editor_if_both_source_and_target_doesnt_have_a_message() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    env.file(".git/editor.sh", "false");
+    let editor_path = env.projects_root().join(".git/editor.sh");
+    let editor_command = format!("sh {}", editor_path.display());
+
+    env.but("commit --empty --no-message").assert().success();
+    env.but("commit --empty --no-message").assert().success();
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ g0 [A]
+┊●   1#0 (no commit message) (no changes)
+┊●   1#1 (no commit message) (no changes)
+┊●   tpm add A
+┊│     tpm:t A A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    env.but("squash 1#0 -t 1#1")
+        .env("GIT_EDITOR", editor_command)
+        .assert()
+        .success();
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ g0 [A]
+┊●   1 (no commit message) (no changes)
+┊●   tpm add A
+┊│     tpm:t A A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}
+
+#[test]
+fn squashing_into_branch_that_sits_below_empty_branch() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    env.file("file", "content");
+
+    env.but("branch new -a A").assert().success();
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted]
+┊   qs A file
+┊
+┊╭┄ br [a-branch-1] (no commits)
+┊│
+┊├┄ g0 [A]
+┊●   tpm add A
+┊│     tpm:t A A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
+
+"#]]);
+
+    env.but("squash file -t A").assert().success();
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ br [a-branch-1] (no commits)
+┊│
+┊├┄ g0 [A]
+┊●   tpm add A
+┊│     tpm:t A A
+┊│     tpm:q A file
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}

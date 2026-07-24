@@ -17,7 +17,7 @@ import { createRoot } from "react-dom/client";
 import type { DragData } from "./DragData.ts";
 import { Match } from "effect";
 
-const DragPreview: FC<{ children: ReactNode }> = ({ children }) => (
+export const DragPreview: FC<{ children: ReactNode }> = ({ children }) => (
 	<div className={classes(styles.dragPreview, "text-13")}>{children}</div>
 );
 

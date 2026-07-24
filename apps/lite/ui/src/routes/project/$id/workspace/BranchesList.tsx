@@ -73,7 +73,7 @@ const branchGraphStatus = (branch: ListedBranch): GraphSegmentStatus =>
  */
 const useIsSelected = (projectId: string, operand: Operand): boolean =>
 	useAppSelector((state) => {
-		const stored = projectSlice.selectors.selectPrimaryOutlineSelection(state, projectId);
+		const stored = projectSlice.selectors.selectPrimaryBranchesSelection(state, projectId);
 		return stored !== null && operandEquals(stored, operand);
 	});
 
@@ -100,7 +100,7 @@ const CommitItem: FC<{ projectId: string; commit: Commit }> = ({ projectId, comm
 			aria-selected={isSelected}
 			isSelected={isSelected}
 			onSelect={() =>
-				dispatch(projectSlice.actions.selectOutline({ projectId, selection: operand }))
+				dispatch(projectSlice.actions.selectBranches({ projectId, selection: operand }))
 			}
 		>
 			<GraphSegment
@@ -207,7 +207,7 @@ const BranchItem: FC<{ projectId: string; branch: ListedBranch }> = ({ projectId
 			<Row
 				isSelected={isSelected}
 				onSelect={() =>
-					dispatch(projectSlice.actions.selectOutline({ projectId, selection: operand }))
+					dispatch(projectSlice.actions.selectBranches({ projectId, selection: operand }))
 				}
 				onContextMenu={(event) => {
 					void showNativeContextMenu(event, menuItems);
@@ -312,10 +312,10 @@ export const BranchesList: FC<
 	);
 
 	const selection = useAppSelector((state) =>
-		projectSlice.selectors.selectSelectionOutline(state, projectId, navigationIndex),
+		projectSlice.selectors.selectSelectionBranches(state, projectId, navigationIndex),
 	);
 	const storedSelection = useAppSelector((state) =>
-		projectSlice.selectors.selectPrimaryOutlineSelection(state, projectId),
+		projectSlice.selectors.selectPrimaryBranchesSelection(state, projectId),
 	);
 
 	// Rows highlight by comparing against the stored selection (see
@@ -327,7 +327,7 @@ export const BranchesList: FC<
 			selection !== null &&
 			(storedSelection === null || !operandEquals(storedSelection, selection))
 		)
-			dispatch(projectSlice.actions.selectOutline({ projectId, selection }));
+			dispatch(projectSlice.actions.selectBranches({ projectId, selection }));
 	}, [dispatch, projectId, selection, storedSelection]);
 
 	const headingId = useId();
@@ -338,7 +338,7 @@ export const BranchesList: FC<
 		projectId,
 		group: "Outline",
 		select: (newItem) =>
-			dispatch(projectSlice.actions.selectOutline({ projectId, selection: newItem })),
+			dispatch(projectSlice.actions.selectBranches({ projectId, selection: newItem })),
 		selection,
 		selectSectionPredicate: (operand) => operand._tag === "Branch",
 		ref: hotkeysRef,

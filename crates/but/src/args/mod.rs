@@ -289,44 +289,17 @@ pub enum Subcommands {
         verbose: bool,
     },
 
-    /// Commit changes to a stack.
-    ///
-    /// The `but commit` command allows you to create a new commit
-    /// on a specified branch (stack) with the current uncommitted changes.
-    ///
-    /// If there is only one branch applied, it will commit to that branch by default.
-    ///
-    /// If there are multiple branches applied, you must specify which branch to
-    /// commit to, or if in interactive mode, you will be prompted to select one.
-    ///
-    /// By default, all uncommitted changes and all changes already staged to that
-    /// branch will be included in the commit. If you only want to commit the changes
-    /// that are already staged to that branch, you can use the `--only` flag.
-    ///
-    /// It will not commit changes staged to other branches.
-    ///
-    /// Use `but commit empty --before <target>` or `but commit empty --after <target>`
-    /// to insert a blank commit. This is useful for creating a placeholder
-    /// commit that you can amend changes into later using `but rub` or `but absorb`.
-    ///
     #[cfg(feature = "legacy")]
     #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
     Commit(commit::Platform),
 
     #[cfg(feature = "legacy")]
     #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
-    #[clap(hide = true, name = "_commit2")]
-    _Commit2(commit2::Platform),
+    Squash(squash::Platform),
 
     #[cfg(feature = "legacy")]
     #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
-    #[clap(hide = true, name = "_squash2")]
-    _Squash2(squash2::Platform),
-
-    #[cfg(feature = "legacy")]
-    #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
-    #[clap(hide = true, name = "_move2")]
-    _Move2(move2::Platform),
+    Move(r#move::Platform),
 
     #[cfg(feature = "legacy")]
     #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
@@ -396,27 +369,9 @@ pub enum Subcommands {
         no_ff: bool,
     },
 
-    /// Discard uncommitted changes from the worktree.
-    ///
-    /// This command permanently discards changes to files, restoring them to their
-    /// state in the HEAD commit. Use this to undo unwanted modifications.
-    ///
-    /// The ID parameter should be a file ID as shown in `but status`. You can
-    /// discard a whole file or specific hunks within a file.
-    ///
-    /// ## Examples
-    ///
-    /// Discard all changes to a file:
-    ///
-    /// ```text
-    /// but discard a1
-    /// ```
     #[cfg(feature = "legacy")]
     #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
-    Discard {
-        /// The ID of the file or hunk to discard (as shown in `but status`)
-        id: String,
-    },
+    Discard(discard::Platform),
 
     /// Resolve conflicts in a commit.
     ///
@@ -564,65 +519,6 @@ pub enum Subcommands {
     #[clap(visible_alias = "mr")]
     Pr(forge::pr::Platform),
 
-    /// Combines two entities together to perform an operation like amend, squash, stage, or move.
-    ///
-    /// The `rub` command is a simple verb that helps you do a number of editing
-    /// operations by doing combinations of two things.
-    ///
-    /// For example, you can "rub" a file onto a branch to stage that file to
-    /// the branch. You can also "rub" a commit onto another commit to squash
-    /// them together. You can rub a commit onto a branch to move that commit.
-    /// You can rub a file from one commit to another.
-    ///
-    /// ## Operations Matrix
-    ///
-    /// Each cell shows what happens when you rub SOURCE → TARGET:
-    ///
-    /// ```text
-    /// SOURCE ↓ / TARGET →  │ zz (uncommitted) │ Commit     │ Branch      │ Stack
-    /// ─────────────────────┼─────────────────┼────────────┼─────────────┼────────────
-    /// File/Hunk            │ Unstage         │ Amend      │ Stage       │ Stage
-    /// Commit               │ Undo            │ Squash     │ Move        │ -
-    /// Branch (all changes) │ Unstage all     │ Amend all  │ Reassign    │ Reassign
-    /// Stack (all changes)  │ Unstage all     │ -          │ Reassign    │ Reassign
-    /// Uncommitted (zz)     │ -               │ Amend all  │ Stage all   │ Stage all
-    /// File-in-Commit       │ Uncommit        │ Move       │ Uncommit to │ -
-    /// ```
-    ///
-    /// Legend:
-    /// - `zz` is a special target meaning "uncommitted" (no branch)
-    /// - `-` means the operation is not supported
-    /// - "all changes" / "all" refers to all uncommitted changes from that source
-    ///
-    /// ## Examples
-    ///
-    /// Squashing two commits into one (combining the commit messages):
-    ///
-    /// ```text
-    /// but rub 3868155 abe3f53f
-    /// ```
-    ///
-    /// Amending a commit with the contents of a modified file:
-    ///
-    /// ```text
-    /// but rub README.md abe3f53f
-    /// ```
-    ///
-    /// Moving a commit from one branch to another:
-    ///
-    /// ```text
-    /// but rub 3868155 feature-branch
-    /// ```
-    ///
-    #[cfg(feature = "legacy")]
-    #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
-    Rub {
-        /// The source entity to combine
-        source: String,
-        /// The target entity to combine with the source
-        target: String,
-    },
-
     /// Amends changes into the appropriate commits where they belong.
     ///
     /// The semantic for finding "the appropriate commit" is as follows:
@@ -691,144 +587,13 @@ pub enum Subcommands {
         no_diff: bool,
     },
 
-    /// Uncommit changes from a commit or file-in-commit to the unstaged area.
-    ///
-    /// Use `--discard` to remove the selected committed changes entirely instead.
-    ///
-    /// Wrapper for `but rub <source> zz`.
     #[cfg(feature = "legacy")]
     #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
-    Uncommit {
-        /// Commit ID or file-in-commit ID to uncommit
-        source: String,
-        /// Discard the selected committed changes instead of moving them to uncommitted
-        #[clap(long, short = 'd')]
-        discard: bool,
-        /// Show the resulting uncommitted diff after uncommitting.
-        #[clap(long, conflicts_with = "discard")]
-        diff: bool,
-    },
+    Uncommit(uncommit::Platform),
 
-    /// Amend one or more file changes into a specific commit and rebases any dependent commits.
-    ///
-    /// Use `but amend <commit> --changes <file-or-hunk>[,<file-or-hunk>...]`.
-    #[cfg(feature = "legacy")]
-    #[clap(override_usage = "but amend [OPTIONS] <COMMIT> --changes <CHANGES>")]
-    #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
-    Amend {
-        /// Commit ID to amend into.
-        ///
-        /// In the legacy two-positional form, this can be the source ID.
-        #[clap(value_name = "COMMIT")]
-        target_or_source: String,
-        /// Commit ID to amend into for the legacy two-positional form.
-        #[clap(value_name = "COMMIT", hide = true)]
-        legacy_commit: Option<String>,
-        /// Uncommitted file or hunk CLI IDs to amend into the commit.
-        ///
-        /// Can be specified multiple times or as comma-separated values.
-        #[clap(long = "changes", short = 'p', value_delimiter = ',')]
-        changes: Vec<String>,
-    },
-
-    /// Squash commits together.
-    ///
-    /// Can be invoked in three ways:
-    /// 1. Using commit identifiers: `but squash <commit1> <commit2>` or `but squash <commit1> <commit2> <commit3>...`
-    ///    - Squashes all commits except the last into the last commit
-    /// 2. Using a commit range: `but squash <commit1>..<commit4>`
-    ///    - Squashes all commits in the range into the last commit in the range
-    /// 3. Using a branch name: `but squash <branch>`
-    ///    - Squashes all commits in the branch into the bottom-most commit
     #[cfg(feature = "legacy")]
     #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
-    Squash {
-        /// Commit identifiers, a range (commit1..commit2), or a branch name
-        commits: Vec<String>,
-        /// Drop source commit messages and keep only the target commit's message
-        #[clap(long, short = 'd', group = "message_opts")]
-        drop_message: bool,
-        /// Provide a new commit message for the resulting commit
-        #[clap(long, short = 'm', group = "message_opts")]
-        message: Option<String>,
-        /// Generate commit message using AI with optional user summary or instructions.
-        /// Use --ai by itself or --ai="your instructions" (equals sign required for value)
-        #[clap(long, short = 'i', group = "message_opts", num_args = 0..=1, require_equals = true)]
-        ai: Option<Option<String>>,
-    },
-
-    /// Move a commit or branch to a different location.
-    ///
-    /// Commit moves:
-    /// - By default, commits are moved to be before (below) the target.
-    /// - Use `--after` to move the commit after (above) the target instead.
-    /// - Use comma-separated commit IDs to move multiple commits together.
-    /// - When moving to a branch, the commit is placed at the top of that branch's stack.
-    ///
-    /// Branch moves:
-    /// - Move one branch on top of another to stack them.
-    /// - Move a branch to `zz` to tear it off (unstack it).
-    ///
-    /// ## Examples
-    ///
-    /// Move a commit before another commit:
-    ///
-    /// ```text
-    /// but move abc123 def456
-    /// ```
-    ///
-    /// Move multiple commits before another commit:
-    ///
-    /// ```text
-    /// but move abc123,789abc def456
-    /// ```
-    ///
-    /// Move a commit after another commit:
-    ///
-    /// ```text
-    /// but move abc123 def456 --after
-    /// ```
-    ///
-    /// Move multiple commits after another commit:
-    ///
-    /// ```text
-    /// but move abc123,789abc def456 --after
-    /// ```
-    ///
-    /// Move a commit to a different branch (places at top):
-    ///
-    /// ```text
-    /// but move abc123 my-feature-branch
-    /// ```
-    ///
-    /// Move multiple commits to a different branch (places at top):
-    ///
-    /// ```text
-    /// but move abc123,789abc my-feature-branch
-    /// ```
-    ///
-    /// Stack one branch on top of another:
-    ///
-    /// ```text
-    /// but move feature/frontend feature/backend
-    /// ```
-    ///
-    /// Tear off (unstack) a branch:
-    ///
-    /// ```text
-    /// but move feature/frontend zz
-    /// ```
-    #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
-    Move {
-        /// Commit/branch identifier to move. Use comma-separated commit IDs for multi-commit moves.
-        source: String,
-        /// Target commit/branch identifier, or `zz` to unstack a branch
-        target: String,
-        /// Move the commit after (above) the target instead of before (below).
-        /// Only valid for commit-to-commit moves.
-        #[clap(short = 'a', long = "after")]
-        after: bool,
-    },
+    Amend(amend::Platform),
 
     /// Commands for viewing and managing operation history.
     ///
@@ -1430,17 +1195,21 @@ pub enum Subcommands {
 pub mod agent;
 pub mod alias;
 #[cfg(feature = "legacy")]
-pub mod commit;
+pub mod amend;
 #[cfg(feature = "legacy")]
-pub mod commit2;
+pub mod commit;
 pub mod config;
 #[cfg(feature = "legacy")]
 pub mod diff2;
 #[cfg(feature = "legacy")]
-pub mod move2;
+pub mod discard;
+#[cfg(feature = "legacy")]
+pub mod r#move;
 pub mod skill;
 #[cfg(feature = "legacy")]
-pub mod squash2;
+pub mod squash;
+#[cfg(feature = "legacy")]
+pub mod uncommit;
 pub mod update;
 
 pub mod actions {

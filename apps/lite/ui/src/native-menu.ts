@@ -1,5 +1,5 @@
 import type { NativeMenuPopupItem, NativeMenuPosition } from "#electron/ipc.ts";
-import type { MouseEvent } from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
 
 type NativeMenuAction = () => void | Promise<void>;
 
@@ -88,13 +88,13 @@ const getBottomLeft = (element: HTMLElement): NativeMenuPosition => {
 };
 
 export const showNativeContextMenu = async (
-	event: MouseEvent<HTMLElement>,
+	event: ReactMouseEvent<HTMLElement> | MouseEvent,
 	items: Array<NativeMenuItem>,
 ): Promise<void> => {
 	event.preventDefault();
 
 	const position =
-		event.clientX === 0 && event.clientY === 0
+		event.clientX === 0 && event.clientY === 0 && event.currentTarget instanceof HTMLElement
 			? getBottomLeft(event.currentTarget)
 			: {
 					x: Math.round(event.clientX),

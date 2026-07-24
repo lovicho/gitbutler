@@ -519,7 +519,7 @@ fn cancel_resolution(ctx: &mut Context, out: &mut OutputChannel, force: bool) ->
         !changes_from_initial(ctx, guard.read_permission())?.is_empty()
     } {
         bail!(
-            "There are changes that differ from the original commit you were editing. Canceling will drop those changes.\n\nIf you want to go through with this, please re-run with `--force`.\n\nIf you want to keep the changes you have made, consider finishing the resolution and then moving the changes with the rub command."
+            "There are changes that differ from the original commit you were editing. Canceling will drop those changes.\n\nIf you want to go through with this, please re-run with `--force`.\n\nIf you want to keep the changes you have made, consider finishing the resolution and then moving the changes with `but squash`."
         )
     }
 

@@ -12,7 +12,7 @@ use crate::{
     args::atoms::{BranchArg, ResolvedCliIdArgRef},
     command::legacy::{
         reword2::RewordCommitOperation,
-        squash2::{
+        squash::{
             self, HowToRewordTarget, ResolvedSquashArgsRef, SquashOperation, SquashOutcome,
             SquashTarget, resolve_target,
         },
@@ -455,7 +455,7 @@ impl App {
             .then(|| terminal_guard.suspend())
             .transpose()?;
 
-        let outcome = squash2::run(ctx, &mut meta, guard.write_permission(), squash_op)?;
+        let outcome = squash::run(ctx, &mut meta, guard.write_permission(), squash_op)?;
 
         let what_to_select = match outcome {
             SquashOutcome::Branch { new_commit, .. }
@@ -613,7 +613,7 @@ fn resolve_squash_operation<'a>(
         },
     };
 
-    let op = squash2::resolve(resolved_args, ws, repo).into_internal_error()?;
+    let op = squash::resolve(resolved_args, ws, repo).into_internal_error()?;
 
     Ok(Some(op))
 }
@@ -637,7 +637,7 @@ fn resolve_squash_operation_with_branch<'a>(
     )?;
 
     let target = resolve_target(target, reword, &head_info).map_err(|err| match err {
-        squash2::ResolveTargetError::Other(err) => err,
+        squash::ResolveTargetError::Other(err) => err,
         other => {
             anyhow::anyhow!("BUG: failed to compute squash target: {other:?}")
         }

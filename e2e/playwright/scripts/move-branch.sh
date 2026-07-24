@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -eu
+
 echo "GIT CONFIG $GIT_CONFIG_GLOBAL"
 echo "DATA DIR $E2E_TEST_APP_DATA_DIR"
 echo "BUT $BUT"
@@ -9,5 +11,5 @@ echo "DIRECTORY: $3"
 
 # Move the source branch on top of the target branch.
 pushd "$3"
-  "$BUT" move "$1" "$2"
+  "$BUT" move "$1" --above "$2"
 popd

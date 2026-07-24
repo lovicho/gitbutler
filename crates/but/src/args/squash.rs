@@ -1,4 +1,4 @@
-//! Arguments for `squash2`.
+//! Arguments for `squash`.
 
 #![deny(missing_docs)]
 
@@ -17,6 +17,8 @@ use crate::args::atoms::CliIdArg;
 ///
 /// If no message-related flag is passed an editor will be opened where the new message can be
 /// composed.
+///
+/// For more details about CLI IDs, see `but help cli-ids`.
 #[derive(Debug, clap::Parser)]
 #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
 pub struct Platform {
@@ -59,8 +61,6 @@ pub struct Platform {
     /// If `TARGET` is a branch the sources will be added to the first commit on the branch.
     ///
     /// If `TARGET` is the uncommitted area (`zz`) the sources will be uncommitted.
-    ///
-    /// Takes a CLI ID, see `but help cli-ids` for details.
     #[clap(long, short)]
     pub target: Option<CliIdArg>,
 
@@ -86,8 +86,6 @@ pub struct Platform {
     ///
     /// It is not possible to mix sources of different types, i.e., all sources must either be
     /// commits, branches, uncommitted files, `zz`, or committed files.
-    ///
-    /// Takes CLI IDs, see `but help cli-ids` for details.
     #[clap(required = true)]
     pub sources: Vec<CliIdArg>,
 }

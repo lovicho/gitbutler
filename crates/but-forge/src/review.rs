@@ -1673,6 +1673,202 @@ pub enum ReviewStackingDescription {
     Disabled,
 }
 
+/// Controls whether same-repository GitHub reviews use GitHub's native stacks API.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GitHubStackingMode {
+    Unconfigured,
+    Disabled,
+    Native,
+}
+
+/// Remove conflicting native GitHub stack membership before changing review target branches.
+///
+/// The caller temporarily flattens reordered reviews onto trunk before pushing their refs. GitHub
+/// requires conflicting native stack membership to be removed before those target updates.
+pub async fn prepare_review_target_updates(
+    preferred_forge_user: &Option<crate::ForgeUser>,
+    forge_repo_info: &crate::forge::ForgeRepoInfo,
+    forge_push_repo_info: &Option<crate::forge::ForgeRepoInfo>,
+    reviews: &[ForgeReviewUpdate],
+    storage: &but_forge_storage::Controller,
+    github_stacking_mode: GitHubStackingMode,
+) -> Result<()> {
+    let crate::forge::ForgeRepoInfo {
+        forge, owner, repo, ..
+    } = forge_repo_info;
+    if *forge != ForgeName::GitHub
+        || github_stacking_mode != GitHubStackingMode::Native
+        || reviews.is_empty()
+    {
+        return Ok(());
+    }
+
+    let (_, head_repo) = github_head_owner_and_repo(forge_repo_info, forge_push_repo_info);
+    if head_repo.is_some() {
+        return Ok(());
+    }
+
+    let preferred_account = preferred_forge_user.as_ref().and_then(|user| user.github());
+    let pr_numbers = reviews
+        .iter()
+        .map(|review| review.number)
+        .collect::<Vec<_>>();
+    let prepared =
+        but_github::stacks::prepare(preferred_account, owner, repo, &pr_numbers, storage).await?;
+    if let but_github::stacks::Availability::Supported(plan) = prepared {
+        but_github::stacks::unstack_conflicting(preferred_account, owner, repo, &plan, storage)
+            .await?;
+    }
+    Ok(())
+}
+
+async fn github_review_bodies(
+    preferred_account: Option<&but_github::GithubAccountIdentifier>,
+    owner: &str,
+    repo: &str,
+    reviews: &[ForgeReviewUpdate],
+    storage: &but_forge_storage::Controller,
+) -> Result<(Vec<Option<Option<String>>>, Vec<String>)> {
+    let mut bodies = Vec::with_capacity(reviews.len());
+    let mut errors = Vec::new();
+    for review in reviews {
+        if review.update_description {
+            bodies.push(Some(review.body.clone()));
+            continue;
+        }
+        match but_github::pr::get(
+            preferred_account,
+            owner,
+            repo,
+            review.number.try_into()?,
+            storage,
+        )
+        .await
+        {
+            Ok(review) => bodies.push(Some(review.body)),
+            Err(err) => {
+                errors.push(format!("PR #{} description: {err}", review.number));
+                bodies.push(None);
+            }
+        }
+    }
+    Ok((bodies, errors))
+}
+
+async fn sync_github_reviews_with_descriptions(
+    preferred_account: Option<&but_github::GithubAccountIdentifier>,
+    owner: &str,
+    repo: &str,
+    reviews: &[ForgeReviewUpdate],
+    pr_numbers: &[i64],
+    storage: &but_forge_storage::Controller,
+    description_mode: ReviewStackingDescription,
+) -> Result<Vec<String>> {
+    let (bodies, mut errors) =
+        github_review_bodies(preferred_account, owner, repo, reviews, storage).await?;
+    for (review, current_body) in reviews.iter().zip(bodies) {
+        let updated_body = current_body.map(|body| {
+            update_body_with_mode(
+                body.as_deref(),
+                review.number,
+                pr_numbers,
+                "#",
+                description_mode,
+            )
+        });
+        let params = but_github::UpdatePullRequestParams {
+            owner,
+            repo,
+            pr_number: review.number,
+            title: None,
+            body: updated_body.as_deref(),
+            base: review.target_branch.as_deref(),
+            state: None,
+        };
+        if let Err(err) = but_github::pr::update(preferred_account, params, storage).await {
+            errors.push(format!("PR #{}: {err}", review.number));
+        }
+    }
+    Ok(errors)
+}
+
+async fn sync_github_native_reviews(
+    preferred_account: Option<&but_github::GithubAccountIdentifier>,
+    owner: &str,
+    repo: &str,
+    reviews: &[ForgeReviewUpdate],
+    pr_numbers: &[i64],
+    storage: &but_forge_storage::Controller,
+    description_mode: ReviewStackingDescription,
+) -> Result<but_github::stacks::Availability<Vec<String>>> {
+    let prepared =
+        but_github::stacks::prepare(preferred_account, owner, repo, pr_numbers, storage).await?;
+    let but_github::stacks::Availability::Supported(plan) = prepared else {
+        return Ok(but_github::stacks::Availability::Unsupported);
+    };
+    let (bodies, mut errors) =
+        github_review_bodies(preferred_account, owner, repo, reviews, storage).await?;
+
+    // Rebuilds have to dissolve the old native membership before GitHub will accept reordered
+    // target branches. Legacy footers remain in place until the new native shape is durable.
+    but_github::stacks::unstack_conflicting(preferred_account, owner, repo, &plan, storage).await?;
+
+    let mut target_errors = Vec::new();
+    for review in reviews {
+        let Some(target_branch) = review.target_branch.as_deref() else {
+            continue;
+        };
+        let params = but_github::UpdatePullRequestParams {
+            owner,
+            repo,
+            pr_number: review.number,
+            title: None,
+            body: None,
+            base: Some(target_branch),
+            state: None,
+        };
+        if let Err(err) = but_github::pr::update(preferred_account, params, storage).await {
+            target_errors.push(format!("PR #{} target: {err}", review.number));
+        }
+    }
+    if !target_errors.is_empty() {
+        anyhow::bail!(
+            "Could not update all PR targets before native stack registration:\n{}",
+            target_errors.join("\n")
+        );
+    }
+
+    but_github::stacks::finish(preferred_account, owner, repo, &plan, storage).await?;
+
+    // GitHub now renders the native stack. Independently honor the configured GitButler
+    // description mode and preserve user text.
+    for (review, current_body) in reviews.iter().zip(bodies) {
+        let Some(current_body) = current_body else {
+            continue;
+        };
+        let updated_body = update_body_with_mode(
+            current_body.as_deref(),
+            review.number,
+            pr_numbers,
+            "#",
+            description_mode,
+        );
+        let params = but_github::UpdatePullRequestParams {
+            owner,
+            repo,
+            pr_number: review.number,
+            title: None,
+            body: Some(&updated_body),
+            base: None,
+            state: None,
+        };
+        if let Err(err) = but_github::pr::update(preferred_account, params, storage).await {
+            errors.push(format!("PR #{} description: {err}", review.number));
+        }
+    }
+    Ok(but_github::stacks::Availability::Supported(errors))
+}
+
 #[cfg(feature = "export-schema")]
 but_schemars::register_sdk_type!(ForgeReviewUpdate);
 
@@ -1706,9 +1902,11 @@ impl From<ForgeReviewTargetUpdate> for ForgeReviewUpdate {
 pub async fn sync_reviews(
     preferred_forge_user: &Option<crate::ForgeUser>,
     forge_repo_info: &crate::forge::ForgeRepoInfo,
+    forge_push_repo_info: &Option<crate::forge::ForgeRepoInfo>,
     reviews: &[ForgeReviewUpdate],
     storage: &but_forge_storage::Controller,
     description_mode: ReviewStackingDescription,
+    github_stacking_mode: GitHubStackingMode,
 ) -> Result<()> {
     let crate::forge::ForgeRepoInfo {
         forge, owner, repo, ..
@@ -1720,52 +1918,85 @@ pub async fn sync_reviews(
         ForgeName::GitHub => {
             let preferred_account = preferred_forge_user.as_ref().and_then(|user| user.github());
             let pr_numbers: Vec<i64> = reviews.iter().map(|r| r.number).collect();
-
-            for review in reviews {
-                // Hydrate target-only callers so policy changes are still applied on the next
-                // stack sync. A failed read must not prevent the independent target update below.
-                let current_body = if !review.update_description {
-                    match but_github::pr::get(
+            let (_, head_repo) = github_head_owner_and_repo(forge_repo_info, forge_push_repo_info);
+            let use_native = github_stacking_mode == GitHubStackingMode::Native
+                && head_repo.is_none()
+                && !reviews.is_empty();
+            if use_native {
+                match sync_github_native_reviews(
+                    preferred_account,
+                    owner,
+                    repo,
+                    reviews,
+                    &pr_numbers,
+                    storage,
+                    description_mode,
+                )
+                .await
+                {
+                    Ok(but_github::stacks::Availability::Supported(native_errors)) => {
+                        errors.extend(native_errors);
+                    }
+                    Ok(but_github::stacks::Availability::Unsupported) => {
+                        errors.push(
+                            "GitHub native stacks are not enabled for this repository".to_string(),
+                        );
+                        errors.extend(
+                            sync_github_reviews_with_descriptions(
+                                preferred_account,
+                                owner,
+                                repo,
+                                reviews,
+                                &pr_numbers,
+                                storage,
+                                description_mode,
+                            )
+                            .await?,
+                        );
+                    }
+                    Err(err) => {
+                        errors.push(format!("GitHub native stack: {err}"));
+                        errors.extend(
+                            sync_github_reviews_with_descriptions(
+                                preferred_account,
+                                owner,
+                                repo,
+                                reviews,
+                                &pr_numbers,
+                                storage,
+                                description_mode,
+                            )
+                            .await?,
+                        );
+                    }
+                }
+            } else {
+                if github_stacking_mode == GitHubStackingMode::Disabled
+                    && head_repo.is_none()
+                    && !reviews.is_empty()
+                    && let Err(err) = but_github::stacks::dissolve(
                         preferred_account,
                         owner,
                         repo,
-                        review.number.try_into()?,
+                        &pr_numbers,
                         storage,
                     )
                     .await
-                    {
-                        Ok(review) => Some(review.body),
-                        Err(err) => {
-                            errors.push(format!("PR #{} description: {err}", review.number));
-                            None
-                        }
-                    }
-                } else {
-                    Some(review.body.clone())
-                };
-                let updated_body = current_body.map(|body| {
-                    update_body_with_mode(
-                        body.as_deref(),
-                        review.number,
+                {
+                    errors.push(format!("GitHub native stack removal: {err}"));
+                }
+                errors.extend(
+                    sync_github_reviews_with_descriptions(
+                        preferred_account,
+                        owner,
+                        repo,
+                        reviews,
                         &pr_numbers,
-                        "#",
+                        storage,
                         description_mode,
                     )
-                });
-
-                let params = but_github::UpdatePullRequestParams {
-                    owner,
-                    repo,
-                    pr_number: review.number,
-                    title: None,
-                    body: updated_body.as_deref(),
-                    base: review.target_branch.as_deref(),
-                    state: None,
-                };
-
-                if let Err(err) = but_github::pr::update(preferred_account, params, storage).await {
-                    errors.push(format!("PR #{}: {err}", review.number));
-                }
+                    .await?,
+                );
             }
         }
         ForgeName::GitLab => {

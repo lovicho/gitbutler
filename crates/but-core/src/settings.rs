@@ -11,6 +11,7 @@ pub mod git {
     const GITBUTLER_SIGN_COMMITS: &str = "gitbutler.signCommits";
     const GITBUTLER_GERRIT_MODE: &str = "gitbutler.gerritMode";
     const GITBUTLER_REVIEW_STACKING_DESCRIPTION: &str = "gitbutler.reviewStackingDescription";
+    const GITBUTLER_GITHUB_STACKING_MODE: &str = "gitbutler.githubStackingMode";
     const GITBUTLER_FORGE_TEMPLATE_PATH: &str = "gitbutler.forgeReviewTemplatePath";
     const GITBUTLER_GITLAB_PROJECT_ID: &str = "gitbutler.gitlabProjectId";
     const GITBUTLER_GITLAB_UPSTREAM_PROJECT_ID: &str = "gitbutler.gitlabUpstreamProjectId";
@@ -38,6 +39,19 @@ pub mod git {
         #[cfg(feature = "export-schema")]
         but_schemars::register_sdk_type!(ReviewStackingDescription);
 
+        /// Controls whether GitButler registers reviewed stacks with GitHub's native stacks API.
+        #[derive(Debug, PartialEq, Eq, Clone, Copy, serde::Serialize, serde::Deserialize)]
+        #[cfg_attr(feature = "export-schema", derive(schemars::JsonSchema))]
+        #[serde(rename_all = "lowercase")]
+        pub enum GitHubStackingMode {
+            /// Keep using ordinary pull requests and GitButler-managed description metadata.
+            Disabled,
+            /// Register same-repository GitHub pull requests as native GitHub stacks.
+            Native,
+        }
+        #[cfg(feature = "export-schema")]
+        but_schemars::register_sdk_type!(GitHubStackingMode);
+
         /// See [`GitConfigSettings`](crate::GitConfigSettings) for the docs.
         #[derive(Debug, PartialEq, Clone, Default, serde::Serialize, serde::Deserialize)]
         #[cfg_attr(feature = "export-schema", derive(schemars::JsonSchema))]
@@ -48,6 +62,7 @@ pub mod git {
             pub gitbutler_sign_commits: Option<bool>,
             pub gitbutler_gerrit_mode: Option<bool>,
             pub gitbutler_review_stacking_description: Option<ReviewStackingDescription>,
+            pub gitbutler_github_stacking_mode: Option<GitHubStackingMode>,
             #[cfg_attr(feature = "export-schema", schemars(with = "Option<String>"))]
             pub gitbutler_forge_review_template_path: Option<BStringForFrontend>,
             pub gitbutler_gitlab_project_id: Option<String>,
@@ -70,6 +85,7 @@ pub mod git {
                     gitbutler_sign_commits,
                     gitbutler_gerrit_mode,
                     gitbutler_review_stacking_description,
+                    gitbutler_github_stacking_mode,
                     gitbutler_forge_review_template_path,
                     gitbutler_gitlab_project_id,
                     gitbutler_gitlab_upstream_project_id,
@@ -83,6 +99,7 @@ pub mod git {
                     gitbutler_sign_commits,
                     gitbutler_gerrit_mode,
                     gitbutler_review_stacking_description,
+                    gitbutler_github_stacking_mode,
                     gitbutler_forge_review_template_path: gitbutler_forge_review_template_path
                         .map(Into::into),
                     gitbutler_gitlab_project_id,
@@ -103,6 +120,7 @@ pub mod git {
                     gitbutler_sign_commits,
                     gitbutler_gerrit_mode,
                     gitbutler_review_stacking_description,
+                    gitbutler_github_stacking_mode,
                     gitbutler_forge_review_template_path,
                     gitbutler_gitlab_project_id,
                     gitbutler_gitlab_upstream_project_id,
@@ -116,6 +134,7 @@ pub mod git {
                     gitbutler_sign_commits,
                     gitbutler_gerrit_mode,
                     gitbutler_review_stacking_description,
+                    gitbutler_github_stacking_mode,
                     gitbutler_forge_review_template_path: gitbutler_forge_review_template_path
                         .map(Into::into),
                     gitbutler_gitlab_project_id,
@@ -132,7 +151,7 @@ pub mod git {
     pub(crate) mod types {
         use std::ffi::OsString;
 
-        pub use super::ui::ReviewStackingDescription;
+        pub use super::ui::{GitHubStackingMode, ReviewStackingDescription};
         use bstr::BString;
 
         /// Settings that are retrieved from Git and written into the repository-local configuration.
@@ -150,6 +169,8 @@ pub mod git {
             pub gitbutler_gerrit_mode: Option<bool>,
             /// Controls where GitButler puts stack information in review descriptions.
             pub gitbutler_review_stacking_description: Option<ReviewStackingDescription>,
+            /// Controls whether GitHub pull requests are registered with the native stacks API.
+            pub gitbutler_github_stacking_mode: Option<GitHubStackingMode>,
             /// The path to the review description template to be used for this repository.
             pub gitbutler_forge_review_template_path: Option<BString>,
             /// The project ID of the GitLab project this repository is associated with, if any.
@@ -168,7 +189,7 @@ pub mod git {
         }
     }
     use types::GitConfigSettings;
-    use ui::ReviewStackingDescription;
+    use ui::{GitHubStackingMode, ReviewStackingDescription};
 
     impl GitConfigSettings {
         /// Read all settings from the given snapshot.
@@ -192,6 +213,16 @@ pub mod git {
                         ReviewStackingDescription::Bottom
                     }
                 });
+            let gitbutler_github_stacking_mode = config
+                .string(GITBUTLER_GITHUB_STACKING_MODE)
+                .map(|value| match value.as_slice() {
+                    b"disabled" => GitHubStackingMode::Disabled,
+                    b"native" => GitHubStackingMode::Native,
+                    invalid => {
+                        tracing::warn!(value = ?invalid, "Invalid gitbutler.githubStackingMode; using disabled");
+                        GitHubStackingMode::Disabled
+                    }
+                });
             let gitbutler_forge_review_template_path = config.string(GITBUTLER_FORGE_TEMPLATE_PATH);
             let gitbutler_gitlab_project_id = config
                 .string(GITBUTLER_GITLAB_PROJECT_ID)
@@ -207,6 +238,7 @@ pub mod git {
                 gitbutler_sign_commits,
                 gitbutler_gerrit_mode,
                 gitbutler_review_stacking_description,
+                gitbutler_github_stacking_mode,
                 gitbutler_forge_review_template_path,
                 gitbutler_gitlab_project_id,
                 gitbutler_gitlab_upstream_project_id,
@@ -241,6 +273,15 @@ pub mod git {
                             ReviewStackingDescription::Bottom => "bottom",
                             ReviewStackingDescription::Top => "top",
                             ReviewStackingDescription::Disabled => "disabled",
+                        },
+                    )?;
+                };
+                if let Some(mode) = self.gitbutler_github_stacking_mode {
+                    config.set_raw_value(
+                        GITBUTLER_GITHUB_STACKING_MODE,
+                        match mode {
+                            GitHubStackingMode::Disabled => "disabled",
+                            GitHubStackingMode::Native => "native",
                         },
                     )?;
                 };

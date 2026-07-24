@@ -1,6 +1,6 @@
 use snapbox::str;
 
-use super::util::find_branch;
+use super::util::sandbox_with_conflicted_commit;
 use crate::utils::{CommandExt, Sandbox};
 
 fn repo_with_unpushed_branch() -> anyhow::Result<Sandbox> {
@@ -17,7 +17,7 @@ fn repo_with_unpushed_branch() -> anyhow::Result<Sandbox> {
     env.but("apply branchB").assert().success();
 
     env.file("test-file.txt", "line 1\nline 2\nline 3\n");
-    env.but("commit -m 'first commit' branchB")
+    env.but("commit -m 'first commit' -b branchB")
         .assert()
         .success();
 
@@ -132,57 +132,11 @@ fn push_uses_tracking_remote_when_branch_tracks_another_remote() -> anyhow::Resu
 
 #[test]
 fn push_refuses_conflicted_commits() -> anyhow::Result<()> {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    env.setup_metadata_at_target(&["A"], "origin/main");
+    let env = sandbox_with_conflicted_commit();
 
-    let remote_git = env.app_data_dir().join("origin.git");
-    let remote_git = remote_git.display();
-    env.invoke_bash(format!(
-        "rm -rf {remote_git} && git clone --bare . {remote_git} && (git remote get-url origin >/dev/null 2>&1 && git remote set-url origin {remote_git} || git remote add origin {remote_git})",
-    ));
-
-    // Create a new branch for our test
-    env.but("branch new branchB").assert().success();
-
-    // Create a file with initial content and commit it
-    env.file("test-file.txt", "line 1\nline 2\nline 3\n");
-    env.but("commit -m 'first commit' branchB")
-        .assert()
-        .success();
-
-    // Add more content that depends on the first commit and commit again
-    env.file("test-file.txt", "line 1\nline 2\nline 3\nline 4\n");
-    env.but("commit -m 'second commit' branchB")
-        .assert()
-        .success();
-
-    // Make origin a writable local repository for the push attempt.
-    // Get the first commit's CLI ID from status
-    let status_output = env.but("--format json status").allow_json().output()?;
-    let status_json: serde_json::Value = serde_json::from_slice(&status_output.stdout)?;
-    let branch = find_branch(&status_json, "branchB")?;
-    let first_commit_id = branch["commits"]
-        .as_array()
-        .and_then(|commits| {
-            commits
-                .iter()
-                .find(|commit| commit["message"].as_str() == Some("first commit"))
-        })
-        .and_then(|commit| commit["cliId"].as_str())
-        .expect("should have first commit cliId");
-
-    // Rub the first commit to uncommitted (zz) - this should create a conflict
-    // in the second commit since it depends on the first
-    env.but(format!("rub {first_commit_id} zz"))
-        .assert()
-        .success();
-
-    // Try to push the branch - should fail with an error about conflicted commits
-    env.but("push branchB")
-        .assert()
-        .failure()
-        .stderr_eq(str![[r#"
-Error: Cannot push branch 'branchB': the branch contains 1 conflicted commit.
+    // Try to push the branch - should fail with an error about conflicted commits.
+    env.but("push A").assert().failure().stderr_eq(str![[r#"
+Error: Cannot push branch 'A': the branch contains 1 conflicted commit.
 Conflicted commits: [..]
 Please resolve conflicts before pushing using 'but resolve <commit>'.
 

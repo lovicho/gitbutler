@@ -17,6 +17,7 @@ import type { FakeGitHubReview, FakeGitHubServer } from "../src/fakeGithub.ts";
 const FOOTER_TOP = "<!-- GitButler Footer Boundary Top -->";
 const FOOTER_BOTTOM = "<!-- GitButler Footer Boundary Bottom -->";
 const POLICY_KEY = "gitbutler.reviewStackingDescription";
+const GITHUB_STACKING_KEY = "gitbutler.githubStackingMode";
 
 type PushOutcome = {
 	reviewSync:
@@ -24,6 +25,34 @@ type PushOutcome = {
 		| { status: "succeeded" }
 		| { status: "failed"; message: string };
 };
+
+test("GitHub native stack endpoints are unavailable when unsupported", async ({
+	gitbutler,
+	fakeGithub,
+}) => {
+	const server = await fakeGithub({
+		headRepoPath: gitbutler.pathInWorkdir("remote-project"),
+		nativeStacks: false,
+	});
+	const stacksUrl = `${server.apiBaseUrl}/repos/acme/widgets/stacks`;
+	const requests = [
+		fetch(stacksUrl),
+		fetch(stacksUrl, {
+			method: "POST",
+			body: JSON.stringify({ pull_requests: [42] }),
+		}),
+		fetch(`${stacksUrl}/1/add`, {
+			method: "POST",
+			body: JSON.stringify({ pull_requests: [42] }),
+		}),
+		fetch(`${stacksUrl}/1/unstack`, { method: "POST" }),
+	];
+
+	for (const response of await Promise.all(requests)) {
+		expect(response.status).toBe(404);
+	}
+	expect(server.getNativeStackMutationHistory()).toEqual([]);
+});
 
 test("review stack descriptions follow the per-project policy", async ({
 	page,
@@ -301,7 +330,7 @@ test("local moves do not update reviews and partial pushes synchronize the compl
 	await gitbutler.runScript("push-branch.sh", ["branch2"]);
 	await expectReviewHistoryDeltas(server, beforeMiddlePush, {
 		42: 1,
-		43: 1,
+		43: 2,
 		44: 1,
 		45: 0,
 	});
@@ -437,6 +466,109 @@ test("creating a review in the middle synchronizes the complete review stack", a
 	});
 });
 
+test("GitHub native stacks are rebuilt when a review is created in the middle", async ({
+	page,
+	gitbutler,
+	fakeGithub,
+}) => {
+	const server = await fakeGithub({
+		headRepoPath: gitbutler.pathInWorkdir("remote-project"),
+		isFork: false,
+		listed: false,
+		nativeStacks: true,
+	});
+	await gitbutler.runScript("project-with-stacks.sh", [server.repositoryUrl]);
+	await storeFakeGitHubEnterprisePat(page, server);
+	mirrorFakeCredentialForCli(gitbutler);
+	await applyUpstream(gitbutler, "branch1", "branch2", "branch3");
+	await mockForge(page, {
+		get_review_merge_status: mergeStatus(),
+		get_repo_info: repoInfo(),
+		list_ci_checks: [],
+	});
+	await openWorkspace(page);
+	await setGitHubStackingMode(page, gitbutler, "native");
+
+	const branchHeaders = page.getByTestId("branch-header");
+	await dragAndDropByLocator(
+		page,
+		branchHeaders.filter({ hasText: "branch2" }),
+		branchHeaders.filter({ hasText: "branch1" }),
+		{ force: true, position: { x: 120, y: -10 } },
+	);
+	await expect(stack(page)).toHaveCount(2);
+	await gitbutler.runScript("push-branch.sh", ["branch2"]);
+
+	await publishReview(page, "branch1", "Description for branch1");
+	server.setListed(true);
+	await publishReview(page, "branch2", "Description for branch2");
+	await expect(page.getByText("PR #43 created successfully")).toBeVisible();
+	await expect
+		.poll(() => server.getNativeStacks())
+		.toEqual([{ number: 1, pull_requests: [{ number: 42 }, { number: 43 }] }]);
+	await expectReviews(server, 2, (reviews) => {
+		expect(reviews.map((review) => review.base.ref)).toEqual(["master", "branch1"]);
+		expectBottomFooter(reviews[0], "Description for branch1", "part 1 of 2");
+		expectBottomFooter(reviews[1], "Description for branch2", "part 2 of 2");
+	});
+
+	await dragAndDropByLocator(
+		page,
+		branchHeaders.filter({ hasText: "branch3" }),
+		branchHeaders.filter({ hasText: "branch1" }),
+		{ force: true, position: { x: 120, y: 0 } },
+	);
+	await expect(stack(page)).toHaveCount(1);
+	await gitbutler.runScript("push-branch.sh", ["branch2"]);
+	expect(server.getNativeStackMutationHistory()).toEqual([
+		{ operation: "create", pullRequests: [42, 43] },
+	]);
+
+	await publishReview(page, "branch3", "Description for branch3");
+	await expect(page.getByText("PR #44 created successfully")).toBeVisible();
+	await expect
+		.poll(() => server.getNativeStacks())
+		.toEqual([
+			{
+				number: 2,
+				pull_requests: [{ number: 42 }, { number: 44 }, { number: 43 }],
+			},
+		]);
+	expect(server.getNativeStackMutationHistory()).toEqual([
+		{ operation: "create", pullRequests: [42, 43] },
+		{ operation: "unstack", stackNumber: 1 },
+		{ operation: "create", pullRequests: [42, 44, 43] },
+	]);
+	await expectReviews(server, 3, (reviews) => {
+		expect(reviews.map((review) => review.base.ref)).toEqual(["master", "branch3", "branch1"]);
+		expectBottomFooter(reviews[0], "Description for branch1", "part 1 of 3");
+		expectBottomFooter(reviews[1], "Description for branch2", "part 3 of 3");
+		expectBottomFooter(reviews[2], "Description for branch3", "part 2 of 3");
+	});
+
+	await setGitHubStackingMode(page, gitbutler, "disabled");
+	writeFileSync(
+		gitbutler.pathInWorkdir("local-clone/b_file"),
+		"change after disabling native stacks\n",
+		{ flag: "a" },
+	);
+	await gitbutler.runScript("commit-branch.sh", ["branch2", "branch2: disable native stacks"]);
+	await gitbutler.runScript("push-branch.sh", ["branch2"]);
+	await expect.poll(() => server.getNativeStacks()).toEqual([]);
+	expect(server.getNativeStackMutationHistory()).toEqual([
+		{ operation: "create", pullRequests: [42, 43] },
+		{ operation: "unstack", stackNumber: 1 },
+		{ operation: "create", pullRequests: [42, 44, 43] },
+		{ operation: "unstack", stackNumber: 2 },
+	]);
+	await expectReviews(server, 3, (reviews) => {
+		for (const review of reviews) {
+			expect(review.body).toContain(FOOTER_TOP);
+			expect(review.body).toContain(FOOTER_BOTTOM);
+		}
+	});
+});
+
 test("reordering reviewed refs updates every target after a partial push", async ({
 	page,
 	gitbutler,
@@ -496,7 +628,7 @@ test("reordering reviewed refs updates every target after a partial push", async
 
 	const beforePartialPush = reviewHistoryLengths(server, [42, 43, 44]);
 	await gitbutler.runScript("push-branch.sh", ["branch3"]);
-	await expectReviewHistoryDeltas(server, beforePartialPush, { 42: 1, 43: 1, 44: 1 });
+	await expectReviewHistoryDeltas(server, beforePartialPush, { 42: 1, 43: 2, 44: 2 });
 	await expectReviews(server, 3, (reviews) => {
 		expect(reviews.map((review) => review.base.ref)).toEqual(["master", "branch3", "branch1"]);
 		for (const review of reviews) {
@@ -571,7 +703,7 @@ test("removing a reviewed middle ref is reflected after pushing the remaining st
 
 	const beforeRemainingStackPush = reviewHistoryLengths(server, [42, 43, 44]);
 	await gitbutler.runScript("push-branch.sh", ["branch3"]);
-	await expectReviewHistoryDeltas(server, beforeRemainingStackPush, { 42: 1, 43: 1, 44: 1 });
+	await expectReviewHistoryDeltas(server, beforeRemainingStackPush, { 42: 1, 43: 1, 44: 2 });
 	await expectReviews(server, 3, (reviews) => {
 		const [reviewA, reviewB, reviewC] = reviews;
 		expect(reviewA?.base.ref).toBe("master");
@@ -645,7 +777,7 @@ test("moving a reviewed ref between reviewed stacks continues after one stack up
 	server.setFailingReviewUpdates([42]);
 	const beforePush = reviewHistoryLengths(server, [42, 43, 44, 45]);
 	await gitbutler.runScript("push-branch.sh", ["branch2"]);
-	await expectReviewHistoryDeltas(server, beforePush, { 42: 1, 43: 1, 44: 1, 45: 1 });
+	await expectReviewHistoryDeltas(server, beforePush, { 42: 1, 43: 2, 44: 1, 45: 2 });
 	await expectReviews(server, 4, (reviews) => {
 		const [reviewA, reviewB, reviewC, reviewD] = reviews;
 		expect(reviews.map((review) => review.base.ref)).toEqual([
@@ -745,6 +877,7 @@ test("a Git push failure does not start review synchronization", async ({
 	await openWorkspace(page);
 
 	await publishReview(page, "branch1", "Description for branch1");
+	await expect(page.getByText("PR #42 created successfully")).toBeVisible();
 	server.setListed(true);
 	writeFileSync(gitbutler.pathInWorkdir("local-clone/a_file"), "rejected Git push\n", {
 		flag: "a",
@@ -761,6 +894,66 @@ test("a Git push failure does not start review synchronization", async ({
 			message: "review synchronization must not start after the Git push fails",
 		})
 		.toBe(beforeFailedPush);
+});
+
+test("a failed reordered push restores temporarily flattened review targets", async ({
+	page,
+	gitbutler,
+	fakeGithub,
+}) => {
+	const server = await fakeGithub({
+		headRepoPath: gitbutler.pathInWorkdir("remote-project"),
+		isFork: false,
+		listed: false,
+	});
+	await gitbutler.runScript("project-with-stacks.sh", [server.repositoryUrl]);
+	await storeFakeGitHubEnterprisePat(page, server);
+	mirrorFakeCredentialForCli(gitbutler);
+	await applyUpstream(gitbutler, "branch1", "branch2", "branch3");
+	await mockForge(page, {
+		get_review_merge_status: mergeStatus(),
+		get_repo_info: repoInfo(),
+		list_ci_checks: [],
+	});
+	await openWorkspace(page);
+	const branchHeaders = page.getByTestId("branch-header");
+	for (const [branch, parent, remainingStacks] of [
+		["branch2", "branch1", 2],
+		["branch3", "branch2", 1],
+	] as const) {
+		await dragAndDropByLocator(
+			page,
+			branchHeaders.filter({ hasText: branch }),
+			branchHeaders.filter({ hasText: parent }),
+			{ force: true, position: { x: 120, y: -10 } },
+		);
+		await expect(stack(page)).toHaveCount(remainingStacks);
+	}
+	await gitbutler.runScript("push-branch.sh", ["branch3"]);
+
+	await publishReview(page, "branch1", "Description for branch1");
+	server.setListed(true);
+	await publishReview(page, "branch2", "Description for branch2");
+	await publishReview(page, "branch3", "Description for branch3");
+	await expect(page.getByText("PR #44 created successfully")).toBeVisible();
+
+	await dragAndDropByLocator(
+		page,
+		branchHeaders.filter({ hasText: "branch2" }),
+		branchHeaders.filter({ hasText: "branch3" }),
+		{ force: true, position: { x: 120, y: -10 } },
+	);
+	await expectBranchHeaderOrder(page, ["branch2", "branch3", "branch1"]);
+
+	const beforeFailedPush = reviewHistoryLengths(server, [42, 43, 44]);
+	server.setGitPushesFailing(true);
+	await expect(gitbutler.runScript("push-branch.sh", ["branch3"])).rejects.toThrow(
+		"Command failed with exit code",
+	);
+	await expectReviewHistoryDeltas(server, beforeFailedPush, { 42: 0, 43: 2, 44: 2 });
+	await expectReviews(server, 3, (reviews) => {
+		expect(reviews.map((review) => review.base.ref)).toEqual(["master", "branch1", "branch2"]);
+	});
 });
 
 async function combineBranchesIntoStack(page: Page) {
@@ -825,6 +1018,23 @@ async function setDescriptionPolicy(page: Page, gitbutler: GitButler, policy: "t
 		.getByRole("button")
 		.click();
 	await assertGitConfigValue(POLICY_KEY, policy, gitbutler.pathInWorkdir("local-clone"));
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("project-settings-modal")).toHaveCount(0);
+}
+
+async function setGitHubStackingMode(
+	page: Page,
+	gitbutler: GitButler,
+	mode: "disabled" | "native",
+) {
+	await clickByTestId(page, "chrome-sidebar-project-settings-button");
+	await waitForTestId(page, "project-settings-modal");
+	const select = page.getByTestId("github-stacking-mode-select");
+	await expect(select).toBeVisible();
+	await select.scrollIntoViewIfNeeded();
+	await select.click();
+	await page.getByTestId(`github-stacking-mode-option-${mode}`).getByRole("button").click();
+	await assertGitConfigValue(GITHUB_STACKING_KEY, mode, gitbutler.pathInWorkdir("local-clone"));
 	await page.keyboard.press("Escape");
 	await expect(page.getByTestId("project-settings-modal")).toHaveCount(0);
 }

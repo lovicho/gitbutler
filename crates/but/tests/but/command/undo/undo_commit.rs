@@ -1,32 +1,20 @@
 use crate::{command::undo::run_mutate_undo_roundtrip_test, utils::Sandbox};
 
-// TODO: `but commit empty` doesn't support `--message`, it should so we don't need this hack
 pub(super) fn commit_empty_with_message(env: &Sandbox, message: &str) -> String {
     #[derive(serde::Deserialize)]
-    struct CommitEmptyJson {
-        commit_id: String,
+    struct CommitJson {
+        commit: String,
     }
-
-    #[derive(serde::Deserialize)]
-    struct RewordJson {
-        new_commit_id: String,
-    }
-
-    let output = env.but("commit empty A --format json").assert().success();
-    let output = output.get_output();
-    let commit_id = serde_json::from_slice::<CommitEmptyJson>(&output.stdout)
-        .unwrap()
-        .commit_id;
 
     let output = env
-        .but("reword")
-        .args([&commit_id, "-m", message, "--format", "json"])
+        .but("commit --empty -b A --format json")
+        .args(["-m", message])
         .assert()
         .success();
     let output = output.get_output();
-    serde_json::from_slice::<RewordJson>(&output.stdout)
+    serde_json::from_slice::<CommitJson>(&output.stdout)
         .unwrap()
-        .new_commit_id
+        .commit
 }
 
 #[test]
@@ -49,7 +37,7 @@ fn can_undo_but_commit_on_branch() {
     env.file(path, "content");
 
     run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but("commit -m 'Add file' A").assert().success();
+        env.but("commit -m 'Add file' -b A").assert().success();
     });
 }
 
@@ -61,10 +49,7 @@ fn can_undo_but_commit_dash_dash_create() {
     env.file(path, "content");
 
     run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but("commit -m 'Add file' --create").assert().success();
-
-        // TODO: only create one snapshot so additional undo isn't required
-        env.but("undo").assert().success();
+        env.but("commit -m 'Add file' -b").assert().success();
     });
 }
 
@@ -76,12 +61,9 @@ fn can_undo_but_commit_dash_dash_create_new_branch() {
     env.file(path, "content");
 
     run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but("commit -m 'Add file' --create my-new-branch")
+        env.but("commit -m 'Add file' -b my-new-branch")
             .assert()
             .success();
-
-        // TODO: only create one snapshot so additional undo isn't required
-        env.but("undo").assert().success();
     });
 }
 
@@ -93,9 +75,7 @@ fn can_undo_but_commit_dash_dash_create_existing_branch() {
     env.file(path, "content");
 
     run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but("commit -m 'Add file' --create A")
-            .assert()
-            .success();
+        env.but("commit -m 'Add file' -b A").assert().success();
     });
 }
 
@@ -111,7 +91,9 @@ fn can_undo_but_commit_dash_dash_only() {
     env.file("uncommitted.txt", "uncommitted content");
 
     run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but("commit -m 'Add file' --only").assert().success();
+        env.but("commit -m 'Add file' assigned.txt")
+            .assert()
+            .success();
     });
 }
 
@@ -124,7 +106,7 @@ fn can_undo_but_commit_dash_dash_changes() {
     env.file("other-new-file.txt", "content");
 
     run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but("commit -m 'Add file' --changes new-file.txt")
+        env.but("commit -m 'Add file' new-file.txt")
             .assert()
             .success();
     });
@@ -136,7 +118,7 @@ fn can_undo_but_commit_empty() {
     env.setup_metadata_at_target(&["A"], "origin/main");
 
     run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but("commit empty").assert().success();
+        env.but("commit --empty --no-message").assert().success();
     });
 }
 
@@ -146,7 +128,7 @@ fn can_undo_but_commit_empty_with_message() {
     env.setup_metadata_at_target(&["A"], "origin/main");
 
     run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but("commit empty -m 'Plan empty slot'")
+        env.but("commit --empty -m 'Plan empty slot'")
             .assert()
             .success();
     });
@@ -162,7 +144,9 @@ fn can_undo_but_commit_empty_target() {
     env.but("branch new my-new-branch").assert().success();
 
     run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but("commit empty my-new-branch").assert().success();
+        env.but("commit --empty --no-message -b my-new-branch")
+            .assert()
+            .success();
     });
 }
 
@@ -178,7 +162,7 @@ fn can_undo_but_commit_empty_dash_dash_before() {
     let target = commit_empty_with_message(&env, "two");
 
     run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but(format!("commit empty --before {target}"))
+        env.but(format!("commit --empty --no-message --below {target}"))
             .assert()
             .success();
     });
@@ -196,7 +180,7 @@ fn can_undo_but_commit_empty_dash_dash_after() {
     commit_empty_with_message(&env, "two");
 
     run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but(format!("commit empty --after {target}"))
+        env.but(format!("commit --empty --no-message --above {target}"))
             .assert()
             .success();
     });

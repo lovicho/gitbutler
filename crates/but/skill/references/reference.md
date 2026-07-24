@@ -410,6 +410,11 @@ Agents must use `--message (-m)`, `--file (-F)`, or `--default (-t)` to avoid ed
 
 Requires forge integration to be configured via `but config forge auth`.
 
+Use `but config forge github-stacks enable` inside a repository to let GitButler register and
+reconcile same-repository pull requests with GitHub's native stacked pull requests API. The setting
+is project-local and shared with Desktop. The repository must be enrolled in GitHub's private
+preview. Use `but config forge github-stacks disable` to return to GitButler description footers.
+
 ### `but land <branch>`
 
 Land a branch directly onto the target (e.g. `origin/master`), skipping a pull request. Fast-forwards

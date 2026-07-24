@@ -17,6 +17,7 @@ export type FakeGitHubOptions = {
 	listed?: boolean;
 	failReviewUpdates?: boolean;
 	failGitPushes?: boolean;
+	nativeStacks?: boolean;
 };
 
 type ResolvedFakeGitHubOptions = {
@@ -29,6 +30,7 @@ type ResolvedFakeGitHubOptions = {
 	reviewNumber: number;
 	title: string;
 	isFork: boolean;
+	nativeStacks: boolean;
 };
 
 export type FakeGitHubServer = {
@@ -39,6 +41,8 @@ export type FakeGitHubServer = {
 	getReviews: () => FakeGitHubReview[];
 	getReviewUpdateCount: () => number;
 	getReviewUpdateHistory: (number: number) => ReviewMutation[];
+	getNativeStacks: () => FakeGitHubStack[];
+	getNativeStackMutationHistory: () => NativeStackMutation[];
 	setReviewUpdatesFailing: (failing: boolean) => void;
 	setFailingReviewUpdates: (numbers: number[]) => void;
 	setGitPushesFailing: (failing: boolean) => void;
@@ -55,6 +59,16 @@ export type ReviewMutation = {
 	draft?: boolean;
 };
 
+export type FakeGitHubStack = {
+	number: number;
+	pull_requests: Array<{ number: number }>;
+};
+
+export type NativeStackMutation =
+	| { operation: "create"; pullRequests: number[] }
+	| { operation: "add"; stackNumber: number; pullRequests: number[] }
+	| { operation: "unstack"; stackNumber: number };
+
 export async function startFakeGitHubServer({
 	headRepoPath,
 	forkRepoPath,
@@ -69,6 +83,7 @@ export async function startFakeGitHubServer({
 	listed = true,
 	failReviewUpdates = false,
 	failGitPushes = false,
+	nativeStacks = false,
 }: FakeGitHubOptions): Promise<FakeGitHubServer> {
 	const reviewRepoPath = headRepoPath ?? forkRepoPath;
 	if (!reviewRepoPath) {
@@ -85,6 +100,7 @@ export async function startFakeGitHubServer({
 		reviewNumber,
 		title,
 		isFork,
+		nativeStacks,
 	};
 	const reviews = new Map<number, FakeGitHubReview>([[reviewNumber, pullRequestPayload(options)]]);
 	let nextReviewNumber = reviewNumber;
@@ -94,6 +110,9 @@ export async function startFakeGitHubServer({
 	let reviewUpdatesFailing = failReviewUpdates;
 	let failingReviewUpdates = new Set<number>();
 	let gitPushesFailing = failGitPushes;
+	const githubStacks = new Map<number, FakeGitHubStack>();
+	const nativeStackMutationHistory: NativeStackMutation[] = [];
+	let nextStackNumber = 1;
 
 	const sockets = new Set<Socket>();
 	const server = http.createServer((request, response) => {
@@ -147,6 +166,39 @@ export async function startFakeGitHubServer({
 				reviews.set(number, updated);
 				return { status: "updated" as const, review: updated };
 			},
+			listStacks(reviewNumber) {
+				if (!nativeStacks) return undefined;
+				return [...githubStacks.values()].filter(
+					(stack) =>
+						reviewNumber === undefined ||
+						stack.pull_requests.some((review) => review.number === reviewNumber),
+				);
+			},
+			createStack(pullRequests) {
+				const stack = nativeStackPayload(nextStackNumber++, pullRequests);
+				githubStacks.set(stack.number, stack);
+				nativeStackMutationHistory.push({
+					operation: "create",
+					pullRequests: [...pullRequests],
+				});
+				return stack;
+			},
+			addToStack(stackNumber, pullRequests) {
+				const current = githubStacks.get(stackNumber);
+				if (!current) return undefined;
+				current.pull_requests.push(...pullRequests.map((number) => ({ number })));
+				nativeStackMutationHistory.push({
+					operation: "add",
+					stackNumber,
+					pullRequests: [...pullRequests],
+				});
+				return current;
+			},
+			unstack(stackNumber) {
+				if (!githubStacks.delete(stackNumber)) return false;
+				nativeStackMutationHistory.push({ operation: "unstack", stackNumber });
+				return true;
+			},
 		}).catch((error: unknown) => {
 			response.writeHead(500, { "Content-Type": "application/json" });
 			response.end(JSON.stringify({ message: String(error) }));
@@ -184,6 +236,11 @@ export async function startFakeGitHubServer({
 		getReviewUpdateCount: () => reviewUpdateCount,
 		getReviewUpdateHistory: (number) =>
 			(reviewUpdateHistory.get(number) ?? []).map((update) => structuredClone(update)),
+		getNativeStacks: () =>
+			[...githubStacks.values()]
+				.sort((a, b) => a.number - b.number)
+				.map((stack) => structuredClone(stack)),
+		getNativeStackMutationHistory: () => structuredClone(nativeStackMutationHistory),
 		setReviewUpdatesFailing: (failing) => {
 			reviewUpdatesFailing = failing;
 		},
@@ -218,10 +275,20 @@ async function handleRequest(
 			| { status: "updated"; review: FakeGitHubReview }
 			| { status: "notFound" }
 			| { status: "failed" };
+		listStacks: (reviewNumber?: number) => FakeGitHubStack[] | undefined;
+		createStack: (pullRequests: number[]) => FakeGitHubStack;
+		addToStack: (stackNumber: number, pullRequests: number[]) => FakeGitHubStack | undefined;
+		unstack: (stackNumber: number) => boolean;
 	},
 ) {
 	const url = new URL(request.url ?? "/", "http://127.0.0.1");
 	const pullPath = `/api/v3/repos/${options.owner}/${options.repo}/pulls`;
+	const stacksPath = `/api/v3/repos/${options.owner}/${options.repo}/stacks`;
+	const stackMutation = nativeStackMutationFromPath(url.pathname, stacksPath);
+
+	if (!options.nativeStacks && (url.pathname === stacksPath || stackMutation !== undefined)) {
+		return json(response, { message: "Not Found" }, 404);
+	}
 
 	if (request.method === "GET" && url.pathname === "/api/v3/user") {
 		return json(response, {
@@ -257,6 +324,30 @@ async function handleRequest(
 		}
 		return result.status === "updated"
 			? json(response, result.review)
+			: json(response, { message: "Not Found" }, 404);
+	}
+
+	if (request.method === "GET" && url.pathname === stacksPath) {
+		const requestedReview = url.searchParams.get("pull_request");
+		const stacks = state.listStacks(requestedReview === null ? undefined : Number(requestedReview));
+		return stacks === undefined
+			? json(response, { message: "Not Found" }, 404)
+			: json(response, stacks);
+	}
+
+	if (request.method === "POST" && url.pathname === stacksPath) {
+		const input = JSON.parse(await readBody(request)) as { pull_requests: number[] };
+		return json(response, state.createStack(input.pull_requests), 201);
+	}
+
+	if (request.method === "POST" && stackMutation?.operation === "add") {
+		const input = JSON.parse(await readBody(request)) as { pull_requests: number[] };
+		const stack = state.addToStack(stackMutation.stackNumber, input.pull_requests);
+		return stack ? json(response, stack) : json(response, { message: "Not Found" }, 404);
+	}
+	if (request.method === "POST" && stackMutation?.operation === "unstack") {
+		return state.unstack(stackMutation.stackNumber)
+			? json(response, {}, 200)
 			: json(response, { message: "Not Found" }, 404);
 	}
 
@@ -351,6 +442,29 @@ function reviewNumberFromPath(pathname: string, pullPath: string): number | unde
 	if (!pathname.startsWith(`${pullPath}/`)) return undefined;
 	const value = Number(pathname.slice(pullPath.length + 1));
 	return Number.isSafeInteger(value) ? value : undefined;
+}
+
+function nativeStackMutationFromPath(
+	pathname: string,
+	stacksPath: string,
+): { stackNumber: number; operation: "add" | "unstack" } | undefined {
+	const match = pathname.match(new RegExp(`^${escapeRegExp(stacksPath)}/(\\d+)/(add|unstack)$`));
+	if (!match) return undefined;
+	return {
+		stackNumber: Number(match[1]),
+		operation: match[2] as "add" | "unstack",
+	};
+}
+
+function nativeStackPayload(number: number, pullRequests: number[]): FakeGitHubStack {
+	return {
+		number,
+		pull_requests: pullRequests.map((reviewNumber) => ({ number: reviewNumber })),
+	};
+}
+
+function escapeRegExp(value: string): string {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function unqualifiedHeadRef(head: string): string {

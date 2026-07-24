@@ -55,8 +55,8 @@ fn resolves_duplicated_change_ids() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
     env.setup_metadata(&[]);
 
-    env.but("_commit2 -m first").assert().success();
-    env.but("_commit2 -m second").assert().success();
+    env.but("commit -m first").assert().success();
+    env.but("commit -m second").assert().success();
 
     env.but("_expand 1#0")
         .assert()
@@ -84,10 +84,10 @@ fn resolves_distinct_change_id_prefixes() {
     env.setup_metadata(&[]);
 
     set_change_id(&env, "123");
-    env.but("_commit2 -m first").assert().success();
+    env.but("commit -m first").assert().success();
 
     set_change_id(&env, "132");
-    env.but("_commit2 -m second").assert().success();
+    env.but("commit -m second").assert().success();
 
     env.but("_expand 12").assert().success().stdout_eq(str![[r#"
 Matches: 1
@@ -114,10 +114,10 @@ fn changing_pushed_commit_does_not_cause_change_id_ambiguity() {
 
     set_change_id(&env, "123");
     env.file("file", "some content");
-    env.but("_commit2 -m first").assert().success();
+    env.but("commit -m first").assert().success();
 
     env.file("file", "some other content");
-    env.but("_commit2 -m second").assert().success();
+    env.but("commit -m second").assert().success();
 
     env.invoke_git("update-ref refs/remotes/origin/a-branch-1 refs/heads/a-branch-1");
     env.invoke_git("config branch.a-branch-1.remote origin");

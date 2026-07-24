@@ -198,7 +198,7 @@ fn json_target_uncommitted_whole_file_with_multiple_hunks() {
         "multi-hunk.txt",
         "line 01\nline 02\nline 03\nline 04\nline 05\nline 06\nline 07\nline 08\nline 09\nline 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19\nline 20\n",
     );
-    env.but("commit A -m multi-hunk-base").assert().success();
+    env.but("commit -b A -m multi-hunk-base").assert().success();
 
     env.file(
         "multi-hunk.txt",
@@ -317,7 +317,7 @@ fn json_target_committed_file() {
 
     env.file("committed-target.txt", "target\n");
     env.file("committed-other.txt", "other\n");
-    env.but("commit A -m committed-file-target")
+    env.but("commit -b A -m committed-file-target")
         .assert()
         .success();
 
@@ -538,7 +538,7 @@ fn json_commit_target_tree_change_statuses() -> anyhow::Result<()> {
     env.file("modified.txt", "before\n");
     env.file("deleted.txt", "delete me\n");
     env.file("renamed-before.txt", "rename me\n");
-    env.but("commit A -m status-base").assert().success();
+    env.but("commit -b A -m status-base").assert().success();
 
     env.file("added.txt", "added\n");
     env.file("modified.txt", "after\n");
@@ -547,7 +547,7 @@ fn json_commit_target_tree_change_statuses() -> anyhow::Result<()> {
         env.projects_root().join("renamed-before.txt"),
         env.projects_root().join("renamed-after.txt"),
     )?;
-    env.but("commit A -m status-target").assert().success();
+    env.but("commit -b A -m status-target").assert().success();
 
     env.but("status -f")
         .assert()

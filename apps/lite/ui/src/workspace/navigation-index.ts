@@ -34,3 +34,12 @@ export const navigationIndexIncludes = <T>(
 	item: T,
 	getKey: (item: T) => string,
 ): boolean => navigationIndex.indexByKey.has(getKey(item));
+
+export const resolveNavigationIndexSelection = <T>(
+	navigationIndex: NavigationIndex<T>,
+	selection: T | null,
+	getKey: (item: T) => string,
+): T | null =>
+	selection !== null && navigationIndexIncludes(navigationIndex, selection, getKey)
+		? selection
+		: (navigationIndex.items[0] ?? null);

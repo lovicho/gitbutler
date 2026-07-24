@@ -11,7 +11,7 @@ use gix::{
     ObjectId,
     refs::{FullName, FullNameRef},
 };
-use itertools::Itertools;
+use itertools::{Either, Itertools};
 use nonempty::NonEmpty;
 use serde::Serialize;
 
@@ -19,7 +19,7 @@ use crate::{
     CliError, CliResult, CliResultExt, IdMap,
     args::{
         atoms::{BranchArg, CliIdArg, Priority, Purpose, ResolvedCliIdArg, ResolvedCliIdArgRef},
-        squash2::Platform,
+        squash::Platform,
     },
     bad_input,
     command::legacy::reword2::RewordCommitOperation,
@@ -362,7 +362,7 @@ pub fn resolve<'a>(
                     };
                     ResolvedSquash::UncommittedHunk(AmendUncommittedHunks {
                         target,
-                        source_hunks,
+                        source_hunks: MaybeBorrowedNonEmpty::Borrowed(source_hunks),
                         reword,
                     })
                 }
@@ -615,8 +615,45 @@ pub enum ResolvedSquash<'a> {
 #[derive(Clone, Debug)]
 pub struct AmendUncommittedHunks<'a> {
     pub target: ObjectId,
-    pub source_hunks: NonEmpty<&'a UncommittedHunkOrFile>,
+    pub source_hunks: MaybeBorrowedNonEmpty<'a, UncommittedHunkOrFile>,
     pub reword: HowToRewordTargetNoSource,
+}
+
+impl<'a> AmendUncommittedHunks<'a> {
+    pub fn into_fully_owned(self) -> AmendUncommittedHunks<'static> {
+        AmendUncommittedHunks {
+            target: self.target,
+            source_hunks: self.source_hunks.into_owned(),
+            reword: self.reword,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum MaybeBorrowedNonEmpty<'a, T> {
+    Owned(NonEmpty<T>),
+    Borrowed(NonEmpty<&'a T>),
+}
+
+impl<'a, T> MaybeBorrowedNonEmpty<'a, T> {
+    fn iter(&self) -> impl Iterator<Item = &T> {
+        match self {
+            MaybeBorrowedNonEmpty::Owned(inner) => Either::Left(inner.iter()),
+            MaybeBorrowedNonEmpty::Borrowed(inner) => Either::Right(inner.iter().copied()),
+        }
+    }
+
+    fn into_owned(self) -> MaybeBorrowedNonEmpty<'static, T>
+    where
+        T: Clone,
+    {
+        match self {
+            MaybeBorrowedNonEmpty::Owned(inner) => MaybeBorrowedNonEmpty::Owned(inner),
+            MaybeBorrowedNonEmpty::Borrowed(inner) => {
+                MaybeBorrowedNonEmpty::Owned(inner.map(|item| item.clone()))
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -1020,7 +1057,7 @@ pub fn run(
             let context_lines = ctx.settings.context_lines;
             let (repo, ws, mut db) = ctx.workspace_and_db_mut_with_perm(perm.read_permission())?;
             let mut builder = DiffSpecBuilder::new(&mut db, &repo, &ws, context_lines);
-            for hunk in &source_hunks {
+            for hunk in source_hunks.iter() {
                 builder.push_changes_from_uncommitted(hunk)?;
             }
             builder.reconcile_worktree_diff_specs()?;
@@ -1242,6 +1279,34 @@ impl SquashOperation<'_> {
             SquashOperation::Uncommitted { reword, .. } => reword.will_open_editor(),
             SquashOperation::MoveCommittedFiles { reword, .. } => reword.will_open_editor(),
             SquashOperation::Uncommit(..) | SquashOperation::UncommitCommittedFiles(..) => false,
+        }
+    }
+
+    pub fn into_fully_owned(self) -> SquashOperation<'static> {
+        match self {
+            SquashOperation::Commits(inner) => SquashOperation::Commits(inner),
+            SquashOperation::Branch(inner) => SquashOperation::Branch(inner),
+            SquashOperation::UncommittedHunks(inner) => {
+                SquashOperation::UncommittedHunks(inner.into_fully_owned())
+            }
+            SquashOperation::Uncommitted { target, reword } => {
+                SquashOperation::Uncommitted { target, reword }
+            }
+            SquashOperation::MoveCommittedFiles {
+                target,
+                source,
+                source_paths,
+                reword,
+            } => SquashOperation::MoveCommittedFiles {
+                target,
+                source,
+                source_paths,
+                reword,
+            },
+            SquashOperation::Uncommit(inner) => SquashOperation::Uncommit(inner),
+            SquashOperation::UncommitCommittedFiles(inner) => {
+                SquashOperation::UncommitCommittedFiles(inner)
+            }
         }
     }
 }

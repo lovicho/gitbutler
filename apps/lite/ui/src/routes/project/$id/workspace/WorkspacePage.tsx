@@ -393,10 +393,15 @@ const WorkspacePage: FC = () => {
 	);
 	const branchesOutline = useBranchesOutline(projectId);
 
-	const navigationIndex =
-		outlineTab === "branches" ? branchesOutline.navigationIndex : outlineNavigationIndex;
 	const outlineSelection = useAppSelector((state) =>
-		projectSlice.selectors.selectSelectionOutline(state, projectId, navigationIndex),
+		projectSlice.selectors.selectSelectionOutline(state, projectId, outlineNavigationIndex),
+	);
+	const branchesSelection = useAppSelector((state) =>
+		projectSlice.selectors.selectSelectionBranches(
+			state,
+			projectId,
+			branchesOutline.navigationIndex,
+		),
 	);
 
 	const { data: worktreeChanges } = useQuery(changesInWorktreeQueryOptions(projectId));
@@ -413,7 +418,7 @@ const WorkspacePage: FC = () => {
 		projectSlice.selectors.selectDetailsSelectionScope(state, projectId),
 	);
 	const detailsSelection = Match.value(detailsSelectionScope).pipe(
-		Match.when("outline", () => outlineSelection),
+		Match.when("outline", () => (outlineTab === "branches" ? branchesSelection : outlineSelection)),
 		Match.when("uncommitted-files", () =>
 			uncommittedFilesSelection === null
 				? null
@@ -467,7 +472,7 @@ const WorkspacePage: FC = () => {
 							projectId={projectId}
 							project={selectedProject}
 							branchesOutline={branchesOutline}
-							navigationIndex={navigationIndex}
+							navigationIndex={outlineNavigationIndex}
 							uncommittedFilesNavigationIndex={uncommittedFilesNavigationIndex}
 							absorptionTargetCommitIds={absorptionTargetCommitIds}
 						/>
@@ -483,7 +488,7 @@ const WorkspacePage: FC = () => {
 				</Panel>
 			</Group>
 
-			<OperationControls outlineNavigationIndex={navigationIndex} />
+			<OperationControls outlineNavigationIndex={outlineNavigationIndex} />
 
 			{Match.value(dialog).pipe(
 				Match.tagsExhaustive({

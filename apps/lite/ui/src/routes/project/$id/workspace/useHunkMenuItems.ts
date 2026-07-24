@@ -1,0 +1,180 @@
+import {
+	useCommitDiscardChanges,
+	useCommitUncommitChanges,
+	useDiscardWorktreeChanges,
+	useOpenInEditor,
+} from "#ui/api/mutations.ts";
+import {
+	guiSettingsQueryOptions,
+	listEditorsQueryOptions,
+	listProjectsQueryOptions,
+} from "#ui/api/queries.ts";
+import { diffHotkeys, selectionOperationHotkeys, toElectronAccelerator } from "#ui/hotkeys.ts";
+import { diffSpecHunkHeadersForLineSelection } from "#ui/hunk.ts";
+import { type NativeMenuItem, nativeMenuItem, nativeMenuItemsFromGroups } from "#ui/native-menu.ts";
+import { hunkOperand, type HunkOperand } from "#ui/operands.ts";
+import { createDiffSpec } from "#ui/operations/diff-specs.ts";
+import { projectSlice } from "#ui/projects/state.ts";
+import { focusSelectionScope } from "#ui/selection-scopes.ts";
+import { useAppDispatch } from "#ui/store.ts";
+import type { TreeChange } from "@gitbutler/but-sdk";
+import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { Match } from "effect";
+
+type HunkMenuTarget = {
+	change: TreeChange;
+	lineNumber: number;
+	operand: HunkOperand;
+};
+
+export const useHunkMenuItems = ({
+	projectId,
+}: {
+	projectId: string;
+}): ((target: HunkMenuTarget) => Array<NativeMenuItem>) => {
+	const dispatch = useAppDispatch();
+	const { data: projects } = useSuspenseQuery(listProjectsQueryOptions);
+	const { data: editors } = useQuery(listEditorsQueryOptions);
+	const { data: preferredEditor } = useQuery({
+		...guiSettingsQueryOptions,
+		select: (cfg) => editors?.find((editor) => editor.id === cfg.editorId),
+	});
+
+	const selectedProject = projects.find((project) => project.id === projectId);
+	if (!selectedProject) throw new Error("Could not find selected project");
+
+	const { isPending: isCommitUncommitChangesPending, mutate: commitUncommitChanges } =
+		useCommitUncommitChanges();
+	const { isPending: isCommitDiscardChangesPending, mutate: commitDiscardChanges } =
+		useCommitDiscardChanges();
+	const { isPending: isDiscardWorktreeChangesPending, mutate: discardWorktreeChanges } =
+		useDiscardWorktreeChanges();
+	const { isPending: isOpenInEditorPending, mutate: openInEditor } = useOpenInEditor();
+
+	return ({ operand, change, lineNumber }) => {
+		const source = hunkOperand(operand);
+		const canUseHunk = !operand.isResultOfBinaryToTextConversion;
+		const cutHunk = () => {
+			dispatch(
+				projectSlice.actions.enterKeyboardTransferMode({
+					projectId,
+					sources: [source],
+				}),
+			);
+			focusSelectionScope("outline");
+		};
+		const discardDiffSpec = createDiffSpec(
+			change,
+			diffSpecHunkHeadersForLineSelection(operand, "discard"),
+		);
+
+		const menuItemGroups: Array<Array<NativeMenuItem>> = [
+			[
+				preferredEditor
+					? nativeMenuItem({
+							label: `Open in ${preferredEditor.name}`,
+							enabled: !isOpenInEditorPending,
+							accelerator: toElectronAccelerator(diffHotkeys.openInEditor.hotkey),
+							onSelect: () =>
+								openInEditor({
+									projectId,
+									editorId: preferredEditor.id,
+									path: change.path,
+									lineNr: lineNumber,
+								}),
+						})
+					: nativeMenuItem({
+							label: "Open In Editor",
+							submenu:
+								editors?.map((editor) =>
+									nativeMenuItem({
+										label: editor.name,
+										enabled: !isOpenInEditorPending,
+										onSelect: () =>
+											openInEditor({
+												projectId,
+												editorId: editor.id,
+												path: change.path,
+												lineNr: lineNumber,
+											}),
+									}),
+								) ?? [],
+						}),
+				nativeMenuItem({
+					label: "Copy Path",
+					submenu: [
+						nativeMenuItem({
+							label: "Absolute Path",
+							onSelect: async () => {
+								const absolutePath = await window.lite.pathJoin(selectedProject.path, change.path);
+								await window.lite.clipboardWriteText(absolutePath);
+							},
+						}),
+						nativeMenuItem({
+							label: "Relative Path",
+							onSelect: () => window.lite.clipboardWriteText(change.path),
+						}),
+					],
+				}),
+			],
+			...(operand.parent.parent._tag !== "Branch"
+				? [
+						[
+							nativeMenuItem({
+								label: "Cut Hunk",
+								enabled: canUseHunk,
+								onSelect: cutHunk,
+								accelerator: toElectronAccelerator(selectionOperationHotkeys.cut.hotkey),
+							}),
+						] satisfies Array<NativeMenuItem>,
+					]
+				: []),
+			...Match.value(operand.parent.parent).pipe(
+				Match.withReturnType<Array<Array<NativeMenuItem>>>(),
+				Match.when({ _tag: "Commit" }, ({ commitId }) => [
+					[
+						nativeMenuItem({
+							label: "Uncommit",
+							enabled: canUseHunk && !isCommitUncommitChangesPending,
+							onSelect: () =>
+								commitUncommitChanges({
+									projectId,
+									commitId,
+									assignTo: null,
+									changes: [discardDiffSpec],
+									dryRun: false,
+								}),
+						}),
+						nativeMenuItem({
+							label: "Discard Changes",
+							enabled: canUseHunk && !isCommitDiscardChangesPending,
+							onSelect: () =>
+								commitDiscardChanges({
+									projectId,
+									commitId,
+									changes: [discardDiffSpec],
+									dryRun: false,
+								}),
+						}),
+					],
+				]),
+				Match.when({ _tag: "UncommittedChanges" }, () => [
+					[
+						nativeMenuItem({
+							label: "Discard Changes",
+							enabled: canUseHunk && !isDiscardWorktreeChangesPending,
+							onSelect: () =>
+								discardWorktreeChanges({
+									projectId,
+									changes: [discardDiffSpec],
+								}),
+						}),
+					],
+				]),
+				Match.orElse(() => []),
+			),
+		];
+
+		return nativeMenuItemsFromGroups(menuItemGroups);
+	};
+};

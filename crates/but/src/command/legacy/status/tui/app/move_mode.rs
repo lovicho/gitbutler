@@ -9,7 +9,7 @@ use ratatui::prelude::Span;
 use crate::{
     CliId,
     command::legacy::{
-        move2::{
+        r#move::{
             self, MoveCommitsRelativeToOperation, MoveOperation,
             MoveOutcome as MoveOperationOutcome, StackBranchOnOperation, UnstackBranchOperation,
         },
@@ -338,12 +338,12 @@ impl App {
 fn move_target(
     target: MoveTarget<'_>,
     insert_side: InsertSide,
-) -> anyhow::Result<move2::MoveTarget> {
+) -> anyhow::Result<r#move::MoveTarget> {
     Ok(match target {
-        MoveTarget::Branch { name } => move2::MoveTarget::BranchTip {
+        MoveTarget::Branch { name } => r#move::MoveTarget::BranchTip {
             name: Category::LocalBranch.to_full_name(name)?,
         },
-        MoveTarget::Commit { commit_id } => move2::MoveTarget::Commit {
+        MoveTarget::Commit { commit_id } => r#move::MoveTarget::Commit {
             commit_id,
             side: targeting::Side::from(insert_side),
         },
@@ -357,7 +357,7 @@ fn move_with(
 ) -> anyhow::Result<Option<SelectAfterReload>> {
     let mut guard = ctx.exclusive_worktree_access();
     let mut meta = ctx.meta()?;
-    let outcome = move2::run(ctx, &mut meta, guard.write_permission(), move_op)?;
+    let outcome = r#move::run(ctx, &mut meta, guard.write_permission(), move_op)?;
 
     Ok(match outcome {
         MoveOperationOutcome::Commits { moved_commits, .. } => {

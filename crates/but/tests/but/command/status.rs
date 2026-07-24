@@ -277,10 +277,10 @@ fn uncommitted_and_committed_file_cli_ids() -> anyhow::Result<()> {
 
     env.file("a.txt", format!("first\n{}last\n", "line\n".repeat(100)));
     env.file("b.txt", "only\n");
-    env.but("commit A -m create-a-and-b").assert().success();
+    env.but("commit -b A -m create-a-and-b").assert().success();
     env.file("a.txt", format!("firsta\n{}lasta\n", "line\n".repeat(100)));
     env.file("b.txt", "onlya\n");
-    env.but("commit A -m edit-a-and-b").assert().success();
+    env.but("commit -b A -m edit-a-and-b").assert().success();
     env.file("a.txt", format!("firstb\n{}lastb\n", "line\n".repeat(100)));
     env.file("b.txt", "onlyb\n");
 
@@ -1148,7 +1148,7 @@ fn agent_status_explains_rewritten_commit_marker() {
     env.setup_metadata(&[]);
 
     env.file("one.txt", "one\n");
-    env.but("commit -m 'add one' -c A")
+    env.but("commit -m 'add one' -b A")
         .assert()
         .success()
         .stderr_eq(snapbox::str![]);
@@ -1156,7 +1156,7 @@ fn agent_status_explains_rewritten_commit_marker() {
 
     env.file("one.txt", "one amended\n");
     let target_commit = env.invoke_git("rev-parse --short refs/heads/A");
-    env.but(format!("amend {target_commit} --changes one.txt"))
+    env.but(format!("amend one.txt --target {target_commit}"))
         .assert()
         .success()
         .stderr_eq(snapbox::str![]);
@@ -1270,7 +1270,7 @@ Hint: run `but help` for all commands
     // Committing composes the oplog snapshot and the pre-commit hook index swap;
     // both must tolerate the unmerged index, and the conflict must survive.
     env.file("other.txt", "unrelated\n");
-    env.but("commit A -m unrelated").assert().success();
+    env.but("commit -b A -m unrelated").assert().success();
     assert_eq!(
         env.invoke_git("ls-files --unmerged").lines().count(),
         3,
@@ -1305,8 +1305,10 @@ Hint: run `but help` for all commands
 
 #[test]
 fn status_in_edit_mode_delegates_to_resolve_status() -> anyhow::Result<()> {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    enter_edit_mode_with_conflicted_commit(&env)?;
+    let env = enter_edit_mode_with_conflicted_commit()?;
+
+    env.file("file.txt", "resolved content\n");
+    env.invoke_git("add file.txt");
 
     env.but("status")
         .with_color_for_svg()

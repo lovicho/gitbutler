@@ -30,93 +30,54 @@ fn branch_commits_contain_file(
 }
 
 #[test]
-fn amend_reports_dependency_changes() -> anyhow::Result<()> {
+fn amend_rejects_dependency_changes() -> anyhow::Result<()> {
     let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
     env.setup_metadata(&[]);
 
     // Commit `first` to branch foo and an unrelated file to branch bar.
     env.file("first", "Some text");
-    env.but("commit -m 'add first' -c foo").assert().success();
+    env.but("commit -m 'add first' -b foo").assert().success();
     env.file("second", "Other text");
-    env.but("commit -m 'add second' -c bar").assert().success();
+    env.but("commit -m 'add second' -b bar").assert().success();
 
     // Change `first` (which depends on foo) and try to amend it into bar's
-    // commit. It cannot land there, so amend should name the branch/commit it
-    // depends on and suggest stacking bar onto foo.
+    // commit. The squash internals reject the operation atomically.
     env.file("first", "changes");
     let status = status_json(&env)?;
     let bar_commit_cli_id = branch_commit_cli_ids(&status, "bar")[0].clone();
-    env.but(format!("amend {bar_commit_cli_id} --changes first"))
+    env.but(format!("amend first --target {bar_commit_cli_id}"))
         .assert()
-        .success()
-        .stdout_eq(str![[r#"
-Amended the only hunk in first in the uncommitted area → [..]
-Note: 1 change could not be applied:
-  first
-    line 1 depends on foo ([..])
-
-Hint: to apply these changes, stack bar on top of foo and commit them again — commits already on the branch move with it:
-  but move bar foo
+        .failure()
+        .stdout_eq(str![""])
+        .stderr_eq(str![[r#"
+Error: Couldn't squash all changes
 
 "#]]);
+
+    let after = status_json(&env)?;
+    assert!(
+        uncommitted_contains_file(&after, "first"),
+        "a rejected amend must leave its source uncommitted"
+    );
+    assert!(
+        !branch_commits_contain_file(&after, "bar", "first"),
+        "a rejected amend must not modify the target branch"
+    );
 
     Ok(())
 }
 
 #[test]
-fn amend_accepts_comma_separated_uncommitted_changes() {
+fn amend_accepts_multiple_uncommitted_changes() {
     assert_multiple_amend(|target_cli_id| {
-        format!("amend {target_cli_id} --changes one.txt,two.txt")
+        format!("amend one.txt two.txt --target {target_cli_id}")
     })
     .unwrap();
 }
 
 #[test]
-fn amend_legacy_form_still_accepts_comma_separated_uncommitted_changes() {
-    assert_multiple_amend(|target_cli_id| format!("amend one.txt,two.txt {target_cli_id}"))
-        .unwrap();
-}
-
-#[test]
-fn amend_without_changes_prints_new_usage_hint() {
-    let env = Sandbox::empty();
-
-    env.but("amend c3")
-        .assert()
-        .failure()
-        .stdout_eq(str![""])
-        .stderr_eq(str![[r#"
-Error: Missing --changes <file-or-hunk>. Usage: but amend <commit> --changes <id>[,<id>]
-
-"#]]);
-}
-
-#[test]
-fn amend_with_changes_rejects_extra_positional() {
-    let env = Sandbox::empty();
-
-    env.but("amend c3 --changes a1 b2")
-        .assert()
-        .failure()
-        .stdout_eq(str![""])
-        .stderr_eq(str![[r#"
-Error: Unexpected extra argument 'b2'. Use comma-separated --changes values: but amend <commit> --changes <id>[,<id>]
-
-"#]]);
-}
-
-#[test]
-fn amend_with_changes_rejects_empty_change_ids() {
-    let env = Sandbox::empty();
-
-    env.but("amend c3 --changes a1,,b2")
-        .assert()
-        .failure()
-        .stdout_eq(str![""])
-        .stderr_eq(str![[r#"
-Error: Empty --changes value. Use comma-separated file or hunk IDs: but amend <commit> --changes <id>[,<id>]
-
-"#]]);
+fn amend_accepts_branch_target() {
+    assert_multiple_amend(|_target_cli_id| "amend one.txt two.txt --target A".to_string()).unwrap();
 }
 
 fn assert_multiple_amend(args: impl FnOnce(&str) -> String) -> anyhow::Result<()> {
@@ -134,7 +95,7 @@ fn assert_multiple_amend(args: impl FnOnce(&str) -> String) -> anyhow::Result<()
         .assert()
         .success()
         .stdout_eq(str![[r#"
-Amended hunk(s) → [..]
+Amended [..] to create [..]
 
 "#]])
         .stderr_eq(str![""]);

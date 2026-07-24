@@ -7,9 +7,6 @@ use crate::{
     id::{CommitId, CommittedFileId, ShortId, UncommittedHunkOrFile, WorktreeHunk},
 };
 
-#[cfg(feature = "legacy")]
-use crate::command::legacy::status::assignment::FileAssignment;
-
 #[derive(Debug)]
 pub struct DiffSpecBuilder<'a> {
     db: &'a mut but_db::DbHandle,
@@ -136,16 +133,6 @@ impl<'a> DiffSpecBuilder<'a> {
     ) -> anyhow::Result<()> {
         let changes = self.worktree_changes()?.to_vec();
         self.push_hunk_assignments_with_changes(assignments, &changes);
-        Ok(())
-    }
-
-    #[cfg(feature = "legacy")]
-    pub fn push_file_assignments(&mut self, files: &[FileAssignment]) -> anyhow::Result<()> {
-        let changes = self.worktree_changes()?.to_vec();
-        self.diff_specs
-            .extend(diff_specs_from_file_assignments_status_aware(
-                files, &changes,
-            ));
         Ok(())
     }
 
@@ -298,44 +285,4 @@ impl<'a> DiffSpecBuilder<'a> {
         )?;
         Ok(tree_changes.into_iter().map(Into::into).collect())
     }
-}
-
-#[cfg(feature = "legacy")]
-fn diff_specs_from_file_assignments_status_aware(
-    files_to_commit: &[FileAssignment],
-    changes: &[but_core::ui::TreeChange],
-) -> Vec<DiffSpec> {
-    files_to_commit
-        .iter()
-        .map(|fa| {
-            let (previous_path, is_addition_or_deletion) = changes
-                .iter()
-                .find(|change| change.path_bytes == fa.path)
-                .map(|change| match &change.status {
-                    but_core::ui::TreeStatus::Rename {
-                        previous_path_bytes,
-                        ..
-                    } => (Some(previous_path_bytes.clone()), false),
-                    but_core::ui::TreeStatus::Addition { .. }
-                    | but_core::ui::TreeStatus::Deletion { .. } => (None, true),
-                    but_core::ui::TreeStatus::Modification { .. } => (None, false),
-                })
-                .unwrap_or((None, false));
-
-            let hunk_headers = if is_addition_or_deletion {
-                Vec::new()
-            } else {
-                fa.assignments
-                    .iter()
-                    .filter_map(|assignment| assignment.inner.hunk_header)
-                    .collect()
-            };
-
-            DiffSpec {
-                previous_path,
-                path: fa.path.clone(),
-                hunk_headers,
-            }
-        })
-        .collect()
 }

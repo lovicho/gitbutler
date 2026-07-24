@@ -15,16 +15,15 @@ fn current_branch_name(env: &Sandbox) -> anyhow::Result<String> {
 
 #[test]
 fn resolve_status_and_finish_work_in_edit_mode() -> anyhow::Result<()> {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    enter_edit_mode_with_conflicted_commit(&env)?;
+    let env = enter_edit_mode_with_conflicted_commit()?;
 
     env.but("resolve status")
         .assert()
         .success()
         .stderr_eq(str![""]);
 
-    env.file("test-file.txt", "resolved content\n");
-    env.invoke_git("add test-file.txt");
+    env.file("file.txt", "resolved content\n");
+    env.invoke_git("add file.txt");
 
     env.but("resolve finish")
         .assert()
@@ -34,7 +33,7 @@ fn resolve_status_and_finish_work_in_edit_mode() -> anyhow::Result<()> {
 ✓ Conflict resolution finalized successfully!
 The commit has been updated with your resolved changes.
 No conflict markers remain in the resolved files.
-Workspace restored; uncommitted changes intact: test-file.txt
+Workspace restored; uncommitted changes intact: uncommitted.txt
 
 "#]]);
 
@@ -44,15 +43,14 @@ Workspace restored; uncommitted changes intact: test-file.txt
 
 #[test]
 fn resolve_finish_reports_leftover_markers_and_uncommitted_paths() -> anyhow::Result<()> {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    enter_edit_mode_with_conflicted_commit(&env)?;
+    let env = enter_edit_mode_with_conflicted_commit()?;
 
     // A "resolution" that leaves conflict markers behind.
     env.file(
-        "test-file.txt",
+        "file.txt",
         "<<<<<<< ours\nline 2\n=======\nline two\n>>>>>>> theirs\n",
     );
-    env.invoke_git("add test-file.txt");
+    env.invoke_git("add file.txt");
 
     env.but("resolve finish")
         .assert()
@@ -61,8 +59,8 @@ fn resolve_finish_reports_leftover_markers_and_uncommitted_paths() -> anyhow::Re
         .stdout_eq(str![[r#"
 ✓ Conflict resolution finalized successfully!
 The commit has been updated with your resolved changes.
-✗ test-file.txt still contains conflict markers — resolve it again if that was not intentional
-Workspace restored; uncommitted changes intact: test-file.txt
+✗ file.txt still contains conflict markers — resolve it again if that was not intentional
+Workspace restored; uncommitted changes intact: uncommitted.txt
 
 "#]]);
 
@@ -72,8 +70,7 @@ Workspace restored; uncommitted changes intact: test-file.txt
 
 #[test]
 fn resolve_cancel_works_in_edit_mode() -> anyhow::Result<()> {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    enter_edit_mode_with_conflicted_commit(&env)?;
+    let env = enter_edit_mode_with_conflicted_commit()?;
 
     env.but("resolve cancel --force")
         .assert()
@@ -85,10 +82,9 @@ fn resolve_cancel_works_in_edit_mode() -> anyhow::Result<()> {
 
 #[test]
 fn resolve_cancel_requires_force_when_changes_were_made() -> anyhow::Result<()> {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    enter_edit_mode_with_conflicted_commit(&env)?;
+    let env = enter_edit_mode_with_conflicted_commit()?;
 
-    env.file("test-file.txt", "resolved content with additional edits\n");
+    env.file("file.txt", "resolved content with additional edits\n");
 
     env.but("resolve cancel")
         .assert()
@@ -98,7 +94,7 @@ Failed to handle conflict resolution. There are changes that differ from the ori
 
 If you want to go through with this, please re-run with `--force`.
 
-If you want to keep the changes you have made, consider finishing the resolution and then moving the changes with the rub command.
+If you want to keep the changes you have made, consider finishing the resolution and then moving the changes with `but squash`.
 
 "#]]);
 

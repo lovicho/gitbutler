@@ -841,7 +841,6 @@ dependencies = [
  "but-gitlab",
  "but-graph",
  "but-hunk-assignment",
- "but-hunk-dependency",
  "but-installer",
  "but-llm",
  "but-meta",

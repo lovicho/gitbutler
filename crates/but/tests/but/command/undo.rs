@@ -4,10 +4,9 @@ use crate::{
 };
 
 mod undo_commit;
-mod undo_move2;
+mod undo_move;
 mod undo_redo;
-mod undo_rub;
-mod undo_squash2;
+mod undo_squash;
 mod undo_uncommit;
 
 #[test]
@@ -94,7 +93,7 @@ fn can_undo_discard() {
             .arg(path)
             .assert()
             .success()
-            .stdout_eq("Successfully discarded changes to 1 item\n")
+            .stdout_eq("Discarded uncommitted changes from new-file.txt\n")
             .stderr_eq("");
     });
 }
@@ -209,7 +208,7 @@ fn can_restore_snapshot_after_commit() {
     );
 
     env.file("brand-new-file.txt", "content");
-    env.but("commit A -m 'add brand new file'")
+    env.but("commit -b A -m 'add brand new file'")
         .assert()
         .success();
 
@@ -338,7 +337,7 @@ fn can_undo_but_squash_with_two_commits() {
     let commit_two = commit_empty_with_message(&env, "two");
 
     run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but(format!("squash {commit_one} {commit_two}"))
+        env.but(format!("squash {commit_one} -t {commit_two} -u"))
             .assert()
             .success();
     });
@@ -351,12 +350,10 @@ fn can_undo_but_squash_with_two_commits() {
         .stdout_eq(snapbox::str![[r#"
 Operations History
 ──────────────────────────────────────────────────
-e1ee47f 2000-01-02 00:00:00 [UNDO] Restored from snapshot: Squashed commit (1d8470b)
-1d8470b 2000-01-02 00:00:00 [SQUASH] Squashed commit
-962a041 2000-01-02 00:00:00 [REWORD] Updated commit message
-3d8549e 2000-01-02 00:00:00 [INSERT_COMMIT] Inserted blank commit
-5a402a5 2000-01-02 00:00:00 [REWORD] Updated commit message
-5820dad 2000-01-02 00:00:00 [INSERT_COMMIT] Inserted blank commit
+b6d1f77 2000-01-02 00:00:00 [UNDO] Restored from snapshot: Squashed commit (5c7ea30)
+5c7ea30 2000-01-02 00:00:00 [SQUASH] Squashed commit
+a135744 2000-01-02 00:00:00 [COMMIT] Created commit
+29b25c0 2000-01-02 00:00:00 [COMMIT] Created commit
 
 "#]]);
 }
@@ -371,9 +368,11 @@ fn can_undo_but_squash_with_three_commits() {
     let commit_three = commit_empty_with_message(&env, "three");
 
     run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but(format!("squash {commit_one} {commit_two} {commit_three}"))
-            .assert()
-            .success();
+        env.but(format!(
+            "squash {commit_one} {commit_two} -t {commit_three} -u"
+        ))
+        .assert()
+        .success();
     });
 
     // ensure we only create one oplog entry
@@ -384,53 +383,11 @@ fn can_undo_but_squash_with_three_commits() {
         .stdout_eq(snapbox::str![[r#"
 Operations History
 ──────────────────────────────────────────────────
-4163245 2000-01-02 00:00:00 [UNDO] Restored from snapshot: Squashed commit (f0d401a)
-f0d401a 2000-01-02 00:00:00 [SQUASH] Squashed commit
-dd54bf3 2000-01-02 00:00:00 [REWORD] Updated commit message
-76d02d9 2000-01-02 00:00:00 [INSERT_COMMIT] Inserted blank commit
-962a041 2000-01-02 00:00:00 [REWORD] Updated commit message
-3d8549e 2000-01-02 00:00:00 [INSERT_COMMIT] Inserted blank commit
-5a402a5 2000-01-02 00:00:00 [REWORD] Updated commit message
-5820dad 2000-01-02 00:00:00 [INSERT_COMMIT] Inserted blank commit
-
-"#]]);
-}
-
-#[test]
-fn can_undo_but_squash_with_range_of_commits() {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack-two-commits");
-    env.setup_metadata(&["A"]);
-
-    let commit_one = commit_empty_with_message(&env, "one");
-    commit_empty_with_message(&env, "two");
-    let commit_three = commit_empty_with_message(&env, "three");
-
-    run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but(format!("squash {commit_one}..{commit_three}"))
-            .assert()
-            .success()
-            .stdout_eq(snapbox::str![[r#"
-Squashed 2 commits → [..]
-
-"#]]);
-    });
-
-    // ensure we only create one oplog entry
-    env.but("oplog")
-        .args(["list"])
-        .assert()
-        .success()
-        .stdout_eq(snapbox::str![[r#"
-Operations History
-──────────────────────────────────────────────────
-c7e1cf4 2000-01-02 00:00:00 [UNDO] Restored from snapshot: Squashed commit (f0d401a)
-f0d401a 2000-01-02 00:00:00 [SQUASH] Squashed commit
-dd54bf3 2000-01-02 00:00:00 [REWORD] Updated commit message
-76d02d9 2000-01-02 00:00:00 [INSERT_COMMIT] Inserted blank commit
-962a041 2000-01-02 00:00:00 [REWORD] Updated commit message
-3d8549e 2000-01-02 00:00:00 [INSERT_COMMIT] Inserted blank commit
-5a402a5 2000-01-02 00:00:00 [REWORD] Updated commit message
-5820dad 2000-01-02 00:00:00 [INSERT_COMMIT] Inserted blank commit
+62a6316 2000-01-02 00:00:00 [UNDO] Restored from snapshot: Squashed commit (5c36646)
+5c36646 2000-01-02 00:00:00 [SQUASH] Squashed commit
+8648d78 2000-01-02 00:00:00 [COMMIT] Created commit
+a135744 2000-01-02 00:00:00 [COMMIT] Created commit
+29b25c0 2000-01-02 00:00:00 [COMMIT] Created commit
 
 "#]]);
 }
@@ -445,7 +402,7 @@ fn can_undo_but_squash_with_two_commits_with_message() {
 
     run_mutate_undo_roundtrip_test(&env, |env| {
         env.but(format!(
-            "squash {commit_one} {commit_two} -m 'squashed message'"
+            "squash {commit_one} -t {commit_two} -m 'squashed message'"
         ))
         .assert()
         .success();
@@ -459,12 +416,10 @@ fn can_undo_but_squash_with_two_commits_with_message() {
         .stdout_eq(snapbox::str![[r#"
 Operations History
 ──────────────────────────────────────────────────
-b49b23c 2000-01-02 00:00:00 [UNDO] Restored from snapshot: Squashed commit (1d8470b)
-1d8470b 2000-01-02 00:00:00 [SQUASH] Squashed commit
-962a041 2000-01-02 00:00:00 [REWORD] Updated commit message
-3d8549e 2000-01-02 00:00:00 [INSERT_COMMIT] Inserted blank commit
-5a402a5 2000-01-02 00:00:00 [REWORD] Updated commit message
-5820dad 2000-01-02 00:00:00 [INSERT_COMMIT] Inserted blank commit
+ff65358 2000-01-02 00:00:00 [UNDO] Restored from snapshot: Squashed commit (5c7ea30)
+5c7ea30 2000-01-02 00:00:00 [SQUASH] Squashed commit
+a135744 2000-01-02 00:00:00 [COMMIT] Created commit
+29b25c0 2000-01-02 00:00:00 [COMMIT] Created commit
 
 "#]]);
 }
@@ -478,7 +433,7 @@ fn can_undo_but_squash_with_branch() {
     commit_empty_with_message(&env, "two");
 
     run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but("squash A").assert().success();
+        env.but("squash A -u").assert().success();
     });
 
     // ensure we only create one oplog entry
@@ -489,12 +444,10 @@ fn can_undo_but_squash_with_branch() {
         .stdout_eq(snapbox::str![[r#"
 Operations History
 ──────────────────────────────────────────────────
-425f7f1 2000-01-02 00:00:00 [UNDO] Restored from snapshot: Squashed commit (1d8470b)
-1d8470b 2000-01-02 00:00:00 [SQUASH] Squashed commit
-962a041 2000-01-02 00:00:00 [REWORD] Updated commit message
-3d8549e 2000-01-02 00:00:00 [INSERT_COMMIT] Inserted blank commit
-5a402a5 2000-01-02 00:00:00 [REWORD] Updated commit message
-5820dad 2000-01-02 00:00:00 [INSERT_COMMIT] Inserted blank commit
+4c80f19 2000-01-02 00:00:00 [UNDO] Restored from snapshot: Squashed commit (5c7ea30)
+5c7ea30 2000-01-02 00:00:00 [SQUASH] Squashed commit
+a135744 2000-01-02 00:00:00 [COMMIT] Created commit
+29b25c0 2000-01-02 00:00:00 [COMMIT] Created commit
 
 "#]]);
 }
@@ -508,7 +461,7 @@ fn can_undo_but_squash_with_branch_and_drop_message() {
     commit_empty_with_message(&env, "two");
 
     run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but("squash A --drop-message").assert().success();
+        env.but("squash A --no-message").assert().success();
     });
 
     // ensure we only create one oplog entry
@@ -519,12 +472,10 @@ fn can_undo_but_squash_with_branch_and_drop_message() {
         .stdout_eq(snapbox::str![[r#"
 Operations History
 ──────────────────────────────────────────────────
-5498538 2000-01-02 00:00:00 [UNDO] Restored from snapshot: Squashed commit (1d8470b)
-1d8470b 2000-01-02 00:00:00 [SQUASH] Squashed commit
-962a041 2000-01-02 00:00:00 [REWORD] Updated commit message
-3d8549e 2000-01-02 00:00:00 [INSERT_COMMIT] Inserted blank commit
-5a402a5 2000-01-02 00:00:00 [REWORD] Updated commit message
-5820dad 2000-01-02 00:00:00 [INSERT_COMMIT] Inserted blank commit
+f698bb9 2000-01-02 00:00:00 [UNDO] Restored from snapshot: Squashed commit (5c7ea30)
+5c7ea30 2000-01-02 00:00:00 [SQUASH] Squashed commit
+a135744 2000-01-02 00:00:00 [COMMIT] Created commit
+29b25c0 2000-01-02 00:00:00 [COMMIT] Created commit
 
 "#]]);
 }

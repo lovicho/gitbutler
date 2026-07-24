@@ -12,8 +12,7 @@ fn setup_multi_hunk_uncommitted_changes(path: &str) -> Sandbox {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-Created new independent branch 'a-branch-1'
-✓ Created commit 1 on branch a-branch-1
+Created commit [..] on new branch 'a-branch-1'
 
 "#]]);
 

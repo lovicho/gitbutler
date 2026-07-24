@@ -566,4 +566,23 @@ pub enum ForgeSubcommand {
         /// If not provided, you'll be prompted to select which account(s) to forget.
         username: Option<String>,
     },
+
+    /// View or configure native GitHub stacked pull requests for this repository.
+    ///
+    /// This is an opt-in GitHub private-preview feature. The setting is stored in the
+    /// repository-local Git config and shared with the GitButler desktop application.
+    #[cfg(feature = "legacy")]
+    GithubStacks {
+        /// Enable or disable native GitHub stacked pull requests.
+        #[clap(value_enum)]
+        status: Option<GitHubStacksStatus>,
+    },
+}
+
+/// Values for the native GitHub stacks project setting.
+#[cfg(feature = "legacy")]
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+pub enum GitHubStacksStatus {
+    Enable,
+    Disable,
 }

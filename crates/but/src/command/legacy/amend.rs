@@ -1,0 +1,108 @@
+use but_ctx::Context;
+use but_graph::Workspace;
+use but_workspace::RefInfo;
+
+use crate::{
+    CliResult, CliResultExt, IdMap,
+    args::{
+        amend::Platform,
+        atoms::{CliIdArg, Priority, Purpose, ResolvedCliIdArg},
+    },
+    bad_input,
+    command::legacy::squash::{
+        self, HowToRewordTarget, ResolveTargetError, ResolvedSquashArgsRef, SquashOperation,
+    },
+    utils::IntermediateChannel,
+};
+
+pub fn amend(
+    ctx: &mut Context,
+    _out: IntermediateChannel<'_>,
+    args: Platform,
+) -> CliResult<squash::SquashOutcome> {
+    let mut guard = ctx.exclusive_worktree_access();
+    let mut meta = ctx.meta()?;
+    let id_map = IdMap::new_from_context(ctx, None, guard.read_permission())?;
+
+    let (repo, ws, _) = ctx.workspace_and_db_with_perm(guard.read_permission())?;
+    let head_info = but_workspace::head_info(
+        &repo,
+        &meta,
+        but_workspace::ref_info::Options {
+            project_meta: ctx.project_meta()?,
+            expensive_commit_info: false,
+            ..Default::default()
+        },
+    )?;
+    let operation = resolve(args, &ws, &repo, &id_map, &head_info)?;
+    drop(repo);
+    drop(ws);
+
+    Ok(squash::run(
+        ctx,
+        &mut meta,
+        guard.write_permission(),
+        operation,
+    )?)
+}
+
+fn resolve(
+    args: Platform,
+    ws: &Workspace,
+    repo: &gix::Repository,
+    id_map: &IdMap,
+    head_info: &RefInfo,
+) -> CliResult<SquashOperation<'static>> {
+    let Platform { target, sources } = args;
+
+    let mut resolved_sources = Vec::new();
+    for source in sources {
+        resolved_sources.extend(
+            source
+                .resolve_uncommitted(repo, id_map)?
+                .into_iter()
+                .map(|source| ResolvedCliIdArg::UncommittedHunkOrFile(Box::new(source))),
+        );
+    }
+    let sources = resolved_sources
+        .iter()
+        .map(ResolvedCliIdArg::as_ref)
+        .collect();
+
+    let target_hint = "--target must be an applied commit or branch";
+    let hint = format!("{}. {}", target_hint, CliIdArg::TARGET_MISSING_HINT);
+    let target = target
+        .resolve_in_workspace(
+            repo,
+            id_map,
+            Purpose::Target,
+            Some(Priority::BranchAndCommit),
+        )
+        .with_hint(|| hint.clone())?;
+    let target = match squash::resolve_target(
+        target.as_ref(),
+        HowToRewordTarget::UseTargetMessage,
+        head_info,
+    ) {
+        Ok(target) => target,
+        Err(err) => {
+            return Err(match err {
+                ResolveTargetError::CannotBeEmptyBranch => {
+                    bad_input("--target cannot be an empty branch").into()
+                }
+                ResolveTargetError::NotFound => bad_input("target not found").hint(hint).into(),
+                ResolveTargetError::UseTargetMessageUnavailable
+                | ResolveTargetError::UseSourceMessageUnavailable
+                | ResolveTargetError::NoMessageUnavailable
+                | ResolveTargetError::MessageUnavailable
+                | ResolveTargetError::InvalidTarget => bad_input(target_hint)
+                    .hint(CliIdArg::TARGET_MISSING_HINT)
+                    .into(),
+                ResolveTargetError::Other(err) => err.into(),
+            });
+        }
+    };
+
+    let args = ResolvedSquashArgsRef::Normal { sources, target };
+    Ok(squash::resolve(args, ws, repo)?.into_fully_owned())
+}
