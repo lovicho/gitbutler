@@ -1,5 +1,4 @@
 import { FileChangeDropData, FolderChangeDropData, HunkDropDataV3 } from "$lib/dragging/draggables";
-import { updateStackPrs } from "$lib/forge/shared/prFooter";
 import { UNCOMMITTED_SERVICE } from "$lib/selection/uncommittedService.svelte";
 import { normalizeReferenceSubject } from "$lib/stacks/commitMovePlacement";
 import { STACK_SERVICE } from "$lib/stacks/stackService.svelte";
@@ -7,7 +6,6 @@ import { UI_STATE } from "$lib/state/uiState.svelte";
 import { inject } from "@gitbutler/core/context";
 import type { DropResult } from "$lib/dragging/dropResult";
 import type { DropzoneHandler } from "$lib/dragging/handler";
-import type { PrService } from "$lib/forge/prService.svelte";
 
 export class BranchDropData {
 	constructor(
@@ -36,12 +34,9 @@ export class MoveBranchDzHandler implements DropzoneHandler {
 	private readonly stackService = inject(STACK_SERVICE);
 
 	constructor(
-		private readonly prService: PrService | undefined,
 		private readonly projectId: string,
 		private readonly stackId: string,
 		private readonly branchName: string,
-		private readonly baseBranchName: string | undefined,
-		private readonly unitSymbol: string | undefined,
 	) {}
 
 	print(): string {
@@ -59,37 +54,11 @@ export class MoveBranchDzHandler implements DropzoneHandler {
 		return acceptsSameStackBranchDrop(data, this.branchName);
 	}
 	async ondrop(data: BranchDropData): Promise<DropResult | void> {
-		const sourceStackDeleted = data.numberOfBranchesInStack === 1;
-
 		await this.stackService.moveBranch({
 			projectId: this.projectId,
 			subjectBranch: normalizeReferenceSubject(data.branchName),
 			targetBranch: normalizeReferenceSubject(this.branchName),
 		});
-
-		if (this.prService && this.baseBranchName) {
-			// For a same-stack reorder the source and target stacks are identical, so the refresh
-			// below already covers it - only refresh the source stack when it's a different stack.
-			if (!sourceStackDeleted && data.stackId !== this.stackId) {
-				const branchDetails = await this.stackService.fetchBranches(this.projectId, data.stackId);
-				await updateStackPrs(
-					this.prService,
-					this.projectId,
-					branchDetails,
-					this.baseBranchName,
-					this.unitSymbol,
-				);
-			}
-
-			const branchDetails = await this.stackService.fetchBranches(this.projectId, this.stackId);
-			await updateStackPrs(
-				this.prService,
-				this.projectId,
-				branchDetails,
-				this.baseBranchName,
-				this.unitSymbol,
-			);
-		}
 	}
 }
 

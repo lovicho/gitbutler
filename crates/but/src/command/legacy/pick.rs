@@ -17,6 +17,7 @@ use gix::{revision::walk::Sorting, traverse::commit::simple::CommitTimeOrder};
 use crate::{
     CliId, IdMap,
     command::legacy::workspace_target,
+    id::CommitId,
     utils::{OutputChannel, WriteWithUtils, shorten_hex_object_id, shorten_object_id},
 };
 
@@ -184,7 +185,7 @@ fn resolve_source_commits(
     let cli_ids = id_map.parse_using_context(source, ctx)?;
 
     for cli_id in &cli_ids {
-        if let CliId::Commit { commit_id, .. } = cli_id {
+        if let CliId::Commit(CommitId { commit_id, .. }) = cli_id {
             return Ok(vec![*commit_id]);
         }
     }
@@ -406,15 +407,12 @@ fn find_stack_by_target(
     // Try parsing as CLI ID first
     if let Ok(cli_ids) = id_map.parse_using_context(target, ctx) {
         for cli_id in &cli_ids {
-            if let CliId::Branch {
-                stack_id: Some(stack_id),
-                name,
-                ..
-            } = cli_id
+            if let CliId::Branch(branch) = cli_id
+                && let Some(stack_id) = branch.stack_id
             {
                 // Verify the stack is in our list of applied stacks
-                if stacks.iter().any(|stack| stack.id == Some(*stack_id)) {
-                    return Ok((*stack_id, name.clone()));
+                if stacks.iter().any(|stack| stack.id == Some(stack_id)) {
+                    return Ok((stack_id, branch.name.clone()));
                 }
             }
         }

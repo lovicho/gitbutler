@@ -1,19 +1,19 @@
 use but_core::DiffSpec;
 use but_ctx::{Context, access::RepoExclusive};
-use but_hunk_assignment::HunkAssignment;
 use but_rebase::graph_rebase::{Editor, LookupStep as _};
 use gitbutler_branch_actions::update_workspace_commit;
 use gix::ObjectId;
 use nonempty::NonEmpty;
 
 use crate::{
+    id::WorktreeHunk,
     theme,
     utils::{OutputChannel, diff_specs::DiffSpecBuilder, rejection},
 };
 
 pub(crate) fn uncommitted_to_commit_with_perm(
     ctx: &mut Context,
-    hunk_assignments: NonEmpty<&HunkAssignment>,
+    hunk_assignments: NonEmpty<&WorktreeHunk>,
     description: String,
     oid: ObjectId,
     out: &mut OutputChannel,

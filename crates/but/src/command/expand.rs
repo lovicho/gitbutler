@@ -4,6 +4,7 @@ use serde::Serialize;
 use crate::{
     CliId, CliResult, IdMap,
     args::atoms::CliIdArg,
+    id::{CommitId, CommittedFileId},
     theme::Theme,
     utils::{CliOutput, CliOutputHuman, WriteWithUtils},
 };
@@ -124,15 +125,18 @@ pub fn handle(ctx: &but_ctx::Context, cli_id: CliIdArg) -> CliResult<ExpandOutco
 
 fn resources_from_cli_id(cli_id: CliId) -> Vec<Resource> {
     match cli_id {
-        CliId::Commit {
+        CliId::Commit(CommitId {
             commit_id,
             change_id,
             ..
-        } => vec![Resource::Commit {
+        }) => vec![Resource::Commit {
             change_id: change_id.map(|id| id.to_string()),
             commit_id: commit_id.to_string(),
         }],
-        CliId::Branch { name, id, .. } => vec![Resource::Branch { short_id: id, name }],
+        CliId::Branch(branch) => vec![Resource::Branch {
+            short_id: branch.id,
+            name: branch.name,
+        }],
         CliId::UncommittedHunkOrFile(uncommitted) if uncommitted.is_entire_file => {
             vec![Resource::UncommittedFile {
                 path: uncommitted.hunk_assignments.first().path_bytes.to_string(),
@@ -149,9 +153,9 @@ fn resources_from_cli_id(cli_id: CliId) -> Vec<Resource> {
                     .unwrap_or_else(|| "<no hunk header>".to_string()),
             })
             .collect(),
-        CliId::CommittedFile {
+        CliId::CommittedFile(CommittedFileId {
             commit_id, path, ..
-        } => vec![Resource::CommittedFile {
+        }) => vec![Resource::CommittedFile {
             commit_id: commit_id.to_string(),
             path: path.to_string(),
         }],

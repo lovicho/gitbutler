@@ -1,7 +1,11 @@
 import { type ButtonVariant, getButtonClassName } from "#ui/components/Button.tsx";
 import { classes } from "#ui/components/classes.ts";
+import { operandIdentityKey, type Operand } from "#ui/operands.ts";
 import { Match } from "effect";
 import styles from "./Row.module.css";
+
+export const treeItemId = (operand: Operand): string =>
+	`outline-treeitem-${encodeURIComponent(operandIdentityKey(operand))}`;
 
 export const getRowButtonClassName = ({
 	variant = "ghost",

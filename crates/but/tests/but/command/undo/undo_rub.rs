@@ -1,10 +1,4 @@
-use crate::{
-    command::{
-        undo::run_mutate_undo_roundtrip_test,
-        util::{branch_commit_cli_ids, commit_two_files_as_two_hunks_each, status_json},
-    },
-    utils::Sandbox,
-};
+use crate::{command::undo::run_mutate_undo_roundtrip_test, utils::Sandbox};
 
 // RubOperation::UnassignUncommitted
 #[test]
@@ -114,24 +108,6 @@ fn undo_stack_to_branch() {
     });
 }
 
-// RubOperation::StackToCommit
-#[test]
-fn undo_stack_to_commit() {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
-    env.setup_metadata(&["A", "B"]);
-    env.file("stack-to-commit.txt", "content\n");
-    env.but("rub stack-to-commit.txt A").assert().success();
-    let target_cli_id = branch_commit_cli_ids(&status_json(&env).unwrap(), "A")[0].clone();
-
-    run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but(format!("rub A@{{stack}} {target_cli_id}"))
-            .assert()
-            .success()
-            .stdout_eq("Amended files assigned to [A] → [..]\n")
-            .stderr_eq("");
-    });
-}
-
 // RubOperation::UncommittedAreaToBranch
 #[test]
 #[ignore = "undo currently does not restore hunk assignment metadata for rub operations that only move changes between uncommitted, branch, and stack buckets. https://linear.app/gitbutler/issue/GB-1435/cannot-undo-rub-operations-that-deal-with-uncommitted-changes"]
@@ -162,29 +138,6 @@ fn undo_uncommitted_area_to_stack() {
             .assert()
             .success()
             .stdout_eq("Staged all unstaged changes to [A].\n")
-            .stderr_eq("");
-    });
-}
-
-// RubOperation::CommitToStack
-#[test]
-fn undo_commit_to_stack() {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
-    env.setup_metadata(&["A", "B"]);
-    commit_two_files_as_two_hunks_each(
-        &env,
-        "A",
-        "commit-to-stack-a.txt",
-        "commit-to-stack-b.txt",
-        "first",
-    );
-    let source_cli_id = branch_commit_cli_ids(&status_json(&env).unwrap(), "A")[0].clone();
-
-    run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but(format!("rub {source_cli_id} B@{{stack}}"))
-            .assert()
-            .success()
-            .stdout_eq("Uncommitted [..] to [B]\n")
             .stderr_eq("");
     });
 }
@@ -227,24 +180,6 @@ fn undo_branch_to_stack() {
     });
 }
 
-// RubOperation::BranchToCommit
-#[test]
-fn undo_branch_to_commit() {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
-    env.setup_metadata(&["A", "B"]);
-    env.file("branch-to-commit.txt", "content\n");
-    env.but("rub branch-to-commit.txt A").assert().success();
-    let target_cli_id = branch_commit_cli_ids(&status_json(&env).unwrap(), "A")[0].clone();
-
-    run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but(format!("rub A {target_cli_id}"))
-            .assert()
-            .success()
-            .stdout_eq("Amended assigned files [A] → [..]\n")
-            .stderr_eq("");
-    });
-}
-
 // RubOperation::BranchToBranch
 #[test]
 #[ignore = "undo currently does not restore hunk assignment metadata for rub operations that only move changes between uncommitted, branch, and stack buckets. https://linear.app/gitbutler/issue/GB-1435/cannot-undo-rub-operations-that-deal-with-uncommitted-changes"]
@@ -259,29 +194,6 @@ fn undo_branch_to_branch() {
             .assert()
             .success()
             .stdout_eq("Staged all [A] changes to [B].\n")
-            .stderr_eq("");
-    });
-}
-
-// RubOperation::CommittedFileToBranch
-#[test]
-fn undo_committed_file_to_branch() {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
-    env.setup_metadata(&["A", "B"]);
-    commit_two_files_as_two_hunks_each(
-        &env,
-        "A",
-        "file-to-branch-a.txt",
-        "file-to-branch-b.txt",
-        "first",
-    );
-    let source_cli_id = branch_commit_cli_ids(&status_json(&env).unwrap(), "A")[0].clone();
-
-    run_mutate_undo_roundtrip_test(&env, |env| {
-        env.but(format!("rub {source_cli_id}:file-to-branch-a.txt B"))
-            .assert()
-            .success()
-            .stdout_eq("Uncommitted changes\n")
             .stderr_eq("");
     });
 }

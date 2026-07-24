@@ -21,9 +21,6 @@ pub struct Platform {
     /// Insert the commit after this commit or branch.
     #[clap(long, conflicts_with = "before")]
     pub after: Option<CliIdArg>,
-    /// Only commit staged files, not unstaged files
-    #[clap(short = 'o', long = "only")]
-    pub only: bool,
     /// No-op compatibility flag for `git commit -a`.
     #[clap(short = 'a', long = "all")]
     pub all: bool,
@@ -44,12 +41,7 @@ pub struct Platform {
     /// Uncommitted file or hunk CLI IDs to include in the commit.
     /// Can be specified multiple times or as comma-separated values.
     /// If not specified, all uncommitted changes (or changes staged to the target branch) are committed.
-    #[clap(
-        long = "changes",
-        short = 'p',
-        value_delimiter = ',',
-        conflicts_with = "only"
-    )]
+    #[clap(long = "changes", short = 'p', value_delimiter = ',')]
     pub changes: Vec<String>,
     /// Always show diff inside the editor.
     ///

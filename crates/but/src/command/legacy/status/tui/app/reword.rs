@@ -13,6 +13,7 @@ use crate::{
             App, Message, Mode, ReloadCause, SelectAfterReload, operations, render::ModeRender,
         },
     },
+    id::CommitId,
     tui::TerminalGuard,
 };
 
@@ -126,21 +127,21 @@ impl App {
         };
 
         let inline_reword_mode = match &**cli_id {
-            CliId::Branch { name, stack_id, .. } => {
-                let Some(stack_id) = stack_id else {
+            CliId::Branch(branch) => {
+                let Some(stack_id) = branch.stack_id else {
                     return Ok(());
                 };
-                let mut textarea = TextArea::from([name]);
+                let mut textarea = TextArea::from([branch.name.as_str()]);
                 textarea.set_cursor_line_style(self.theme.local_branch);
                 textarea.move_cursor(CursorMove::End);
 
                 InlineRewordMode::Branch {
-                    name: name.to_owned(),
-                    stack_id: *stack_id,
+                    name: branch.name.to_owned(),
+                    stack_id,
                     textarea: Box::new(textarea),
                 }
             }
-            CliId::Commit { commit_id, .. } => {
+            CliId::Commit(CommitId { commit_id, .. }) => {
                 let current_message = operations::current_commit_message(ctx, *commit_id)?;
 
                 if operations::commit_message_has_multiple_lines_legacy(&current_message) {

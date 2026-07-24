@@ -27,6 +27,9 @@ import { Match } from "effect";
 import { type ComponentProps, type FC, useState } from "react";
 import { ToggleGroupStyles, ToggleStyles } from "#ui/components/ToggleGroup.tsx";
 import { OutlineTree } from "#ui/routes/project/$id/workspace/OutlineTree/OutlineTree.tsx";
+import { BranchesList } from "#ui/routes/project/$id/workspace/BranchesList.tsx";
+import type { BranchesOutline } from "#ui/routes/project/$id/workspace/useBranchesOutline.ts";
+import type { OutlineTab } from "#ui/projects/project.ts";
 import styles from "./Outline.module.css";
 import { TopLeftControls } from "#ui/routes/project/$id/workspace/TopLeftControls.tsx";
 
@@ -87,6 +90,7 @@ const FetchFromRemotesButton: FC<{
 export const Outline: FC<
 	{
 		absorptionTargetCommitIds: ReadonlySet<string>;
+		branchesOutline: BranchesOutline;
 		navigationIndex: NavigationIndex<Operand>;
 		uncommittedFilesNavigationIndex: NavigationIndex<string>;
 		project: ProjectForFrontend;
@@ -94,6 +98,7 @@ export const Outline: FC<
 	} & ComponentProps<"div">
 > = ({
 	absorptionTargetCommitIds,
+	branchesOutline,
 	navigationIndex,
 	uncommittedFilesNavigationIndex,
 	project,
@@ -105,6 +110,16 @@ export const Outline: FC<
 	const isDefaultMode = useAppSelector(
 		(state) => projectSlice.selectors.selectOutlineModeState(state, projectId)._tag === "Default",
 	);
+	const outlineTab = useAppSelector((state) =>
+		projectSlice.selectors.selectOutlineTab(state, projectId),
+	);
+
+	const selectOutlineTab = (value: Array<OutlineTab>) => {
+		const head = value[0];
+		if (head === undefined) return;
+
+		dispatch(projectSlice.actions.setOutlineTab({ projectId, tab: head }));
+	};
 
 	const selectBranch = (branch: BranchOperand) => {
 		dispatch(
@@ -349,8 +364,13 @@ export const Outline: FC<
 					</div>
 				</header>
 
-				<ToggleGroup render={<ToggleGroupStyles />} aria-label="Navigation" value={["workspace"]}>
-					<Toggle render={<ToggleStyles />} value="workspace">
+				<ToggleGroup
+					render={<ToggleGroupStyles />}
+					aria-label="Navigation"
+					value={[outlineTab]}
+					onValueChange={selectOutlineTab}
+				>
+					<Toggle render={<ToggleStyles />} value={"workspace" satisfies OutlineTab}>
 						<Icon name="workbench" />
 						Workspace
 					</Toggle>
@@ -358,20 +378,28 @@ export const Outline: FC<
 						<Icon name="inbox" />
 						Upstream
 					</Toggle>
-					<Toggle render={<ToggleStyles />} value="branches" disabled>
+					<Toggle render={<ToggleStyles />} value={"branches" satisfies OutlineTab}>
 						<Icon name="branch" />
 						Branches
 					</Toggle>
 				</ToggleGroup>
 			</div>
 
-			<OutlineTree
-				className={styles.outlineTree}
-				navigationIndex={navigationIndex}
-				uncommittedFilesNavigationIndex={uncommittedFilesNavigationIndex}
-				absorptionTargetCommitIds={absorptionTargetCommitIds}
-				projectId={projectId}
-			/>
+			{outlineTab === "branches" ? (
+				<BranchesList
+					className={styles.outlineTree}
+					projectId={projectId}
+					outline={branchesOutline}
+				/>
+			) : (
+				<OutlineTree
+					className={styles.outlineTree}
+					navigationIndex={navigationIndex}
+					uncommittedFilesNavigationIndex={uncommittedFilesNavigationIndex}
+					absorptionTargetCommitIds={absorptionTargetCommitIds}
+					projectId={projectId}
+				/>
+			)}
 		</div>
 	);
 };

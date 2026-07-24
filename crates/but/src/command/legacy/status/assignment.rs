@@ -1,16 +1,14 @@
 use std::collections::BTreeMap;
 
 use bstr::BString;
-use but_core::ref_metadata::StackId;
-use but_hunk_assignment::HunkAssignment;
 
-use crate::IdMap;
+use crate::{IdMap, id::WorktreeHunk};
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CLIHunkAssignment {
     #[serde(flatten)]
-    pub inner: HunkAssignment,
+    pub inner: WorktreeHunk,
     /// The CLI ID representation of this assignment
     pub cli_id: String,
 }
@@ -47,26 +45,4 @@ impl FileAssignment {
         }
         assignments_by_file
     }
-}
-
-pub(crate) fn filter_by_stack_id<'a, I>(input: I, stack_id: &Option<StackId>) -> Vec<FileAssignment>
-where
-    I: IntoIterator<Item = &'a FileAssignment>,
-{
-    let mut out = Vec::new();
-    for assignment in input {
-        let filtered = assignment
-            .assignments
-            .iter()
-            .filter(|a| a.inner.stack_id == *stack_id)
-            .cloned()
-            .collect::<Vec<_>>();
-        let mut updated = assignment.clone();
-        updated.assignments = filtered;
-        if updated.assignments.is_empty() {
-            continue;
-        }
-        out.push(updated);
-    }
-    out
 }

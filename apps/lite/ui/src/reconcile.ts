@@ -31,8 +31,15 @@ export const useStateReconciler = (): void => {
 	const outlineSelection = useAppSelector((state) =>
 		projectSlice.selectors.selectPrimaryOutlineSelection(state, projectId),
 	);
+	const outlineTab = useAppSelector((state) =>
+		projectSlice.selectors.selectOutlineTab(state, projectId),
+	);
 	const reconcileSelectedCommit = useEffectEvent(
 		(headInfoIndex: HeadInfoIndex, prevHeadInfoIndex: HeadInfoIndex | null) => {
+			// The Branches tab selects commits on unapplied branches, which are
+			// absent from headInfo (workspace stacks); its selection is validated
+			// against the branches navigation index instead.
+			if (outlineTab === "branches") return;
 			if (outlineSelection?._tag !== "Commit") return;
 
 			const curr = headInfoIndex.commitContextById(outlineSelection.commitId);

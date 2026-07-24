@@ -1,12 +1,13 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use bstr::BStr;
 use but_api::open::{
-    list_builtin_program_specs, list_user_defined_program_specs,
-    program::{ProgramSpec, open_in_program_unchecked},
+    list_program_specs, list_program_specs_for_file,
+    program::{OpenSpec, ProgramSpec, open_in_program_unchecked},
 };
 use but_ctx::Context;
 use gix::utils::AsBStr;
+use nonempty::NonEmpty;
 
 use crate::{
     CliError, CliResult, IdMap,
@@ -32,6 +33,7 @@ pub(crate) struct Hunk {
 #[derive(Debug)]
 pub(crate) enum Openable {
     File(PathBuf),
+    Files(NonEmpty<PathBuf>),
     Hunk(Hunk),
 }
 
@@ -84,57 +86,127 @@ impl Openable {
     }
 }
 
-pub(crate) fn open(ctx: &Context, cli_id: CliIdArg, program_id: Option<String>) -> CliResult<()> {
+pub(crate) fn open(
+    ctx: &Context,
+    sources: Vec<CliIdArg>,
+    program_id: Option<String>,
+) -> CliResult<()> {
     let guard = ctx.shared_worktree_access();
     let id_map = IdMap::new_from_context(ctx, None, guard.read_permission())?;
     let (repo, _ws, _db) = ctx.workspace_and_db_with_perm(guard.read_permission())?;
 
-    let to_open = match cli_id.resolve_in_workspace(&repo, &id_map, Purpose::Uncommitted, None)? {
-        ResolvedCliIdArg::UncommittedHunkOrFile(uncommitted) => {
-            Openable::try_from_uncommitted(&repo, &uncommitted)?
-        }
-        resolved_id => {
-            return Err(bad_input(format!(
-                "Expected uncommitted file or hunk, got {}",
-                resolved_id.kind_for_humans()
-            ))
-            .into());
+    let to_open = match sources.as_slice() {
+        [] => return Err(bad_input("At least one source is required").into()),
+        [source] => resolve_source(&repo, &id_map, source)?,
+        [first_source, tail @ ..] => {
+            let mut paths = NonEmpty::new(resolve_file_source(&repo, &id_map, first_source)?);
+            for source in tail {
+                paths.push(resolve_file_source(&repo, &id_map, source)?);
+            }
+            Openable::Files(paths)
         }
     };
-
-    let builtin_program_specs = list_builtin_program_specs();
-    let user_defined_program_specs = list_user_defined_program_specs();
-    let mut all_program_specs = user_defined_program_specs
-        .iter()
-        .chain(builtin_program_specs);
 
     let program = match program_id {
-        Some(program_id) => all_program_specs
-            .find(|ps| ps.id == program_id)
-            .ok_or_else(|| {
-                CliError::from(
-                    bad_input("No such program found")
-                        .arg_name("--program-id")
-                        .arg_value(program_id),
-                )
-            })?,
-        None => all_program_specs
-            .next()
-            .expect("BUG: The internal list of programs should not be empty"),
+        Some(program_id) => {
+            let program_specs = list_program_specs();
+            program_specs
+                .into_iter()
+                .find(|ps| ps.id == program_id)
+                .ok_or_else(|| {
+                    CliError::from(
+                        bad_input("No such program found")
+                            .arg_name("--program-id")
+                            .arg_value(program_id),
+                    )
+                })?
+        }
+        None => {
+            let program_specs = list_program_specs_for_openable(&to_open);
+            match TryInto::<[ProgramSpec; 1]>::try_into(program_specs) {
+                Ok([program_spec]) => program_spec,
+                _ => {
+                    return Err(bad_input("Could not automatically choose program")
+                        .hint("Specify a program with `--program-id`")
+                        .into());
+                }
+            }
+        }
     };
 
-    run(program, &to_open)?;
+    run(&program, to_open)?;
 
     Ok(())
 }
 
-pub(crate) fn run(program: &ProgramSpec, to_open: &Openable) -> anyhow::Result<()> {
-    let (path, line_number) = match to_open {
-        Openable::Hunk(hunk) => (&hunk.path, Some(compute_line_number_to_open_at(hunk))),
-        Openable::File(path) => (path, None),
+pub(crate) fn list_program_specs_for_openable(openable: &Openable) -> Vec<ProgramSpec> {
+    let path: &Path = match openable {
+        Openable::File(path) => path,
+        Openable::Files(paths) => paths.first(),
+        Openable::Hunk(hunk) => &hunk.path,
     };
 
-    open_in_program_unchecked(program, path, line_number)
+    list_program_specs_for_file(path)
+}
+
+fn resolve_source(
+    repo: &gix::Repository,
+    id_map: &IdMap,
+    source: &CliIdArg,
+) -> CliResult<Openable> {
+    match source.resolve_in_workspace(repo, id_map, Purpose::Uncommitted, None)? {
+        ResolvedCliIdArg::UncommittedHunkOrFile(uncommitted) => {
+            Ok(Openable::try_from_uncommitted(repo, &uncommitted)?)
+        }
+        resolved_id => Err(unexpected_source_kind(resolved_id)),
+    }
+}
+
+fn resolve_file_source(
+    repo: &gix::Repository,
+    id_map: &IdMap,
+    source: &CliIdArg,
+) -> CliResult<PathBuf> {
+    match source.resolve_in_workspace(repo, id_map, Purpose::Uncommitted, None)? {
+        ResolvedCliIdArg::UncommittedHunkOrFile(uncommitted) => {
+            if !uncommitted.is_entire_file {
+                return Err(bad_input(format!(
+                    "Only entire files can be opened when multiple sources are provided; \
+                     '{source}' is a hunk"
+                ))
+                .into());
+            }
+
+            match Openable::try_from_uncommitted(repo, &uncommitted)? {
+                Openable::File(path) => Ok(path),
+                Openable::Hunk(_) | Openable::Files(_) => {
+                    unreachable!("entire-file source must resolve to one file")
+                }
+            }
+        }
+        resolved_id => Err(unexpected_source_kind(resolved_id)),
+    }
+}
+
+fn unexpected_source_kind(resolved_id: ResolvedCliIdArg) -> CliError {
+    bad_input(format!(
+        "Expected uncommitted file or hunk, got {}",
+        resolved_id.kind_for_humans()
+    ))
+    .into()
+}
+
+pub(crate) fn run(program: &ProgramSpec, to_open: Openable) -> anyhow::Result<()> {
+    let open_spec = match to_open {
+        Openable::Hunk(hunk) => {
+            let line_number = compute_line_number_to_open_at(&hunk);
+            OpenSpec::FileAtLine(hunk.path, line_number)
+        }
+        Openable::File(path) => OpenSpec::File(path),
+        Openable::Files(paths) => OpenSpec::Files(paths),
+    };
+
+    open_in_program_unchecked(program, open_spec)
 }
 
 /// Compute the line to place the cursor at, going through a priority order of additions ->

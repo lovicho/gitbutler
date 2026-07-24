@@ -1,20 +1,22 @@
 use bstr::BString;
 use but_api::diff::ComputeLineStats;
-use but_core::{UnifiedPatch, ref_metadata::StackId, unified_diff::DiffHunk};
+use but_core::{UnifiedPatch, unified_diff::DiffHunk};
 use but_ctx::Context;
-use but_hunk_assignment::HunkAssignment;
 
 use super::{
     JsonChange, JsonDiff, JsonDiffOutput, JsonHunk,
     display::{DiffDisplay, TreeChangeWithPatch},
 };
-use crate::{IdMap, id::UncommittedHunkOrFile, utils::OutputChannel};
+use crate::{
+    IdMap,
+    id::{UncommittedHunkOrFile, WorktreeHunk},
+    utils::OutputChannel,
+};
 
 #[expect(clippy::large_enum_variant)]
 pub(crate) enum Filter {
     UncommittedArea,
     Uncommitted(UncommittedHunkOrFile),
-    Stack(StackId),
 }
 
 pub(crate) fn worktree(
@@ -22,14 +24,14 @@ pub(crate) fn worktree(
     out: &mut OutputChannel,
     filter: Option<Filter>,
 ) -> anyhow::Result<()> {
-    let short_id_assignment_pairs: Vec<(&str, &HunkAssignment)> = id_map
+    let short_id_assignment_pairs: Vec<(&str, &WorktreeHunk)> = id_map
         .uncommitted_hunks
         .iter()
         .filter(|(_, uncommitted_hunk)| {
             let a = &uncommitted_hunk.hunk_assignment;
             match &filter {
                 None => true,
-                Some(Filter::UncommittedArea) => a.stack_id.is_none(),
+                Some(Filter::UncommittedArea) => true,
                 Some(Filter::Uncommitted(id)) => {
                     if id.is_entire_file {
                         a.path_bytes == id.hunk_assignments.first().path_bytes
@@ -37,7 +39,6 @@ pub(crate) fn worktree(
                         a.eq(id.hunk_assignments.first())
                     }
                 }
-                Some(Filter::Stack(stack_id)) => a.stack_id.as_ref() == Some(stack_id),
             }
         })
         .map(|(short_id, uncommitted_hunk)| (short_id.as_str(), &uncommitted_hunk.hunk_assignment))
@@ -46,10 +47,10 @@ pub(crate) fn worktree(
 }
 
 pub(crate) fn hunk_assignments<'a>(
-    hunk_assignments: impl IntoIterator<Item = &'a (String, HunkAssignment)>,
+    hunk_assignments: impl IntoIterator<Item = &'a (String, WorktreeHunk)>,
     out: &mut OutputChannel,
 ) -> anyhow::Result<()> {
-    let short_id_assignment_pairs: Vec<(&str, &HunkAssignment)> = hunk_assignments
+    let short_id_assignment_pairs: Vec<(&str, &WorktreeHunk)> = hunk_assignments
         .into_iter()
         .map(|(short_id, hunk_assignment)| (short_id.as_str(), hunk_assignment))
         .collect();
@@ -57,19 +58,14 @@ pub(crate) fn hunk_assignments<'a>(
 }
 
 fn print_short_id_assignment_pairs<'a>(
-    mut short_id_assignment_pairs: Vec<(&'a str, &'a HunkAssignment)>,
+    mut short_id_assignment_pairs: Vec<(&'a str, &'a WorktreeHunk)>,
     out: &mut OutputChannel,
 ) -> anyhow::Result<()> {
     short_id_assignment_pairs.sort_by(|(_, a_assignment), (_, b_assignment)| {
         a_assignment
-            .stack_id
-            .cmp(&b_assignment.stack_id)
-            .then_with(|| {
-                a_assignment
-                    .path_bytes
-                    .cmp(&b_assignment.path_bytes)
-                    .then_with(|| a_assignment.hunk_header.cmp(&b_assignment.hunk_header))
-            })
+            .path_bytes
+            .cmp(&b_assignment.path_bytes)
+            .then_with(|| a_assignment.hunk_header.cmp(&b_assignment.hunk_header))
     });
 
     if short_id_assignment_pairs.is_empty() {
@@ -168,7 +164,7 @@ pub(crate) fn branch(
 
 // Helper functions for JSON conversion
 
-fn hunk_assignment_to_json(id: Option<&str>, assignment: &HunkAssignment) -> JsonChange {
+fn hunk_assignment_to_json(id: Option<&str>, assignment: &WorktreeHunk) -> JsonChange {
     let diff = if let (Some(diff_bytes), Some(header)) = (&assignment.diff, &assignment.hunk_header)
     {
         JsonDiff::Patch {

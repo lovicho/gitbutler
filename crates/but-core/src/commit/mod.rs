@@ -193,7 +193,7 @@ impl From<&Headers> for Vec<(BString, BString)> {
         )];
 
         if let Some(change_id) = &hdr.change_id {
-            out.push((HEADERS_NEW_CHANGE_ID_FIELD.into(), (**change_id).clone()));
+            out.push((HEADERS_NEW_CHANGE_ID_FIELD.into(), (**change_id).to_owned()));
         }
 
         if let Some(conflicted) = hdr.conflicted {

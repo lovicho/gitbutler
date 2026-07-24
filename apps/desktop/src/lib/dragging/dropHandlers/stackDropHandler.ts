@@ -8,7 +8,6 @@ import {
 import { BranchDropData } from "$lib/dragging/dropHandlers/branchDropHandler";
 import { CommitDropData } from "$lib/dragging/dropHandlers/commitDropHandler";
 import { classify } from "$lib/error/errorClassification";
-import { unstackPRs, updateStackPrs } from "$lib/forge/shared/prFooter";
 import { toCommitMovePlacement } from "$lib/stacks/commitMovePlacement";
 import StackMacros from "$lib/stacks/macros";
 import { toMoveBranchWarning } from "$lib/stacks/stack";
@@ -16,7 +15,6 @@ import { withStackBusy } from "$lib/state/uiState.svelte";
 import { untrack } from "svelte";
 import type { DropResult } from "$lib/dragging/dropResult";
 import type { DropzoneHandler } from "$lib/dragging/handler";
-import type { PrService } from "$lib/forge/prService.svelte";
 import type { DiffService } from "$lib/hunks/diffService.svelte";
 import type { UncommittedService } from "$lib/selection/uncommittedService.svelte";
 import type { StackService } from "$lib/stacks/stackService.svelte";
@@ -29,13 +27,10 @@ export class OutsideLaneDzHandler implements DropzoneHandler {
 
 	constructor(
 		private stackService: StackService,
-		private prService: PrService | undefined,
 		private projectId: string,
 		private readonly uiState: UiState,
 		private readonly uncommittedService: UncommittedService,
 		private readonly diffService: DiffService,
-		private readonly baseBranchName: string | undefined,
-		private readonly unitSymbol: string | undefined,
 	) {
 		this.macros = new StackMacros(this.projectId, this.stackService, this.uiState);
 	}
@@ -266,30 +261,7 @@ export class OutsideLaneDzHandler implements DropzoneHandler {
 		});
 		const afterAppliedStackCount = result.workspace.headInfo.stacks.length;
 		const unappliedStackCount = Math.max(0, beforeAppliedStackCount + 1 - afterAppliedStackCount);
-		await this.updatePrDescriptions(data);
 		return toMoveBranchWarning(unappliedStackCount);
-	}
-
-	private async updatePrDescriptions(data: BranchDropData) {
-		if (this.prService === undefined) return;
-		if (data.prNumber === undefined) return;
-		if (this.baseBranchName === undefined) return;
-		const prs = [data.prNumber, ...data.allOtherPrNumbersInStack];
-
-		if (data.allOtherPrNumbersInStack.length === 1) {
-			await unstackPRs(this.prService, this.projectId, prs, this.baseBranchName);
-			return;
-		}
-
-		await unstackPRs(this.prService, this.projectId, [data.prNumber], this.baseBranchName);
-		const branchDetails = await this.stackService.fetchBranches(this.projectId, data.stackId);
-		await updateStackPrs(
-			this.prService,
-			this.projectId,
-			branchDetails,
-			this.baseBranchName,
-			this.unitSymbol,
-		);
 	}
 
 	async ondrop(data: unknown): Promise<DropResult | void> {

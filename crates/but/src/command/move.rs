@@ -37,19 +37,13 @@ pub(crate) fn handle(
     let branch_route = matches!(
         (&source_id, &target_id),
         (
-            CliId::Branch { .. },
-            CliId::Branch { .. } | CliId::Uncommitted { .. }
+            CliId::Branch(..),
+            CliId::Branch(..) | CliId::Uncommitted { .. }
         )
     );
 
     let move_result = if branch_route {
-        let (
-            CliId::Branch {
-                name: source_name, ..
-            },
-            target_id,
-        ) = (&source_id, &target_id)
-        else {
+        let (CliId::Branch(source), target_id) = (&source_id, &target_id) else {
             unreachable!("branch_route guarantees source is a branch")
         };
         if after {
@@ -61,16 +55,14 @@ pub(crate) fn handle(
             match target_id {
                 CliId::Uncommitted { .. } => super::branch::tear_off_branch_by_name_with_perm(
                     ctx,
-                    source_name,
+                    &source.name,
                     out,
                     guard.write_permission(),
                 ),
-                CliId::Branch {
-                    name: target_name, ..
-                } => super::branch::move_branch_by_name_with_perm(
+                CliId::Branch(target) => super::branch::move_branch_by_name_with_perm(
                     ctx,
-                    source_name,
-                    target_name,
+                    &source.name,
+                    &target.name,
                     out,
                     guard.write_permission(),
                 ),

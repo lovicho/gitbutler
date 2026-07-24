@@ -24,7 +24,7 @@ use crate::{
             },
         },
     },
-    id::{ShortId, UNCOMMITTED, UncommittedHunkOrFile},
+    id::{CommitId, ShortId, UNCOMMITTED, UncommittedHunkOrFile},
     tui::TerminalGuard,
     utils::targeting,
 };
@@ -241,7 +241,7 @@ impl App {
             }
             CliId::UncommittedHunkOrFile(hunk) => CommitSource::Uncommitted(hunk),
             CliId::Stack { stack_id, .. } => CommitSource::Stack(StackCommitSource { stack_id }),
-            CliId::Branch { .. } | CliId::Commit { .. } => {
+            CliId::Branch(..) | CliId::Commit { .. } => {
                 CommitSource::UncommittedArea(UncommittedAreaCommitSource {
                     id: UNCOMMITTED.to_string(),
                 })
@@ -330,10 +330,10 @@ impl App {
         }
 
         let target = match &**data {
-            CliId::Branch { name, .. } => commit2::CommitRelativeToTarget::BranchTip {
-                name: Category::LocalBranch.to_full_name(&**name)?,
+            CliId::Branch(branch) => commit2::CommitRelativeToTarget::BranchTip {
+                name: Category::LocalBranch.to_full_name(&*branch.name)?,
             },
-            CliId::Commit { commit_id, .. } => commit2::CommitRelativeToTarget::Commit {
+            CliId::Commit(CommitId { commit_id, .. }) => commit2::CommitRelativeToTarget::Commit {
                 commit_id: *commit_id,
                 side: targeting::Side::from(*insert_side),
             },
@@ -378,10 +378,10 @@ impl App {
                     branch_name: None,
                 })
             }
-            CliId::Branch { name, .. } => {
+            CliId::Branch(branch) => {
                 commit2::CommitOperation::CommitAt(commit2::CommitAtOperation {
                     target: commit2::CommitRelativeToTarget::BranchBucket {
-                        name: Category::LocalBranch.to_full_name(&**name)?,
+                        name: Category::LocalBranch.to_full_name(&*branch.name)?,
                         side: targeting::Side::Above,
                     },
                 })

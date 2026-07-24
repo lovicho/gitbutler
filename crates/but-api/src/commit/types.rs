@@ -77,6 +77,14 @@ pub struct CommitMoveResult {
     pub workspace: WorkspaceState,
 }
 
+/// Outcome of cherry-picking commits.
+pub struct CommitCherryPickResult {
+    /// The final IDs of the cherry-picked commits in parent-first order.
+    pub new_commits: Vec<gix::ObjectId>,
+    /// Workspace state after the cherry-pick.
+    pub workspace: WorkspaceState,
+}
+
 /// Outcome after inserting a blank commit.
 pub struct CommitInsertBlankResult {
     /// The ID of the newly inserted blank commit.

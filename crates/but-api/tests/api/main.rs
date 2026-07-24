@@ -1,9 +1,11 @@
 mod branch_apply;
 mod branch_checkout;
 mod branch_create;
+mod branch_list;
 mod branch_move;
 mod branch_remove;
 mod branch_rename;
+mod commit_cherry_pick;
 #[cfg(feature = "legacy")]
 mod forge_info;
 #[cfg(all(feature = "legacy", not(feature = "graph-workspace")))]

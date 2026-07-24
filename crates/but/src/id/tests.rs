@@ -6,7 +6,10 @@ use but_hunk_assignment::HunkAssignment;
 use but_testsupport::{hex_to_id, hunk_header};
 use snapbox::{assert_data_eq, prelude::*};
 
-use crate::{CliId, IdMap, id::id_usage::UintId};
+use crate::{
+    CliId, IdMap,
+    id::{BranchId, CommitId, id_usage::UintId},
+};
 
 #[test]
 fn uint_id_from_short_id() {
@@ -64,11 +67,11 @@ branches: [ no ]
         bail!("unexpected IDs {commit_id} {parent_id:?}");
     };
 
-    let expected = [CliId::Commit {
+    let expected = [CliId::Commit(CommitId {
         commit_id: id1,
         id: "0".to_string(),
         change_id: None,
-    }];
+    })];
     assert_eq!(
         id_map.parse("0", Box::new(changed_paths_fn))?,
         expected,
@@ -101,11 +104,13 @@ fn commit_id_appearing_multiple_times() -> anyhow::Result<()> {
         id_map.parse("01", Box::new(changed_paths_fn))?.to_debug(),
         snapbox::str![[r#"
 [
-    Commit {
-        commit_id: Sha1(0101010101010101010101010101010101010101),
-        id: "01",
-        change_id: None,
-    },
+    Commit(
+        CommitId {
+            commit_id: Sha1(0101010101010101010101010101010101010101),
+            id: "01",
+            change_id: None,
+        },
+    ),
 ]
 
 "#]]
@@ -133,26 +138,34 @@ branches: [ no ]
         id_map.all_ids().to_debug(),
         snapbox::str![[r#"
 [
-    Commit {
-        commit_id: Sha1(21aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa),
-        id: "21a",
-        change_id: None,
-    },
-    Commit {
-        commit_id: Sha1(21bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb),
-        id: "21bb",
-        change_id: None,
-    },
-    Commit {
-        commit_id: Sha1(21bccccccccccccccccccccccccccccccccccccc),
-        id: "21bc",
-        change_id: None,
-    },
-    Branch {
-        name: "not-important",
-        id: "no",
-        stack_id: None,
-    },
+    Commit(
+        CommitId {
+            commit_id: Sha1(21aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa),
+            id: "21a",
+            change_id: None,
+        },
+    ),
+    Commit(
+        CommitId {
+            commit_id: Sha1(21bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb),
+            id: "21bb",
+            change_id: None,
+        },
+    ),
+    Commit(
+        CommitId {
+            commit_id: Sha1(21bccccccccccccccccccccccccccccccccccccc),
+            id: "21bc",
+            change_id: None,
+        },
+    ),
+    Branch(
+        BranchId {
+            name: "not-important",
+            id: "no",
+            stack_id: None,
+        },
+    ),
 ]
 
 "#]]
@@ -191,11 +204,11 @@ fn exact_branch_short_id_takes_priority() {
 
     assert_eq!(
         id_map.parse("tp", Box::new(|_, _| unreachable!())).unwrap(),
-        [CliId::Branch {
+        [CliId::Branch(BranchId {
             name: "tp-branch".into(),
             id: "tp".into(),
             stack_id: None,
-        }],
+        })],
         "exact branch short ID wins over change ID prefix"
     );
 }
@@ -219,11 +232,11 @@ branches: [ g0 ]
 "#]]
     );
 
-    let expected = [CliId::Branch {
+    let expected = [CliId::Branch(BranchId {
         name: "f".into(),
         id: "g0".into(),
         stack_id: None,
-    }];
+    })];
     assert_eq!(
         id_map.parse("f", Box::new(changed_paths_fn))?,
         expected,
@@ -256,11 +269,11 @@ branches: [ za ]
 "#]]
     );
 
-    let expected = [CliId::Branch {
+    let expected = [CliId::Branch(BranchId {
         name: "zza".into(),
         id: "za".into(),
         stack_id: None,
-    }];
+    })];
     assert_eq!(
         id_map.parse("za", Box::new(changed_paths_fn))?,
         expected,
@@ -291,21 +304,21 @@ branches: [ ax, yz ]
         bail!("unexpected IDs {commit_id} {parent_id:?}");
     };
 
-    let expected = [CliId::Branch {
+    let expected = [CliId::Branch(BranchId {
         name: "x-yz_/hi".into(),
         id: "yz".into(),
         stack_id: None,
-    }];
+    })];
     assert_eq!(
         id_map.parse("yz", Box::new(changed_paths_fn))?,
         expected,
         "avoids non-alphanumeric, taking first alphanumeric pair"
     );
-    let expected = [CliId::Branch {
+    let expected = [CliId::Branch(BranchId {
         name: "0ax".into(),
         id: "ax".into(),
         stack_id: None,
-    }];
+    })];
     assert_eq!(
         id_map.parse("ax", Box::new(changed_paths_fn))?,
         expected,
@@ -336,11 +349,11 @@ uncommitted_hunks: [ nx:q, yz:q ]
 "#]]
     );
 
-    let expected = [CliId::Branch {
+    let expected = [CliId::Branch(BranchId {
         name: "ghij".into(),
         id: "ij".into(),
         stack_id: None,
-    }];
+    })];
     assert_eq!(
         id_map.parse("ghij", Box::new(changed_paths_fn))?,
         expected,
@@ -371,17 +384,17 @@ branches: [ su, up ]
 "#]]
     );
 
-    let expected = [CliId::Branch {
+    let expected = [CliId::Branch(BranchId {
         name: "substring".into(),
         id: "su".into(),
         stack_id: None,
-    }];
+    })];
     assert_eq!(id_map.parse("su", Box::new(changed_paths_fn))?, expected,);
-    let expected = [CliId::Branch {
+    let expected = [CliId::Branch(BranchId {
         name: "supersubstring".into(),
         id: "up".into(),
         stack_id: None,
-    }];
+    })];
     assert_eq!(
         id_map.parse("supersubstring", Box::new(changed_paths_fn))?,
         expected,
@@ -424,18 +437,22 @@ stacks: [ j0 ]
         id_map.all_ids().to_debug(),
         snapbox::str![[r#"
 [
-    Commit {
-        commit_id: Sha1(0202020202020202020202020202020202020202),
-        id: "0",
-        change_id: None,
-    },
-    Branch {
-        name: "h0",
-        id: "h0",
-        stack_id: Some(
-            00000000-0000-0000-0000-000000000001,
-        ),
-    },
+    Commit(
+        CommitId {
+            commit_id: Sha1(0202020202020202020202020202020202020202),
+            id: "0",
+            change_id: None,
+        },
+    ),
+    Branch(
+        BranchId {
+            name: "h0",
+            id: "h0",
+            stack_id: Some(
+                00000000-0000-0000-0000-000000000001,
+            ),
+        },
+    ),
     Stack {
         id: "j0",
         stack_id: 00000000-0000-0000-0000-000000000001,
@@ -444,13 +461,11 @@ stacks: [ j0 ]
         UncommittedHunkOrFile {
             id: "kv",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: None,
                     path: "",
                     path_bytes: "uncommitted2.txt",
-                    stack_id: None,
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: None,
@@ -464,13 +479,11 @@ stacks: [ j0 ]
         UncommittedHunkOrFile {
             id: "kv:q",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: None,
                     path: "",
                     path_bytes: "uncommitted2.txt",
-                    stack_id: None,
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: None,
@@ -484,29 +497,25 @@ stacks: [ j0 ]
         UncommittedHunkOrFile {
             id: "ro",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: Some(
                         HunkHeader("-1,2", "+1,2"),
                     ),
                     path: "",
                     path_bytes: "uncommitted1.txt",
-                    stack_id: None,
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: None,
                 },
                 tail: [
-                    HunkAssignment {
+                    WorktreeHunk {
                         id: None,
                         hunk_header: Some(
                             HunkHeader("-3,2", "+3,2"),
                         ),
                         path: "",
                         path_bytes: "uncommitted1.txt",
-                        stack_id: None,
-                        branch_ref_bytes: None,
                         line_nums_added: None,
                         line_nums_removed: None,
                         diff: None,
@@ -520,15 +529,13 @@ stacks: [ j0 ]
         UncommittedHunkOrFile {
             id: "ro:q#0-2",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: Some(
                         HunkHeader("-1,2", "+1,2"),
                     ),
                     path: "",
                     path_bytes: "uncommitted1.txt",
-                    stack_id: None,
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: None,
@@ -542,15 +549,13 @@ stacks: [ j0 ]
         UncommittedHunkOrFile {
             id: "ro:q#1-2",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: Some(
                         HunkHeader("-3,2", "+3,2"),
                     ),
                     path: "",
                     path_bytes: "uncommitted1.txt",
-                    stack_id: None,
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: None,
@@ -598,11 +603,13 @@ uncommitted_hunks: [ ln:q ]
         id_map.parse("0a", Box::new(changed_paths_fn))?.to_debug(),
         snapbox::str![[r#"
 [
-    Commit {
-        commit_id: Sha1(0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a),
-        id: "0",
-        change_id: None,
-    },
+    Commit(
+        CommitId {
+            commit_id: Sha1(0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a),
+            id: "0",
+            change_id: None,
+        },
+    ),
 ]
 
 "#]]
@@ -617,11 +624,13 @@ uncommitted_hunks: [ ln:q ]
         id_map.parse("h0", Box::new(changed_paths_fn))?.to_debug(),
         snapbox::str![[r#"
 [
-    Branch {
-        name: "h0",
-        id: "h0",
-        stack_id: None,
-    },
+    Branch(
+        BranchId {
+            name: "h0",
+            id: "h0",
+            stack_id: None,
+        },
+    ),
 ]
 
 "#]]
@@ -640,13 +649,11 @@ uncommitted_hunks: [ ln:q ]
         UncommittedHunkOrFile {
             id: "ln",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: None,
                     path: "",
                     path_bytes: "uncommitted.txt",
-                    stack_id: None,
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: None,
@@ -672,12 +679,14 @@ uncommitted_hunks: [ ln:q ]
             .to_debug(),
         snapbox::str![[r#"
 [
-    CommittedFile {
-        commit_id: Sha1(0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a),
-        path: "committed.txt",
-        id: "0:z",
-        change_id: None,
-    },
+    CommittedFile(
+        CommittedFileId {
+            commit_id: Sha1(0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a),
+            path: "committed.txt",
+            id: "0:z",
+            change_id: None,
+        },
+    ),
 ]
 
 "#]]
@@ -718,13 +727,11 @@ fn uncommitted_files_disambiguate_between_themselves() -> anyhow::Result<()> {
         UncommittedHunkOrFile {
             id: "kpo",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: None,
                     path: "",
                     path_bytes: "foo242",
-                    stack_id: None,
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: None,
@@ -738,13 +745,11 @@ fn uncommitted_files_disambiguate_between_themselves() -> anyhow::Result<()> {
         UncommittedHunkOrFile {
             id: "kpr",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: None,
                     path: "",
                     path_bytes: "foo23",
-                    stack_id: None,
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: None,
@@ -767,13 +772,11 @@ fn uncommitted_files_disambiguate_between_themselves() -> anyhow::Result<()> {
         UncommittedHunkOrFile {
             id: "kpo",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: None,
                     path: "",
                     path_bytes: "foo242",
-                    stack_id: None,
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: None,
@@ -795,13 +798,11 @@ fn uncommitted_files_disambiguate_between_themselves() -> anyhow::Result<()> {
         UncommittedHunkOrFile {
             id: "kpr",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: None,
                     path: "",
                     path_bytes: "foo23",
-                    stack_id: None,
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: None,
@@ -847,11 +848,13 @@ fn uncommitted_files_disambiguate_with_branch() -> anyhow::Result<()> {
         id_map.parse("qs", Box::new(changed_paths_fn))?.to_debug(),
         snapbox::str![[r#"
 [
-    Branch {
-        name: "qsy",
-        id: "qs",
-        stack_id: None,
-    },
+    Branch(
+        BranchId {
+            name: "qsy",
+            id: "qs",
+            stack_id: None,
+        },
+    ),
 ]
 
 "#]]
@@ -862,11 +865,13 @@ fn uncommitted_files_disambiguate_with_branch() -> anyhow::Result<()> {
         id_map.parse("qsy", Box::new(changed_paths_fn))?.to_debug(),
         snapbox::str![[r#"
 [
-    Branch {
-        name: "qsy",
-        id: "qs",
-        stack_id: None,
-    },
+    Branch(
+        BranchId {
+            name: "qsy",
+            id: "qs",
+            stack_id: None,
+        },
+    ),
 ]
 
 "#]]
@@ -881,13 +886,11 @@ fn uncommitted_files_disambiguate_with_branch() -> anyhow::Result<()> {
         UncommittedHunkOrFile {
             id: "qsy",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: None,
                     path: "",
                     path_bytes: "file",
-                    stack_id: None,
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: None,
@@ -929,13 +932,11 @@ fn longer_id_is_ok() -> anyhow::Result<()> {
         UncommittedHunkOrFile {
             id: "kp",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: None,
                     path: "",
                     path_bytes: "foo23",
-                    stack_id: None,
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: None,
@@ -977,13 +978,11 @@ fn reverse_hex_filename_is_its_own_id() -> anyhow::Result<()> {
         UncommittedHunkOrFile {
             id: "kl",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: None,
                     path: "",
                     path_bytes: "klmxyz",
-                    stack_id: None,
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: None,
@@ -1023,22 +1022,22 @@ fn branch_and_file_by_name() -> anyhow::Result<()> {
         id_map.parse("foo", Box::new(changed_paths_fn))?.to_debug(),
         snapbox::str![[r#"
 [
-    Branch {
-        name: "foo",
-        id: "fo",
-        stack_id: None,
-    },
+    Branch(
+        BranchId {
+            name: "foo",
+            id: "fo",
+            stack_id: None,
+        },
+    ),
     UncommittedHunkOrFile(
         UncommittedHunkOrFile {
             id: "zo",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: None,
                     path: "",
                     path_bytes: "foo",
-                    stack_id: None,
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: None,
@@ -1082,17 +1081,13 @@ fn colon_uncommitted_filename() -> anyhow::Result<()> {
 [
     UncommittedHunkOrFile(
         UncommittedHunkOrFile {
-            id: "mv",
+            id: "nv",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: None,
                     path: "",
                     path_bytes: "assigned",
-                    stack_id: Some(
-                        00000000-0000-0000-0000-000000000001,
-                    ),
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: None,
@@ -1116,17 +1111,13 @@ fn colon_uncommitted_filename() -> anyhow::Result<()> {
 [
     UncommittedHunkOrFile(
         UncommittedHunkOrFile {
-            id: "mv",
+            id: "nv",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: None,
                     path: "",
                     path_bytes: "assigned",
-                    stack_id: Some(
-                        00000000-0000-0000-0000-000000000001,
-                    ),
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: None,
@@ -1152,13 +1143,11 @@ fn colon_uncommitted_filename() -> anyhow::Result<()> {
         UncommittedHunkOrFile {
             id: "pv",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: None,
                     path: "",
                     path_bytes: "uncommitted",
-                    stack_id: None,
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: None,
@@ -1203,13 +1192,11 @@ fn uncommitted_path() -> anyhow::Result<()> {
         hunk_assignments: NonEmpty {
             head: (
                 "yz:q",
-                HunkAssignment {
+                WorktreeHunk {
                     id: None,
                     hunk_header: None,
                     path: "",
                     path_bytes: "prefix/a",
-                    stack_id: None,
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: None,
@@ -1218,13 +1205,11 @@ fn uncommitted_path() -> anyhow::Result<()> {
             tail: [
                 (
                     "uo:q",
-                    HunkAssignment {
+                    WorktreeHunk {
                         id: None,
                         hunk_header: None,
                         path: "",
                         path_bytes: "prefix/b",
-                        stack_id: None,
-                        branch_ref_bytes: None,
                         line_nums_added: None,
                         line_nums_removed: None,
                         diff: None,
@@ -1323,14 +1308,16 @@ fn committed_file_can_be_referenced_by_either_change_id_or_commit_id() {
             .to_debug(),
         snapbox::str![[r#"
 [
-    CommittedFile {
-        commit_id: Sha1(0101010101010101010101010101010101010101),
-        path: "file.txt",
-        id: "s:u",
-        change_id: Some(
-            "swstzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
-        ),
-    },
+    CommittedFile(
+        CommittedFileId {
+            commit_id: Sha1(0101010101010101010101010101010101010101),
+            path: "file.txt",
+            id: "s:u",
+            change_id: Some(
+                "swstzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+            ),
+        },
+    ),
 ]
 
 "#]]
@@ -1342,14 +1329,16 @@ fn committed_file_can_be_referenced_by_either_change_id_or_commit_id() {
             .to_debug(),
         snapbox::str![[r#"
 [
-    CommittedFile {
-        commit_id: Sha1(0101010101010101010101010101010101010101),
-        path: "file.txt",
-        id: "s:u",
-        change_id: Some(
-            "swstzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
-        ),
-    },
+    CommittedFile(
+        CommittedFileId {
+            commit_id: Sha1(0101010101010101010101010101010101010101),
+            path: "file.txt",
+            id: "s:u",
+            change_id: Some(
+                "swstzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+            ),
+        },
+    ),
 ]
 
 "#]]
@@ -1383,13 +1372,11 @@ fn short_uncommitted_files_are_properly_reverse_hexed() -> anyhow::Result<()> {
         UncommittedHunkOrFile {
             id: "ky",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: None,
                     path: "",
                     path_bytes: "k",
-                    stack_id: None,
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: None,
@@ -1412,13 +1399,11 @@ fn short_uncommitted_files_are_properly_reverse_hexed() -> anyhow::Result<()> {
         UncommittedHunkOrFile {
             id: "klx",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: None,
                     path: "",
                     path_bytes: "kl",
-                    stack_id: None,
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: None,
@@ -1441,13 +1426,11 @@ fn short_uncommitted_files_are_properly_reverse_hexed() -> anyhow::Result<()> {
         UncommittedHunkOrFile {
             id: "klml",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: None,
                     path: "",
                     path_bytes: "klm",
-                    stack_id: None,
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: None,
@@ -1498,15 +1481,13 @@ fn uncommitted_hunks_by_numeric_index() -> anyhow::Result<()> {
         UncommittedHunkOrFile {
             id: "ro:q#0-2",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: Some(
                         HunkHeader("-1,2", "+1,2"),
                     ),
                     path: "",
                     path_bytes: "uncommitted1.txt",
-                    stack_id: None,
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: None,
@@ -1531,15 +1512,13 @@ fn uncommitted_hunks_by_numeric_index() -> anyhow::Result<()> {
         UncommittedHunkOrFile {
             id: "ro:q#0-2",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: Some(
                         HunkHeader("-1,2", "+1,2"),
                     ),
                     path: "",
                     path_bytes: "uncommitted1.txt",
-                    stack_id: None,
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: None,
@@ -1564,15 +1543,13 @@ fn uncommitted_hunks_by_numeric_index() -> anyhow::Result<()> {
         UncommittedHunkOrFile {
             id: "ro:q#0-2",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: Some(
                         HunkHeader("-1,2", "+1,2"),
                     ),
                     path: "",
                     path_bytes: "uncommitted1.txt",
-                    stack_id: None,
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: None,
@@ -1644,15 +1621,13 @@ fn uncommitted_hunks_by_id() -> anyhow::Result<()> {
         UncommittedHunkOrFile {
             id: "ro:3",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: Some(
                         HunkHeader("-1,6", "+1,7"),
                     ),
                     path: "",
                     path_bytes: "uncommitted1.txt",
-                    stack_id: None,
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: Some(
@@ -1678,15 +1653,13 @@ fn uncommitted_hunks_by_id() -> anyhow::Result<()> {
         UncommittedHunkOrFile {
             id: "ro:f",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: Some(
                         HunkHeader("-23,6", "+24,7"),
                     ),
                     path: "",
                     path_bytes: "uncommitted1.txt",
-                    stack_id: None,
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: Some(
@@ -1712,15 +1685,13 @@ fn uncommitted_hunks_by_id() -> anyhow::Result<()> {
         UncommittedHunkOrFile {
             id: "ro:1",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: Some(
                         HunkHeader("-60,6", "+62,7"),
                     ),
                     path: "",
                     path_bytes: "uncommitted1.txt",
-                    stack_id: None,
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: Some(
@@ -1749,13 +1720,11 @@ fn uncommitted_hunks_by_id() -> anyhow::Result<()> {
         UncommittedHunkOrFile {
             id: "wp:q",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: None,
                     path: "",
                     path_bytes: "hunk_without_diff.txt",
-                    stack_id: None,
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: None,
@@ -1817,15 +1786,13 @@ fn uncommitted_hunks_by_id_increase_id_length_as_necessary() -> anyhow::Result<(
         UncommittedHunkOrFile {
             id: "ro:78",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: Some(
                         HunkHeader("-1,6", "+1,7"),
                     ),
                     path: "",
                     path_bytes: "uncommitted1.txt",
-                    stack_id: None,
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: Some(
@@ -1853,15 +1820,13 @@ fn uncommitted_hunks_by_id_increase_id_length_as_necessary() -> anyhow::Result<(
         UncommittedHunkOrFile {
             id: "ro:79",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: Some(
                         HunkHeader("-23,6", "+24,7"),
                     ),
                     path: "",
                     path_bytes: "uncommitted1.txt",
-                    stack_id: None,
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: Some(
@@ -1924,15 +1889,13 @@ fn uncommitted_hunks_overspecifying_id_prefix() -> anyhow::Result<()> {
         UncommittedHunkOrFile {
             id: "ro:7",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: Some(
                         HunkHeader("-1,6", "+1,7"),
                     ),
                     path: "",
                     path_bytes: "uncommitted1.txt",
-                    stack_id: None,
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: Some(
@@ -2001,15 +1964,13 @@ fn uncommitted_hunks_overspecifying_id_prefix_with_collision_disambiguation() ->
         UncommittedHunkOrFile {
             id: "ro:3#0-2",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: Some(
                         HunkHeader("-1,6", "+1,7"),
                     ),
                     path: "",
                     path_bytes: "uncommitted1.txt",
-                    stack_id: None,
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: Some(
@@ -2082,15 +2043,13 @@ fn underspecifying_hunk_ids() -> anyhow::Result<()> {
         UncommittedHunkOrFile {
             id: "ro:78#0-2",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: Some(
                         HunkHeader("-1,6", "+1,7"),
                     ),
                     path: "",
                     path_bytes: "uncommitted1.txt",
-                    stack_id: None,
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: Some(
@@ -2106,15 +2065,13 @@ fn underspecifying_hunk_ids() -> anyhow::Result<()> {
         UncommittedHunkOrFile {
             id: "ro:79",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: Some(
                         HunkHeader("-23,6", "+24,7"),
                     ),
                     path: "",
                     path_bytes: "uncommitted1.txt",
-                    stack_id: None,
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: Some(
@@ -2130,15 +2087,13 @@ fn underspecifying_hunk_ids() -> anyhow::Result<()> {
         UncommittedHunkOrFile {
             id: "ro:78#1-2",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: Some(
                         HunkHeader("-33,6", "+35,7"),
                     ),
                     path: "",
                     path_bytes: "uncommitted1.txt",
-                    stack_id: None,
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: Some(
@@ -2167,15 +2122,13 @@ fn underspecifying_hunk_ids() -> anyhow::Result<()> {
         UncommittedHunkOrFile {
             id: "ro:78#0-2",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: Some(
                         HunkHeader("-1,6", "+1,7"),
                     ),
                     path: "",
                     path_bytes: "uncommitted1.txt",
-                    stack_id: None,
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: Some(
@@ -2261,15 +2214,13 @@ fn uncommitted_hunks_by_id_collision_handling() -> anyhow::Result<()> {
         UncommittedHunkOrFile {
             id: "ro:3#0-2",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: Some(
                         HunkHeader("-1,6", "+1,7"),
                     ),
                     path: "",
                     path_bytes: "uncommitted1.txt",
-                    stack_id: None,
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: Some(
@@ -2297,15 +2248,13 @@ fn uncommitted_hunks_by_id_collision_handling() -> anyhow::Result<()> {
         UncommittedHunkOrFile {
             id: "ro:3#1-2",
             hunk_assignments: NonEmpty {
-                head: HunkAssignment {
+                head: WorktreeHunk {
                     id: None,
                     hunk_header: Some(
                         HunkHeader("-23,6", "+24,7"),
                     ),
                     path: "",
                     path_bytes: "uncommitted1.txt",
-                    stack_id: None,
-                    branch_ref_bytes: None,
                     line_nums_added: None,
                     line_nums_removed: None,
                     diff: Some(
@@ -2345,9 +2294,9 @@ fn commit_matches_are_deduplicated_by_commit_oid() -> anyhow::Result<()> {
     let matches = id_map.parse("02", Box::new(changed_paths_fn))?;
     assert_eq!(matches.len(), 1);
     assert!(
-        matches
-            .iter()
-            .any(|m| matches!(m, CliId::Commit { commit_id: id, .. } if *id == commit_id)),
+        matches.iter().any(
+            |m| matches!(m, CliId::Commit(CommitId { commit_id: id, .. }) if *id == commit_id)
+        ),
         "same commit reachable through local and remote views should not be ambiguous"
     );
 
@@ -2375,12 +2324,12 @@ fn dedupe_does_not_hide_ambiguity_between_distinct_commits() -> anyhow::Result<(
     assert!(
         matches
             .iter()
-            .any(|m| matches!(m, CliId::Commit { commit_id, .. } if *commit_id == id1))
+            .any(|m| matches!(m, CliId::Commit(CommitId { commit_id, .. }) if *commit_id == id1))
     );
     assert!(
         matches
             .iter()
-            .any(|m| matches!(m, CliId::Commit { commit_id, .. } if *commit_id == id2))
+            .any(|m| matches!(m, CliId::Commit(CommitId { commit_id, .. }) if *commit_id == id2))
     );
 
     Ok(())
@@ -2414,22 +2363,19 @@ fn dedupe_does_not_hide_ambiguity_between_branches_in_different_stacks() -> anyh
     assert!(
         matches
             .iter()
-            .any(|m| matches!(m, CliId::Branch { name, stack_id, .. } if name == "foo" && *stack_id == Some(StackId::from_number_for_testing(1))))
+            .any(|m| matches!(m, CliId::Branch(branch) if branch.name == "foo" && branch.stack_id == Some(StackId::from_number_for_testing(1))))
     );
     assert!(
         matches
             .iter()
-            .any(|m| matches!(m, CliId::Branch { name, stack_id, .. } if name == "foo" && *stack_id == Some(StackId::from_number_for_testing(2))))
+            .any(|m| matches!(m, CliId::Branch(branch) if branch.name == "foo" && branch.stack_id == Some(StackId::from_number_for_testing(2))))
     );
 
     Ok(())
 }
 
 #[test]
-fn dedupe_does_not_hide_ambiguity_between_unmanaged_branches_with_same_name() -> anyhow::Result<()>
-{
-    use std::collections::HashSet;
-
+fn dedupe_treats_unmanaged_branches_with_same_name_as_the_same_branch() -> anyhow::Result<()> {
     let stacks = vec![
         stack([segment("foo", [id(1)], None, [])]),
         stack([segment("foo", [id(2)], None, [])]),
@@ -2442,20 +2388,12 @@ fn dedupe_does_not_hide_ambiguity_between_unmanaged_branches_with_same_name() ->
     };
 
     let matches = id_map.parse("foo", Box::new(changed_paths_fn))?;
-    assert_eq!(
-        matches.len(),
-        2,
-        "same branch name across unmanaged stacks must remain ambiguous"
-    );
-    assert!(matches.iter().all(
-        |m| matches!(m, CliId::Branch { name, stack_id, .. } if name == "foo" && stack_id.is_none())
-    ));
-
-    let unique_ids: HashSet<_> = matches.iter().map(CliId::to_short_string).collect();
-    assert_eq!(
-        unique_ids.len(),
-        2,
-        "the two unmanaged branches must stay distinct"
+    assert!(
+        matches!(
+            matches.as_slice(),
+            [CliId::Branch(branch)] if branch.name == "foo" && branch.stack_id.is_none()
+        ),
+        "unmanaged branches with the same name have the same identity"
     );
     Ok(())
 }
@@ -2497,20 +2435,24 @@ branches: [ no ]
             .to_debug(),
         snapbox::str![[r#"
 [
-    Commit {
-        commit_id: Sha1(0101010101010101010101010101010101010101),
-        id: "01",
-        change_id: Some(
-            "swstzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
-        ),
-    },
-    Commit {
-        commit_id: Sha1(0202020202020202020202020202020202020202),
-        id: "02",
-        change_id: Some(
-            "swsrzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
-        ),
-    },
+    Commit(
+        CommitId {
+            commit_id: Sha1(0101010101010101010101010101010101010101),
+            id: "01",
+            change_id: Some(
+                "swstzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+            ),
+        },
+    ),
+    Commit(
+        CommitId {
+            commit_id: Sha1(0202020202020202020202020202020202020202),
+            id: "02",
+            change_id: Some(
+                "swsrzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+            ),
+        },
+    ),
 ]
 
 "#]],
@@ -2523,13 +2465,15 @@ branches: [ no ]
             .to_debug(),
         snapbox::str![[r#"
 [
-    Commit {
-        commit_id: Sha1(0101010101010101010101010101010101010101),
-        id: "01",
-        change_id: Some(
-            "swstzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
-        ),
-    },
+    Commit(
+        CommitId {
+            commit_id: Sha1(0101010101010101010101010101010101010101),
+            id: "01",
+            change_id: Some(
+                "swstzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+            ),
+        },
+    ),
 ]
 
 "#]],
@@ -2542,13 +2486,15 @@ branches: [ no ]
             .to_debug(),
         snapbox::str![[r#"
 [
-    Commit {
-        commit_id: Sha1(0202020202020202020202020202020202020202),
-        id: "02",
-        change_id: Some(
-            "swsrzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
-        ),
-    },
+    Commit(
+        CommitId {
+            commit_id: Sha1(0202020202020202020202020202020202020202),
+            id: "02",
+            change_id: Some(
+                "swsrzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+            ),
+        },
+    ),
 ]
 
 "#]],
@@ -2671,7 +2617,7 @@ fn uncommitted_scope_does_not_prefix_match_a_branch_short_id() -> anyhow::Result
 
     let full = id_map.parse("kp", Box::new(changed_paths_fn))?;
     assert!(
-        matches!(full.as_slice(), [CliId::Branch { .. }]),
+        matches!(full.as_slice(), [CliId::Branch(..)]),
         "precondition: the full namespace resolves 'kp' to the branch: {full:?}"
     );
 
@@ -2731,20 +2677,24 @@ branches: [ no ]
             .to_debug(),
         snapbox::str![[r#"
 [
-    Commit {
-        commit_id: Sha1(0101010101010101010101010101010101010101),
-        id: "01",
-        change_id: Some(
-            "swstzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
-        ),
-    },
-    Commit {
-        commit_id: Sha1(0202020202020202020202020202020202020202),
-        id: "02",
-        change_id: Some(
-            "swstzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
-        ),
-    },
+    Commit(
+        CommitId {
+            commit_id: Sha1(0101010101010101010101010101010101010101),
+            id: "01",
+            change_id: Some(
+                "swstzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+            ),
+        },
+    ),
+    Commit(
+        CommitId {
+            commit_id: Sha1(0202020202020202020202020202020202020202),
+            id: "02",
+            change_id: Some(
+                "swstzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+            ),
+        },
+    ),
 ]
 
 "#]],
@@ -2757,13 +2707,15 @@ branches: [ no ]
             .to_debug(),
         snapbox::str![[r#"
 [
-    Commit {
-        commit_id: Sha1(0101010101010101010101010101010101010101),
-        id: "01",
-        change_id: Some(
-            "swstzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
-        ),
-    },
+    Commit(
+        CommitId {
+            commit_id: Sha1(0101010101010101010101010101010101010101),
+            id: "01",
+            change_id: Some(
+                "swstzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+            ),
+        },
+    ),
 ]
 
 "#]],
@@ -2776,13 +2728,15 @@ branches: [ no ]
             .to_debug(),
         snapbox::str![[r#"
 [
-    Commit {
-        commit_id: Sha1(0202020202020202020202020202020202020202),
-        id: "02",
-        change_id: Some(
-            "swstzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
-        ),
-    },
+    Commit(
+        CommitId {
+            commit_id: Sha1(0202020202020202020202020202020202020202),
+            id: "02",
+            change_id: Some(
+                "swstzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+            ),
+        },
+    ),
 ]
 
 "#]],

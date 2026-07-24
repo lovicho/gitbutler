@@ -273,3 +273,86 @@ fn copies_get_new_change_ids() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn copies_commit_contents() -> anyhow::Result<()> {
+    let (_tmp, graph, repo, mut meta, _description) =
+        writable_scenario("ws-ref-ws-commit-single-stack-double-stack-files", |_| {})?;
+    let mut workspace = graph.into_workspace()?;
+    let source = repo.rev_parse_single("B")?.detach();
+    let target_ref: gix::refs::FullName = "refs/heads/A".try_into()?;
+    let editor = Editor::create(&mut workspace, &mut meta, &repo)?;
+
+    let (rebase, inserted_selectors) = but_workspace::commit::cherry_pick_commits(
+        editor,
+        [source],
+        RelativeTo::Reference(target_ref),
+        InsertSide::Below,
+    )?;
+    let copy = rebase.lookup_pick(inserted_selectors[0])?;
+    rebase.materialize()?;
+
+    assert_eq!(
+        repo.find_commit(copy)?.message_raw()?,
+        repo.find_commit(source)?.message_raw()?,
+        "the copy should retain the source commit message"
+    );
+    assert_eq!(
+        repo.rev_parse_single(format!("{copy}:file-a").as_str())?
+            .object()?
+            .data,
+        b"a\n",
+        "the copy should retain the destination contents"
+    );
+    assert_eq!(
+        repo.rev_parse_single(format!("{copy}:file-b").as_str())?
+            .object()?
+            .data,
+        b"b\n",
+        "the copy should apply the source changes"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn rebased_children_keep_contents() -> anyhow::Result<()> {
+    let (_tmp, graph, repo, mut meta, _description) =
+        writable_scenario("ws-ref-ws-commit-single-stack-double-stack-files", |_| {})?;
+    let mut workspace = graph.into_workspace()?;
+    let source = repo.rev_parse_single("B")?.detach();
+    let target = repo.rev_parse_single("A")?.detach();
+    let editor = Editor::create(&mut workspace, &mut meta, &repo)?;
+
+    but_workspace::commit::cherry_pick_commits(
+        editor,
+        [source],
+        RelativeTo::Commit(target),
+        InsertSide::Below,
+    )?
+    .0
+    .materialize()?;
+
+    let rebased_target = repo.rev_parse_single("A")?.detach();
+    assert_eq!(
+        repo.find_commit(rebased_target)?.message_raw()?,
+        repo.find_commit(target)?.message_raw()?,
+        "the rebased child should retain its message"
+    );
+    assert_eq!(
+        repo.rev_parse_single(format!("{rebased_target}:file-a").as_str())?
+            .object()?
+            .data,
+        b"a\n",
+        "the rebased child should retain its changes"
+    );
+    assert_eq!(
+        repo.rev_parse_single(format!("{rebased_target}:file-b").as_str())?
+            .object()?
+            .data,
+        b"b\n",
+        "the rebased child should include the cherry-picked changes"
+    );
+
+    Ok(())
+}

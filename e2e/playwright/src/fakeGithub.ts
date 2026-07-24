@@ -15,6 +15,8 @@ export type FakeGitHubOptions = {
 	title?: string;
 	isFork?: boolean;
 	listed?: boolean;
+	failReviewUpdates?: boolean;
+	failGitPushes?: boolean;
 };
 
 type ResolvedFakeGitHubOptions = {
@@ -36,12 +38,16 @@ export type FakeGitHubServer = {
 	getReview: (number: number) => FakeGitHubReview | undefined;
 	getReviews: () => FakeGitHubReview[];
 	getReviewUpdateCount: () => number;
+	getReviewUpdateHistory: (number: number) => ReviewMutation[];
+	setReviewUpdatesFailing: (failing: boolean) => void;
+	setFailingReviewUpdates: (numbers: number[]) => void;
+	setGitPushesFailing: (failing: boolean) => void;
 	close: () => Promise<void>;
 };
 
 export type FakeGitHubReview = ReturnType<typeof pullRequestPayload>;
 
-type ReviewMutation = {
+export type ReviewMutation = {
 	title?: string;
 	head?: string;
 	base?: string;
@@ -61,6 +67,8 @@ export async function startFakeGitHubServer({
 	title = "Fork PR",
 	isFork = true,
 	listed = true,
+	failReviewUpdates = false,
+	failGitPushes = false,
 }: FakeGitHubOptions): Promise<FakeGitHubServer> {
 	const reviewRepoPath = headRepoPath ?? forkRepoPath;
 	if (!reviewRepoPath) {
@@ -81,13 +89,20 @@ export async function startFakeGitHubServer({
 	const reviews = new Map<number, FakeGitHubReview>([[reviewNumber, pullRequestPayload(options)]]);
 	let nextReviewNumber = reviewNumber;
 	let reviewUpdateCount = 0;
+	const reviewUpdateHistory = new Map<number, ReviewMutation[]>();
 	let isListed = listed;
+	let reviewUpdatesFailing = failReviewUpdates;
+	let failingReviewUpdates = new Set<number>();
+	let gitPushesFailing = failGitPushes;
 
 	const sockets = new Set<Socket>();
 	const server = http.createServer((request, response) => {
 		handleRequest(request, response, options, {
 			get listed() {
 				return isListed;
+			},
+			get gitPushesFailing() {
+				return gitPushesFailing;
 			},
 			listReviews() {
 				return [...reviews.values()].sort((a, b) => a.number - b.number);
@@ -112,9 +127,15 @@ export async function startFakeGitHubServer({
 				return created;
 			},
 			updateReview(number, input) {
-				const current = reviews.get(number);
-				if (!current) return undefined;
 				reviewUpdateCount += 1;
+				const history = reviewUpdateHistory.get(number) ?? [];
+				history.push(structuredClone(input));
+				reviewUpdateHistory.set(number, history);
+				if (reviewUpdatesFailing || failingReviewUpdates.has(number)) {
+					return { status: "failed" as const };
+				}
+				const current = reviews.get(number);
+				if (!current) return { status: "notFound" as const };
 				const updated = {
 					...current,
 					title: input.title ?? current.title,
@@ -124,7 +145,7 @@ export async function startFakeGitHubServer({
 					updated_at: "2026-06-01T00:01:00Z",
 				};
 				reviews.set(number, updated);
-				return updated;
+				return { status: "updated" as const, review: updated };
 			},
 		}).catch((error: unknown) => {
 			response.writeHead(500, { "Content-Type": "application/json" });
@@ -161,6 +182,17 @@ export async function startFakeGitHubServer({
 				.sort((a, b) => a.number - b.number)
 				.map((review) => structuredClone(review)),
 		getReviewUpdateCount: () => reviewUpdateCount,
+		getReviewUpdateHistory: (number) =>
+			(reviewUpdateHistory.get(number) ?? []).map((update) => structuredClone(update)),
+		setReviewUpdatesFailing: (failing) => {
+			reviewUpdatesFailing = failing;
+		},
+		setFailingReviewUpdates: (numbers) => {
+			failingReviewUpdates = new Set(numbers);
+		},
+		setGitPushesFailing: (failing) => {
+			gitPushesFailing = failing;
+		},
 		close: async () =>
 			await new Promise<void>((resolve, reject) => {
 				server.close((error) => (error ? reject(error) : resolve()));
@@ -175,10 +207,17 @@ async function handleRequest(
 	options: ResolvedFakeGitHubOptions,
 	state: {
 		readonly listed: boolean;
+		readonly gitPushesFailing: boolean;
 		listReviews: () => FakeGitHubReview[];
 		getReview: (number: number) => FakeGitHubReview | undefined;
 		createReview: (input: ReviewMutation) => FakeGitHubReview;
-		updateReview: (number: number, input: ReviewMutation) => FakeGitHubReview | undefined;
+		updateReview: (
+			number: number,
+			input: ReviewMutation,
+		) =>
+			| { status: "updated"; review: FakeGitHubReview }
+			| { status: "notFound" }
+			| { status: "failed" };
 	},
 ) {
 	const url = new URL(request.url ?? "/", "http://127.0.0.1");
@@ -212,12 +251,27 @@ async function handleRequest(
 
 	if (request.method === "PATCH" && reviewNumber !== undefined) {
 		const input = JSON.parse(await readBody(request)) as ReviewMutation;
-		const review = state.updateReview(reviewNumber, input);
-		return review ? json(response, review) : json(response, { message: "Not Found" }, 404);
+		const result = state.updateReview(reviewNumber, input);
+		if (result.status === "failed") {
+			return json(response, { message: "Configured review update failure" }, 500);
+		}
+		return result.status === "updated"
+			? json(response, result.review)
+			: json(response, { message: "Not Found" }, 404);
 	}
 
 	const repositoryPath = `/${options.owner}/${options.repo}.git`;
 	if (url.pathname === repositoryPath || url.pathname.startsWith(`${repositoryPath}/`)) {
+		if (
+			state.gitPushesFailing &&
+			request.method === "POST" &&
+			url.pathname === `${repositoryPath}/git-receive-pack`
+		) {
+			request.resume();
+			response.writeHead(500, { Connection: "close", "Content-Type": "text/plain" });
+			response.end("Configured Git push failure");
+			return;
+		}
 		return await serveGitRequest(request, response, url, repositoryPath, options.baseRepoPath);
 	}
 

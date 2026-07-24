@@ -907,6 +907,7 @@ dependencies = [
  "tracing-forest",
  "tracing-subscriber",
  "unicode-width",
+ "uuid",
 ]
 
 [[package]]
@@ -976,6 +977,7 @@ dependencies = [
  "but-api-macros",
  "but-askpass",
  "but-bitbucket",
+ "but-branches",
  "but-cherry-apply",
  "but-core",
  "but-ctx",
@@ -1000,6 +1002,7 @@ dependencies = [
  "but-testsupport",
  "but-workspace",
  "but-worktrees",
+ "chrono",
  "futures",
  "gitbutler-branch",
  "gitbutler-branch-actions",
@@ -1016,6 +1019,7 @@ dependencies = [
  "itertools",
  "napi",
  "napi-derive",
+ "nonempty",
  "objc2-app-kit",
  "objc2-foundation",
  "open",
@@ -1091,6 +1095,21 @@ dependencies = [
  "tokio",
  "tracing",
  "urlencoding",
+]
+
+[[package]]
+name = "but-branches"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "bstr",
+ "but-core",
+ "but-graph",
+ "but-meta",
+ "but-testsupport",
+ "gitbutler-reference",
+ "gix",
+ "snapbox",
 ]
 
 [[package]]

@@ -72,7 +72,6 @@
 		branchIndex: number;
 		parent: Segment | undefined;
 		withForce: boolean;
-		stackPrNumbers: (number | undefined)[];
 		baseCommit?: string;
 		onclick: () => void;
 		disableClick?: boolean;
@@ -302,7 +301,6 @@
 							branchIndex={args.branchIndex}
 							parent={args.parent}
 							withForce={args.withForce}
-							stackPrNumbers={args.stackPrNumbers}
 							prNumber={args.prNumber}
 							oncancel={() => {
 								projectState.exclusiveAction.set(undefined);

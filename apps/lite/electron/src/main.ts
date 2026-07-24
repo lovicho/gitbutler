@@ -69,6 +69,7 @@ import {
 	branchCreate,
 	branchDetails,
 	branchDiff,
+	branchList,
 	changesInWorktree,
 	commitAmend,
 	commitCreate,
@@ -315,6 +316,8 @@ const buildNativeMenuTemplate = (
 		return {
 			label: item.label,
 			accelerator: item.accelerator,
+			type: item.checked !== undefined ? "checkbox" : undefined,
+			checked: item.checked,
 			enabled: item.enabled,
 			click: itemId !== undefined ? () => onItem(itemId) : undefined,
 			submenu: item.submenu ? buildNativeMenuTemplate(item.submenu, onItem) : undefined,
@@ -403,6 +406,9 @@ const registerIpcHandlers = (): void => {
 	senderValidatingHandle(
 		liteIpcChannels.branchDiff,
 		(_e, { projectId, branch }: BranchDiffParams) => branchDiff(projectId, branch),
+	);
+	senderValidatingHandle(liteIpcChannels.branchList, (_e, projectId: string) =>
+		branchList(projectId),
 	);
 	senderValidatingHandle(liteIpcChannels.changesInWorktree, (_e, projectId: string) =>
 		changesInWorktree(projectId, true),

@@ -12,7 +12,11 @@ import { writable } from "svelte/store";
 import type { BackendApi } from "$lib/state/backendApi";
 import type { QueryOptions } from "$lib/state/butlerModule";
 import type { PostHogWrapper } from "$lib/telemetry/posthog";
-import type { ForgeReviewUpdate, ReviewMergeStatus } from "@gitbutler/but-sdk";
+import type {
+	PublishReviewOutcome,
+	PublishReviewInput,
+	ReviewMergeStatus,
+} from "@gitbutler/but-sdk";
 import type { StartQueryActionCreatorOptions } from "@reduxjs/toolkit/query";
 
 export const PR_SERVICE = new InjectionToken<PrService>("PrService");
@@ -51,24 +55,24 @@ export class PrService {
 			title,
 			body,
 			draft,
-			baseBranchName,
+			localBranchName,
 			upstreamName,
 			posthogLabel,
 		}: CreatePullRequestArgs & { posthogLabel?: string },
 	): Promise<PullRequest> {
 		this.loading.set(true);
 		const request = async () => {
-			const review = await this.backendApi.endpoints.publishReview.mutate({
+			const outcome = await this.backendApi.endpoints.publishReview.mutate({
 				projectId,
 				params: {
 					title,
 					body,
+					localBranch: localBranchName,
 					sourceBranch: upstreamName,
-					targetBranch: baseBranchName,
 					draft,
 				},
 			});
-			return mapForgeReviewToPullRequest(review);
+			return mapForgeReviewToPullRequest(outcome.review);
 		};
 
 		let attempts = 0;
@@ -171,10 +175,6 @@ export class PrService {
 		});
 	}
 
-	async updateReviewFooters(projectId: string, reviews: ForgeReviewUpdate[]) {
-		await this.backendApi.endpoints.updateReviewFooters.mutate({ projectId, reviews });
-	}
-
 	async setDraft(projectId: string, reviewId: number, draft: boolean) {
 		await this.backendApi.endpoints.setDraft.mutate({ projectId, reviewId, draft });
 	}
@@ -183,14 +183,6 @@ export class PrService {
 function injectBackendEndpoints(api: BackendApi) {
 	return api.injectEndpoints({
 		endpoints: (build) => ({
-			updateReviewFooters: build.mutation<
-				void,
-				{ projectId: string; reviews: ForgeReviewUpdate[] }
-			>({
-				extraOptions: { command: "update_review_footers" },
-				query: (args) => args,
-				invalidatesTags: [invalidatesList(ReduxTag.PullRequests)],
-			}),
 			setAutoMerge: build.mutation<void, { projectId: string; reviewId: number; enable: boolean }>({
 				extraOptions: { command: "set_review_auto_merge" },
 				query: (args) => args,
@@ -216,16 +208,10 @@ function injectBackendEndpoints(api: BackendApi) {
 				],
 			}),
 			publishReview: build.mutation<
-				ForgeReview,
+				PublishReviewOutcome,
 				{
 					projectId: string;
-					params: {
-						title: string;
-						body: string;
-						sourceBranch: string;
-						targetBranch: string;
-						draft: boolean;
-					};
+					params: PublishReviewInput;
 				}
 			>({
 				extraOptions: { command: "publish_review" },

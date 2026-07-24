@@ -10,6 +10,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::str::{self, FromStr as _};
 
 use bstr::{BStr, BString, ByteSlice};
+use but_core::HunkHeader;
 use but_core::sync::RepoShared;
 use but_core::{ChangeId, ref_metadata::StackId};
 use but_ctx::Context;
@@ -18,6 +19,7 @@ use but_hunk_assignment::HunkAssignment;
 use gix::hash::hasher;
 use nonempty::NonEmpty;
 use self_cell::self_cell;
+use uuid::Uuid;
 
 use crate::id::{
     file_info::FileInfo, id_usage::UintId, stacks_info::StacksInfo,
@@ -114,21 +116,14 @@ impl UnqualifiedHunkId {
     }
 }
 
-/// Create a CLI ID for the given staged file (if `stack_id` is `Some`) or the
-/// given unstaged file or committed file (if `stack_id` is `None`).
-fn create_reverse_hex_id(
-    path_bytes: &[u8],
-    stack_id: Option<&StackId>,
-) -> anyhow::Result<ChangeId> {
+/// Create a CLI ID for the given file.
+fn create_reverse_hex_id(path_bytes: &[u8]) -> anyhow::Result<ChangeId> {
     let mut hasher = gix::hash::hasher(gix::hash::Kind::Sha1);
     hasher.update(path_bytes);
-    if let Some(stack_id) = stack_id {
-        hasher.update(stack_id.0.as_bytes());
-    }
     let object_id = hasher.try_finalize()?;
     let mut change_id = ChangeId::from_bytes(object_id.as_bytes());
-    if stack_id.is_none() && path_bytes.iter().all(|c| b'k' <= *c && *c <= b'z') {
-        change_id.prefix_with(path_bytes.iter().copied());
+    if path_bytes.iter().all(|c| b'k' <= *c && *c <= b'z') {
+        change_id = change_id.prefixed_with(path_bytes.iter().copied());
     }
     Ok(change_id)
 }
@@ -203,11 +198,7 @@ fn short_ids_from_tree_changes(
     let FileInfo { changes } = FileInfo::from_tree_changes(tree_changes)?;
     let mut short_ids: Vec<(NonEmpty<but_core::TreeChange>, ChangeId, ShortId)> = Vec::new();
     for (path, changes) in changes {
-        short_ids.push((
-            changes,
-            create_reverse_hex_id(&path, None)?,
-            ShortId::default(),
-        ));
+        short_ids.push((changes, create_reverse_hex_id(&path)?, ShortId::default()));
     }
     let mut reverse_hex_short_ids = BTreeMap::<ChangeId, Vec<_>>::new();
 
@@ -383,7 +374,7 @@ impl<'a> Node<'a> for &'a WorkspaceCommitWithId {
                 || tree_changes.first().path == BStr::new(element);
             if is_match {
                 matches.push(Box::new(Leaf {
-                    cli_id: CliId::CommittedFile {
+                    cli_id: CliId::CommittedFile(CommittedFileId {
                         commit_id: self.commit_id(),
                         path: tree_changes.first().path.clone(),
                         id: format!(
@@ -398,7 +389,7 @@ impl<'a> Node<'a> for &'a WorkspaceCommitWithId {
                             .change_id
                             .as_ref()
                             .map(|change_id| change_id.change_id.clone()),
-                    },
+                    }),
                 }));
             }
         }
@@ -410,11 +401,11 @@ impl<'a> Node<'a> for &'a WorkspaceCommitWithId {
         _short_id: &str,
         _id_map: &IdMap,
     ) -> anyhow::Result<Option<CliId>> {
-        Ok(Some(CliId::Commit {
+        Ok(Some(CliId::Commit(CommitId {
             commit_id: self.commit_id(),
             id: self.short_id.clone(),
             change_id: self.change_id.as_ref().map(|id| id.change_id.clone()),
-        }))
+        })))
     }
 }
 
@@ -447,11 +438,11 @@ impl<'a> Node<'a> for &'a RemoteCommitWithId {
         _short_id: &str,
         _id_map: &IdMap,
     ) -> anyhow::Result<Option<CliId>> {
-        Ok(Some(CliId::Commit {
+        Ok(Some(CliId::Commit(CommitId {
             commit_id: self.commit_id(),
             id: self.short_id.clone(),
             change_id: None,
-        }))
+        })))
     }
 }
 
@@ -509,11 +500,11 @@ impl<'a> Node<'a> for &'a SegmentWithId {
         _short_id: &str,
         _id_map: &IdMap,
     ) -> anyhow::Result<Option<CliId>> {
-        Ok(Some(CliId::Branch {
+        Ok(Some(CliId::Branch(BranchId {
             name: self.branch_name().unwrap_or_default().to_string(),
             id: self.short_id.clone(),
             stack_id: self.stack_id,
-        }))
+        })))
     }
 }
 
@@ -525,6 +516,7 @@ pub struct StackWithId {
     /// Parallel to the original [Stack::segments].
     pub segments: Vec<SegmentWithId>,
 }
+
 impl<'a> Node<'a> for &'a StackWithId {
     fn parse(
         self: Box<Self>,
@@ -534,7 +526,7 @@ impl<'a> Node<'a> for &'a StackWithId {
     ) -> anyhow::Result<Vec<Box<dyn Node<'a> + 'a>>> {
         // Parse known suffixes.
         if element.ends_with('/') {
-            return Ok(id_map.parse_uncommitted_path_prefix(self.id, element));
+            return Ok(id_map.parse_uncommitted_path_prefix(element));
         }
         for uncommitted_file in id_map.uncommitted_files.values() {
             let hunk_assignments = uncommitted_file.hunk_assignments();
@@ -542,9 +534,7 @@ impl<'a> Node<'a> for &'a StackWithId {
             // TODO once the set of allowed CLI IDs is determined and the
             // access patterns of `uncommitted_files` are known, change its data
             // structure to be more efficient than the current linear search.
-            if hunk_assignment.stack_id == self.id
-                && hunk_assignment.path_bytes == element.as_bytes()
-            {
+            if hunk_assignment.path_bytes == element.as_bytes() {
                 return Ok(vec![Box::new(uncommitted_file)]);
             }
         }
@@ -571,6 +561,7 @@ struct StacksIndexes<'a> {
     // can delete this.)
     _dummy: &'a Vec<StackWithId>,
 }
+
 self_cell!(
     struct IndexedStacks {
         owner: Vec<StackWithId>,
@@ -578,6 +569,77 @@ self_cell!(
         dependent: StacksIndexes,
     }
 );
+
+// The CLI treats every worktree change as uncommitted, regardless of backend assignments. This
+// type enforces that. Its like `HunkAssignment` but without assignment related fields.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorktreeHunk {
+    pub id: Option<Uuid>,
+    pub hunk_header: Option<HunkHeader>,
+    pub path: String,
+    pub path_bytes: BString,
+    pub line_nums_added: Option<Vec<usize>>,
+    pub line_nums_removed: Option<Vec<usize>>,
+    pub diff: Option<BString>,
+}
+
+impl From<HunkAssignment> for WorktreeHunk {
+    fn from(value: HunkAssignment) -> Self {
+        let HunkAssignment {
+            id,
+            hunk_header,
+            path,
+            path_bytes,
+            line_nums_added,
+            line_nums_removed,
+            diff,
+            stack_id: _,
+            branch_ref_bytes: _,
+        } = value;
+        Self {
+            id,
+            hunk_header,
+            path,
+            path_bytes,
+            line_nums_added,
+            line_nums_removed,
+            diff,
+        }
+    }
+}
+
+impl WorktreeHunk {
+    pub fn into_hunk_assignment_ignoring_stack_assignments(self) -> HunkAssignment {
+        let Self {
+            id,
+            hunk_header,
+            path,
+            path_bytes,
+            line_nums_added,
+            line_nums_removed,
+            diff,
+        } = self;
+        HunkAssignment {
+            id,
+            hunk_header,
+            path,
+            path_bytes,
+            line_nums_added,
+            line_nums_removed,
+            diff,
+            stack_id: None,
+            branch_ref_bytes: None,
+        }
+    }
+}
+
+// matching `impl PartialEq for HunkAssignment`
+impl PartialEq for WorktreeHunk {
+    fn eq(&self, other: &Self) -> bool {
+        self.hunk_header == other.hunk_header && self.path_bytes == other.path_bytes
+    }
+}
 
 /// A mapping from user-friendly CLI IDs to GitButler entities.
 pub struct IdMap {
@@ -608,6 +670,11 @@ impl IdMap {
         hunk_assignments: Vec<HunkAssignment>,
         commit_id_to_change_id: gix::hashtable::HashMap<gix::ObjectId, ChangeId>,
     ) -> anyhow::Result<Self> {
+        let hunk_assignments = hunk_assignments
+            .into_iter()
+            .map(WorktreeHunk::from)
+            .collect::<Vec<_>>();
+
         let UncommittedInfo {
             partitioned_hunks,
             uncommitted_short_filenames,
@@ -624,12 +691,8 @@ impl IdMap {
 
         let mut uncommitted_files: BTreeMap<ChangeId, UncommittedFile> = BTreeMap::new();
         for hunk_assignments in partitioned_hunks {
-            let HunkAssignment {
-                path_bytes,
-                stack_id,
-                ..
-            } = hunk_assignments.first();
-            let reverse_hex = create_reverse_hex_id(path_bytes, stack_id.as_ref())?;
+            let WorktreeHunk { path_bytes, .. } = hunk_assignments.first();
+            let reverse_hex = create_reverse_hex_id(path_bytes)?;
             // Ensure that uncommitted files do not collide with CLI IDs generated after
             if let Some(uint_id) = UintId::from_name(&reverse_hex[..2]) {
                 id_usage.mark_used(uint_id);
@@ -774,7 +837,7 @@ impl IdMap {
     ///
     /// Note that hunks that lack a diff follow the same rules, only that `<prefix>="q"` always.
     fn assign_content_based_hunk_ids<'a>(
-        short_ids_and_hunks: impl Iterator<Item = &'a mut (UnqualifiedHunkId, HunkAssignment)>,
+        short_ids_and_hunks: impl Iterator<Item = &'a mut (UnqualifiedHunkId, WorktreeHunk)>,
     ) -> anyhow::Result<()> {
         let mut content_hash_to_short_ids: BTreeMap<String, Vec<&'a mut UnqualifiedHunkId>> =
             BTreeMap::new();
@@ -911,11 +974,7 @@ impl IdMap {
 /// Private methods to individually parse what can appear on both side of a
 /// colon. (Some of them can also appear alone.)
 impl IdMap {
-    fn parse_uncommitted_filename<'a>(
-        &'a self,
-        stack_id: Option<StackId>,
-        element: &str,
-    ) -> Vec<Box<dyn Node<'a> + 'a>> {
+    fn parse_uncommitted_filename<'a>(&'a self, element: &str) -> Vec<Box<dyn Node<'a> + 'a>> {
         let mut matches = Vec::<Box<dyn Node<'a> + 'a>>::new();
         for uncommitted_file in self.uncommitted_files.values() {
             let hunk_assignments = uncommitted_file.hunk_assignments();
@@ -923,26 +982,18 @@ impl IdMap {
             // TODO once the set of allowed CLI IDs is determined and the
             // access patterns of `uncommitted_files` are known, change its data
             // structure to be more efficient than the current linear search.
-            if hunk_assignment.stack_id == stack_id
-                && hunk_assignment.path_bytes == element.as_bytes()
-            {
+            if hunk_assignment.path_bytes == element.as_bytes() {
                 matches.push(Box::new(uncommitted_file));
             }
         }
         matches
     }
 
-    fn parse_uncommitted_path_prefix<'a>(
-        &'a self,
-        stack_id: Option<StackId>,
-        element: &str,
-    ) -> Vec<Box<dyn Node<'a> + 'a>> {
-        let mut hunk_assignments = Vec::new();
+    fn parse_uncommitted_path_prefix<'a>(&'a self, element: &str) -> Vec<Box<dyn Node<'a> + 'a>> {
+        let mut hunk_assignments = Vec::<(String, WorktreeHunk)>::new();
         for (short_id, uncommitted_hunk) in self.uncommitted_hunks.iter() {
             let hunk_assignment = &uncommitted_hunk.hunk_assignment;
-            if hunk_assignment.stack_id == stack_id
-                && hunk_assignment.path_bytes.starts_with(element.as_bytes())
-            {
+            if hunk_assignment.path_bytes.starts_with(element.as_bytes()) {
                 hunk_assignments.push((short_id.to_owned(), hunk_assignment.to_owned()));
             }
         }
@@ -1020,7 +1071,7 @@ impl IdMap {
             return Ok(matches);
         }
         if element.ends_with('/') {
-            return Ok(self.parse_uncommitted_path_prefix(None, element));
+            return Ok(self.parse_uncommitted_path_prefix(element));
         }
 
         let mut matches = Vec::<Box<dyn Node<'a> + 'a>>::new();
@@ -1038,7 +1089,7 @@ impl IdMap {
                 }
             }
         }
-        matches.extend(self.parse_uncommitted_filename(None, element));
+        matches.extend(self.parse_uncommitted_filename(element));
 
         // The following match only if there have been no matches so far.
         if !matches.is_empty() {
@@ -1178,7 +1229,7 @@ impl<'a> Node<'a> for Unstaged {
         id_map: &'a IdMap,
         _changes_in_commit_fn: &mut ChangesInCommitFn<'a>,
     ) -> anyhow::Result<Vec<Box<dyn Node<'a> + 'a>>> {
-        Ok(id_map.parse_uncommitted_filename(None, element))
+        Ok(id_map.parse_uncommitted_filename(element))
     }
 
     fn to_cli_id(
@@ -1363,49 +1414,9 @@ impl IdMap {
 fn cli_ids_refer_to_same_entity(lhs: &CliId, rhs: &CliId) -> bool {
     match (lhs, rhs) {
         (CliId::UncommittedHunkOrFile(lhs), CliId::UncommittedHunkOrFile(rhs)) => lhs == rhs,
-        (
-            CliId::Commit {
-                commit_id: lhs_commit_id,
-                ..
-            },
-            CliId::Commit {
-                commit_id: rhs_commit_id,
-                ..
-            },
-        ) => lhs_commit_id == rhs_commit_id,
-        (
-            CliId::CommittedFile {
-                commit_id: lhs_commit_id,
-                path: lhs_path,
-                ..
-            },
-            CliId::CommittedFile {
-                commit_id: rhs_commit_id,
-                path: rhs_path,
-                ..
-            },
-        ) => lhs_commit_id == rhs_commit_id && lhs_path == rhs_path,
-        (
-            CliId::Branch {
-                name: lhs_name,
-                id: lhs_id,
-                stack_id: lhs_stack_id,
-                ..
-            },
-            CliId::Branch {
-                name: rhs_name,
-                id: rhs_id,
-                stack_id: rhs_stack_id,
-                ..
-            },
-        ) => match (lhs_stack_id, rhs_stack_id) {
-            // Managed stacks have stable stack IDs, so this is true entity identity.
-            (Some(lhs_stack_id), Some(rhs_stack_id)) => {
-                lhs_name == rhs_name && lhs_stack_id == rhs_stack_id
-            }
-            // Unmanaged stacks can have `None` IDs; keep branch matches distinct by their own CLI IDs.
-            _ => lhs_id == rhs_id,
-        },
+        (CliId::Commit(l), CliId::Commit(r)) => l == r,
+        (CliId::CommittedFile(l), CliId::CommittedFile(r)) => l == r,
+        (CliId::Branch(l), CliId::Branch(r)) => l == r,
         (
             CliId::Stack {
                 stack_id: lhs_stack_id,
@@ -1427,7 +1438,7 @@ pub struct UncommittedHunkOrFile {
     /// The short CLI ID for this file (typically 2 characters)
     pub id: ShortId,
     /// The hunk assignments
-    pub hunk_assignments: NonEmpty<HunkAssignment>,
+    pub hunk_assignments: NonEmpty<WorktreeHunk>,
     /// `true` if self represents all hunks in a stack-assignment or file pair.
     /// Note that this file may have hunks with other stack assignments.
     pub is_entire_file: bool,
@@ -1460,11 +1471,7 @@ impl UncommittedHunkOrFile {
         } else {
             "a hunk"
         };
-        let assignment = if self.hunk_assignments.first().stack_id.is_some() {
-            "a stack"
-        } else {
-            "the uncommitted area"
-        };
+        let assignment = "the uncommitted area";
         format!(
             "{hunk_cardinality} in {} in {assignment}",
             self.hunk_assignments.first().path_bytes,
@@ -1488,39 +1495,14 @@ pub enum CliId {
         /// The ID as given by the user
         id: ShortId,
         /// The hunk assignments with their associated short IDs
-        hunk_assignments: NonEmpty<(ShortId, HunkAssignment)>,
+        hunk_assignments: NonEmpty<(ShortId, WorktreeHunk)>,
     },
     /// A file that exists in a commit.
-    CommittedFile {
-        /// The object ID of the commit containing the change to the file
-        commit_id: gix::ObjectId,
-        /// The file path relative to the repository root
-        path: BString,
-        /// The short CLI ID for this file (typically 2 characters)
-        id: ShortId,
-        /// The stable change ID from the commit headers, if present.
-        change_id: Option<but_core::ChangeId>,
-    },
+    CommittedFile(CommittedFileId),
     /// A branch.
-    Branch {
-        /// The short name of the branch, like `main` or `origin/feat`.
-        name: String,
-        /// The short CLI ID for this branch (typically 2 characters)
-        id: ShortId,
-        /// The stack ID.
-        stack_id: Option<StackId>,
-    },
+    Branch(BranchId),
     /// A commit in the workspace identified by its SHA.
-    Commit {
-        /// The object ID of the commit.
-        commit_id: gix::ObjectId,
-        /// The short CLI ID, a prefix of the object ID. This prefix is unique
-        /// among all commits in all stacks (but not necessarily among all
-        /// commits in the repo).
-        id: ShortId,
-        /// The stable change ID from the commit headers, if present.
-        change_id: Option<but_core::ChangeId>,
-    },
+    Commit(CommitId),
     /// The uncommitted area, as a designated area that files can be put in.
     Uncommitted {
         /// The CLI ID for the uncommitted area.
@@ -1539,20 +1521,9 @@ impl PartialEq for CliId {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::UncommittedHunkOrFile(l), Self::UncommittedHunkOrFile(r)) => l == r,
-            (
-                Self::CommittedFile {
-                    id: l_id,
-                    path: l_path,
-                    ..
-                },
-                Self::CommittedFile {
-                    id: r_id,
-                    path: r_path,
-                    ..
-                },
-            ) => l_id == r_id && l_path == r_path,
-            (Self::Branch { id: l_id, .. }, Self::Branch { id: r_id, .. }) => l_id == r_id,
-            (Self::Commit { id: l_id, .. }, Self::Commit { id: r_id, .. }) => l_id == r_id,
+            (Self::CommittedFile(l), Self::CommittedFile(r)) => l == r,
+            (Self::Branch(l), Self::Branch(r)) => l == r,
+            (Self::Commit(l), Self::Commit(r)) => l == r,
             (Self::Stack { id: l_id, .. }, Self::Stack { id: r_id, .. }) => l_id == r_id,
             (Self::Uncommitted { .. }, Self::Uncommitted { .. }) => true,
             _ => false,
@@ -1570,7 +1541,7 @@ impl CliId {
             CliId::UncommittedHunkOrFile { .. } => "an uncommitted file or hunk",
             CliId::PathPrefix { .. } => "a path prefix",
             CliId::CommittedFile { .. } => "a committed file",
-            CliId::Branch { .. } => "a branch",
+            CliId::Branch(..) => "a branch",
             CliId::Commit { .. } => "a commit",
             CliId::Uncommitted { .. } => "the uncommitted area",
             CliId::Stack { .. } => "a stack",
@@ -1582,9 +1553,9 @@ impl CliId {
         match self {
             CliId::UncommittedHunkOrFile(UncommittedHunkOrFile { id, .. })
             | CliId::PathPrefix { id, .. }
-            | CliId::CommittedFile { id, .. }
-            | CliId::Branch { id, .. }
-            | CliId::Commit { id, .. }
+            | CliId::CommittedFile(CommittedFileId { id, .. })
+            | CliId::Branch(BranchId { id, .. })
+            | CliId::Commit(CommitId { id, .. })
             | CliId::Stack { id, .. }
             | CliId::Uncommitted { id, .. } => id.clone(),
         }
@@ -1593,12 +1564,10 @@ impl CliId {
     /// Get the stack id, if any.
     pub fn stack_id(&self) -> Option<StackId> {
         match self {
-            CliId::Branch { stack_id, .. } => *stack_id,
+            CliId::Branch(BranchId { stack_id, .. }) => *stack_id,
             CliId::Stack { stack_id, .. } => Some(*stack_id),
-            CliId::UncommittedHunkOrFile(uncommitted_cli_id) => {
-                uncommitted_cli_id.hunk_assignments.first().stack_id
-            }
             CliId::PathPrefix { .. }
+            | CliId::UncommittedHunkOrFile(..)
             | CliId::CommittedFile { .. }
             | CliId::Commit { .. }
             | CliId::Uncommitted { .. } => None,
@@ -1620,20 +1589,17 @@ impl CliId {
 pub struct UncommittedFile {
     /// The shortest ID that can be used to unambiguously refer to this file.
     pub short_id: ShortId,
-    /// Every element has the same [HunkAssignment::stack_id] and [HunkAssignment::path_bytes],
-    /// so the first assignment can be used to obtain both.
-    short_id_hunk_assignments: NonEmpty<(UnqualifiedHunkId, HunkAssignment)>,
+    /// Every element has the same [`HunkAssignment::path_bytes`] so the first assignment can be used
+    /// to obtain it.
+    short_id_hunk_assignments: NonEmpty<(UnqualifiedHunkId, WorktreeHunk)>,
 }
 
 impl UncommittedFile {
-    /// Return the file's stack if it is associated to one, or `None` if the Stack is unknown/has no ID.
-    pub fn stack_id(&self) -> Option<StackId> {
-        self.hunk_assignments().first().stack_id
-    }
     /// The path of the uncommitted file.
     pub fn path(&self) -> &BStr {
         self.hunk_assignments().first().path_bytes.as_ref()
     }
+
     /// Turn this instance into a [CliId].
     pub fn to_id(&self) -> CliId {
         CliId::UncommittedHunkOrFile(UncommittedHunkOrFile {
@@ -1644,8 +1610,9 @@ impl UncommittedFile {
             is_entire_file: true,
         })
     }
+
     /// Hunk assignments.
-    pub fn hunk_assignments(&self) -> NonEmpty<&HunkAssignment> {
+    pub fn hunk_assignments(&self) -> NonEmpty<&WorktreeHunk> {
         self.short_id_hunk_assignments
             .as_ref()
             .map(|(_, hunk_assignment)| hunk_assignment)
@@ -1711,7 +1678,7 @@ impl<'a> Node<'a> for &'a UncommittedFile {
 #[derive(Debug)]
 pub struct UncommittedHunk {
     /// The hunk assignment.
-    pub hunk_assignment: HunkAssignment,
+    pub hunk_assignment: WorktreeHunk,
 }
 
 impl<'a> Node<'a> for &'a UncommittedHunk {
@@ -1737,12 +1704,16 @@ impl<'a> Node<'a> for &'a UncommittedHunk {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq)]
 pub struct CommittedFileId {
+    /// The object ID of the commit containing the change to the file
     pub commit_id: gix::ObjectId,
+    /// The file path relative to the repository root
     pub path: BString,
+    /// The short CLI ID for this file (typically 2 characters)
     pub id: ShortId,
-    pub change_id: Option<ChangeId>,
+    /// The stable change ID from the commit headers, if present.
+    pub change_id: Option<but_core::ChangeId>,
 }
 
 impl CommittedFileId {
@@ -1762,7 +1733,7 @@ impl PartialEq for CommittedFileId {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq)]
 pub struct CommittedFileIdRef<'a> {
     pub commit_id: gix::ObjectId,
     pub path: &'a BStr,
@@ -1793,10 +1764,13 @@ impl PartialEq for CommittedFileIdRef<'_> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq)]
 pub struct BranchId {
+    /// The short name of the branch, like `main` or `origin/feat`.
     pub name: String,
+    /// The short CLI ID for this branch (typically 2 characters)
     pub id: ShortId,
+    /// The stack ID.
     pub stack_id: Option<StackId>,
 }
 
@@ -1816,7 +1790,7 @@ impl PartialEq for BranchId {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq)]
 pub struct BranchIdRef<'a> {
     pub name: &'a str,
     pub id: &'a str,
@@ -1838,8 +1812,69 @@ impl PartialEq for BranchIdRef<'_> {
         let Self {
             name,
             id: _,
-            stack_id: _,
+            stack_id,
         } = self;
-        name == &other.name
+        name == &other.name && stack_id == &other.stack_id
+    }
+}
+
+#[derive(Debug, Clone, Eq)]
+pub struct CommitId {
+    /// The object ID of the commit.
+    pub commit_id: gix::ObjectId,
+    /// The short CLI ID, a prefix of the object ID. This prefix is unique
+    /// among all commits in all stacks (but not necessarily among all
+    /// commits in the repo).
+    pub id: ShortId,
+    /// The stable change ID from the commit headers, if present.
+    pub change_id: Option<but_core::ChangeId>,
+}
+
+impl CommitId {
+    pub fn as_ref(&self) -> CommitIdRef<'_> {
+        CommitIdRef {
+            commit_id: self.commit_id,
+            id: &self.id,
+            change_id: self.change_id.as_ref(),
+        }
+    }
+}
+
+impl PartialEq for CommitId {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_ref() == other.as_ref()
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq)]
+pub struct CommitIdRef<'a> {
+    /// The object ID of the commit.
+    pub commit_id: gix::ObjectId,
+    /// The short CLI ID, a prefix of the object ID. This prefix is unique
+    /// among all commits in all stacks (but not necessarily among all
+    /// commits in the repo).
+    pub id: &'a str,
+    /// The stable change ID from the commit headers, if present.
+    pub change_id: Option<&'a but_core::ChangeId>,
+}
+
+impl CommitIdRef<'_> {
+    pub fn to_owned(self) -> CommitId {
+        CommitId {
+            commit_id: self.commit_id,
+            id: self.id.to_owned(),
+            change_id: self.change_id.cloned(),
+        }
+    }
+}
+
+impl PartialEq for CommitIdRef<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        let Self {
+            commit_id,
+            id: _,
+            change_id: _,
+        } = self;
+        *commit_id == other.commit_id
     }
 }

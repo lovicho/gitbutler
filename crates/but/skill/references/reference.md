@@ -361,6 +361,9 @@ but push <branch-name> --no-hooks  # Bypass pre-push hooks (--no-verify also wor
 ```
 
 Force push is enabled by default with protection checks. Use `-s` only when intentionally skipping those checks.
+After a successful push, GitButler also synchronizes PR targets and stack descriptions for the
+selected branch and its ancestors. A forge update failure is reported as a warning; it does not
+turn the completed Git push into a failure.
 
 ### `but pull`
 
@@ -396,6 +399,8 @@ but pr set-ready <selector>   # Mark review as ready
 
 **Key behavior:** `but pr new` automatically pushes the branch to remote before creating the PR. No need to run `but push` first. Force push and pre-push hooks run by default.
 Use `--no-hooks` to bypass pre-push hooks when needed.
+Review creation remains successful if the follow-up stack synchronization fails, and reports that
+partial success as a warning.
 
 Selectors for `auto-merge`, `set-draft`, and `set-ready` can be branch names, branch IDs, stack IDs, or numeric review IDs, comma-separated.
 

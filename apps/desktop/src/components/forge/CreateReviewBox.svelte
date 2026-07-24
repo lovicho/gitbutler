@@ -19,7 +19,6 @@
 		branchIndex: number;
 		parent: Segment | undefined;
 		withForce: boolean;
-		stackPrNumbers: (number | undefined)[];
 		prNumber?: number;
 		oncancel?: () => void;
 	};
@@ -32,7 +31,6 @@
 		branchIndex,
 		parent,
 		withForce,
-		stackPrNumbers,
 		prNumber,
 		oncancel,
 	}: Props = $props();
@@ -67,7 +65,6 @@
 			{branchIndex}
 			{parent}
 			{withForce}
-			{stackPrNumbers}
 			onClose={close}
 		/>
 		<ReviewCreationControls

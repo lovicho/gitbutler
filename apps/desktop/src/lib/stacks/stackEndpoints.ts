@@ -57,6 +57,7 @@ import type {
 	UncommitChangesFromCommitsResult,
 	UncommitChangesSource,
 	BranchRenameResult,
+	PushResult,
 } from "@gitbutler/but-sdk";
 
 export type BranchParams = {
@@ -77,16 +78,7 @@ export type CreateCommitRequest = {
 
 export type CreateCommitRequestWorktreeChanges = DiffSpec;
 
-export interface BranchPushResult {
-	/**
-	 * The list of pushed branches and their corresponding remote refnames.
-	 */
-	branchToRemote: [string, string][];
-	/**
-	 * The name of the remote to which the branches were pushed.
-	 */
-	remote: string;
-}
+export type BranchPushResult = PushResult;
 
 /**
  * All possible reasons for a commit to be rejected.

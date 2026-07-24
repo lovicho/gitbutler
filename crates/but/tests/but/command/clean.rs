@@ -145,25 +145,6 @@ fn json_output_no_empty_branches() {
 }
 
 #[test]
-fn does_not_remove_branch_with_assigned_changes() {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    env.setup_metadata(&["A"]);
-
-    // Create a new empty branch
-    env.but("branch new my-branch").assert().success();
-
-    // Assign a file change to this branch's stack
-    env.file("new-file.txt", "content");
-    env.but("stage new-file.txt my-branch").assert().success();
-
-    // my-branch has assigned changes, should not be cleaned
-    env.but("clean").assert().success().stdout_eq(str![[r#"
-No empty branches found.
-
-"#]]);
-}
-
-#[test]
 fn creates_oplog_entry() -> anyhow::Result<()> {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
     env.setup_metadata(&["A"]);

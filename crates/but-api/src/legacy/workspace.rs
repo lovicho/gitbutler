@@ -3,7 +3,7 @@ use std::str::FromStr;
 use anyhow::{Context as _, Result};
 use but_api_macros::but_api;
 use but_core::{RepositoryExt, ref_metadata::StackId};
-use but_ctx::Context;
+use but_ctx::{Context, ThreadSafeContext};
 use but_rebase::{
     RebaseOutput,
     graph_rebase::{
@@ -428,7 +428,63 @@ pub fn target_commits(
 /// Push a branch and any parent references that lie within the current workspace projection.
 #[but_api(napi, json::PushResult)]
 #[instrument(err(Debug))]
-pub fn workspace_branch_and_ancestors_push(
+pub async fn workspace_branch_and_ancestors_push(
+    ctx: ThreadSafeContext,
+    with_force: bool,
+    skip_force_push_protection: bool,
+    branch: String,
+    run_hooks: bool,
+    push_opts: Vec<but_gerrit::PushFlag>,
+) -> Result<WorkspaceBranchAndAncestorsPushOutcome> {
+    let branch: gix::refs::FullName = branch.try_into()?;
+    let sync_ctx = ctx.clone();
+    let push_branch = branch.clone();
+    // This API also awaits forge synchronization, but the Git push remains synchronous and may
+    // perform network I/O, hooks, and credential handling. Keep it off Tokio's async worker pool.
+    let result = tokio::task::spawn_blocking(move || {
+        let mut ctx = ctx.into_thread_local();
+        workspace_branch_and_ancestors_push_only(
+            &mut ctx,
+            with_force,
+            skip_force_push_protection,
+            push_branch.as_ref(),
+            run_hooks,
+            push_opts,
+        )
+    })
+    .await
+    .context("Push task failed")??;
+    let review_sync = if !push_needs_review_sync(&result) {
+        but_forge::ReviewSyncOutcome::NotNeeded
+    } else {
+        crate::legacy::forge::sync_review_stacks_after_push(
+            sync_ctx,
+            branch,
+            result.branch_sha_updates.clone(),
+        )
+        .await
+    };
+    Ok(WorkspaceBranchAndAncestorsPushOutcome {
+        push: result,
+        review_sync,
+    })
+}
+
+fn push_needs_review_sync(result: &gitbutler_git::PushResult) -> bool {
+    !result.branch_to_remote.is_empty()
+}
+
+/// The durable push result plus best-effort review synchronization.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceBranchAndAncestorsPushOutcome {
+    #[serde(flatten)]
+    pub push: gitbutler_git::PushResult,
+    pub review_sync: but_forge::ReviewSyncOutcome,
+}
+
+/// Perform only the Git push portion of [`workspace_branch_and_ancestors_push()`].
+pub fn workspace_branch_and_ancestors_push_only(
     ctx: &mut Context,
     with_force: bool,
     skip_force_push_protection: bool,
@@ -492,21 +548,52 @@ pub mod json {
         /// The list of branches with their before/after commit SHAs.
         /// Format: (branch_name, before_sha, after_sha)
         pub branch_sha_updates: Vec<(String, String, String)>,
+        /// Best-effort synchronization of the complete review stack affected by the push.
+        pub review_sync: but_forge::ReviewSyncOutcome,
     }
     #[cfg(feature = "export-schema")]
     but_schemars::register_sdk_type!(PushResult);
 
-    impl From<gitbutler_git::PushResult> for PushResult {
-        fn from(value: gitbutler_git::PushResult) -> Self {
+    impl From<super::WorkspaceBranchAndAncestorsPushOutcome> for PushResult {
+        fn from(value: super::WorkspaceBranchAndAncestorsPushOutcome) -> Self {
             Self {
-                remote: value.remote,
+                remote: value.push.remote,
                 branch_to_remote: value
+                    .push
                     .branch_to_remote
                     .into_iter()
                     .map(|(name, refname)| (name, refname.to_string()))
                     .collect(),
-                branch_sha_updates: value.branch_sha_updates,
+                branch_sha_updates: value.push.branch_sha_updates,
+                review_sync: value.review_sync,
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::push_needs_review_sync;
+
+    #[test]
+    fn no_op_push_does_not_request_review_synchronization() {
+        let no_op = gitbutler_git::PushResult {
+            remote: "origin".into(),
+            branch_to_remote: Vec::new(),
+            branch_sha_updates: Vec::new(),
+        };
+        assert!(!push_needs_review_sync(&no_op));
+
+        let pushed = gitbutler_git::PushResult {
+            remote: "origin".into(),
+            branch_to_remote: vec![(
+                "feature".into(),
+                "refs/remotes/origin/feature"
+                    .try_into()
+                    .expect("valid remote reference"),
+            )],
+            branch_sha_updates: Vec::new(),
+        };
+        assert!(push_needs_review_sync(&pushed));
     }
 }

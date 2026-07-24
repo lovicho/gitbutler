@@ -3,9 +3,6 @@
 	import BranchDropIndicator from "$components/branch/BranchDropIndicator.svelte";
 	import Dropzone from "$components/shared/Dropzone.svelte";
 	import { MoveBranchDzHandler } from "$lib/dragging/dropHandlers/branchDropHandler";
-	import { FORGE_INFO_SERVICE } from "$lib/forge/forgeInfo.svelte";
-	import { inject } from "@gitbutler/core/context";
-	import type { PrService } from "$lib/forge/prService.svelte";
 
 	interface Props {
 		projectId: string;
@@ -13,8 +10,6 @@
 		branchName: string;
 		lineColor: string;
 		isCommitting: boolean;
-		baseBranchName: string | undefined;
-		prService: PrService | undefined;
 		isFirst?: boolean;
 	}
 
@@ -24,24 +19,12 @@
 		branchName,
 		lineColor,
 		isCommitting,
-		baseBranchName,
-		prService,
 		isFirst = false,
 	}: Props = $props();
-
-	const forgeInfoService = inject(FORGE_INFO_SERVICE);
-	const unitSymbol = $derived(forgeInfoService.get(projectId).response?.unit.symbol);
 </script>
 
-{#if !isCommitting && baseBranchName}
-	{@const moveBranchHandler = new MoveBranchDzHandler(
-		prService,
-		projectId,
-		stackId,
-		branchName,
-		baseBranchName,
-		unitSymbol,
-	)}
+{#if !isCommitting}
+	{@const moveBranchHandler = new MoveBranchDzHandler(projectId, stackId, branchName)}
 	<Dropzone handlers={[moveBranchHandler]}>
 		{#snippet overlay({ hovered, activated })}
 			{#if isFirst}

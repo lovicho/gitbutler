@@ -35,12 +35,12 @@ pub fn handle(
                 // Direct stack ID - get the branches for display
                 get_stack_branches(&stacks, *stack_id, identifier)?
             }
-            CliId::Branch { name, stack_id, .. } => {
+            CliId::Branch(branch) => {
                 // Branch ID - use the associated stack
-                if let Some(stack_id) = stack_id {
-                    get_stack_branches(&stacks, *stack_id, name)?
+                if let Some(stack_id) = branch.stack_id {
+                    get_stack_branches(&stacks, stack_id, &branch.name)?
                 } else {
-                    bail!("Branch '{name}' does not have an associated stack");
+                    bail!("Branch '{}' does not have an associated stack", branch.name);
                 }
             }
             CliId::Commit { .. } => {

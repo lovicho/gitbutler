@@ -1,15 +1,13 @@
 use std::{
     ffi::OsString,
-    path::Path,
+    path::{Path, PathBuf},
     process::{Command, Stdio},
     sync::LazyLock,
 };
 
-#[cfg(target_os = "macos")]
-use std::path::PathBuf;
-
 use crate::open::spawn::spawn_and_reap;
 
+use nonempty::NonEmpty;
 use serde::{Deserialize, Serialize};
 
 /// Name of the user-defined programs file
@@ -21,9 +19,13 @@ pub const FILEPATH_PLACEHOLDER: &str = "{{filepath}}";
 /// Placeholder used for line number.
 pub const LINE_NUMBER_PLACEHOLDER: &str = "{{line_number}}";
 
+/// Wildcard used to match any file extension (even the empty one)
+pub const FILE_EXTENSION_WILDCARD: &str = "*";
+
 /// Program category to classify an openable program.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub enum ProgramCategory {
+    #[default]
     /// A text editor/IDE.
     Editor,
     /// A file manager such as Finder, Explorer or Thunar.
@@ -58,6 +60,8 @@ pub struct ProgramSpec {
     pub executable: ExecutableProgram,
     /// The category of the program.
     pub category: ProgramCategory,
+    /// Associated program extensions.
+    pub extensions: Option<Vec<String>>,
 }
 
 impl ProgramSpec {
@@ -72,21 +76,6 @@ impl ProgramSpec {
             ExecutableProgram::PathExecutable(PathExecutable { requires_tty, .. }) => *requires_tty,
             #[cfg(target_os = "macos")]
             ExecutableProgram::MacosApplication(_) => false,
-        }
-    }
-}
-
-impl From<UserDefinedProgramSpec> for ProgramSpec {
-    fn from(value: UserDefinedProgramSpec) -> Self {
-        ProgramSpec {
-            id: value.id.unwrap_or_else(|| value.name.clone()),
-            name: value.name,
-            cli_arg_supplier: CliArgumentSupplier::Custom(CustomCliArgumentSupplier {
-                open_args: value.open_args,
-                open_at_line_args: value.open_at_line_args,
-            }),
-            executable: value.executable.into(),
-            category: value.category.into(),
         }
     }
 }
@@ -175,6 +164,7 @@ enum CliArgumentSupplier {
     Sublime,
     Custom(CustomCliArgumentSupplier),
     #[cfg(all(target_os = "macos", not(debug_assertions)))]
+    #[allow(dead_code)]
     Xcode,
     /// For programs that don't support any special "open at" semantics
     #[allow(dead_code)]
@@ -182,14 +172,8 @@ enum CliArgumentSupplier {
 }
 
 impl CliArgumentSupplier {
-    /// Add argument(s) to `cmd` to open the file on the specific line, or error if it's not
-    /// supported.
-    fn open_at_line<'a>(
-        &self,
-        cmd: &'a mut Command,
-        path: &Path,
-        line_nr: u32,
-    ) -> anyhow::Result<&'a mut Command> {
+    /// Add argument(s) to `cmd` to open the file on the specific line.
+    fn open_at_line<'a>(&self, cmd: &'a mut Command, path: &Path, line_nr: u32) -> &'a mut Command {
         match self {
             Self::VSCodeLike => cmd.arg("--goto").arg(self.path_with_line_nr(path, line_nr)),
             Self::Zed => cmd.arg(self.path_with_line_nr(path, line_nr)),
@@ -197,11 +181,37 @@ impl CliArgumentSupplier {
             #[cfg(all(target_os = "macos", not(debug_assertions)))]
             Self::Xcode => cmd.arg("--line").arg(line_nr.to_string()).arg(path),
             Self::Neovim => cmd.arg(format!("+{line_nr}")).arg(path),
-            Self::Custom(open_at_line) => open_at_line.open_at_line(cmd, path, line_nr),
+            Self::Custom(custom) => custom.open_at_line(cmd, path, line_nr),
             Self::Default => cmd.arg(path),
         };
 
-        Ok(cmd)
+        cmd
+    }
+
+    /// Add argument(s) to `cmd` to open the file.
+    fn open<'a>(&self, cmd: &'a mut Command, path: &Path) -> &'a mut Command {
+        match self {
+            Self::Custom(custom) => custom.open(cmd, path),
+            _ => cmd.arg(path),
+        };
+        cmd
+    }
+
+    /// Add argument(s) to `cmd` to open all files.
+    fn open_many<'a, P: AsRef<Path>>(
+        &self,
+        cmd: &'a mut Command,
+        paths: &NonEmpty<P>,
+    ) -> &'a mut Command {
+        match self {
+            Self::Custom(custom) => custom.open_many(cmd, paths),
+            _ => {
+                for path in paths {
+                    cmd.arg(path.as_ref());
+                }
+                cmd
+            }
+        }
     }
 
     fn path_with_line_nr(&self, path: &Path, line_nr: u32) -> OsString {
@@ -261,6 +271,28 @@ impl CustomCliArgumentSupplier {
         }
         cmd
     }
+
+    fn open_many<'a, P: AsRef<Path>>(
+        &self,
+        cmd: &'a mut Command,
+        paths: &NonEmpty<P>,
+    ) -> &'a mut Command {
+        let Some(open_args) = &self.open_args else {
+            return CliArgumentSupplier::Default.open_many(cmd, paths);
+        };
+
+        for arg in open_args {
+            if arg.contains(FILEPATH_PLACEHOLDER) {
+                for path in paths {
+                    cmd.arg(arg.replace(FILEPATH_PLACEHOLDER, &path.as_ref().to_string_lossy()));
+                }
+            } else {
+                cmd.arg(arg);
+            }
+        }
+
+        cmd
+    }
 }
 
 /// The built-in supported programs.
@@ -279,6 +311,7 @@ pub(crate) static PROGRAMS: LazyLock<Vec<ProgramSpec>> = LazyLock::new(|| {
                 requires_tty: true,
             }),
             category: ProgramCategory::Editor,
+            extensions: None,
         },
         ProgramSpec {
             id: "cursor".into(),
@@ -299,6 +332,7 @@ pub(crate) static PROGRAMS: LazyLock<Vec<ProgramSpec>> = LazyLock::new(|| {
                 cli_wrapper_path: Some("Contents/Resources/app/bin/cursor".into()),
             }),
             category: ProgramCategory::Editor,
+            extensions: None,
         },
         ProgramSpec {
             id: "sublime".into(),
@@ -318,6 +352,7 @@ pub(crate) static PROGRAMS: LazyLock<Vec<ProgramSpec>> = LazyLock::new(|| {
                 cli_wrapper_path: Some("Contents/SharedSupport/bin/subl".into()),
             }),
             category: ProgramCategory::Editor,
+            extensions: None,
         },
         ProgramSpec {
             id: "vscode".into(),
@@ -337,6 +372,7 @@ pub(crate) static PROGRAMS: LazyLock<Vec<ProgramSpec>> = LazyLock::new(|| {
                 cli_wrapper_path: Some("Contents/Resources/app/bin/code".into()),
             }),
             category: ProgramCategory::Editor,
+            extensions: None,
         },
         #[cfg(all(target_os = "macos", not(debug_assertions)))]
         ProgramSpec {
@@ -348,6 +384,7 @@ pub(crate) static PROGRAMS: LazyLock<Vec<ProgramSpec>> = LazyLock::new(|| {
                 cli_wrapper_path: Some("Contents/Developer/usr/bin/xed".into()),
             }),
             category: ProgramCategory::Editor,
+            extensions: None,
         },
         ProgramSpec {
             id: "zed".into(),
@@ -367,6 +404,7 @@ pub(crate) static PROGRAMS: LazyLock<Vec<ProgramSpec>> = LazyLock::new(|| {
                 cli_wrapper_path: Some("Contents/MacOS/cli".into()),
             }),
             category: ProgramCategory::Editor,
+            extensions: None,
         },
         #[cfg(debug_assertions)]
         ProgramSpec {
@@ -384,6 +422,7 @@ pub(crate) static PROGRAMS: LazyLock<Vec<ProgramSpec>> = LazyLock::new(|| {
                 requires_tty: true,
             }),
             category: ProgramCategory::Test,
+            extensions: None,
         },
         #[cfg(debug_assertions)]
         ProgramSpec {
@@ -398,6 +437,7 @@ pub(crate) static PROGRAMS: LazyLock<Vec<ProgramSpec>> = LazyLock::new(|| {
                 requires_tty: true,
             }),
             category: ProgramCategory::Test,
+            extensions: None,
         },
         #[cfg(all(target_os = "linux", not(debug_assertions)))]
         ProgramSpec {
@@ -409,9 +449,20 @@ pub(crate) static PROGRAMS: LazyLock<Vec<ProgramSpec>> = LazyLock::new(|| {
                 requires_tty: false,
             }),
             category: ProgramCategory::FileManager,
+            extensions: None,
         },
     ])
 });
+
+/// Specification to open.
+pub enum OpenSpec {
+    /// A single file.
+    File(PathBuf),
+    /// Multiple files.
+    Files(NonEmpty<PathBuf>),
+    /// A single file at a specific line.
+    FileAtLine(PathBuf, u32),
+}
 
 /// Low-level API to open a `path` with a specified `program`.
 ///
@@ -419,18 +470,14 @@ pub(crate) static PROGRAMS: LazyLock<Vec<ProgramSpec>> = LazyLock::new(|| {
 /// It is up to the caller to assure that the `path` is safe to open and that the `program` is safe
 /// to use. Therefore, this should never be exposed to an untrusted context, such as the GUI
 /// renderer.
-pub fn open_in_program_unchecked(
-    program: &ProgramSpec,
-    path: &Path,
-    line_nr: Option<u32>,
-) -> anyhow::Result<()> {
+pub fn open_in_program_unchecked(program: &ProgramSpec, open_spec: OpenSpec) -> anyhow::Result<()> {
     match &program.executable {
         ExecutableProgram::PathExecutable(path_executable) => {
-            open_in_path_executable(path_executable, &program.cli_arg_supplier, path, line_nr)
+            open_in_path_executable(path_executable, &program.cli_arg_supplier, open_spec)
         }
         #[cfg(target_os = "macos")]
         ExecutableProgram::MacosApplication(macos_application) => {
-            open_in_macos_application(macos_application, &program.cli_arg_supplier, path, line_nr)
+            open_in_macos_application(macos_application, &program.cli_arg_supplier, open_spec)
         }
     }
 }
@@ -438,17 +485,16 @@ pub fn open_in_program_unchecked(
 fn open_in_path_executable(
     path_executable: &PathExecutable,
     cli_arg_supplier: &CliArgumentSupplier,
-    path: &Path,
-    line_nr: Option<u32>,
+    open_spec: OpenSpec,
 ) -> anyhow::Result<()> {
     let mut cmd = Command::new(&path_executable.name_or_path);
 
-    if let Some(line_nr) = line_nr {
-        cli_arg_supplier.open_at_line(&mut cmd, path, line_nr)?
-    } else if let CliArgumentSupplier::Custom(custom_cli_arg_supplier) = cli_arg_supplier {
-        custom_cli_arg_supplier.open(&mut cmd, path)
-    } else {
-        cmd.arg(path)
+    match open_spec {
+        OpenSpec::File(path) => cli_arg_supplier.open(&mut cmd, &path),
+        OpenSpec::Files(paths) => cli_arg_supplier.open_many(&mut cmd, &paths),
+        OpenSpec::FileAtLine(path, line_nr) => {
+            cli_arg_supplier.open_at_line(&mut cmd, &path, line_nr)
+        }
     };
 
     if path_executable.requires_tty {
@@ -458,7 +504,11 @@ fn open_in_path_executable(
             .status()?;
     } else {
         cmd.stdout(Stdio::null()).stderr(Stdio::null());
-        spawn_and_reap(cmd, &path_executable.name_or_path, &path.to_string_lossy())?;
+        spawn_and_reap(
+            cmd,
+            &path_executable.name_or_path,
+            &path_executable.name_or_path,
+        )?;
     }
 
     Ok(())
@@ -514,30 +564,42 @@ impl MacosApplication {
 fn open_in_macos_application(
     app: &MacosApplication,
     cli_arg_supplier: &CliArgumentSupplier,
-    path: &Path,
-    line_nr: Option<u32>,
+    open_spec: OpenSpec,
 ) -> anyhow::Result<()> {
-    if let (Some(line_nr), Ok(cli_abspath)) = (line_nr, app.resolve_cli_wrapper_abspath()) {
-        let mut cmd = Command::new(cli_abspath);
-        cli_arg_supplier.open_at_line(&mut cmd, path, line_nr)?;
-        cmd.stdout(Stdio::null()).stderr(Stdio::null());
-        spawn_and_reap(cmd, &app.bundle_identifier, &path.to_string_lossy())?;
-    } else {
-        let mut cmd = Command::new("/usr/bin/open");
-        let status = cmd
-            .arg("-b")
-            .arg(&app.bundle_identifier)
-            .arg(path)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()?;
+    match open_spec {
+        OpenSpec::FileAtLine(path, line_nr) => match app.resolve_cli_wrapper_abspath() {
+            Ok(cli_abspath) => {
+                let mut cmd = Command::new(cli_abspath);
+                cli_arg_supplier.open_at_line(&mut cmd, &path, line_nr);
+                cmd.stdout(Stdio::null()).stderr(Stdio::null());
+                spawn_and_reap(cmd, &app.bundle_identifier, &path.to_string_lossy())
+            }
+            Err(_) => open_macos_application_via_open(app, &NonEmpty::new(path)),
+        },
+        OpenSpec::File(path) => open_macos_application_via_open(app, &NonEmpty::new(path)),
+        OpenSpec::Files(paths) => open_macos_application_via_open(app, &paths),
+    }
+}
 
-        if !status.success() {
-            anyhow::bail!(
-                "failed to open {path:?} with app bundle identifier '{}'",
-                app.bundle_identifier
-            );
-        }
+#[cfg(target_os = "macos")]
+fn open_macos_application_via_open(
+    app: &MacosApplication,
+    paths: &NonEmpty<PathBuf>,
+) -> anyhow::Result<()> {
+    let mut cmd = Command::new("/usr/bin/open");
+    cmd.arg("-b").arg(&app.bundle_identifier);
+
+    for path in paths {
+        cmd.arg(path);
+    }
+
+    let status = cmd.stdout(Stdio::null()).stderr(Stdio::null()).status()?;
+
+    if !status.success() {
+        anyhow::bail!(
+            "failed to open {paths:?} with app bundle identifier '{}'",
+            app.bundle_identifier
+        );
     }
 
     Ok(())
@@ -552,11 +614,11 @@ pub struct UserDefinedProgramSpec {
     /// If left empty, the ID is derived from [`Self::name`] instead.
     pub id: Option<String>,
     /// The display name of the program.
-    pub name: String,
+    pub name: Option<String>,
     /// The exuctable to invoke to start the program.
-    pub executable: UserDefinedExecutableProgram,
+    pub executable: Option<UserDefinedExecutableProgram>,
     /// The kind of the program.
-    pub category: UserDefinedProgramCategory,
+    pub category: Option<UserDefinedProgramCategory>,
     /// Arguments to pass to the executable when invoked to open a file.
     ///
     /// Recognized placeholders:
@@ -570,6 +632,72 @@ pub struct UserDefinedProgramSpec {
     /// * [`FILEPATH_PLACEHOLDER`] is substituted for the filepath
     /// * [`LINE_NUMBER_PLACEHOLDER`] is substituted for the line number
     pub open_at_line_args: Option<Vec<String>>,
+    /// File extensions to associate with this program.
+    pub extensions: Option<Vec<String>>,
+}
+
+impl UserDefinedProgramSpec {
+    /// Try to transform this specification into a valid [`ProgramSpec`].
+    pub fn try_into_program_spec(self) -> anyhow::Result<ProgramSpec> {
+        let extensions = self.extensions.map(|extensions| {
+            extensions
+                .into_iter()
+                .map(|ext| ext.strip_prefix('.').unwrap_or(&ext).to_owned())
+                .collect()
+        });
+
+        if let Some(id) = &self.id
+            && let Some(builtin) = PROGRAMS.iter().find(|p| &p.id == id)
+        {
+            // This is an override for a builtin - merge!
+            let cli_arg_supplier = if self.open_args.is_some() || self.open_at_line_args.is_some() {
+                CliArgumentSupplier::Custom(CustomCliArgumentSupplier {
+                    open_args: self.open_args,
+                    open_at_line_args: self.open_at_line_args,
+                })
+            } else {
+                builtin.cli_arg_supplier.clone()
+            };
+
+            Ok(ProgramSpec {
+                id: id.clone(),
+                name: self.name.unwrap_or_else(|| builtin.name.clone()),
+                executable: self
+                    .executable
+                    .map(Into::into)
+                    .unwrap_or_else(|| builtin.executable.clone()),
+                category: self
+                    .category
+                    .map(Into::into)
+                    .unwrap_or_else(|| builtin.category.clone()),
+                cli_arg_supplier,
+                extensions,
+            })
+        } else {
+            let (name, id) = match (self.name, self.id) {
+                (Some(name), Some(id)) => (name, id),
+                (Some(name), None) => (name.clone(), name),
+                (None, Some(id)) => (id.clone(), id),
+                (None, None) => anyhow::bail!("id or name must be specified"),
+            };
+
+            let Some(executable) = self.executable else {
+                anyhow::bail!("executable must be specified for non built-ins")
+            };
+
+            Ok(ProgramSpec {
+                id,
+                name,
+                executable: executable.into(),
+                category: self.category.map(Into::into).unwrap_or_default(),
+                cli_arg_supplier: CliArgumentSupplier::Custom(CustomCliArgumentSupplier {
+                    open_args: self.open_args,
+                    open_at_line_args: self.open_at_line_args,
+                }),
+                extensions,
+            })
+        }
+    }
 }
 
 /// The executable to invoke for a program.
@@ -619,10 +747,11 @@ pub struct UserDefinedMacosApplication {
     pub cli_wrapper_path: Option<String>,
 }
 
-#[cfg(all(test, target_os = "macos"))]
+#[cfg(test)]
 mod tests {
     use super::*;
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn user_defined_macos_application_deserializes_into_program_spec() {
         let spec: UserDefinedProgramSpec = serde_json::from_str(
@@ -638,7 +767,7 @@ mod tests {
         )
         .expect("macOS application should deserialize");
 
-        let spec: ProgramSpec = spec.into();
+        let spec: ProgramSpec = spec.try_into_program_spec().unwrap();
         assert_eq!(
             spec,
             ProgramSpec {
@@ -653,8 +782,104 @@ mod tests {
                     cli_wrapper_path: Some("Contents/Resources/app/bin/code".into()),
                 }),
                 category: ProgramCategory::Editor,
+                extensions: None,
             },
             "JSON should convert to expected internal program specification"
         );
+    }
+
+    #[test]
+    fn user_defined_override_for_builtin_executable_merges_with_builtin() {
+        let vscode_override_spec: UserDefinedProgramSpec = serde_json::from_str(
+            r#"{
+                "id": "vscode",
+                "executable": {
+                    "type": "pathExecutable",
+                    "nameOrPath": "/overridden/path",
+                    "requiresTerminal": false
+                }
+            }"#,
+        )
+        .expect("must deserialize");
+
+        let builtin_vscode = PROGRAMS.iter().find(|p| p.id == "vscode").unwrap();
+
+        let spec: ProgramSpec = vscode_override_spec.try_into_program_spec().unwrap();
+        assert_eq!(
+            spec,
+            ProgramSpec {
+                executable: ExecutableProgram::PathExecutable(PathExecutable {
+                    name_or_path: "/overridden/path".into(),
+                    requires_tty: false
+                }),
+                ..builtin_vscode.clone()
+            }
+        )
+    }
+
+    #[test]
+    fn user_defined_override_for_builtin_category_merges_with_builtin() {
+        let vscode_override_spec: UserDefinedProgramSpec = serde_json::from_str(
+            r#"{
+                "id": "vscode",
+                "category": "fileManager"
+            }"#,
+        )
+        .expect("must deserialize");
+
+        let builtin_vscode = PROGRAMS.iter().find(|p| p.id == "vscode").unwrap();
+
+        let spec: ProgramSpec = vscode_override_spec.try_into_program_spec().unwrap();
+        assert_eq!(
+            spec,
+            ProgramSpec {
+                category: ProgramCategory::FileManager,
+                ..builtin_vscode.clone()
+            }
+        )
+    }
+
+    #[test]
+    fn user_defined_override_for_builtin_extensions_merges_with_builtin() {
+        let vscode_override_spec: UserDefinedProgramSpec = serde_json::from_str(
+            r#"{
+                "id": "vscode",
+                "extensions": ["txt"]
+            }"#,
+        )
+        .expect("must deserialize");
+
+        let builtin_vscode = PROGRAMS.iter().find(|p| p.id == "vscode").unwrap();
+
+        let spec: ProgramSpec = vscode_override_spec.try_into_program_spec().unwrap();
+        assert_eq!(
+            spec,
+            ProgramSpec {
+                extensions: Some(vec!["txt".into()]),
+                ..builtin_vscode.clone()
+            }
+        )
+    }
+
+    #[test]
+    fn user_defined_override_for_builtin_extensions_strips_periods_from_extensions() {
+        let vscode_override_spec: UserDefinedProgramSpec = serde_json::from_str(
+            r#"{
+                "id": "vscode",
+                "extensions": [".txt"]
+            }"#,
+        )
+        .expect("must deserialize");
+
+        let builtin_vscode = PROGRAMS.iter().find(|p| p.id == "vscode").unwrap();
+
+        let spec: ProgramSpec = vscode_override_spec.try_into_program_spec().unwrap();
+        assert_eq!(
+            spec,
+            ProgramSpec {
+                extensions: Some(vec!["txt".into()]),
+                ..builtin_vscode.clone()
+            }
+        )
     }
 }

@@ -5,13 +5,10 @@ import { getHeadInfoIndex, resolveRelativeTo } from "#ui/api/ref-info.ts";
 import { getButtonClassName } from "#ui/components/Button.tsx";
 import { classes } from "#ui/components/classes.ts";
 import { Icon } from "#ui/components/Icon.tsx";
+import { Kbd } from "#ui/components/Kbd.tsx";
 import { TooltipPopup } from "#ui/components/Tooltip.tsx";
-import {
-	changesHotkeys,
-	formatForDisplaySorted,
-	outlineHotkeys,
-	toElectronAccelerator,
-} from "#ui/hotkeys.ts";
+import { draftCommitMessageQueryOptions, usePersistDraftCommitMessage } from "#ui/draft.ts";
+import { changesHotkeys, outlineHotkeys, toElectronAccelerator } from "#ui/hotkeys.ts";
 import { nativeMenuItem, showNativeMenuFromTrigger, type NativeMenuItem } from "#ui/native-menu.ts";
 import { operandEquals, operandIdentityKey, type Operand } from "#ui/operands.ts";
 import { projectSlice } from "#ui/projects/state.ts";
@@ -29,9 +26,6 @@ export type CommitTargetComboboxItem = {
 	operand: Extract<Operand, { _tag: "Branch" | "Commit" }>;
 	relativeTo: RelativeTo;
 };
-
-// oxlint-disable-next-line react/only-export-components -- TODO: move
-export const commitMessageInputId = "commit-message-input";
 
 const CommitTargetComboboxPopup: FC = () => (
 	<Combobox.Popup className={classes(uiStyles.popup, "text-13", styles.targetPopup)}>
@@ -61,8 +55,17 @@ export const CommitForm: FC<{
 	projectId: string;
 	commitTarget: CommitTargetComboboxItem | null;
 	targetComboboxItems: Array<CommitTargetComboboxItem>;
+	startCommitButtonId: string;
+	commitMessageInputId: string;
 	className?: string;
-}> = ({ projectId, commitTarget, targetComboboxItems, className }) => {
+}> = ({
+	projectId,
+	commitTarget,
+	targetComboboxItems,
+	startCommitButtonId,
+	commitMessageInputId,
+	className,
+}) => {
 	const dispatch = useAppDispatch();
 	const { isPending: isCommitCreatePending, mutate: commitCreate } = useCommitCreate({
 		projectId,
@@ -74,6 +77,10 @@ export const CommitForm: FC<{
 	const { data: worktreeChanges } = useQuery(changesInWorktreeQueryOptions(projectId));
 
 	const commitTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+	const formRef = useRef<HTMLFormElement | null>(null);
+
+	const { data: draftMessage } = useQuery(draftCommitMessageQueryOptions(projectId));
+	const { mutate: persistDraftMessage } = usePersistDraftCommitMessage();
 
 	const isDefaultMode = useAppSelector(
 		(state) => projectSlice.selectors.selectOutlineModeState(state, projectId)._tag === "Default",
@@ -84,6 +91,10 @@ export const CommitForm: FC<{
 		select: getHeadInfoIndex,
 	});
 	const isCommitOrAmendPending = isCommitCreatePending || isCommitAmendPending;
+
+	const [open, setOpen] = useState(false);
+	const [isExpanded, setIsExpanded] = useState(false);
+
 	const canCommitOrAmendBase = isDefaultMode && commitTarget !== null && !isCommitOrAmendPending;
 	const canCommit = canCommitOrAmendBase;
 	const canAmend =
@@ -92,8 +103,6 @@ export const CommitForm: FC<{
 		worktreeChanges.changes.length > 0 &&
 		headInfoIndex &&
 		resolveRelativeTo({ headInfoIndex, relativeTo: commitTarget.relativeTo }) !== null;
-
-	const [open, setOpen] = useState(false);
 
 	const selectBranch = (option: CommitTargetComboboxItem | null) => {
 		if (option)
@@ -106,13 +115,16 @@ export const CommitForm: FC<{
 
 		commitCreate(
 			{
-				message: commitTextareaRef.current?.value ?? "",
+				message: commitTextareaRef.current?.value ?? draftMessage ?? "",
 				relativeTo: commitTarget.relativeTo,
 			},
 			{
 				onSuccess: (response) => {
-					if (response.newCommit !== null && commitTextareaRef.current)
-						commitTextareaRef.current.value = "";
+					if (response.newCommit === null) return;
+
+					if (commitTextareaRef.current) commitTextareaRef.current.value = "";
+
+					persistDraftMessage({ projectId, message: "" });
 				},
 			},
 		);
@@ -179,25 +191,77 @@ export const CommitForm: FC<{
 		},
 	]);
 
-	useHotkey("Escape", () => focusSelectionScope("uncommitted-files"), {
-		target: commitTextareaRef,
-		conflictBehavior: "allow",
-	});
+	// Note we deliberately don't scope this hotkey with `target` refs. The form
+	// is conditionally rendered, so the refs are `null` on mount, and the hook
+	// would never register the listener.
+	useHotkey(
+		"Escape",
+		() => {
+			const form = formRef.current;
+			if (!form || !form.contains(document.activeElement)) return;
 
-	const commitTextareaLabel = `Compose commit message ${formatForDisplaySorted(
-		outlineHotkeys.composeCommitMessage.hotkey,
-	)}`;
+			// Persist the draft before the textarea unmounts.
+			persistDraftMessage({ projectId, message: commitTextareaRef.current?.value ?? "" });
+			setIsExpanded(false);
+			setOpen(false);
+			focusSelectionScope("uncommitted-files");
+		},
+		{
+			conflictBehavior: "allow",
+			enabled: isExpanded,
+		},
+	);
+
+	const commitTextareaLabel = "Compose commit message";
+
+	if (!isExpanded) {
+		return (
+			<Button
+				className={classes(
+					getButtonClassName({ variant: "pop" }),
+					styles.startCommitButton,
+					className,
+				)}
+				id={startCommitButtonId}
+				onClick={() => setIsExpanded(true)}
+				focusableWhenDisabled
+				disabled={!isDefaultMode}
+			>
+				Start commit
+				<Kbd hotkey={outlineHotkeys.composeCommitMessage.hotkey} variant="button" />
+			</Button>
+		);
+	}
 
 	return (
-		<form onSubmit={submit} className={classes(styles.form, className)}>
+		// oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- Used for persistence, not UI per se.
+		<form
+			ref={formRef}
+			onSubmit={submit}
+			onBlur={(e) => {
+				const next = e.relatedTarget;
+				if (next instanceof Node && e.currentTarget.contains(next)) return;
+				persistDraftMessage({ projectId, message: commitTextareaRef.current?.value ?? "" });
+			}}
+			className={classes(styles.form, className)}
+		>
 			<textarea
+				// The form is only rendered expanded after interacting with the
+				// "Start commit" trigger, so focusing the input is expected.
+				// oxlint-disable-next-line jsx_a11y/no-autofocus
+				autoFocus
 				id={commitMessageInputId}
-				ref={commitTextareaRef}
+				ref={(el) => {
+					commitTextareaRef.current = el;
+					// Place the caret at the end of the restored draft message.
+					el?.setSelectionRange(el.value.length, el.value.length);
+				}}
 				aria-label={commitTextareaLabel}
 				disabled={!isDefaultMode}
 				readOnly={isCommitOrAmendPending}
 				placeholder={commitTextareaLabel}
-				className={classes("text-13", "text-body", styles.textarea)}
+				defaultValue={draftMessage ?? ""}
+				className={classes("text-13", "text-body", styles.textarea, uiStyles.overlayScrollbar)}
 			/>
 
 			<div className={styles.footer}>
@@ -247,36 +311,56 @@ export const CommitForm: FC<{
 					</Combobox.Portal>
 				</Combobox.Root>
 
-				<div className={styles.dropdownButton}>
+				<div className={styles.commitActions}>
 					<Tooltip.Root>
 						<Tooltip.Trigger
-							className={getButtonClassName({ variant: "pop" })}
-							// We pass `disabled` here because we want to disable the button, not
-							// the tooltip. Other props should be passed above.
-							render={<Button focusableWhenDisabled type="submit" disabled={!canCommit} />}
+							className={getButtonClassName({ variant: "outline" })}
+							onClick={() => {
+								// Persist the draft before the textarea unmounts.
+								persistDraftMessage({
+									projectId,
+									message: commitTextareaRef.current?.value ?? "",
+								});
+								setIsExpanded(false);
+								setOpen(false);
+								focusSelectionScope("uncommitted-files");
+							}}
+							render={
+								<Button focusableWhenDisabled disabled={isCommitOrAmendPending} type="button" />
+							}
 						>
-							Commit
+							Cancel
 						</Tooltip.Trigger>
 						<Tooltip.Portal>
 							<Tooltip.Positioner sideOffset={4}>
-								<Tooltip.Popup render={<TooltipPopup kbd={changesHotkeys.commit.hotkey} />}>
-									{changesHotkeys.commit.meta.name}
-								</Tooltip.Popup>
+								<Tooltip.Popup render={<TooltipPopup kbd="Escape" />}>Cancel</Tooltip.Popup>
 							</Tooltip.Positioner>
 						</Tooltip.Portal>
 					</Tooltip.Root>
-					<div aria-hidden className={styles.dropdownButtonSeparator} />
-					<Button
-						focusableWhenDisabled
-						disabled={!(canAmend || canCommit)}
-						aria-label="Commit options"
-						className={getButtonClassName({ variant: "pop", iconOnly: true })}
-						onClick={(event) => {
-							void showNativeMenuFromTrigger(event.currentTarget, commitMenuItems);
-						}}
-					>
-						<Icon name="chevron-down" />
-					</Button>
+
+					<div className={styles.dropdownButton}>
+						<Button
+							className={getButtonClassName({ variant: "pop" })}
+							focusableWhenDisabled
+							type="submit"
+							disabled={!canCommit}
+						>
+							Commit
+							<Kbd hotkey={changesHotkeys.commit.hotkey} variant="button" />
+						</Button>
+						<div aria-hidden className={styles.dropdownButtonSeparator} />
+						<Button
+							focusableWhenDisabled
+							disabled={!(canAmend || canCommit)}
+							aria-label="Commit options"
+							className={getButtonClassName({ variant: "pop", iconOnly: true })}
+							onClick={(event) => {
+								void showNativeMenuFromTrigger(event.currentTarget, commitMenuItems);
+							}}
+						>
+							<Icon name="chevron-down" />
+						</Button>
+					</div>
 				</div>
 			</div>
 		</form>

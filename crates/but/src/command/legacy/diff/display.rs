@@ -1,8 +1,8 @@
 use but_core::{UnifiedPatch, ui, unified_diff::DiffHunk};
-use but_hunk_assignment::HunkAssignment;
 use colored::ColoredString;
 
 use crate::command::legacy::status::status_letter_ui;
+use crate::id::WorktreeHunk;
 use crate::theme::Paint as _;
 
 fn path_with_color_ui(status: &ui::TreeStatus, path: String) -> ColoredString {
@@ -58,7 +58,7 @@ impl DiffDisplay for TreeChangeWithPatch {
         // We use the raw path length for width calculation since ANSI codes don't count
         let content_width = 2 + path_str.len(); // "M " + path
 
-        // Helper to render box-style header (same layout as HunkAssignment):
+        // Helper to render box-style header (same layout as WorktreeHunk):
         // ────────╮
         // M file  │
         // ────────╯
@@ -194,7 +194,7 @@ fn fmt_hunk(hunk: &DiffHunk) -> String {
     output
 }
 
-impl DiffDisplay for HunkAssignment {
+impl DiffDisplay for WorktreeHunk {
     fn print_diff(&self, short_id: Option<&str>) -> String {
         let t = crate::theme::get();
         let mut output = String::new();

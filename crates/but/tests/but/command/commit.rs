@@ -792,21 +792,6 @@ Error: branch argument cannot be used with 'commit empty'. Use the target positi
 }
 
 #[test]
-fn commit_empty_rejects_only_flag() {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    env.setup_metadata(&["A"]);
-
-    // Try to use --only with empty subcommand
-    env.but("commit --only empty --before A")
-        .assert()
-        .failure()
-        .stderr_eq(str![[r#"
-Error: --only cannot be used with 'commit empty'.
-
-"#]]);
-}
-
-#[test]
 fn commit_empty_rejects_create_flag() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
     env.setup_metadata(&["A"]);
@@ -903,26 +888,6 @@ fn commit_empty_rejects_ai_flag() {
         .failure()
         .stderr_eq(str![[r#"
 Error: --ai cannot be used with 'commit empty'.
-
-"#]]);
-}
-
-#[test]
-fn commit_changes_conflicts_with_only() {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
-    env.setup_metadata(&["A"]);
-    env.file("file.txt", "content");
-
-    // Try to use both --changes and --only
-    env.but("commit -m 'test' --changes ab --only")
-        .assert()
-        .failure()
-        .stderr_eq(str![[r#"
-error: the argument '--changes <CHANGES>' cannot be used with '--only'
-
-Usage: but commit --message <MESSAGE> --changes <CHANGES> [BRANCH]
-
-For more information, try '--help'.
 
 "#]]);
 }
@@ -1425,33 +1390,6 @@ fn commit_with_filename_shadowed_by_branch_of_same_name_succeeds() -> anyhow::Re
     assert_eq!(remaining, 0, "the file should be committed");
     let messages = branch_commit_messages(&env, "A");
     assert_eq!(messages[..1], ["notes"]);
-
-    Ok(())
-}
-
-#[test]
-fn commit_with_file_assigned_to_different_stack_fails() -> anyhow::Result<()> {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
-    env.setup_metadata(&["A", "B"]);
-
-    // Create a file
-    env.file("file.txt", "content");
-
-    // Stage the file to branch A
-    env.but("stage file.txt A").assert().success();
-
-    // Try to commit the file to branch B (should fail because it's staged to A)
-    let output = env
-        .but("commit -m 'test' B --changes A@{stack}:file.txt")
-        .assert()
-        .failure();
-
-    // Verify error message contains the expected text
-    let stderr = std::str::from_utf8(&output.get_output().stderr)?;
-    assert!(
-        stderr.contains("is assigned to a different stack"),
-        "Expected error about different stack assignment, got: {stderr}"
-    );
 
     Ok(())
 }

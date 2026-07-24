@@ -11,7 +11,6 @@ pub mod get_text;
 
 pub(crate) mod diff_viewer;
 pub mod editor;
-pub(crate) mod stage_viewer;
 
 mod picker;
 pub use picker::*;

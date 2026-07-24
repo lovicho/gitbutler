@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use bstr::BStr;
-use but_core::ref_metadata::StackId;
 
 use crate::{
     CliId,
@@ -22,6 +21,7 @@ use crate::{
             },
         },
     },
+    id::{CommitId, CommittedFileId},
 };
 
 #[cfg(test)]
@@ -106,7 +106,8 @@ impl Cursor {
 
     pub fn select_commit(object_id: gix::ObjectId, lines: &[StatusOutputLine]) -> Option<Self> {
         let idx = lines.iter().position(|line| {
-            if let Some(CliId::Commit { commit_id, .. }) = line.data.cli_id().map(|id| &**id)
+            if let Some(CliId::Commit(CommitId { commit_id, .. })) =
+                line.data.cli_id().map(|id| &**id)
                 && *commit_id == object_id
             {
                 true
@@ -122,7 +123,7 @@ impl Cursor {
         self,
         lines: &[StatusOutputLine],
     ) -> Option<SelectAfterReload> {
-        if let Some(CliId::Commit { commit_id, .. }) = lines
+        if let Some(CliId::Commit(CommitId { commit_id, .. })) = lines
             .get(self.0)
             .and_then(|line| line.data.cli_id())
             .map(|id| &**id)
@@ -212,7 +213,8 @@ impl Cursor {
             return None;
         }
 
-        if let Some(CliId::Commit { commit_id, .. }) = lines[self.0].data.cli_id().map(|id| &**id)
+        if let Some(CliId::Commit(CommitId { commit_id, .. })) =
+            lines[self.0].data.cli_id().map(|id| &**id)
             && !discarded_commits.contains(commit_id)
         {
             return Some(SelectAfterReload::Commit(*commit_id));
@@ -223,7 +225,8 @@ impl Cursor {
                 break;
             }
 
-            if let Some(CliId::Commit { commit_id, .. }) = line.data.cli_id().map(|id| &**id)
+            if let Some(CliId::Commit(CommitId { commit_id, .. })) =
+                line.data.cli_id().map(|id| &**id)
                 && !discarded_commits.contains(commit_id)
             {
                 return Some(SelectAfterReload::Commit(*commit_id));
@@ -235,7 +238,8 @@ impl Cursor {
                 break;
             }
 
-            if let Some(CliId::Commit { commit_id, .. }) = line.data.cli_id().map(|id| &**id)
+            if let Some(CliId::Commit(CommitId { commit_id, .. })) =
+                line.data.cli_id().map(|id| &**id)
                 && !discarded_commits.contains(commit_id)
             {
                 return Some(SelectAfterReload::Commit(*commit_id));
@@ -270,14 +274,14 @@ impl Cursor {
         };
 
         for line in lines.iter().skip(self.0 + 1) {
-            if let Some(CliId::Branch { name, .. }) = line.data.cli_id().map(|id| &**id) {
-                return Some(SelectAfterReload::Branch(name.clone()));
+            if let Some(CliId::Branch(branch)) = line.data.cli_id().map(|id| &**id) {
+                return Some(SelectAfterReload::Branch(branch.name.clone()));
             }
         }
 
         for line in lines.iter().take(self.0).rev() {
-            if let Some(CliId::Branch { name, .. }) = line.data.cli_id().map(|id| &**id) {
-                return Some(SelectAfterReload::Branch(name.clone()));
+            if let Some(CliId::Branch(branch)) = line.data.cli_id().map(|id| &**id) {
+                return Some(SelectAfterReload::Branch(branch.name.clone()));
             }
         }
 
@@ -293,7 +297,8 @@ impl Cursor {
         lines: &[StatusOutputLine],
     ) -> Option<Self> {
         let idx = lines.iter().position(|line| {
-            if let Some(CliId::CommittedFile { commit_id, .. }) = line.data.cli_id().map(|id| &**id)
+            if let Some(CliId::CommittedFile(CommittedFileId { commit_id, .. })) =
+                line.data.cli_id().map(|id| &**id)
                 && *commit_id == object_id
             {
                 true
@@ -307,8 +312,8 @@ impl Cursor {
     /// Select the first line that points to the given branch name.
     pub fn select_branch(branch_name: &str, lines: &[StatusOutputLine]) -> Option<Self> {
         let idx = lines.iter().position(|line| {
-            if let Some(CliId::Branch { name, .. }) = line.data.cli_id().map(|id| &**id)
-                && *name == branch_name
+            if let Some(CliId::Branch(branch)) = line.data.cli_id().map(|id| &**id)
+                && branch.name == branch_name
             {
                 true
             } else {
@@ -319,17 +324,13 @@ impl Cursor {
     }
 
     /// Select the first uncommitted file line that points to the given path in the given stack.
-    pub fn select_uncommitted_file(
-        path: &BStr,
-        stack_id: Option<StackId>,
-        lines: &[StatusOutputLine],
-    ) -> Option<Self> {
+    pub fn select_uncommitted_file(path: &BStr, lines: &[StatusOutputLine]) -> Option<Self> {
         let idx = lines.iter().position(|line| {
             if let Some(CliId::UncommittedHunkOrFile(uncommitted)) =
                 line.data.cli_id().map(|id| &**id)
             {
                 let assignment = uncommitted.hunk_assignments.first();
-                &**assignment.path_bytes == path && assignment.stack_id == stack_id
+                &**assignment.path_bytes == path
             } else {
                 false
             }
@@ -386,12 +387,12 @@ impl Cursor {
 
         if matches!(selected_line.data, StatusOutputLineData::File { .. }) {
             let file_is_visible = match selected_line.data.cli_id().map(|id| &**id) {
-                Some(CliId::CommittedFile { commit_id, .. }) => {
+                Some(CliId::CommittedFile(CommittedFileId { commit_id, .. })) => {
                     show_files.show_files_for(*commit_id)
                 }
                 Some(CliId::UncommittedHunkOrFile(..))
                 | Some(CliId::PathPrefix { .. })
-                | Some(CliId::Branch { .. })
+                | Some(CliId::Branch(..))
                 | Some(CliId::Commit { .. })
                 | Some(CliId::Uncommitted { .. })
                 | Some(CliId::Stack { .. }) => matches!(show_files, FilesStatusFlag::All),
@@ -691,7 +692,7 @@ pub(super) fn same_entity_for_reload(previous: &CliId, current: &CliId) -> bool 
             if previous.is_entire_file {
                 let previous = previous.hunk_assignments.first();
                 let current = current.hunk_assignments.first();
-                previous.path_bytes == current.path_bytes && previous.stack_id == current.stack_id
+                previous.path_bytes == current.path_bytes
             } else {
                 previous == current
             }
@@ -710,18 +711,18 @@ pub(super) fn same_entity_for_reload(previous: &CliId, current: &CliId) -> bool 
             .map(|(_, assignment)| assignment)
             .eq(current.iter().map(|(_, assignment)| assignment)),
         (
-            CliId::CommittedFile {
+            CliId::CommittedFile(CommittedFileId {
                 commit_id: previous_commit_id,
                 path: previous_path,
                 change_id: previous_change_id,
                 ..
-            },
-            CliId::CommittedFile {
+            }),
+            CliId::CommittedFile(CommittedFileId {
                 commit_id: current_commit_id,
                 path: current_path,
                 change_id: current_change_id,
                 ..
-            },
+            }),
         ) => {
             previous_path == current_path
                 && match (previous_change_id, current_change_id) {
@@ -731,20 +732,18 @@ pub(super) fn same_entity_for_reload(previous: &CliId, current: &CliId) -> bool 
                     }
                 }
         }
-        (CliId::Branch { name: previous, .. }, CliId::Branch { name: current, .. }) => {
-            previous == current
-        }
+        (CliId::Branch(previous), CliId::Branch(current)) => previous == current,
         (
-            CliId::Commit {
+            CliId::Commit(CommitId {
                 commit_id: previous_commit_id,
                 change_id: previous_change_id,
                 ..
-            },
-            CliId::Commit {
+            }),
+            CliId::Commit(CommitId {
                 commit_id: current_commit_id,
                 change_id: current_change_id,
                 ..
-            },
+            }),
         ) => match (previous_change_id, current_change_id) {
             (Some(previous), Some(current)) => previous == current,
             (Some(_), None) | (None, Some(_)) | (None, None) => {
@@ -766,12 +765,14 @@ pub(super) fn same_entity_for_reload(previous: &CliId, current: &CliId) -> bool 
 
 fn select_after_reload_for_cli_id(cli_id: &Arc<CliId>) -> SelectAfterReload {
     match &**cli_id {
-        CliId::Commit { commit_id, .. } => SelectAfterReload::Commit(*commit_id),
-        CliId::CommittedFile { commit_id, .. } => SelectAfterReload::FirstFileInCommit(*commit_id),
+        CliId::Commit(CommitId { commit_id, .. }) => SelectAfterReload::Commit(*commit_id),
+        CliId::CommittedFile(CommittedFileId { commit_id, .. }) => {
+            SelectAfterReload::FirstFileInCommit(*commit_id)
+        }
         CliId::Uncommitted { .. }
         | CliId::UncommittedHunkOrFile(..)
         | CliId::PathPrefix { .. }
-        | CliId::Branch { .. }
+        | CliId::Branch(..)
         | CliId::Stack { .. } => SelectAfterReload::CliId(Box::new((**cli_id).clone())),
     }
 }
@@ -849,10 +850,13 @@ fn is_noop_move_stack_target(idx: usize, lines: &[StatusOutputLine], mode: &Mode
         return false;
     }
 
+    let Some(source_stack_id) = move_mode.source.branch.stack_id else {
+        return false;
+    };
     let current_stack_order = super::app::stack_ids_in_display_order(lines);
     let Some(source_index) = current_stack_order
         .iter()
-        .position(|stack| *stack == move_mode.source.stack)
+        .position(|stack| *stack == source_stack_id)
     else {
         return false;
     };
@@ -941,7 +945,7 @@ pub fn is_selectable_in_mode(
                     let Some(id) = line.data.cli_id() else {
                         return false;
                     };
-                    let CliId::CommittedFile { commit_id, .. } = &**id else {
+                    let CliId::CommittedFile(CommittedFileId { commit_id, .. }) = &**id else {
                         return false;
                     };
                     if *commit_id != files.head.commit_id {
@@ -982,7 +986,7 @@ pub fn is_selectable_in_mode(
             FilesStatusFlag::None | FilesStatusFlag::All => true,
             FilesStatusFlag::Commit(object_id) => {
                 if let Some(cli_id) = line.data.cli_id()
-                    && let CliId::CommittedFile { commit_id, .. } = &**cli_id
+                    && let CliId::CommittedFile(CommittedFileId { commit_id, .. }) = &**cli_id
                 {
                     object_id == *commit_id
                 } else {
@@ -1007,7 +1011,7 @@ pub fn is_selectable_in_mode(
                     CliId::UncommittedHunkOrFile(..) | CliId::Uncommitted { .. } => true,
                     CliId::PathPrefix { .. }
                     | CliId::CommittedFile { .. }
-                    | CliId::Branch { .. }
+                    | CliId::Branch(..)
                     | CliId::Commit { .. }
                     | CliId::Stack { .. } => false,
                 }

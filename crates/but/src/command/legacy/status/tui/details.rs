@@ -42,6 +42,7 @@ use crate::{
         mode::ModeDiscriminant,
         render::{RenderSingleLineSpans, available_lines_in_area},
     },
+    id::{CommitId, CommittedFileId},
     theme::{Rgb, Theme},
     utils::{
         DebugAsType,
@@ -251,11 +252,11 @@ impl Details {
         };
 
         match selection {
-            CliId::Commit {
+            CliId::Commit(CommitId {
                 commit_id: commit,
                 change_id,
                 ..
-            } => {
+            }) => {
                 let commit = *commit;
                 let change_id = change_id.clone();
                 self.poll_render_thread(
@@ -275,8 +276,8 @@ impl Details {
                     },
                 )
             }
-            CliId::Branch { name, .. } => {
-                let name = name.to_owned();
+            CliId::Branch(branch) => {
+                let name = branch.name.to_owned();
                 self.poll_render_thread(
                     ctx,
                     None,
@@ -319,12 +320,12 @@ impl Details {
                     },
                 )
             }
-            CliId::CommittedFile {
+            CliId::CommittedFile(CommittedFileId {
                 commit_id,
                 path,
                 id,
                 change_id: _,
-            } => {
+            }) => {
                 let commit = *commit_id;
                 let path = path.clone();
                 let id = id.clone();
@@ -1197,7 +1198,7 @@ impl Details {
             CliId::UncommittedHunkOrFile(..) | CliId::Uncommitted { .. } => true,
             CliId::PathPrefix { .. }
             | CliId::CommittedFile { .. }
-            | CliId::Branch { .. }
+            | CliId::Branch(..)
             | CliId::Commit { .. }
             | CliId::Stack { .. } => false,
         }

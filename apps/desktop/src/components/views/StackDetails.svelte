@@ -237,7 +237,6 @@
 					parent={selectedContext.parent}
 					child={selectedContext.child}
 					withForce={selectedContext.withForce}
-					stackPrNumbers={selectedContext.stackPrNumbers}
 					stackLength={segments.length}
 					onclose={() => controller.closePreview()}
 					rounded

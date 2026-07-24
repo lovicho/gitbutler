@@ -444,7 +444,7 @@ fn get_branch_names(project: &Project, branch_id: &str) -> anyhow::Result<Vec<St
         .parse_using_context(branch_id, &ctx)?
         .iter()
         .filter_map(|clid| match clid {
-            CliId::Branch { name, .. } => Some(name.clone()),
+            CliId::Branch(branch) => Some(branch.name.clone()),
             _ => None,
         })
         .collect::<Vec<_>>();
@@ -473,6 +473,7 @@ pub async fn handle_multiple_branches_in_workspace(
     let mut overall_outcome = PublishReviewsOutcome {
         published: vec![],
         already_existing: vec![],
+        review_sync: vec![],
     };
 
     let selected_branches = if let Some(branches) = selected_branches {
@@ -519,6 +520,7 @@ pub async fn handle_multiple_branches_in_workspace(
         overall_outcome
             .already_existing
             .extend(outcome.already_existing);
+        overall_outcome.review_sync.extend(outcome.review_sync);
     }
 
     if let Some(out) = out.for_json() {
@@ -637,7 +639,7 @@ async fn publish_reviews_for_branch_and_dependents(
     }
 
     let branch = gix::refs::Category::LocalBranch.to_full_name(branch_name)?;
-    let result = but_api::legacy::workspace::workspace_branch_and_ancestors_push(
+    let result = but_api::legacy::workspace::workspace_branch_and_ancestors_push_only(
         ctx,
         with_force,
         skip_force_push_protection,
@@ -657,7 +659,6 @@ async fn publish_reviews_for_branch_and_dependents(
 
     let mut newly_published = Vec::new();
     let mut already_existing = Vec::new();
-    let mut all_reviews_in_order = Vec::new();
     let mut current_target_branch = base_branch.short_name.as_str();
     for branch in stack_entry.branches.iter().rev() {
         if let Some(out) = out.for_human() {
@@ -688,13 +689,9 @@ async fn publish_reviews_for_branch_and_dependents(
         .await?;
         match published_review {
             PublishReviewResult::Published(review) => {
-                newly_published.push(*review.clone());
-                all_reviews_in_order.push((*review, current_target_branch.to_string()));
+                newly_published.push(*review);
             }
             PublishReviewResult::AlreadyExists(reviews) => {
-                if let Some(review) = reviews.first() {
-                    all_reviews_in_order.push((review.clone(), current_target_branch.to_string()));
-                }
                 already_existing.extend(reviews);
             }
         }
@@ -706,25 +703,16 @@ async fn publish_reviews_for_branch_and_dependents(
         }
     }
 
-    // Update footers and fix any drifted target branches in a single pass.
-    let review_updates: Vec<but_forge::ForgeReviewUpdate> = all_reviews_in_order
-        .into_iter()
-        .map(|(review, expected_target)| {
-            let mut update: but_forge::ForgeReviewUpdate = review.into();
-            // Only send a target update when it has drifted.
-            if update.target_branch.as_ref() == Some(&expected_target) {
-                update.target_branch = None;
-            } else {
-                update.target_branch = Some(expected_target);
-            }
-            update
-        })
-        .collect();
-    but_api::legacy::forge::update_review_footers(ctx.to_sync(), review_updates).await?;
+    // Batch creation uses the create-only primitive above and synchronizes the complete
+    // workspace review stack once all review associations are cached.
+    let review_sync =
+        but_api::legacy::forge::sync_review_stack_after_review_creation(ctx.to_sync(), branch)
+            .await;
 
     let outcome = PublishReviewsOutcome {
         published: newly_published,
         already_existing,
+        review_sync: vec![review_sync],
     };
 
     Ok(outcome)
@@ -748,6 +736,16 @@ fn display_review_publication_summary(
         writeln!(out)?;
         for review in &outcome.already_existing {
             print_existing_pr_info(review, out)?;
+        }
+    }
+
+    for sync in &outcome.review_sync {
+        if let but_forge::ReviewSyncOutcome::Failed { message } = sync {
+            writeln!(
+                out,
+                "\n{} Reviews were created, but stack synchronization failed: {message}",
+                theme::get().sym().warning
+            )?;
         }
     }
 
@@ -817,6 +815,7 @@ fn print_existing_pr_info(
 struct PublishReviewsOutcome {
     published: Vec<but_forge::ForgeReview>,
     already_existing: Vec<but_forge::ForgeReview>,
+    review_sync: Vec<but_forge::ReviewSyncOutcome>,
 }
 
 enum PublishReviewResult {
@@ -914,7 +913,7 @@ async fn publish_review_for_branch(
     };
 
     // Publish a new review for the branch
-    but_api::legacy::forge::publish_review(
+    but_api::legacy::forge::publish_review_only(
         ctx.to_sync(),
         but_forge::CreateForgeReviewParams {
             title,
@@ -925,7 +924,7 @@ async fn publish_review_for_branch(
         },
     )
     .await
-    // The PR association is derived from the forge review cache; `publish_review`
+    // The PR association is derived from the forge review cache; `publish_review_only`
     // optimistically caches the created review, so there is no PR number to
     // persist onto branch metadata here.
     .map(|review| PublishReviewResult::Published(Box::new(review)))
@@ -1237,11 +1236,13 @@ fn resolve_cli_ids_to_review_ids(
         .unwrap_or_default()
         .into_iter()
         .filter_map(|cli_id| match cli_id {
-            CliId::Branch { name, stack_id, .. } => applied_stacks
+            CliId::Branch(branch) => applied_stacks
                 .iter()
                 .find_map(|stack| {
-                    if stack.id == stack_id {
-                        stack.branch(&name).and_then(|branch| branch.review_id)
+                    if stack.id == branch.stack_id {
+                        stack
+                            .branch(&branch.name)
+                            .and_then(|branch| branch.review_id)
                     } else {
                         None
                     }

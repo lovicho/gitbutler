@@ -23,7 +23,6 @@
 	import { REORDER_DROPZONE_FACTORY } from "$lib/dragging/stackingReorderDropzoneManager";
 	import { useForgeAuth } from "$lib/forge/forgeAuth.svelte";
 	import { FORGE_INFO_SERVICE, prUrl } from "$lib/forge/forgeInfo.svelte";
-	import { PR_SERVICE } from "$lib/forge/prService.svelte";
 	import { createBranchSelection } from "$lib/selection/key";
 	import { precomputeStack, segmentContext } from "$lib/stacks/segmentContext";
 	import { getStackContext } from "$lib/stacks/stackController.svelte";
@@ -44,7 +43,6 @@
 
 	const controller = getStackContext();
 	const stackService = inject(STACK_SERVICE);
-	const prService = inject(PR_SERVICE);
 	const forgeInfoService = inject(FORGE_INFO_SERVICE);
 	const urlService = inject(URL_SERVICE);
 	const baseBranchService = inject(BASE_BRANCH_SERVICE);
@@ -92,7 +90,6 @@
 	const canPublishPR = $derived(auth.authenticated.current);
 	const landDirectly = $derived(projectLandDirectly(projectId));
 	const baseBranchResponse = $derived(baseBranchService.baseBranch(projectId));
-	const baseBranchName = $derived(baseBranchResponse.response?.shortName);
 	const landTargetName = $derived(baseBranchResponse.response?.branchName);
 
 	// Compute stack-wide derived values once per render so the per-iteration
@@ -145,8 +142,6 @@
 				{branchName}
 				{lineColor}
 				isCommitting={controller.isCommitting}
-				{baseBranchName}
-				{prService}
 				isFirst={firstBranch}
 			/>
 		{:else if !firstBranch}
@@ -336,7 +331,6 @@
 			branchIndex={ctx.branchIndex}
 			parent={ctx.parent}
 			withForce={ctx.withForce}
-			stackPrNumbers={ctx.stackPrNumbers}
 			baseCommit={segment.base ?? undefined}
 			dropzones={branchName && startCommittingDz
 				? [stackingReorderDropzoneManager.top(branchName), startCommittingDz]

@@ -1,6 +1,6 @@
 //! A type representing ChangeIDs in commit headers.
 
-use std::{fmt, ops::Deref};
+use std::{fmt, ops::Deref, sync::Arc};
 
 use bstr::{BStr, BString};
 use rand::Rng;
@@ -18,14 +18,15 @@ const CHANGE_ID_REVERSE_BYTE_LEN: usize = CHANGE_ID_REVERSE_HEX_LEN / 2;
 /// header, but is usually a reverse hex string or a uuid.
 ///
 /// For all intents and purposes, this type acts like a [`BString`].
-#[derive(Clone, Default, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ChangeId(BString);
+#[derive(Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ChangeId(Arc<[u8]>);
 
 /// Lifecycle
 impl ChangeId {
     /// Creates a ChangeId from a number for testing purposes.
     pub fn from_number_for_testing(value: u128) -> Self {
-        ChangeId(value.to_string().into())
+        let bstr = BString::from(value.to_string());
+        ChangeId(Vec::<u8>::from(bstr).into())
     }
 
     /// Creates a random length 32 reverse hex ChangeId (SHA-1).
@@ -48,12 +49,21 @@ impl ChangeId {
 
         Self(out.into())
     }
+
+    fn from_bstring(bstr: BString) -> Self {
+        ChangeId(Vec::<u8>::from(bstr).into())
+    }
 }
 
 impl ChangeId {
     /// Return the raw bytes backing this `ChangeId`.
     pub fn as_bytes(&self) -> &[u8] {
         self.0.as_ref()
+    }
+
+    /// Return the `BStr` backing this `ChangeId`.
+    pub fn as_bstr(&self) -> &BStr {
+        BStr::new(&*self.0)
     }
 
     /// Try to return the compact bytes represented by this reverse-hex `ChangeId`,
@@ -83,8 +93,10 @@ impl ChangeId {
 /// Use with care and only if you know what you are doing.
 impl ChangeId {
     /// Prefixes this instance with the given `prefix` bytes.
-    pub fn prefix_with(&mut self, prefix: impl IntoIterator<Item = u8>) {
-        self.0.splice(0..0, prefix);
+    pub fn prefixed_with(self, prefix: impl IntoIterator<Item = u8>) -> Self {
+        let mut bstr = BString::from(&*self.0);
+        bstr.splice(0..0, prefix);
+        Self::from_bstring(bstr)
     }
 }
 
@@ -111,22 +123,22 @@ fn reverse_hex_char_to_nibble(byte: u8) -> Option<u8> {
 }
 
 impl Deref for ChangeId {
-    type Target = BString;
+    type Target = BStr;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        self.as_bstr()
     }
 }
 
 impl fmt::Debug for ChangeId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
+        self.as_bstr().fmt(f)
     }
 }
 
 impl fmt::Display for ChangeId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
+        self.as_bstr().fmt(f)
     }
 }
 
@@ -135,7 +147,7 @@ impl<'de> Deserialize<'de> for ChangeId {
     where
         D: Deserializer<'de>,
     {
-        BString::deserialize(deserializer).map(ChangeId)
+        BString::deserialize(deserializer).map(ChangeId::from_bstring)
     }
 }
 
@@ -144,19 +156,19 @@ impl Serialize for ChangeId {
     where
         S: Serializer,
     {
-        self.0.serialize(serializer)
+        self.as_bstr().serialize(serializer)
     }
 }
 
 impl From<&BStr> for ChangeId {
     fn from(value: &BStr) -> Self {
-        Self(value.to_owned())
+        Self::from_bstring(value.to_owned())
     }
 }
 
 impl From<BString> for ChangeId {
     fn from(value: BString) -> Self {
-        Self(value)
+        Self::from_bstring(value)
     }
 }
 

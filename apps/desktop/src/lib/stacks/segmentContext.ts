@@ -11,7 +11,6 @@ export interface SegmentContext {
 	parent: Segment | undefined;
 	child: Segment | undefined;
 	withForce: boolean;
-	stackPrNumbers: (number | undefined)[];
 }
 
 /**
@@ -21,7 +20,6 @@ export interface SegmentContext {
  * O(1) instead of O(N) per call.
  */
 export interface StackPrecomputed {
-	stackPrNumbers: (number | undefined)[];
 	/**
 	 * `withForceFromIndex[i]` is true when *any* segment at index `>= i`
 	 * needs a force push. Pre-computed via a single suffix-OR pass over
@@ -31,8 +29,6 @@ export interface StackPrecomputed {
 }
 
 export function precomputeStack(segments: Segment[]): StackPrecomputed {
-	const stackPrNumbers = segments.map((s) => s.metadata?.review.pullRequest ?? undefined);
-
 	const withForceFromIndex = new Array<boolean>(segments.length);
 	let anyForceFromHere = false;
 	for (let i = segments.length - 1; i >= 0; i--) {
@@ -41,7 +37,7 @@ export function precomputeStack(segments: Segment[]): StackPrecomputed {
 		withForceFromIndex[i] = anyForceFromHere;
 	}
 
-	return { stackPrNumbers, withForceFromIndex };
+	return { withForceFromIndex };
 }
 
 export function segmentContext(
@@ -54,6 +50,5 @@ export function segmentContext(
 		parent: segments[index + 1],
 		child: segments[index - 1],
 		withForce: precomputed.withForceFromIndex[index] ?? false,
-		stackPrNumbers: precomputed.stackPrNumbers,
 	};
 }

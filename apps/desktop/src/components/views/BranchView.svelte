@@ -26,7 +26,6 @@
 		parent: Segment | undefined;
 		child: Segment | undefined;
 		withForce: boolean;
-		stackPrNumbers: (number | undefined)[];
 		stackLength: number;
 		active?: boolean;
 		grow?: boolean;
@@ -47,7 +46,6 @@
 		parent,
 		child,
 		withForce,
-		stackPrNumbers,
 		stackLength,
 		grow,
 		clientHeight = $bindable(),
@@ -170,7 +168,6 @@
 					{parent}
 					{child}
 					{withForce}
-					{stackPrNumbers}
 					{prNumber}
 					{reviewId}
 				/>

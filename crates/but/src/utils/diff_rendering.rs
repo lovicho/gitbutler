@@ -15,7 +15,6 @@ use but_core::{
     unified_diff::DiffHunk,
 };
 use but_ctx::Context;
-use but_hunk_assignment::HunkAssignment;
 use gix::{ObjectId, actor::Signature};
 use itertools::{Itertools, Position};
 use ratatui::{
@@ -30,7 +29,7 @@ use unicode_width::UnicodeWidthStr as _;
 
 use crate::{
     CliId, IdMap,
-    id::{ShortId, UncommittedHunk, UncommittedHunkOrFile},
+    id::{ShortId, UncommittedHunk, UncommittedHunkOrFile, WorktreeHunk},
     theme::Theme,
     utils::string_interning::{SharedStrings, Strings},
 };
@@ -543,9 +542,7 @@ pub fn render_uncommitted(
 
     let wt_changes = but_api::diff::changes_in_worktree(ctx, true)?;
     let id_map = IdMap::legacy_new_from_context(ctx, Some(wt_changes.assignments))?;
-    let uncommitted_hunks = filter_uncommitted_hunks(ctx, &id_map, |hunk_assignment| {
-        hunk_assignment.stack_id.is_none()
-    })?;
+    let uncommitted_hunks = filter_uncommitted_hunks(ctx, &id_map, |_| true)?;
 
     if !options.skip_line_stats {
         let line_stats = render_line_stats(compute_line_stats_from_uncommitted_hunks(
@@ -688,7 +685,7 @@ fn tree_changes_with_patches(
 fn render_hunk_assignment(
     id: SectionId,
     cli_id: Option<Arc<CliId>>,
-    hunk_assignment: &HunkAssignment,
+    hunk_assignment: &WorktreeHunk,
     theme: &'static Theme,
     out: &mut dyn DiffLineWriter,
 ) -> anyhow::Result<()> {
@@ -1064,7 +1061,7 @@ fn filter_uncommitted_hunks<'a, F>(
     mut filter: F,
 ) -> anyhow::Result<Vec<(&'a str, Arc<CliId>, &'a UncommittedHunk)>>
 where
-    F: FnMut(&HunkAssignment) -> bool,
+    F: FnMut(&WorktreeHunk) -> bool,
 {
     let mut uncommitted_hunks = id_map
         .uncommitted_hunks
@@ -1111,16 +1108,15 @@ where
 
 /// Returns true if `hunk_assignment` is part of the selected uncommitted entity.
 fn uncommitted_hunk_matches_selection(
-    hunk_assignment: &HunkAssignment,
+    hunk_assignment: &WorktreeHunk,
     hunk: &UncommittedHunkOrFile,
 ) -> bool {
     let selected_hunk = hunk.hunk_assignments.first();
 
     if hunk.is_entire_file {
         hunk_assignment.path_bytes == selected_hunk.path_bytes
-            && hunk_assignment.stack_id == selected_hunk.stack_id
     } else {
-        hunk_assignment == selected_hunk && hunk_assignment.stack_id == selected_hunk.stack_id
+        hunk_assignment == selected_hunk
     }
 }
 

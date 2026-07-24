@@ -1,6 +1,9 @@
 /// Functions for amending existing commits.
 pub mod amend;
 
+/// Functions for cherry-picking commits.
+pub mod cherry_pick;
+
 /// Functions for creating new commits.
 pub mod create;
 

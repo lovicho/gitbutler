@@ -10,7 +10,11 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
 };
 
-use crate::{id::UncommittedHunkOrFile, theme, tui::TerminalGuard as _};
+use crate::{
+    id::{UncommittedHunkOrFile, WorktreeHunk},
+    theme,
+    tui::TerminalGuard as _,
+};
 
 /// A single file's diff information for TUI display.
 pub(crate) struct DiffFileEntry {
@@ -42,7 +46,6 @@ pub(crate) enum DiffLine {
 pub(crate) enum WorktreeFilter {
     UncommittedArea,
     Uncommitted(Box<UncommittedHunkOrFile>),
-    Stack(but_core::ref_metadata::StackId),
 }
 
 impl DiffFileEntry {
@@ -51,13 +54,12 @@ impl DiffFileEntry {
         filter: Option<&WorktreeFilter>,
     ) -> Vec<DiffFileEntry> {
         // Group hunks by path, applying filter
-        let mut by_path: BTreeMap<String, Vec<&but_hunk_assignment::HunkAssignment>> =
-            BTreeMap::new();
+        let mut by_path: BTreeMap<String, Vec<&WorktreeHunk>> = BTreeMap::new();
         for uncommitted_hunk in id_map.uncommitted_hunks.values() {
             let a = &uncommitted_hunk.hunk_assignment;
             let include = match filter {
                 None => true,
-                Some(WorktreeFilter::UncommittedArea) => a.stack_id.is_none(),
+                Some(WorktreeFilter::UncommittedArea) => true,
                 Some(WorktreeFilter::Uncommitted(id)) => {
                     if id.is_entire_file {
                         a.path_bytes == id.hunk_assignments.first().path_bytes
@@ -65,7 +67,6 @@ impl DiffFileEntry {
                         a.eq(id.hunk_assignments.first())
                     }
                 }
-                Some(WorktreeFilter::Stack(stack_id)) => a.stack_id.as_ref() == Some(stack_id),
             };
             if include {
                 by_path.entry(a.path.clone()).or_default().push(a);
@@ -76,10 +77,9 @@ impl DiffFileEntry {
     }
 
     pub fn from_hunk_assignments<'a>(
-        hunk_assignments: impl IntoIterator<Item = &'a (String, but_hunk_assignment::HunkAssignment)>,
+        hunk_assignments: impl IntoIterator<Item = &'a (String, WorktreeHunk)>,
     ) -> Vec<DiffFileEntry> {
-        let mut by_path: BTreeMap<String, Vec<&but_hunk_assignment::HunkAssignment>> =
-            BTreeMap::new();
+        let mut by_path: BTreeMap<String, Vec<&WorktreeHunk>> = BTreeMap::new();
         for (_, a) in hunk_assignments {
             by_path.entry(a.path.clone()).or_default().push(a);
         }
@@ -88,7 +88,7 @@ impl DiffFileEntry {
     }
 
     fn from_hunk_assignments_by_path(
-        by_path: BTreeMap<String, Vec<&but_hunk_assignment::HunkAssignment>>,
+        by_path: BTreeMap<String, Vec<&WorktreeHunk>>,
     ) -> Vec<DiffFileEntry> {
         by_path
             .into_iter()
@@ -208,9 +208,7 @@ fn parse_unified_patch(patch: &but_core::UnifiedPatch) -> Vec<DiffLine> {
     }
 }
 
-pub(crate) fn parse_hunk_assignment_to_lines(
-    assignment: &but_hunk_assignment::HunkAssignment,
-) -> Vec<DiffLine> {
+pub(crate) fn parse_hunk_assignment_to_lines(assignment: &WorktreeHunk) -> Vec<DiffLine> {
     if let (Some(diff), Some(header)) = (&assignment.diff, &assignment.hunk_header) {
         let hunk = DiffHunk {
             old_start: header.old_start,

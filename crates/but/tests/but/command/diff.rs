@@ -481,7 +481,6 @@ fn json_target_uncommitted_area() {
 
     env.file("unassigned.txt", "unassigned\n");
     env.file("assigned.txt", "assigned\n");
-    env.but("stage assigned.txt A").assert().success();
 
     env.but("diff --format json zz")
         .allow_json()
@@ -491,6 +490,23 @@ fn json_target_uncommitted_area() {
         .stdout_eq(snapbox::str![[r#"
 {
   "changes": [
+    {
+      "id": "xz:8",
+      "path": "assigned.txt",
+      "status": "modified",
+      "diff": {
+        "type": "patch",
+        "hunks": [
+          {
+            "oldStart": 1,
+            "oldLines": 0,
+            "newStart": 1,
+            "newLines": 1,
+            "diff": "@@ -1,0 +1,1 @@/n+assigned/n"
+          }
+        ]
+      }
+    },
     {
       "id": "nz:4",
       "path": "unassigned.txt",
@@ -504,75 +520,6 @@ fn json_target_uncommitted_area() {
             "newStart": 1,
             "newLines": 1,
             "diff": "@@ -1,0 +1,1 @@/n+unassigned/n"
-          }
-        ]
-      }
-    }
-  ]
-}
-
-"#]]);
-}
-
-#[test]
-fn json_target_stack() {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
-    env.setup_metadata(&["A", "B"]);
-
-    env.file("unassigned.txt", "unassigned\n");
-    env.file("assigned.txt", "assigned\n");
-    env.but("stage assigned.txt A").assert().success();
-
-    env.but("status -f")
-        .assert()
-        .success()
-        .stderr_eq(snapbox::str![])
-        .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted]
-┊   nz A unassigned.txt
-┊
-┊  ╭┄ k0 [staged to A]
-┊  │ su A assigned.txt
-┊  │
-┊╭┄ g0 [A]
-┊●   tpm add A
-┊│     tpm:t A A
-├╯
-┊
-┊╭┄ h0 [B]
-┊●   lrm add B
-┊│     lrm:p A B
-├╯
-┊
-┴ 0dc3733 (common base) 2000-01-02 add M
-
-Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
-
-"#]]);
-
-    let stack_id = "k0";
-
-    env.but(format!("diff --format json {stack_id}"))
-        .allow_json()
-        .assert()
-        .success()
-        .stderr_eq(snapbox::str![])
-        .stdout_eq(snapbox::str![[r#"
-{
-  "changes": [
-    {
-      "id": "su:8",
-      "path": "assigned.txt",
-      "status": "modified",
-      "diff": {
-        "type": "patch",
-        "hunks": [
-          {
-            "oldStart": 1,
-            "oldLines": 0,
-            "newStart": 1,
-            "newLines": 1,
-            "diff": "@@ -1,0 +1,1 @@/n+assigned/n"
           }
         ]
       }

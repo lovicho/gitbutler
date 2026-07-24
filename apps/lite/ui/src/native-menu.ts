@@ -6,6 +6,8 @@ type NativeMenuAction = () => void | Promise<void>;
 export type NativeMenuItemData = {
 	label: string;
 	accelerator?: string;
+	/** Renders the item as a checkbox in the given state. */
+	checked?: boolean;
 	enabled?: boolean;
 	onSelect?: NativeMenuAction;
 	submenu?: Array<NativeMenuItem>;
@@ -57,6 +59,7 @@ const serializeNativeMenuItems = (
 			_tag: "Item",
 			label: item.label,
 			accelerator: item.accelerator,
+			checked: item.checked,
 			enabled: item.enabled,
 			itemId,
 		};

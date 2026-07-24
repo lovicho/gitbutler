@@ -6,9 +6,7 @@ use std::{
 };
 
 use bstr::{BStr, ByteSlice};
-use but_api::open::{
-    list_builtin_program_specs, list_user_defined_program_specs, program::ProgramSpec,
-};
+use but_api::open::program::ProgramSpec;
 use but_ctx::Context;
 use crossterm::event::Event;
 use gitbutler_operating_modes::OperatingMode;
@@ -27,6 +25,7 @@ use crate::{
         },
         open::{self, Openable},
     },
+    id::{CommitId, CommittedFileId},
     theme::Theme,
     tui::TerminalGuard,
 };
@@ -415,9 +414,9 @@ impl App {
             Message::CopyToClipboard(text) => {
                 self.clipboard.set_text(text)?;
             }
-            Message::PickProgramThenOpen => self.handle_pick_program_then_open(ctx)?,
+            Message::PickProgramThenOpen => self.handle_pick_program_then_open(ctx, messages)?,
             Message::OpenInProgram(program, to_open) => {
-                self.handle_open_in_program(&program, &to_open, terminal_guard, messages)?;
+                self.handle_open_in_program(&program, to_open, terminal_guard, messages)?;
             }
             Message::ShowToast { kind, text } => {
                 self.toasts.insert(kind, text);
@@ -717,7 +716,7 @@ impl App {
                 };
 
                 if let Some(cli_id) = selection.data.cli_id()
-                    && let CliId::CommittedFile { commit_id, .. } = &**cli_id
+                    && let CliId::CommittedFile(CommittedFileId { commit_id, .. }) = &**cli_id
                     && *commit_id == object_id
                 {
                     // cursor is already within the file list
@@ -809,7 +808,7 @@ impl App {
 
         if let Some(selection) = self.cursor.selected_line(&self.status_lines)
             && let Some(cli_id) = selection.data.cli_id()
-            && let CliId::Commit { commit_id, .. } = &**cli_id
+            && let CliId::Commit(CommitId { commit_id, .. }) = &**cli_id
         {
             if !operations::commit_is_empty(ctx, *commit_id)? {
                 let select_after_reload = match self.flags.show_files {
@@ -898,7 +897,7 @@ impl App {
                                             }
                                             CliId::PathPrefix { .. }
                                             | CliId::CommittedFile { .. }
-                                            | CliId::Branch { .. }
+                                            | CliId::Branch(..)
                                             | CliId::Commit { .. }
                                             | CliId::Stack { .. }
                                             | CliId::Uncommitted { .. } => None,
@@ -943,7 +942,7 @@ impl App {
                         }
                         CliId::PathPrefix { .. }
                         | CliId::CommittedFile { .. }
-                        | CliId::Branch { .. }
+                        | CliId::Branch(..)
                         | CliId::Commit { .. }
                         | CliId::Stack { .. } => {
                             messages.push(Message::Reload(
@@ -1063,8 +1062,8 @@ impl App {
                         .and_then(|cli_id| Cursor::restore(cli_id, &new_lines))
                         .or_else(|| Cursor::select_uncommitted(&new_lines))
                 }
-                SelectAfterReload::UncommittedFile { path, stack_id } => {
-                    Cursor::select_uncommitted_file(path.as_ref(), stack_id, &new_lines)
+                SelectAfterReload::UncommittedFile { path } => {
+                    Cursor::select_uncommitted_file(path.as_ref(), &new_lines)
                 }
                 SelectAfterReload::FirstFileInCommit(commit_id) => {
                     Cursor::select_first_file_in_commit(commit_id, &new_lines)
@@ -1169,11 +1168,12 @@ impl App {
 
         match &selection.data {
             StatusOutputLineData::Branch { cli_id, .. } => {
-                let CliId::Branch { name, .. } = &**cli_id else {
+                let CliId::Branch(branch) = &**cli_id else {
                     return Ok(());
                 };
 
-                let commit_result = operations::create_empty_commit_relative_to_branch(ctx, name)?;
+                let commit_result =
+                    operations::create_empty_commit_relative_to_branch(ctx, &branch.name)?;
 
                 messages.push(Message::Reload(
                     Some(SelectAfterReload::Commit(commit_result.new_commit)),
@@ -1181,7 +1181,7 @@ impl App {
                 ));
             }
             StatusOutputLineData::Commit { cli_id, .. } => {
-                let CliId::Commit { commit_id, .. } = &**cli_id else {
+                let CliId::Commit(CommitId { commit_id, .. }) = &**cli_id else {
                     return Ok(());
                 };
 
@@ -1224,10 +1224,10 @@ impl App {
 
         let new_name = match &selection.data {
             StatusOutputLineData::Branch { cli_id, .. } => {
-                let CliId::Branch { name, .. } = &**cli_id else {
+                let CliId::Branch(branch) = &**cli_id else {
                     return Ok(());
                 };
-                operations::create_branch_anchored_legacy(ctx, name.to_owned())?
+                operations::create_branch_anchored_legacy(ctx, branch.name.to_owned())?
             }
             StatusOutputLineData::UncommittedChanges { .. }
             | StatusOutputLineData::MergeBase
@@ -1266,13 +1266,13 @@ impl App {
         };
 
         let what_to_copy = match &**cli_id {
-            CliId::Branch { name, .. } => Cow::Borrowed(&**name),
-            CliId::Commit {
+            CliId::Branch(branch) => Cow::Borrowed(branch.name.as_str()),
+            CliId::Commit(CommitId {
                 commit_id,
                 change_id,
                 ..
-            } => Cow::Owned(commit_identifier_to_copy(*commit_id, change_id.as_ref())),
-            CliId::CommittedFile { path, .. } => path.to_str_lossy(),
+            }) => Cow::Owned(commit_identifier_to_copy(*commit_id, change_id.as_ref())),
+            CliId::CommittedFile(CommittedFileId { path, .. }) => path.to_str_lossy(),
             CliId::UncommittedHunkOrFile(uncommitted) => {
                 Cow::Borrowed(&*uncommitted.hunk_assignments.first().path)
             }
@@ -1299,23 +1299,23 @@ impl App {
         };
 
         let picker = match &**selection {
-            CliId::Commit { commit_id, .. } => {
+            CliId::Commit(CommitId { commit_id, .. }) => {
                 let commit_id = *commit_id;
                 copy_selection_picker::commit_picker(commit_id, self.theme)
             }
-            CliId::Branch { name, .. } => {
-                let branch = Category::LocalBranch.to_full_name(&**name)?;
+            CliId::Branch(branch) => {
+                let branch = Category::LocalBranch.to_full_name(&*branch.name)?;
                 copy_selection_picker::branch_picker(branch, self.theme)
             }
             CliId::UncommittedHunkOrFile(hunk) => {
                 copy_selection_picker::uncommitted_hunk_picker(hunk.clone(), self.theme)
             }
-            CliId::CommittedFile {
+            CliId::CommittedFile(CommittedFileId {
                 path,
                 id,
                 commit_id: _,
                 change_id: _,
-            } => copy_selection_picker::committed_file_picker(
+            }) => copy_selection_picker::committed_file_picker(
                 path.to_owned(),
                 id.to_owned(),
                 self.theme,
@@ -1332,7 +1332,11 @@ impl App {
         Ok(())
     }
 
-    fn handle_pick_program_then_open(&mut self, ctx: &Context) -> anyhow::Result<()> {
+    fn handle_pick_program_then_open(
+        &mut self,
+        ctx: &Context,
+        messages: &mut Vec<Message>,
+    ) -> anyhow::Result<()> {
         let selection = if matches!(&*self.mode, Mode::Details(..)) {
             self.details.selected_section_cli_id()
         } else {
@@ -1349,7 +1353,7 @@ impl App {
             CliId::UncommittedHunkOrFile(uncommitted) => {
                 Openable::try_from_uncommitted(&*ctx.repo.get()?, uncommitted)?
             }
-            CliId::CommittedFile { path, .. } => {
+            CliId::CommittedFile(CommittedFileId { path, .. }) => {
                 Openable::try_from_relpath(&*ctx.repo.get()?, path.as_bstr())?
             }
             _ => {
@@ -1357,19 +1361,18 @@ impl App {
             }
         };
 
-        let builtin_program_specs = list_builtin_program_specs();
-        let user_defined_program_specs = list_user_defined_program_specs();
-        let mut all_program_specs = user_defined_program_specs
-            .iter()
-            .chain(builtin_program_specs)
-            .cloned();
+        let mut program_specs = open::list_program_specs_for_openable(&to_open).into_iter();
+        let first_program = program_specs
+            .next()
+            .expect("BUG: Program specs cannot be empty");
+        let Some(second_program) = program_specs.next() else {
+            messages.push(Message::OpenInProgram(first_program, to_open));
+            return Ok(());
+        };
 
-        let mut items = NonEmpty::new(
-            all_program_specs
-                .next()
-                .expect("BUG: Program specs cannot be empty"),
-        );
-        items.extend(all_program_specs);
+        let mut items = NonEmpty::new(first_program);
+        items.push(second_program);
+        items.extend(program_specs);
 
         self.modal = Some(Modal::ProgramPicker {
             picker: Box::new(FuzzyPicker::new(
@@ -1389,7 +1392,7 @@ impl App {
     fn handle_open_in_program<T>(
         &mut self,
         program: &ProgramSpec,
-        to_open: &Openable,
+        to_open: Openable,
         terminal_guard: &mut T,
         messages: &mut Vec<Message>,
     ) -> anyhow::Result<()>
@@ -1422,7 +1425,7 @@ impl App {
             return None;
         };
 
-        let CliId::Commit { commit_id, .. } = &**cli_id else {
+        let CliId::Commit(CommitId { commit_id, .. }) = &**cli_id else {
             return None;
         };
 
@@ -1464,10 +1467,8 @@ impl App {
                     .iter()
                     .find(|line| {
                         if let Some(id) = line.data.cli_id()
-                            && let CliId::Branch {
-                                name: name_on_line, ..
-                            } = &**id
-                            && name_on_line == name.shorten()
+                            && let CliId::Branch(branch) = &**id
+                            && branch.name == name.shorten()
                         {
                             true
                         } else {

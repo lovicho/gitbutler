@@ -4,7 +4,6 @@ use anyhow::Context as _;
 use bstr::{BString, ByteSlice as _};
 use but_core::{CommitOwned, TreeChange, commit::Headers, diff::CommitDetails};
 use but_ctx::Context;
-use but_hunk_assignment::HunkAssignment;
 use gix::{prelude::ObjectIdExt as _, refs::FullName};
 use nonempty::NonEmpty;
 use ratatui::style::Style;
@@ -13,7 +12,7 @@ use crate::{
     command::legacy::status::tui::{
         Col, FuzzyPicker, FuzzyPickerItem, Message, SearchableToken, ToastKind,
     },
-    id::{ShortId, UncommittedHunkOrFile},
+    id::{ShortId, UncommittedHunkOrFile, WorktreeHunk},
     theme::Theme,
     utils::DebugAsType,
 };
@@ -258,6 +257,7 @@ fn uncommitted_hunk_or_file_to_diff(
     let assignments: Vec<_> = worktree_changes
         .assignments
         .into_iter()
+        .map(WorktreeHunk::from)
         .filter(|assignment| uncommitted_hunk_matches_selection(assignment, uncommitted))
         .collect();
 
@@ -288,20 +288,19 @@ fn uncommitted_hunk_or_file_to_diff(
 }
 
 fn uncommitted_hunk_matches_selection(
-    hunk_assignment: &HunkAssignment,
+    hunk_assignment: &WorktreeHunk,
     uncommitted: &UncommittedHunkOrFile,
 ) -> bool {
     let selected_hunk = uncommitted.hunk_assignments.first();
 
     if uncommitted.is_entire_file {
         hunk_assignment.path_bytes == selected_hunk.path_bytes
-            && hunk_assignment.stack_id == selected_hunk.stack_id
     } else {
-        hunk_assignment == selected_hunk && hunk_assignment.stack_id == selected_hunk.stack_id
+        hunk_assignment == selected_hunk
     }
 }
 
-fn hunk_assignment_to_diff(assignment: &HunkAssignment) -> String {
+fn hunk_assignment_to_diff(assignment: &WorktreeHunk) -> String {
     let path = assignment.path_bytes.to_str_lossy();
     let mut diff = format!("diff --git a/{path} b/{path}\n--- a/{path}\n+++ b/{path}\n");
     if let Some(hunk_diff) = &assignment.diff {

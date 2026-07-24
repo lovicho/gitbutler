@@ -7,6 +7,7 @@ import type { FC } from "react";
 type Props = {
 	// We can't use the `Hotkey` type because it causes type errors in Storybook. 🤷‍♂️
 	hotkey: string | HotkeySequence;
+	variant?: "button";
 };
 
 const formatKeys = (hotkey: string | HotkeySequence): string =>
@@ -14,8 +15,8 @@ const formatKeys = (hotkey: string | HotkeySequence): string =>
 		? formatForDisplaySorted(hotkey)
 		: hotkey.map(formatForDisplaySorted).join(" ");
 
-export const Kbd: FC<Props> = ({ hotkey }) => (
-	<span className={classes(styles.keys, "text-semibold")}>
+export const Kbd: FC<Props> = ({ hotkey, variant }) => (
+	<span className={classes(styles.keys, variant === "button" && styles.button, "text-semibold")}>
 		{formatKeys(hotkey)
 			.split(" ")
 			.map((key, index) => (

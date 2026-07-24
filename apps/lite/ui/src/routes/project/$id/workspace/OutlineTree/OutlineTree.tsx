@@ -40,6 +40,7 @@ import { type ComponentProps, createContext, type FC, Fragment, use, useRef } fr
 import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panels";
 import styles from "./OutlineTree.module.css";
 import { Row, RowLabel, RowLabelContainer } from "../Row.tsx";
+import { treeItemId } from "../Row-utils.ts";
 import { getOperation, type Placement, useDryRunOperation } from "#ui/operations/operation.ts";
 import { GraphSegment, type GraphSegmentStatus } from "#ui/components/GraphSegment.tsx";
 import { segmentBottomRelativeTo } from "#ui/api/stack.ts";
@@ -77,9 +78,6 @@ AbsorptionTargetCommitIdsContext.displayName = "AbsorptionTargetCommitIdsContext
 // This must be unique as to not collide with other IDs, and stable because it's
 // stored in local storage.
 type PanelId = "uncommitted-changes-panel" | "stacks-panel";
-
-const treeItemId = (operand: Operand): string =>
-	`outline-treeitem-${encodeURIComponent(operandIdentityKey(operand))}`;
 
 const TreeItem: FC<
 	{
@@ -280,6 +278,8 @@ const UncommittedChanges: FC<{
 				projectId={projectId}
 				commitTarget={commitTarget}
 				targetComboboxItems={targetComboboxItems}
+				startCommitButtonId={startCommitButtonId}
+				commitMessageInputId={commitMessageInputId}
 				className={styles.commitForm}
 			/>
 		</div>
@@ -522,6 +522,17 @@ const StackC: FC<{
 	);
 };
 
+const startCommitButtonId = "start-commit-button";
+const commitMessageInputId = "commit-message-input";
+
+const focusCommitMessageInput = () => {
+	const input = document.getElementById(commitMessageInputId);
+	if (input) input.focus();
+	// The commit form may be collapsed; clicking the trigger expands it and
+	// focuses the message input.
+	else document.getElementById(startCommitButtonId)?.click();
+};
+
 const Stacks: FC<{
 	projectId: string;
 	checkCommit: (evt: { commitId: string; shiftKey: boolean }) => void;
@@ -571,6 +582,7 @@ const Stacks: FC<{
 		projectId,
 		ref: hotkeysRef,
 		checkCommit,
+		focusCommitMessageInput,
 	});
 
 	return (

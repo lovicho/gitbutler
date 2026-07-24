@@ -48,7 +48,7 @@ pub fn handle(
         }
 
         let branch_name = match &resolved_ids[0] {
-            CliId::Branch { name, .. } => name.clone(),
+            CliId::Branch(branch) => branch.name.clone(),
             other => bail!("Expected a branch ID, got {}", other.kind_for_humans()),
         };
 

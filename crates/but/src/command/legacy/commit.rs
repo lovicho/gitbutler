@@ -246,7 +246,6 @@ fn resolve_file_ids(
     id_map: &IdMap,
     ctx: &mut but_ctx::Context,
     file_ids: &[String],
-    target_stack_id: Option<but_core::ref_metadata::StackId>,
 ) -> anyhow::Result<Vec<FileAssignment>> {
     let mut resolved_files: BTreeMap<BString, FileAssignment> = BTreeMap::new();
     let mut errors = Vec::new();
@@ -288,14 +287,6 @@ fn resolve_file_ids(
         match &cli_ids[0] {
             CliId::UncommittedHunkOrFile(uncommitted) => {
                 // Validate stack assignment for ALL hunks - each must be uncommitted OR assigned to target stack
-                for hunk in &uncommitted.hunk_assignments {
-                    if hunk.stack_id.is_some() && hunk.stack_id != target_stack_id {
-                        errors.push(format!(
-                            "'{file_id}' is assigned to a different stack. Use 'but rub {file_id} zz' to unassign it first."
-                        ));
-                        break;
-                    }
-                }
                 if errors
                     .iter()
                     .any(|e| e.starts_with(&format!("'{file_id}'")))
@@ -389,8 +380,8 @@ fn select_target_branch<'a>(
             .or_else(|| {
                 if let Ok(cli_ids) = id_map.parse_using_context(branch_hint, ctx) {
                     for cli_id in cli_ids {
-                        if let CliId::Branch { name, .. } = cli_id
-                            && let Some(branch) = target_stack.branch(&name)
+                        if let CliId::Branch(branch_id) = cli_id
+                            && let Some(branch) = target_stack.branch(&branch_id.name)
                         {
                             return Some(branch);
                         }
@@ -500,7 +491,6 @@ pub(crate) fn commit(
     before: Option<CliIdArg>,
     after: Option<CliIdArg>,
     file_ids: &[String],
-    only: bool,
     all: bool,
     create_branch: bool,
     no_hooks: bool,
@@ -536,7 +526,7 @@ pub(crate) fn commit(
         .into());
     }
 
-    let (target_stack_id, target_stack) = select_stack(
+    let (_target_stack_id, target_stack) = select_stack(
         &id_map,
         ctx,
         &stacks,
@@ -556,31 +546,14 @@ pub(crate) fn commit(
     // Get files to commit - either specific files by ID or all eligible files
     let files_to_commit = if !file_ids.is_empty() {
         // User specified specific file IDs - resolve them
-        resolve_file_ids(&id_map, ctx, file_ids, Some(target_stack_id))?
+        resolve_file_ids(&id_map, ctx, file_ids)?
     } else {
         // Default behavior: uncommitted files + files assigned to target stack
         let assignments_by_file: BTreeMap<BString, FileAssignment> =
             FileAssignment::get_assignments_by_file(&id_map);
 
-        let mut files = Vec::new();
-
-        if !only {
-            // Add uncommitted files (unless --only flag is used)
-            let uncommitted = crate::command::legacy::status::assignment::filter_by_stack_id(
-                assignments_by_file.values(),
-                &None,
-            );
-            files.extend(uncommitted);
-        }
-
-        // Add files assigned to target stack
-        let stack_assigned = crate::command::legacy::status::assignment::filter_by_stack_id(
-            assignments_by_file.values(),
-            &Some(target_stack_id),
-        );
-        files.extend(stack_assigned);
-
-        files
+        // Add uncommitted files
+        assignments_by_file.values().cloned().collect::<Vec<_>>()
     };
 
     if files_to_commit.is_empty() {
@@ -865,9 +838,9 @@ fn find_stack_by_hint(id_map: &IdMap, stacks: &[TargetStack], hint: &str) -> Opt
         .parse(hint, Box::new(move |_, _| Ok(Vec::new())))
         .ok()?;
     for cli_id in cli_ids {
-        if let CliId::Branch { name, .. } = cli_id {
+        if let CliId::Branch(branch) = cli_id {
             for (stack_id, stack) in stacks {
-                if stack.contains_branch(&name) {
+                if stack.contains_branch(&branch.name) {
                     return Some((*stack_id, stack.clone()));
                 }
             }

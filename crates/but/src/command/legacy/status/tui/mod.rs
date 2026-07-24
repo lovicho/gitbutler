@@ -8,7 +8,6 @@ use std::{
 use anyhow::Context as _;
 use bstr::BString;
 use but_api::open::program::ProgramSpec;
-use but_core::ref_metadata::StackId;
 use but_ctx::Context;
 use but_settings::AppSettingsWithDiskSync;
 use crossterm::event::{Event, MouseEventKind};
@@ -692,7 +691,6 @@ enum SelectAfterReload {
     #[expect(dead_code)]
     UncommittedFile {
         path: BString,
-        stack_id: Option<StackId>,
     },
     UncommittedDetailsSection {
         index: usize,

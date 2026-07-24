@@ -5,7 +5,7 @@ use crate::{
     CliError, CliId, CliResult, IdMap,
     args::atoms::BranchArg,
     bad_input,
-    id::{CommittedFileId, UncommittedHunkOrFile},
+    id::{CommitId, CommittedFileId, UncommittedHunkOrFile},
 };
 
 /// An argument atom for cli ids that can match multiple things like branches, commits, files, etc.
@@ -70,27 +70,17 @@ impl CliIdArg {
             return Ok(None);
         };
         Ok(Some(match id {
-            CliId::Branch { name, .. } => ResolvedCliIdArg::Branch(BranchArg(name)),
-            CliId::Commit {
+            CliId::Branch(branch) => ResolvedCliIdArg::Branch(BranchArg(branch.name)),
+            CliId::Commit(CommitId {
                 commit_id,
                 change_id,
                 ..
-            } => ResolvedCliIdArg::Commit(commit_id, change_id),
+            }) => ResolvedCliIdArg::Commit(commit_id, change_id),
             CliId::UncommittedHunkOrFile(uncommitted) => {
                 ResolvedCliIdArg::UncommittedHunkOrFile(Box::new(uncommitted))
             }
             CliId::PathPrefix { .. } => ResolvedCliIdArg::PathPrefix,
-            CliId::CommittedFile {
-                commit_id,
-                path,
-                id,
-                change_id,
-            } => ResolvedCliIdArg::CommittedFile(CommittedFileId {
-                commit_id,
-                path,
-                id,
-                change_id,
-            }),
+            CliId::CommittedFile(file) => ResolvedCliIdArg::CommittedFile(file),
             CliId::Uncommitted { .. } => ResolvedCliIdArg::Uncommitted,
             CliId::Stack { .. } => ResolvedCliIdArg::Stack,
         }))
@@ -125,7 +115,7 @@ impl CliIdArg {
             return Ok(None);
         };
         match id {
-            CliId::Commit { commit_id, .. } => Ok(Some(commit_id)),
+            CliId::Commit(CommitId { commit_id, .. }) => Ok(Some(commit_id)),
             _ => Ok(None),
         }
     }
@@ -174,7 +164,7 @@ impl CliIdArg {
             return Ok(None);
         };
         match id {
-            CliId::Branch { name, .. } => Ok(Some(BranchArg(name))),
+            CliId::Branch(branch) => Ok(Some(BranchArg(branch.name))),
             _ => Ok(None),
         }
     }
@@ -239,7 +229,7 @@ impl CliIdArg {
     #[expect(dead_code)]
     fn wrong_kind_error(&self, id: &CliId, expected: &'static str) -> CliError {
         let kind = match id {
-            CliId::Branch { .. } => "a branch",
+            CliId::Branch(..) => "a branch",
             CliId::Commit { .. } => "a commit",
             CliId::UncommittedHunkOrFile(..) => "an uncommitted change",
             CliId::PathPrefix { .. } => "a path",
@@ -298,7 +288,7 @@ fn try_resolve_cli_id(
         let mut uncommitted = Vec::new();
         for id in std::iter::once(target).chain(target_ids) {
             match id {
-                CliId::Branch { .. } => branches.push(id),
+                CliId::Branch(..) => branches.push(id),
                 CliId::Commit { .. } => commits.push(id),
                 CliId::UncommittedHunkOrFile(..) => uncommitted.push(id),
                 CliId::PathPrefix { .. }

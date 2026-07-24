@@ -1,3 +1,4 @@
+use but_api::open::program::USER_DEFINED_PROGRAMS_FILENAME;
 use but_testsupport::Sandbox;
 use crossterm::event::{KeyCode, KeyModifiers};
 use snapbox::{file, str};
@@ -36,6 +37,85 @@ fn open_uncommitted_file_in_program() {
     tui.input("g");
     tui.input([KeyCode::Down, KeyCode::Down])
         .assert_current_line_eq(str!["┊   wv A open-me.txt.touch"]);
+}
+
+#[test]
+fn open_uncommitted_file_in_program_chooses_program_by_extension_automatically_if_unambiguous() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    env.file("open-me.txt", "I have new content");
+
+    let mut tui = test_tui(env);
+    tui.input('g');
+    tui.input(KeyCode::Down)
+        .assert_current_line_eq(str!["┊   ps A open-me.txt"]);
+
+    let app_data_dir = tui.env().projects_root();
+    let config_dir = app_data_dir.join("gitbutler");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    std::fs::write(
+        config_dir.join(USER_DEFINED_PROGRAMS_FILENAME),
+        r#"[
+  {
+    "id": "touch",
+    "extensions": ["txt"]
+  }
+]"#,
+    )
+    .unwrap();
+
+    let app_data_dir = app_data_dir.display().to_string();
+    with_var("E2E_TEST_APP_DATA_DIR", Some(app_data_dir), || {
+        tui.input('o').assert_rendered_term_svg_eq(file![
+            "snapshots/open_uncommitted_file_in_program_chooses_program_by_extension_automatically_if_unambiguous_001.svg"
+        ]);
+        tui.reload().assert_rendered_term_svg_eq(file![
+            "snapshots/open_uncommitted_file_in_program_chooses_program_by_extension_automatically_if_unambiguous_002.svg"
+        ]);
+    });
+
+    tui.input("g");
+    tui.input([KeyCode::Down, KeyCode::Down])
+        .assert_current_line_eq(str!["┊   ps A open-me.txt"]);
+}
+
+#[test]
+fn open_uncommitted_file_in_program_shows_only_programs_that_match_extension() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    env.file("open-me.txt", "I have new content");
+
+    let mut tui = test_tui(env);
+    tui.input('g');
+    tui.input(KeyCode::Down)
+        .assert_current_line_eq(str!["┊   ps A open-me.txt"]);
+
+    let app_data_dir = tui.env().projects_root();
+    let config_dir = app_data_dir.join("gitbutler");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    std::fs::write(
+        config_dir.join(USER_DEFINED_PROGRAMS_FILENAME),
+        r#"[
+  {
+    "id": "touch",
+    "extensions": ["txt"]
+  },
+  {
+    "id": "echo",
+    "extensions": ["txt"]
+  }
+]"#,
+    )
+    .unwrap();
+
+    let app_data_dir = app_data_dir.display().to_string();
+    with_var("E2E_TEST_APP_DATA_DIR", Some(app_data_dir), || {
+        tui.input('o').assert_rendered_term_svg_eq(file![
+            "snapshots/open_uncommitted_file_in_program_shows_only_programs_that_match_extension.svg"
+        ]);
+    });
 }
 
 #[test]

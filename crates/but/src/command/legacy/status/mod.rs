@@ -34,7 +34,10 @@ use crate::{
         upstream::{self, BranchStatus as UpstreamBranchStatus},
         workspace_target,
     },
-    id::{ChangeIdWithShortId, SegmentWithId, ShortId, StackWithId, TreeChangeWithId},
+    id::{
+        ChangeIdWithShortId, CommitId, CommittedFileId, SegmentWithId, ShortId, StackWithId,
+        TreeChangeWithId,
+    },
     tui::text::truncate_text,
     utils::{
         InputOutputChannel, OutputChannel, WriteWithUtils, shorten_hex_object_id,
@@ -433,13 +436,13 @@ fn build_status_context<'a>(
         FileAssignment::get_assignments_by_file(&id_map);
     let mut stack_details: Vec<StackEntry> = Vec::new();
 
-    let uncommitted = assignment::filter_by_stack_id(assignments_by_file.values(), &None);
+    let uncommitted = assignments_by_file.values().cloned().collect();
     stack_details.push((None, (None, uncommitted)));
 
     for stack in stacks {
-        let assignments = assignment::filter_by_stack_id(assignments_by_file.values(), &stack.id);
-        stack_details.push((stack.id, (Some(stack.clone()), assignments)));
+        stack_details.push((stack.id, (Some(stack.clone()), Vec::new())));
     }
+
     let ci_map = ci_map(
         ctx,
         &cache_config,
@@ -1320,7 +1323,7 @@ fn print_group(
                 &status_ctx.id_map,
                 &repo,
                 &segment.short_id,
-                |id| matches!(id, CliId::Branch { .. }),
+                |id| matches!(id, CliId::Branch(..)),
                 "branch",
             )?;
             let mut branch_suffix = Vec::new();
@@ -1596,7 +1599,7 @@ fn print_commit(
         &status_ctx.id_map,
         repo,
         &short_id,
-        |id| matches!(id, CliId::Commit { commit_id, .. } if *commit_id == commit.id),
+        |id| matches!(id, CliId::Commit(CommitId { commit_id, .. }) if *commit_id == commit.id),
         "commit",
     )?;
 
@@ -1687,12 +1690,12 @@ fn print_commit(
                     .unwrap_or(0);
 
                 for TreeChangeWithId { short_id, inner } in tree_changes {
-                    let file_cli_id = CliId::CommittedFile {
+                    let file_cli_id = CliId::CommittedFile(CommittedFileId {
                         commit_id: commit.id,
                         path: inner.path.clone(),
                         id: short_id.to_owned(),
                         change_id: change_id.map(|change_id| change_id.change_id.clone()),
-                    };
+                    });
 
                     let display_id = displayed_file_id(padded_file_id_prefix.as_deref(), short_id);
                     let (status, path) = tree_change_display_cli(inner);

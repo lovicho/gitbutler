@@ -91,7 +91,8 @@ export const useNavigationIndexHotkeys = <T>({
 	selection: T | null;
 	ref: React.RefObject<HTMLElement | null>;
 	selectSectionPredicate?: (item: T) => boolean;
-	operationSourcesForItem: (item: T) => Array<Operand>;
+	/** When omitted, the selection operation hotkeys (move, cut) are not registered. */
+	operationSourcesForItem?: (item: T) => Array<Operand>;
 	getKey: (item: T) => string;
 }) => {
 	const dispatch = useAppDispatch();
@@ -276,7 +277,7 @@ export const useNavigationIndexHotkeys = <T>({
 	]);
 
 	const enterTransferModeForSelection = (placement: Placement) => {
-		if (selection === null) return;
+		if (selection === null || operationSourcesForItem === undefined) return;
 
 		dispatch(
 			projectSlice.actions.enterKeyboardTransferMode({
@@ -295,7 +296,7 @@ export const useNavigationIndexHotkeys = <T>({
 			callback: () => enterTransferModeForSelection("above"),
 			options: {
 				conflictBehavior: "allow",
-				enabled: selection !== null,
+				enabled: selection !== null && operationSourcesForItem !== undefined,
 				target: ref,
 				meta: { group, name: "Move" },
 			},
@@ -305,7 +306,7 @@ export const useNavigationIndexHotkeys = <T>({
 			callback: () => enterTransferModeForSelection("into"),
 			options: {
 				conflictBehavior: "allow",
-				enabled: selection !== null,
+				enabled: selection !== null && operationSourcesForItem !== undefined,
 				target: ref,
 				ignoreInputs: true,
 				meta: { group, name: "Cut" },

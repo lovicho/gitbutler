@@ -12,7 +12,7 @@ use gix::ObjectId;
 use crate::theme::{self, Paint};
 
 use super::undo::stack_id_by_commit_id;
-use crate::{CliId, IdMap, command::legacy::ai, utils::OutputChannel};
+use crate::{CliId, IdMap, command::legacy::ai, id::CommitId, utils::OutputChannel};
 
 /// Handler for `but squash` command with support for:
 /// 1. Multiple commits: `but squash <commit1> <commit2> <commit3>` - squashes 1 and 2 into 3
@@ -45,12 +45,12 @@ pub(crate) fn handle(
             let entity = &matches[0];
 
             // Check if it's a branch - if so, squash all commits in the branch
-            if let CliId::Branch { name, stack_id, .. } = entity {
+            if let CliId::Branch(branch) = entity {
                 return squash_branch_commits(
                     ctx,
                     out,
-                    name,
-                    *stack_id,
+                    &branch.name,
+                    branch.stack_id,
                     drop_message,
                     custom_message,
                     ai,
@@ -161,7 +161,7 @@ fn handle_multi_commit_squash(
     let mut commit_oids = Vec::new();
     for source in &sources {
         match source {
-            CliId::Commit { commit_id, .. } => {
+            CliId::Commit(CommitId { commit_id, .. }) => {
                 commit_oids.push(*commit_id);
             }
             other => {
@@ -465,13 +465,13 @@ fn parse_commit_range(
     // Both must be commits
     let (start_commit_oid, end_commit_oid) = match (start_id, end_id) {
         (
-            CliId::Commit {
+            CliId::Commit(CommitId {
                 commit_id: start_oid,
                 ..
-            },
-            CliId::Commit {
+            }),
+            CliId::Commit(CommitId {
                 commit_id: end_oid, ..
-            },
+            }),
         ) => (start_oid, end_oid),
         _ => {
             bail!("Range endpoints must be commits, not other types");

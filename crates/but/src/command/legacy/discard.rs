@@ -14,7 +14,7 @@ use gitbutler_oplog::{
 
 use crate::{
     CliId, IdMap,
-    id::parser::parse_uncommitted_sources,
+    id::{WorktreeHunk, parser::parse_uncommitted_sources},
     utils::{OutputChannel, diff_specs},
 };
 
@@ -56,9 +56,15 @@ pub fn handle(ctx: &mut Context, out: &mut OutputChannel, id: &str) -> Result<()
                     builder.push_changes_from_path_prefix(&id, &hunk_assignments)?;
                 }
                 CliId::Uncommitted { .. } => {
-                    builder.push_hunk_assignments(worktree_changes.assignments.clone())?;
+                    builder.push_hunk_assignments(
+                        worktree_changes
+                            .assignments
+                            .iter()
+                            .cloned()
+                            .map(WorktreeHunk::from),
+                    )?;
                 }
-                CliId::Branch { .. } => {
+                CliId::Branch(..) => {
                     bail!("Cannot discard a branch. Use a file or hunk ID instead.");
                 }
                 CliId::Commit { .. } => {

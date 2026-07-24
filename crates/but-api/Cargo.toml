@@ -86,6 +86,7 @@ but-path.workspace = true
 but-api-macros.workspace = true
 but-error.workspace = true
 but-core.workspace = true
+but-branches.workspace = true
 but-graph.workspace = true
 but-ctx.workspace = true
 but-workspace.workspace = true
@@ -147,6 +148,7 @@ gix = { workspace = true, features = ["worktree-mutation"] }
 open.workspace = true
 url.workspace = true
 which = "8.0.2"
+nonempty.workspace = true
 but-schemars.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
@@ -156,6 +158,7 @@ objc2-foundation = { version = "0.3.2", default-features = false, features = ["s
 [dev-dependencies]
 but-api = { path = ".", features = ["legacy"] }
 but-testsupport.workspace = true
+chrono.workspace = true
 gitbutler-oplog.workspace = true
 snapbox.workspace = true
 tempfile.workspace = true

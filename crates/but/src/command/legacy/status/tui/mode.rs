@@ -161,7 +161,7 @@ impl<'a> ModeRef<'a> {
             },
             ModeRef::Move(move_mode) => match &*move_mode.source {
                 MoveSource::Marks(commits) => MarksRef::from_commits(commits),
-                MoveSource::Commit { .. } | MoveSource::Branch { .. } => MarksRef::Empty,
+                MoveSource::Commit { .. } | MoveSource::Branch(..) => MarksRef::Empty,
             },
             ModeRef::InlineReword(..)
             | ModeRef::Stack(..)

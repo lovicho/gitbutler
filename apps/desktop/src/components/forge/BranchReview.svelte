@@ -23,7 +23,6 @@
 		parent: Segment | undefined;
 		child: Segment | undefined;
 		withForce: boolean;
-		stackPrNumbers: (number | undefined)[];
 		prNumber?: number;
 		reviewId?: string;
 	};
@@ -38,7 +37,6 @@
 		parent,
 		child,
 		withForce,
-		stackPrNumbers,
 		prNumber,
 		reviewId,
 	}: Props = $props();
@@ -98,7 +96,6 @@
 			{branchIndex}
 			{parent}
 			{withForce}
-			{stackPrNumbers}
 			onClose={() => modal?.close()}
 		/>
 

@@ -24,6 +24,7 @@ use crate::{
         self, ShowDiffInEditor,
         status::{StatusFlags, StatusOutput, StatusOutputLine, StatusRenderMode, TuiLaunchOptions},
     },
+    id::WorktreeHunk,
     utils::{WriteWithUtils, diff_specs},
 };
 
@@ -229,7 +230,7 @@ pub fn reword_branch_legacy(
 
 fn discard_uncommitted_legacy_with_assignments(
     ctx: &mut Context,
-    hunk_assignments: Vec<but_hunk_assignment::HunkAssignment>,
+    hunk_assignments: Vec<WorktreeHunk>,
 ) -> anyhow::Result<()> {
     let changes_to_discard = {
         let context_lines = ctx.settings.context_lines;
@@ -250,7 +251,7 @@ fn discard_uncommitted_legacy_with_assignments(
 
 pub fn discard_uncommitted_hunks_legacy(
     ctx: &mut Context,
-    hunk_assignments: Vec<but_hunk_assignment::HunkAssignment>,
+    hunk_assignments: Vec<WorktreeHunk>,
 ) -> anyhow::Result<()> {
     discard_uncommitted_legacy_with_assignments(ctx, hunk_assignments)
 }

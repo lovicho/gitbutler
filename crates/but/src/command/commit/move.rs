@@ -1,5 +1,6 @@
 use crate::{
     CliId,
+    id::{CommitId, CommittedFileId},
     theme::{self, Paint},
     utils::OutputChannel,
 };
@@ -20,7 +21,7 @@ pub(crate) fn handle_resolved_with_perm(
     // Validate --after flag usage
     if after {
         // Check if target is a branch (--after only makes sense for commit-to-commit moves)
-        if matches!(target_id, CliId::Branch { .. }) {
+        if matches!(target_id, CliId::Branch(..)) {
             bail!(
                 "The {} flag only makes sense when moving a commit to another commit.\n\
                 When moving to a branch, the commit is placed at the top of the stack by default.",
@@ -68,7 +69,7 @@ pub(crate) fn handle_multiple_resolved_with_perm(
     let sources = source_ids
         .iter()
         .map(|id| match id {
-            CliId::Commit { commit_id, .. } => Ok(*commit_id),
+            CliId::Commit(CommitId { commit_id, .. }) => Ok(*commit_id),
             _ => bail!(
                 "Cannot move {} as part of a multi-commit operation. Only commits are supported.",
                 t.cli_id.paint(id.to_short_string())
@@ -77,10 +78,10 @@ pub(crate) fn handle_multiple_resolved_with_perm(
         .collect::<anyhow::Result<Vec<_>>>()?;
 
     match target_id {
-        CliId::Commit { commit_id, .. } => {
+        CliId::Commit(CommitId { commit_id, .. }) => {
             move_commit_to_commit_with_perm(ctx, sources, *commit_id, after, out, perm)
         }
-        CliId::Branch { name, .. } => {
+        CliId::Branch(branch) => {
             if after {
                 bail!(
                     "The {} flag only makes sense when moving a commit to another commit.\n\
@@ -88,7 +89,7 @@ pub(crate) fn handle_multiple_resolved_with_perm(
                     "--after"
                 );
             }
-            move_commit_to_branch_with_perm(ctx, sources, name, out, perm)
+            move_commit_to_branch_with_perm(ctx, sources, &branch.name, out, perm)
         }
         _ => bail!(
             "Cannot move multiple commits to {} ({}).\n\
@@ -303,12 +304,12 @@ fn route_move_operation<'a>(
     match (source, target) {
         // Commit -> Commit: move commit to specific position
         (
-            Commit {
+            Commit(CommitId {
                 commit_id: source, ..
-            },
-            Commit {
+            }),
+            Commit(CommitId {
                 commit_id: target, ..
-            },
+            }),
         ) => Some(MoveOperation::CommitToCommit {
             source: *source,
             target: *target,
@@ -316,25 +317,25 @@ fn route_move_operation<'a>(
         }),
         // Commit -> Branch: move commit to top of branch
         (
-            Commit {
+            Commit(CommitId {
                 commit_id: source, ..
-            },
-            Branch { name, .. },
+            }),
+            Branch(branch),
         ) => Some(MoveOperation::CommitToBranch {
             source: *source,
-            target_branch: name,
+            target_branch: &branch.name,
         }),
         // CommittedFile -> Commit: move a file from one commit to another
         (
-            CommittedFile {
+            CommittedFile(CommittedFileId {
                 path,
                 commit_id: source_commit,
                 ..
-            },
-            Commit {
+            }),
+            Commit(CommitId {
                 commit_id: target_commit,
                 ..
-            },
+            }),
         ) => Some(MoveOperation::CommittedFileToCommit {
             path: path.as_ref(),
             source_commit: *source_commit,
@@ -349,35 +350,35 @@ fn route_move_operation<'a>(
 mod tests {
     use bstr::BString;
 
+    use crate::id::{BranchId, CommitId, WorktreeHunk};
+
     use super::*;
 
     // Helper to create test CliIds
     fn commit_id(id: &str) -> CliId {
-        CliId::Commit {
+        CliId::Commit(CommitId {
             commit_id: gix::ObjectId::empty_tree(gix::hash::Kind::Sha1),
             id: id.to_string(),
             change_id: None,
-        }
+        })
     }
 
     fn branch_id(name: &str) -> CliId {
-        CliId::Branch {
+        CliId::Branch(BranchId {
             name: name.to_string(),
             id: "br".to_string(),
             stack_id: None,
-        }
+        })
     }
 
     fn uncommitted_id() -> CliId {
         CliId::UncommittedHunkOrFile(crate::id::UncommittedHunkOrFile {
             id: "uc".to_string(),
-            hunk_assignments: nonempty::NonEmpty::new(but_hunk_assignment::HunkAssignment {
+            hunk_assignments: nonempty::NonEmpty::new(WorktreeHunk {
                 id: None,
                 hunk_header: None,
                 path: "test.txt".to_string(),
                 path_bytes: BString::from("test.txt"),
-                stack_id: None,
-                branch_ref_bytes: None,
                 line_nums_added: None,
                 line_nums_removed: None,
                 diff: None,
@@ -387,12 +388,12 @@ mod tests {
     }
 
     fn committed_file_id(path: &str) -> CliId {
-        CliId::CommittedFile {
+        CliId::CommittedFile(CommittedFileId {
             commit_id: gix::ObjectId::empty_tree(gix::hash::Kind::Sha1),
             path: BString::from(path),
             id: "cf".to_string(),
             change_id: None,
-        }
+        })
     }
 
     #[test]

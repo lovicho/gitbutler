@@ -19,6 +19,7 @@ use crate::{
         mode::Mode,
         operations,
     },
+    id::{CommitId, CommittedFileId},
     utils::diff_specs::DiffSpecBuilder,
 };
 
@@ -101,7 +102,7 @@ impl App {
                         },
                     )
                 }
-                CliId::Commit { commit_id, .. } => {
+                CliId::Commit(CommitId { commit_id, .. }) => {
                     self.to_be_discarded = Vec::from([Arc::clone(cli_id)]);
                     let commit_id = *commit_id;
                     let select_after_reload = self
@@ -136,10 +137,10 @@ impl App {
                         },
                     )
                 }
-                CliId::Branch { name, .. } => {
+                CliId::Branch(branch) => {
                     let commits = {
                         let (_guard, _, ws, _) = ctx.workspace_and_db()?;
-                        let ref_name = Category::LocalBranch.to_full_name(&**name)?;
+                        let ref_name = Category::LocalBranch.to_full_name(&*branch.name)?;
                         let Some((_, segment)) =
                             ws.find_segment_and_stack_by_refname(ref_name.as_ref())
                         else {
@@ -152,7 +153,7 @@ impl App {
                             .collect::<Vec<_>>()
                     };
 
-                    let name = name.to_owned();
+                    let name = branch.name.to_owned();
 
                     self.to_be_discarded = Vec::from([Arc::clone(cli_id)]);
                     let select_after_reload = self
@@ -191,12 +192,12 @@ impl App {
                         },
                     )
                 }
-                CliId::CommittedFile {
+                CliId::CommittedFile(CommittedFileId {
                     commit_id,
                     path,
                     id: _,
                     change_id: _,
-                } => {
+                }) => {
                     let commit_id = *commit_id;
                     let path = path.to_owned();
 

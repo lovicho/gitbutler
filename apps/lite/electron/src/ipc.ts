@@ -27,9 +27,12 @@ import type {
 	InsertSide,
 	IntegrateBranchResult,
 	InteractiveIntegration,
+	ListedStack,
 	MessageCombinationStrategy,
 	PushResult,
 	ProjectForFrontend,
+	PublishReviewInput,
+	PublishReviewOutcome,
 	RelativeTo,
 	RefInfo,
 	RepoInfo,
@@ -41,7 +44,6 @@ import type {
 	CommitMoveResult,
 	CommitRewordResult,
 	CommitSquashResult,
-	CreateForgeReviewParams,
 	MoveBranchResult,
 	MoveChangesResult,
 	PushFlag,
@@ -285,7 +287,7 @@ export interface PeelRestoreSnapshotParams {
 
 export interface PublishReviewParams {
 	projectId: string;
-	params: CreateForgeReviewParams;
+	params: PublishReviewInput;
 }
 
 export interface WorkspaceBranchAndAncestorsPushParams {
@@ -403,6 +405,8 @@ export interface NativeMenuPosition {
 type NativeMenuPopupItemData = {
 	label: string;
 	accelerator?: string;
+	/** Renders the item as a checkbox in the given state. */
+	checked?: boolean;
 	enabled?: boolean;
 	itemId?: string;
 	submenu?: Array<NativeMenuPopupItem>;
@@ -430,6 +434,7 @@ export interface LiteElectronApi {
 	branchCreate: (params: BranchCreateParams) => Promise<BranchCreateResult>;
 	branchDetails: (params: BranchDetailsParams) => Promise<BranchDetails>;
 	branchDiff: (params: BranchDiffParams) => Promise<TreeChanges>;
+	branchList: (projectId: string) => Promise<Array<ListedStack>>;
 	changesInWorktree: (projectId: string) => Promise<WorktreeChanges>;
 	clipboardWriteText: (text: string) => Promise<void>;
 	commitAmend: (params: CommitAmendParams) => Promise<CommitCreateResult>;
@@ -476,7 +481,7 @@ export interface LiteElectronApi {
 	openInWebBrowser: (url: string) => Promise<void>;
 	openInEditor: (params: OpenInEditorParams) => Promise<void>;
 	pathJoin: (...paths: Array<string>) => Promise<string>;
-	publishReview: (params: PublishReviewParams) => Promise<ForgeReview>;
+	publishReview: (params: PublishReviewParams) => Promise<PublishReviewOutcome>;
 	updateBranchName: (params: UpdateBranchNameParams) => Promise<UpdateBranchNameResult>;
 	updateReview: (params: UpdateReviewParams) => Promise<void>;
 	tearOffBranch: (params: TearOffBranchParams) => Promise<MoveBranchResult>;
@@ -522,6 +527,7 @@ export const liteIpcChannels = {
 	branchCreate: "workspace:branch-create",
 	branchDetails: "workspace:branch-details",
 	branchDiff: "workspace:branch-diff",
+	branchList: "workspace:branch-list",
 	changesInWorktree: "workspace:changes-in-worktree",
 	clipboardWriteText: "lite:clipboard-write-text",
 	commitAmend: "workspace:commit-amend",

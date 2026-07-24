@@ -160,6 +160,7 @@ tracing-appender = "0.2.5"
 fuzzy-matcher = "0.3.7"
 indexmap.workspace = true
 allocation-counter = { version = "0.8.1", optional = true }
+uuid.workspace = true
 
 [dev-dependencies]
 but-graph.workspace = true

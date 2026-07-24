@@ -14,7 +14,6 @@
 	import MessageEditorInput from "$components/editor/MessageEditorInput.svelte";
 	import PrTemplateSection from "$components/forge/PrTemplateSection.svelte";
 	import { AI_SERVICE } from "$lib/ai/service";
-	import { BASE_BRANCH_SERVICE } from "$lib/baseBranch/baseBranchService.svelte";
 	import { getBranchNameFromRef } from "$lib/branches/branchUtils";
 	import { splitMessage } from "$lib/commits/commitMessage";
 	import { projectAiGenEnabled, projectRunCommitHooks } from "$lib/config/config";
@@ -24,7 +23,6 @@
 	import { type PullRequest } from "$lib/forge/interface/types";
 	import { PrPersistedStore } from "$lib/forge/prContents";
 	import { PR_SERVICE } from "$lib/forge/prService.svelte";
-	import { syncStackAfterReviewCreation } from "$lib/forge/shared/prFooter";
 	import { showToast } from "$lib/notifications/toasts";
 	import { SETTINGS_SERVICE } from "$lib/settings/appSettings";
 	import { requiresPush } from "$lib/stacks/stack";
@@ -48,27 +46,12 @@
 		branchIndex: number;
 		parent: Segment | undefined;
 		withForce: boolean;
-		stackPrNumbers: (number | undefined)[];
 		reviewId?: string;
 		onClose: () => void;
 	};
 
-	const {
-		projectId,
-		stackId,
-		branchName,
-		segment,
-		branchIndex,
-		parent,
-		withForce,
-		stackPrNumbers,
-		onClose,
-	}: Props = $props();
+	const { projectId, stackId, branchName, segment, withForce, onClose }: Props = $props();
 
-	const baseBranchService = inject(BASE_BRANCH_SERVICE);
-	const baseBranchQuery = $derived(baseBranchService.baseBranch(projectId));
-	const baseBranch = $derived(baseBranchQuery.response);
-	const baseBranchName = $derived(baseBranch?.shortName);
 	const prService = inject(PR_SERVICE);
 	const forgeInfoService = inject(FORGE_INFO_SERVICE);
 	const forgeInfoQuery = $derived(forgeInfoService.get(projectId));
@@ -82,9 +65,6 @@
 
 	const [pushStack, stackPush] = stackService.pushStack;
 
-	const branchParentName = $derived(parent?.refName?.displayName);
-	const branchParentPrNumber = $derived(parent?.metadata?.review.pullRequest);
-	const branchParentDetails = $derived(parent);
 	const branchDetails = $derived(segment);
 	const commits = $derived(segment.commits);
 	const runHooks = $derived(projectRunCommitHooks(projectId));
@@ -199,7 +179,7 @@
 			return [upstreamBranchName, pushQuery];
 		}
 
-		return [branchName, undefined];
+		return [branchDetails?.remoteTrackingRefName?.displayName ?? branchName, undefined];
 	}
 
 	export async function createReview() {
@@ -247,44 +227,17 @@
 	}
 
 	async function createPr(params: CreatePrParams): Promise<PullRequest | undefined> {
-		// Local mutable copy of pre-computed pr numbers so we can splice in
-		// the newly-created pr number below.
-		const prNumbers = [...stackPrNumbers];
-
 		try {
-			if (!baseBranchName) {
-				chipToasts.error("No base branch name determined");
-				return;
-			}
-
 			if (!params.upstreamBranchName) {
 				chipToasts.error("No upstream branch name determined");
 				return;
-			}
-
-			const currentIndex = branchIndex;
-			if (currentIndex === -1) {
-				throw new Error("Branch index not found.");
-			}
-
-			// Use base branch as base unless it's part of stack and should be be pointing
-			// to the preceding branch. Ensuring we're not using `archived` branches as base.
-			let base = baseBranch?.shortName || "master";
-
-			if (
-				branchParentName &&
-				branchParentPrNumber &&
-				branchParentDetails &&
-				branchParentDetails.pushStatus !== "integrated"
-			) {
-				base = branchParentName;
 			}
 
 			const pr = await prService.createPr(projectId, {
 				title: params.title,
 				body: params.body,
 				draft: params.draft,
-				baseBranchName: base,
+				localBranchName: params.branchName,
 				upstreamName: params.upstreamBranchName,
 				posthogLabel: forgeInfo?.posthogLabel,
 			});
@@ -293,14 +246,11 @@
 			// backend optimistically caches the just-created review), so there is
 			// no longer any PR number to persist onto branch metadata here.
 
-			// If we now have two or more pull requests we add a stack table to the description.
-			prNumbers[currentIndex] = pr.number;
-			const definedPrNumbers = prNumbers.filter(isDefined);
 			const unit = forgeInfo?.unit.abbr || "PR";
 			const symbol = forgeInfo?.unit.symbol || "#";
 			chipToasts.success(`${unit} ${symbol}${pr.number} created successfully`);
 
-			return await syncStackAfterReviewCreation(prService, projectId, pr, definedPrNumbers, symbol);
+			return pr;
 		} catch (err: any) {
 			console.error(err);
 			const toast = mapErrorToToast(err);

@@ -32,7 +32,7 @@ enum BranchSelection {
 #[serde(rename_all = "camelCase")]
 struct BatchPushResult {
     /// Successfully pushed branches
-    pushed: Vec<PushResult>,
+    pushed: Vec<but_api::legacy::workspace::WorkspaceBranchAndAncestorsPushOutcome>,
     /// Failed branches with error messages
     failed: Vec<FailedBranch>,
 }
@@ -60,9 +60,10 @@ pub async fn handle(
         return handle_dry_run(ctx, &args.branch_id, out);
     }
 
-    let guard = ctx.shared_worktree_access();
-    let perm = guard.read_permission();
-    let id_map = IdMap::new_from_context(ctx, None, perm)?;
+    let id_map = {
+        let guard = ctx.shared_worktree_access();
+        IdMap::new_from_context(ctx, None, guard.read_permission())?
+    };
 
     // If no branch_id is provided, show all branches and prompt or push all
     let branch_selection = if let Some(ref branch_id) = args.branch_id {
@@ -74,26 +75,19 @@ pub async fn handle(
     };
 
     // Handle branch selection
-    let had_successful_push = match branch_selection {
-        BranchSelection::All => push_all_branches(ctx, perm, &args, gerrit_mode, out)?,
+    match branch_selection {
+        BranchSelection::All => {
+            push_all_branches(ctx, &args, gerrit_mode, out).await?;
+        }
         BranchSelection::Single(branch_name) => {
-            push_single_branch(ctx, perm, &branch_name, &args, gerrit_mode, out)?;
-            true
+            push_single_branch(ctx, &branch_name, &args, gerrit_mode, out).await?;
         }
         BranchSelection::Multiple(branch_names) => {
-            let mut had_successful_push = false;
             for branch_name in branch_names {
-                push_single_branch(ctx, perm, &branch_name, &args, gerrit_mode, out)?;
-                had_successful_push = true;
+                push_single_branch(ctx, &branch_name, &args, gerrit_mode, out).await?;
             }
-            had_successful_push
         }
         BranchSelection::None => return Ok(()),
-    };
-
-    // Best-effort: update PR/MR target branches to match the current stack structure.
-    if had_successful_push && let Err(err) = update_review_targets_for_stacks(ctx, perm).await {
-        tracing::warn!(?err, "Failed to update review target branches after push");
     }
 
     Ok(())
@@ -572,16 +566,15 @@ fn dry_run_remote_ref(branch_name: &str, remote: &str) -> anyhow::Result<gix::re
     Ok(format!("refs/remotes/{remote}/{branch_name}").try_into()?)
 }
 
-fn push_single_branch(
+async fn push_single_branch(
     ctx: &mut Context,
-    perm: &RepoShared,
     branch_name: &str,
     args: &Command,
     gerrit_mode: bool,
     out: &mut OutputChannel,
 ) -> anyhow::Result<()> {
     let t = theme::get();
-    let result = push_single_branch_impl(ctx, branch_name, args, gerrit_mode)?;
+    let result = push_single_branch_impl(ctx, branch_name, args, gerrit_mode).await?;
 
     if let Some(out) = out.for_json() {
         out.write_value(&result)?;
@@ -591,22 +584,26 @@ fn push_single_branch(
         writeln!(human)?;
         writeln!(human, "{} Push completed successfully", t.sym().success)?;
         writeln!(human)?;
-        if !result.branch_sha_updates.is_empty() {
+        if !result.push.branch_sha_updates.is_empty() {
             let repo = ctx.repo.get()?.clone().for_commit_shortening();
             let gerrit_review_ref = if gerrit_mode {
-                Some(gerrit_review_ref(ctx, perm, &repo)?)
+                let guard = ctx.shared_worktree_access();
+                Some(gerrit_review_ref(ctx, guard.read_permission(), &repo)?)
             } else {
                 None
             };
-            for (branch, before_sha, after_sha) in &result.branch_sha_updates {
+            for (branch, before_sha, after_sha) in &result.push.branch_sha_updates {
                 let before_str = if before_sha == "0000000000000000000000000000000000000000" {
                     "(new branch)".to_string()
                 } else {
                     shorten_hex_object_id(&repo, before_sha)
                 };
                 let after_str = shorten_hex_object_id(&repo, after_sha);
-                let remote_ref =
-                    branch_remote_ref_for_display(&result, branch, gerrit_review_ref.as_deref());
+                let remote_ref = branch_remote_ref_for_display(
+                    &result.push,
+                    branch,
+                    gerrit_review_ref.as_deref(),
+                );
 
                 writeln!(
                     human,
@@ -618,18 +615,19 @@ fn push_single_branch(
                 )?;
             }
         }
+        write_review_sync_warning(human, &result.review_sync)?;
     }
 
     Ok(())
 }
 
 // Shared implementation for pushing a single branch
-fn push_single_branch_impl(
+async fn push_single_branch_impl(
     ctx: &mut Context,
     branch_name: &str,
     args: &Command,
     gerrit_mode: bool,
-) -> anyhow::Result<PushResult> {
+) -> anyhow::Result<but_api::legacy::workspace::WorkspaceBranchAndAncestorsPushOutcome> {
     // Check for conflicted commits before pushing
     check_for_conflicted_commits(ctx, branch_name)?;
 
@@ -638,19 +636,19 @@ fn push_single_branch_impl(
 
     let branch = gix::refs::Category::LocalBranch.to_full_name(branch_name)?;
     but_api::legacy::workspace::workspace_branch_and_ancestors_push(
-        ctx,
+        ctx.to_sync(),
         args.with_force,
         args.skip_force_push_protection,
-        branch.as_ref(),
+        branch.to_string(),
         !args.no_hooks,
         gerrit_flags,
     )
+    .await
 }
 
 /// Returns `true` if at least one branch was pushed successfully.
-fn push_all_branches(
+async fn push_all_branches(
     ctx: &mut Context,
-    perm: &RepoShared,
     args: &Command,
     gerrit_mode: bool,
     out: &mut OutputChannel,
@@ -701,7 +699,7 @@ fn push_all_branches(
             t.important.paint(&branch_name)
         )?;
 
-        match push_single_branch_impl(ctx, &branch_name, args, gerrit_mode) {
+        match push_single_branch_impl(ctx, &branch_name, args, gerrit_mode).await {
             Ok(result) => {
                 total_commits_pushed += unpushed_count;
                 writeln!(
@@ -758,20 +756,24 @@ fn push_all_branches(
             // Print combined branch, remote, and SHA information for all pushed branches
             let repo = ctx.repo.get()?.clone().for_commit_shortening();
             let gerrit_review_ref = if gerrit_mode {
-                Some(gerrit_review_ref(ctx, perm, &repo)?)
+                let guard = ctx.shared_worktree_access();
+                Some(gerrit_review_ref(ctx, guard.read_permission(), &repo)?)
             } else {
                 None
             };
             for result in &pushed_results {
-                for (branch, before_sha, after_sha) in &result.branch_sha_updates {
+                for (branch, before_sha, after_sha) in &result.push.branch_sha_updates {
                     let before_str = if before_sha == "0000000000000000000000000000000000000000" {
                         "(new branch)".to_string()
                     } else {
                         shorten_hex_object_id(&repo, before_sha)
                     };
                     let after_str = shorten_hex_object_id(&repo, after_sha);
-                    let remote_ref =
-                        branch_remote_ref_for_display(result, branch, gerrit_review_ref.as_deref());
+                    let remote_ref = branch_remote_ref_for_display(
+                        &result.push,
+                        branch,
+                        gerrit_review_ref.as_deref(),
+                    );
 
                     writeln!(
                         human,
@@ -782,6 +784,7 @@ fn push_all_branches(
                         t.commit_id.paint(&after_str)
                     )?;
                 }
+                write_review_sync_warning(human, &result.review_sync)?;
             }
         }
 
@@ -1028,7 +1031,7 @@ fn resolve_branch_name(
         let branch_names: Vec<String> = cli_ids
             .iter()
             .filter_map(|id| match id {
-                CliId::Branch { name, .. } => Some(name.clone()),
+                CliId::Branch(branch) => Some(branch.name.clone()),
                 _ => None,
             })
             .collect();
@@ -1047,7 +1050,7 @@ fn resolve_branch_name(
     }
 
     match &cli_ids[0] {
-        CliId::Branch { name, .. } => Ok(name.clone()),
+        CliId::Branch(branch) => Ok(branch.name.clone()),
         _ => Err(anyhow::anyhow!(
             "Expected branch identifier, got {}. Please use a branch name or branch CLI ID.",
             cli_ids[0].kind_for_humans()
@@ -1099,6 +1102,22 @@ fn branch_remote_ref_for_display(
         .unwrap_or_else(|| format!("{}/{}", result.remote, branch))
 }
 
+fn write_review_sync_warning(
+    out: &mut dyn std::fmt::Write,
+    outcome: &but_forge::ReviewSyncOutcome,
+) -> std::fmt::Result {
+    if let but_forge::ReviewSyncOutcome::Failed { message } = outcome {
+        let t = theme::get();
+        writeln!(
+            out,
+            "{} Push succeeded, but review synchronization failed: {}",
+            t.sym().warning,
+            t.hint.paint(message)
+        )?;
+    }
+    Ok(())
+}
+
 fn gerrit_review_ref(
     ctx: &Context,
     perm: &RepoShared,
@@ -1115,45 +1134,6 @@ fn gerrit_review_ref(
             .unwrap_or_else(|| target_ref_name.shorten().to_string());
 
     Ok(format!("refs/for/{target_branch}"))
-}
-
-/// Update PR/MR target branches to match the current stack structure.
-async fn update_review_targets_for_stacks(ctx: &Context, perm: &RepoShared) -> anyhow::Result<()> {
-    let base_branch = gitbutler_branch_actions::base::get_base_branch_data(ctx, perm)?;
-    let stacks = crate::legacy::workspace::applied_stacks(ctx)?;
-
-    let mut errors = Vec::new();
-    for stack in &stacks {
-        // heads are ordered top-first, so iterate in reverse for bottom-to-top
-        let heads: Vec<(String, Option<i64>)> = stack
-            .branches
-            .iter()
-            .rev()
-            .map(|branch| (branch.name.clone(), branch.review_id.map(|id| id as i64)))
-            .collect();
-        let target_updates =
-            but_forge::compute_review_target_updates(&heads, &base_branch.short_name);
-        if target_updates.is_empty() {
-            continue;
-        }
-
-        let reviews: Vec<but_forge::ForgeReviewUpdate> =
-            target_updates.into_iter().map(Into::into).collect();
-        if let Err(err) =
-            but_api::legacy::forge::update_review_footers(ctx.to_sync(), reviews).await
-        {
-            errors.push(err.to_string());
-        }
-    }
-
-    if errors.is_empty() {
-        Ok(())
-    } else {
-        anyhow::bail!(
-            "Failed to synchronize one or more review stacks: {}",
-            errors.join("; ")
-        )
-    }
 }
 
 /// Check if a branch contains any conflicted commits

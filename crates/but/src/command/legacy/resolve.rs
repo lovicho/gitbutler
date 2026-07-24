@@ -17,7 +17,7 @@ use gitbutler_operating_modes::OperatingMode;
 use crate::{
     IdMap,
     args::resolve::Subcommands,
-    id::CliId,
+    id::{CliId, CommitId},
     theme::{self, Paint},
     utils::{Confirm, ConfirmDefault, OutputChannel, shorten_object_id},
 };
@@ -81,7 +81,7 @@ fn parse_commit_id(ctx: &mut Context, commit_id_str: &str) -> Result<(gix::Objec
 
     // Extract the commit OID from the matched CliId
     match &matches[0] {
-        CliId::Commit { commit_id, .. } => {
+        CliId::Commit(CommitId { commit_id, .. }) => {
             let commit_ref = theme::Commit(
                 *commit_id,
                 id_map

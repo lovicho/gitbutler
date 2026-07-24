@@ -7,12 +7,44 @@ use crate::{
 };
 
 use super::types::{
+    CommitCherryPickResult as EngineCommitCherryPickResult,
     CommitCreateResult as EngineCommitCreateResult,
     CommitInsertBlankResult as EngineCommitInsertBlankResult,
     CommitMoveResult as EngineCommitMoveResult, CommitRewordResult as EngineCommitRewordResult,
     CommitSquashResult as EngineCommitSquashResult, MoveChangesResult as EngineMoveChangesResult,
     UncommitChangesFromCommitsResult as EngineUncommitChangesFromCommitsResult,
 };
+
+/// JSON transport type for cherry-picking commits.
+#[derive(Debug, Serialize)]
+#[cfg_attr(feature = "export-schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CommitCherryPickResult {
+    /// Final cherry-picked commit IDs in parent-first order.
+    #[cfg_attr(feature = "export-schema", schemars(with = "Vec<String>"))]
+    pub new_commits: Vec<HexHash>,
+    /// Workspace state after the cherry-pick.
+    pub workspace: crate::json::WorkspaceState,
+}
+
+#[cfg(feature = "export-schema")]
+but_schemars::register_sdk_type!(CommitCherryPickResult);
+
+impl TryFrom<EngineCommitCherryPickResult> for CommitCherryPickResult {
+    type Error = anyhow::Error;
+
+    fn try_from(value: EngineCommitCherryPickResult) -> Result<Self, Self::Error> {
+        let EngineCommitCherryPickResult {
+            new_commits,
+            workspace,
+        } = value;
+
+        Ok(Self {
+            new_commits: new_commits.into_iter().map(Into::into).collect(),
+            workspace: workspace.try_into()?,
+        })
+    }
+}
 
 /// JSON transport type for moving changes between commits.
 #[derive(Debug, Serialize)]

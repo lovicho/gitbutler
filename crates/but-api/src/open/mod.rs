@@ -1,16 +1,18 @@
 //! In place of commands.rs
-use std::env;
+use std::{env, ffi::OsStr};
 
 use anyhow::{Context as _, Result, bail};
 use but_api_macros::but_api;
 use but_error::bail_precondition;
+use std::path::Path;
 use tracing::instrument;
 use url::Url;
 
+use crate::open::program::FILE_EXTENSION_WILDCARD;
 use crate::open::{
     program::{
-        Editor, PROGRAMS, ProgramSpec, USER_DEFINED_PROGRAMS_FILENAME, UserDefinedProgramSpec,
-        open_in_program_unchecked,
+        Editor, OpenSpec, PROGRAMS, ProgramSpec, USER_DEFINED_PROGRAMS_FILENAME,
+        UserDefinedProgramSpec, open_in_program_unchecked,
     },
     spawn::spawn_and_reap,
 };
@@ -509,8 +511,6 @@ pub fn open_in_terminal(terminal_id: String, path: String) -> Result<()> {
             cmd
         }
 
-        use std::path::Path;
-
         // Validate path exists and canonicalize it to proper Windows format
         let path_buf = Path::new(&path);
         if !path_buf.exists() {
@@ -638,23 +638,17 @@ pub fn show_in_finder(path: String) -> Result<()> {
 #[but_api(napi)]
 #[instrument(err(Debug))]
 pub fn list_editors() -> anyhow::Result<Vec<Editor>> {
-    Ok(list_user_defined_program_specs()
+    Ok(list_program_specs()
         .iter()
-        .chain(PROGRAMS.iter())
         .filter(|p| p.is_gui_editor())
         .map(Into::into)
         .collect())
 }
 
-/// List all built-in supported programs.
-pub fn list_builtin_program_specs() -> &'static [ProgramSpec] {
-    PROGRAMS.as_slice()
-}
-
 /// List all user-defined programs.
 ///
 /// This function never fails, it only logs errors as warnings if something goes wrong.
-pub fn list_user_defined_program_specs() -> Vec<ProgramSpec> {
+fn list_user_defined_program_specs() -> Vec<ProgramSpec> {
     let Ok(user_defined_programs_file) =
         but_path::app_config_dir().map(|dir| dir.join(USER_DEFINED_PROGRAMS_FILENAME))
     else {
@@ -664,10 +658,10 @@ pub fn list_user_defined_program_specs() -> Vec<ProgramSpec> {
     let content = match std::fs::read_to_string(&user_defined_programs_file) {
         Ok(content) => content,
         Err(err) => {
-            tracing::debug!(
+            tracing::info!(
                 ?err,
                 ?user_defined_programs_file,
-                "Failed to read from user-defined programs file"
+                "Failed to read from user-defined programs file, probably does not exist"
             );
             return vec![];
         }
@@ -684,8 +678,60 @@ pub fn list_user_defined_program_specs() -> Vec<ProgramSpec> {
 
     user_defined_program_specs
         .into_iter()
-        .map(Into::into)
+        .filter_map(|spec| match spec.try_into_program_spec() {
+            Ok(spec) => Some(spec),
+            Err(err) => {
+                tracing::warn!(?err, "Failed to decode user defined program specification");
+                None
+            }
+        })
         .collect()
+}
+
+/// List all program specifications.
+pub fn list_program_specs() -> Vec<ProgramSpec> {
+    let mut specs = list_user_defined_program_specs();
+
+    for builtin in PROGRAMS.iter() {
+        if !specs
+            .iter()
+            .any(|user_defined| user_defined.id == builtin.id)
+        {
+            specs.push(builtin.clone());
+        }
+    }
+
+    specs
+}
+
+/// List all programs that are suitable to use to open the file based on the file extension, or all
+/// programs if no specific ones are found.
+pub fn list_program_specs_for_file(path: &Path) -> Vec<ProgramSpec> {
+    let all_specs = list_program_specs();
+    let ext = path.extension().and_then(OsStr::to_str);
+
+    let mut exact_extension_matches = vec![];
+    let mut wildcard_extension_matches = vec![];
+
+    for spec in &all_specs {
+        if let Some(extensions) = &spec.extensions {
+            if let Some(ext) = ext
+                && extensions.iter().any(|v| v == ext)
+            {
+                exact_extension_matches.push(spec.clone());
+            } else if extensions.iter().any(|v| v == FILE_EXTENSION_WILDCARD) {
+                wildcard_extension_matches.push(spec.clone());
+            }
+        }
+    }
+
+    if !exact_extension_matches.is_empty() {
+        exact_extension_matches
+    } else if !wildcard_extension_matches.is_empty() {
+        wildcard_extension_matches
+    } else {
+        all_specs
+    }
 }
 
 /// Open `path` within the given project's workdir using the editor specified by `editor_id`.
@@ -723,7 +769,11 @@ pub fn open_in_editor(
         .find(|editor| editor.id == editor_id)
         && editor.is_gui_editor()
     {
-        open_in_program_unchecked(editor, &resolved_path, line_nr)
+        let open_spec = match line_nr {
+            Some(line_nr) => OpenSpec::FileAtLine(resolved_path, line_nr),
+            None => OpenSpec::File(resolved_path),
+        };
+        open_in_program_unchecked(editor, open_spec)
     } else {
         bail_precondition!("editor_id '{editor_id}' is not a GUI-compatible editor");
     }

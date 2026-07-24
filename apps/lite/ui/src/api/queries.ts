@@ -18,6 +18,7 @@ import * as ms from "ms";
 export type QueryKey =
 	| "branchDetails"
 	| "branchDiff"
+	| "branchList"
 	| "changesInWorktree"
 	| "ciChecks"
 	| "commitDetailsWithLineStats"
@@ -46,6 +47,12 @@ export const branchDiffQueryOptions = ({ projectId, ...params }: BranchDiffParam
 	queryOptions({
 		queryKey: ["branchDiff" satisfies QueryKey, projectId, params],
 		queryFn: () => window.lite.branchDiff({ projectId, ...params }),
+	});
+
+export const branchListQueryOptions = (projectId: string) =>
+	queryOptions({
+		queryKey: ["branchList" satisfies QueryKey, projectId],
+		queryFn: () => window.lite.branchList(projectId),
 	});
 
 export const changesInWorktreeQueryOptions = (projectId: string) =>

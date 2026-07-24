@@ -17,6 +17,7 @@ use crate::{
     id::{UncommittedHunkOrFile, parser::parse_sources},
     utils::OutputChannel,
 };
+
 /// Amends changes into the appropriate commits where they belong.
 ///
 /// The semantic for finding "the appropriate commit" is as follows
@@ -51,7 +52,7 @@ pub(crate) fn handle(
                 };
             let mut acceptable = resolved.into_iter().filter(|id| {
                 matches!(id, CliId::UncommittedHunkOrFile { .. })
-                    || matches!(id, CliId::Branch { .. })
+                    || matches!(id, CliId::Branch(..))
             });
             let first = acceptable.next().ok_or_else(|| {
                 anyhow::anyhow!(
@@ -74,13 +75,15 @@ pub(crate) fn handle(
             }) => {
                 // Absorb this particular file
                 AbsorptionTarget::HunkAssignments {
-                    assignments: hunk_assignments.into(),
+                    assignments: hunk_assignments
+                        .map(|hunk| hunk.into_hunk_assignment_ignoring_stack_assignments())
+                        .into(),
                 }
             }
-            CliId::Branch { name, .. } => {
+            CliId::Branch(branch) => {
                 // Absorb everything that is assigned to this lane
                 AbsorptionTarget::Branch {
-                    branch_name: name.clone(),
+                    branch_name: branch.name,
                 }
             }
             _ => {

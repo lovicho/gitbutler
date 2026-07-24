@@ -227,10 +227,6 @@ impl Subcommands {
             #[cfg(feature = "legacy")]
             Subcommands::Amend { .. } => Amend,
             #[cfg(feature = "legacy")]
-            Subcommands::Stage { .. } => Stage,
-            #[cfg(feature = "legacy")]
-            Subcommands::Unstage { .. } => Unstage,
-            #[cfg(feature = "legacy")]
             Subcommands::Squash { .. } => Squash,
             #[cfg(feature = "legacy")]
             Subcommands::_Squash2(..) => Squash2,
@@ -282,26 +278,6 @@ impl Subcommands {
                 push_prop(&mut props, "targetKind", "commit");
             }
             #[cfg(feature = "legacy")]
-            Subcommands::Stage { file_or_hunk, .. } => {
-                push_prop(
-                    &mut props,
-                    "stageMode",
-                    if file_or_hunk.is_some() {
-                        "direct"
-                    } else {
-                        "interactive"
-                    },
-                );
-                if file_or_hunk.is_some() {
-                    push_prop(&mut props, "sourceKind", "fileOrHunk");
-                }
-                push_prop(&mut props, "targetKind", "branch");
-            }
-            #[cfg(feature = "legacy")]
-            Subcommands::Unstage { .. } => {
-                push_prop(&mut props, "sourceKind", "fileOrHunk");
-                push_prop(&mut props, "targetKind", "branch");
-            }
             #[cfg(feature = "legacy")]
             Subcommands::Squash { .. } => {
                 push_prop(&mut props, "sourceKind", "commitOrBranch");
@@ -509,12 +485,7 @@ fn external_subcommand_metric_value(command_name: &std::ffi::OsStr) -> String {
 fn captures_detailed_error_message(command: CommandName) -> bool {
     matches!(
         command,
-        CommandName::Rub
-            | CommandName::Uncommit
-            | CommandName::Amend
-            | CommandName::Stage
-            | CommandName::Unstage
-            | CommandName::Squash
+        CommandName::Rub | CommandName::Uncommit | CommandName::Amend | CommandName::Squash
     )
 }
 
@@ -930,14 +901,6 @@ mod tests {
                 },
                 "amend",
             );
-            assert_command(
-                Subcommands::Stage {
-                    file_or_hunk: Some("a1".into()),
-                    branch_pos: Some("main".into()),
-                    branch: None,
-                },
-                "stage",
-            );
         }
     }
 
@@ -960,25 +923,6 @@ mod tests {
 
         #[cfg(feature = "legacy")]
         {
-            let direct_stage = Subcommands::Stage {
-                file_or_hunk: Some("a1".into()),
-                branch_pos: Some("main".into()),
-                branch: None,
-            };
-            let props = direct_stage.to_metrics_extra_props();
-            assert_eq!(
-                prop(&props, "stageMode"),
-                Some(&serde_json::json!("direct"))
-            );
-            assert_eq!(
-                prop(&props, "sourceKind"),
-                Some(&serde_json::json!("fileOrHunk"))
-            );
-            assert_eq!(
-                prop(&props, "targetKind"),
-                Some(&serde_json::json!("branch"))
-            );
-
             let discard = Subcommands::Uncommit {
                 source: "c1".into(),
                 discard: true,
@@ -1034,18 +978,21 @@ mod tests {
     fn internal_error_details_are_allowlisted() {
         let anyhow_result = Err::<(), _>(
             anyhow::anyhow!("stale id. If you just performed a Git operation, refresh")
-                .context("Failed to stage."),
+                .context("Failed to uncommit."),
         );
 
         let props = Props::from_anyhow_result(
             std::time::Instant::now(),
             &anyhow_result,
-            CommandName::Stage,
+            CommandName::Uncommit,
         );
 
         assert_eq!(props.values["error"], "Internal error");
         assert_eq!(props.values["errorKind"], "internal");
-        assert_eq!(props.values["errorMessage"], "Failed to stage.: stale id.");
+        assert_eq!(
+            props.values["errorMessage"],
+            "Failed to uncommit.: stale id."
+        );
         assert_eq!(props.values["errorRoot"], "stale id.");
 
         let result = Err::<(), _>(
@@ -1076,7 +1023,7 @@ mod tests {
         let props = Props::from_cli_error_result(
             std::time::Instant::now(),
             &bad_input_result,
-            CommandName::Stage,
+            CommandName::Commit,
         );
 
         assert_eq!(props.values["errorKind"], "badInput");
@@ -1144,24 +1091,27 @@ mod tests {
     #[test]
     fn detailed_error_messages_are_normalized_and_capped() {
         let multiline_result =
-            Err::<(), _>(anyhow::anyhow!("first line\nsecond line").context("Failed to stage."));
+            Err::<(), _>(anyhow::anyhow!("first line\nsecond line").context("Failed to uncommit."));
 
         let props = Props::from_anyhow_result(
             std::time::Instant::now(),
             &multiline_result,
-            CommandName::Stage,
+            CommandName::Uncommit,
         );
 
         assert_eq!(
             props.values["errorMessage"],
-            "Failed to stage.: first line second line"
+            "Failed to uncommit.: first line second line"
         );
         assert_eq!(props.values["errorRoot"], "first line second line");
 
         let long_result = Err::<(), _>(anyhow::anyhow!("{}", "a".repeat(1100)));
 
-        let props =
-            Props::from_anyhow_result(std::time::Instant::now(), &long_result, CommandName::Stage);
+        let props = Props::from_anyhow_result(
+            std::time::Instant::now(),
+            &long_result,
+            CommandName::Uncommit,
+        );
 
         assert_eq!(
             props.values["errorMessage"].as_str().unwrap().len(),

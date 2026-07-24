@@ -15,12 +15,12 @@ use but_rebase::graph_rebase::{
 /// target commit, if applicable, are rebased atop the cherry-picked commits.
 pub fn cherry_pick_commits<'ws, 'meta, M: RefMetadata>(
     mut editor: Editor<'ws, 'meta, M>,
-    source_commit_ids: impl IntoIterator<Item: ToCommitSelector>,
+    source_commits: impl IntoIterator<Item: ToCommitSelector>,
     relative_to: RelativeTo,
     side: InsertSide,
 ) -> anyhow::Result<(SuccessfulRebase<'ws, 'meta, M>, Vec<Selector>)> {
-    let mut source_commit_ids = source_commit_ids.into_iter().peekable();
-    if source_commit_ids.peek().is_none() {
+    let mut source_commits = source_commits.into_iter().peekable();
+    if source_commits.peek().is_none() {
         bail!("No commits were provided to cherry-pick")
     }
     if matches!(
@@ -31,7 +31,7 @@ pub fn cherry_pick_commits<'ws, 'meta, M: RefMetadata>(
     }
 
     let target = relative_to.to_selector(&editor)?;
-    let ordered_selectors = editor.order_commit_selectors_by_parentage(source_commit_ids)?;
+    let ordered_selectors = editor.order_commit_selectors_by_parentage(source_commits)?;
 
     let mut inserted_selectors = Vec::with_capacity(ordered_selectors.len());
     let mut previous_selector = None;

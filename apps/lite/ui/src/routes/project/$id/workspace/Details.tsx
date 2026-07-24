@@ -24,6 +24,7 @@ import {
 	treeChangeDiffsQueryOptions,
 } from "#ui/api/queries.ts";
 import { decodeBytes } from "#ui/api/bytes.ts";
+import { branchDetailsParams } from "#ui/branch.ts";
 import { commitBody, commitTitle, shortCommitId } from "#ui/commit.ts";
 import {
 	branchFileParent,
@@ -699,9 +700,7 @@ const Title: FC<{
 				<SuspenseQuery
 					{...branchDetailsQueryOptions({
 						projectId,
-						// https://linear.app/gitbutler/issue/GB-1226/unify-branch-identifiers
-						branchName: decodeBytes(branchRef).replace(/^refs\/heads\//, ""),
-						remote: null,
+						...branchDetailsParams(decodeBytes(branchRef)),
 					})}
 				>
 					{({ data: branchDetails }) => (
@@ -1180,11 +1179,10 @@ const Diff: FC<{
 const PullRequestForm: FC<{
 	projectId: string;
 	sourceBranch: string;
-	targetBranch: string;
 	reviewId: number | null;
 	title: string | null;
 	body: string | null;
-}> = ({ projectId, sourceBranch, targetBranch, reviewId, title, body }) => {
+}> = ({ projectId, sourceBranch, reviewId, title, body }) => {
 	const { isPending: isPublishReviewPending, mutate: publishReview } = usePublishReview();
 	const { isPending: isUpdateReviewPending, mutate: updateReview } = useUpdateReview();
 	const formRef = useRef<HTMLFormElement | null>(null);
@@ -1239,8 +1237,8 @@ const PullRequestForm: FC<{
 					title: localDocument.title,
 					body: localDocument.body,
 					draft: localDocument.isDraft,
+					localBranch: sourceBranch,
 					sourceBranch,
-					targetBranch,
 				},
 			});
 		} else {
@@ -1693,7 +1691,6 @@ export const Details: FC<
 															projectId={projectId}
 															reviewId={null}
 															sourceBranch={sourceBranch}
-															targetBranch={targetBranch}
 															title={null}
 														/>
 													) : (
@@ -1704,7 +1701,6 @@ export const Details: FC<
 																projectId={projectId}
 																reviewId={review.number}
 																sourceBranch={sourceBranch}
-																targetBranch={targetBranch}
 																title={review.title}
 															/>
 

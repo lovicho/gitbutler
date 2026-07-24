@@ -343,32 +343,6 @@ pub enum Subcommands {
         cli_id: CliIdArg,
     },
 
-    /// Stages a file or hunk to a specific branch.
-    ///
-    /// Without arguments, opens an interactive TUI for selecting files and hunks to stage.
-    /// With arguments, stages the specified file or hunk to the given branch.
-    ///
-    /// Usage:
-    ///
-    /// ```text
-    /// but stage                         # interactive TUI selector
-    /// but stage --branch <branch>       # interactive, specific branch
-    /// but stage <file-or-hunk> <branch> # direct staging
-    /// ```
-    ///
-    /// For the interactive hunk picker workflow, see <https://docs.gitbutler.com/gitbutler-tui#stage-hunks-interactively>
-    #[cfg(feature = "legacy")]
-    #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
-    Stage {
-        /// File or hunk ID to stage
-        file_or_hunk: Option<String>,
-        /// Branch to stage to (positional)
-        branch_pos: Option<String>,
-        /// Branch to stage to (for interactive mode)
-        #[clap(long = "branch", short = 'b')]
-        branch: Option<String>,
-    },
-
     /// Commands for managing branches.
     ///
     /// This includes creating, deleting, listing, and showing details about branches.
@@ -972,8 +946,9 @@ pub enum Subcommands {
     #[clap(hide = true, name = "_open")]
     #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
     _Open {
-        /// The thing to open.
-        id: CliIdArg,
+        /// One or more uncommitted files or hunks to open.
+        #[clap(num_args = 1..)]
+        sources: Vec<CliIdArg>,
         /// The program to use for opening.
         #[clap(long, short = 'p')]
         program_id: Option<String>,
@@ -1414,20 +1389,6 @@ pub enum Subcommands {
     #[clap(hide = true)]
     #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
     Fetch,
-
-    /// Unstages a file or hunk from a branch.
-    ///
-    /// Wrapper for `but rub <file-or-hunk> zz`.
-    #[cfg(feature = "legacy")]
-    #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
-    #[clap(hide = true)]
-    Unstage {
-        /// File or hunk ID to unstage
-        file_or_hunk: String,
-        /// Branch ID to unstage from (optional, for validation)
-        #[clap(required = false)]
-        branch: Option<String>,
-    },
 
     /// AI: capture agent logs into GitMeta.
     #[clap(name = "agentlog", hide = true)]

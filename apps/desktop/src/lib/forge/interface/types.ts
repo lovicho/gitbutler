@@ -157,6 +157,6 @@ export type CreatePullRequestArgs = {
 	title: string;
 	body: string;
 	draft: boolean;
-	baseBranchName: string;
+	localBranchName: string;
 	upstreamName: string;
 };

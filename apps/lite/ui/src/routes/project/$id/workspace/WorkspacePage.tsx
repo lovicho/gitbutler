@@ -53,6 +53,7 @@ import { buildIndexByKey, type NavigationIndex } from "#ui/workspace/navigation-
 import { OperationControls } from "#ui/routes/project/$id/workspace/OperationControls.tsx";
 import { WorkspacePageErrorBoundary } from "./WorkspacePageErrorBoundary.tsx";
 import { Settings } from "./Settings.tsx";
+import { useBranchesOutline } from "./useBranchesOutline.ts";
 import type { OutlineMode } from "#ui/outline/mode.ts";
 import { useStateReconciler as useReconcileState } from "#ui/reconcile.ts";
 
@@ -386,8 +387,16 @@ const WorkspacePage: FC = () => {
 		outlineMode,
 		absorptionTargetCommitIds,
 	});
+
+	const outlineTab = useAppSelector((state) =>
+		projectSlice.selectors.selectOutlineTab(state, projectId),
+	);
+	const branchesOutline = useBranchesOutline(projectId);
+
+	const navigationIndex =
+		outlineTab === "branches" ? branchesOutline.navigationIndex : outlineNavigationIndex;
 	const outlineSelection = useAppSelector((state) =>
-		projectSlice.selectors.selectSelectionOutline(state, projectId, outlineNavigationIndex),
+		projectSlice.selectors.selectSelectionOutline(state, projectId, navigationIndex),
 	);
 
 	const { data: worktreeChanges } = useQuery(changesInWorktreeQueryOptions(projectId));
@@ -457,7 +466,8 @@ const WorkspacePage: FC = () => {
 						<Outline
 							projectId={projectId}
 							project={selectedProject}
-							navigationIndex={outlineNavigationIndex}
+							branchesOutline={branchesOutline}
+							navigationIndex={navigationIndex}
 							uncommittedFilesNavigationIndex={uncommittedFilesNavigationIndex}
 							absorptionTargetCommitIds={absorptionTargetCommitIds}
 						/>
@@ -473,7 +483,7 @@ const WorkspacePage: FC = () => {
 				</Panel>
 			</Group>
 
-			<OperationControls outlineNavigationIndex={outlineNavigationIndex} />
+			<OperationControls outlineNavigationIndex={navigationIndex} />
 
 			{Match.value(dialog).pipe(
 				Match.tagsExhaustive({

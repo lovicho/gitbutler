@@ -25,3 +25,16 @@
 	font-family: inherit;
 	white-space: nowrap;
 }
+
+.button .key {
+	padding: 0;
+	background-color: transparent;
+	box-shadow: none;
+	color: currentColor;
+	font-size: inherit;
+	opacity: 0.4;
+}
+
+.button {
+	gap: 0;
+}

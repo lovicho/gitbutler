@@ -32,8 +32,11 @@ export const MyComponent: FC<Props> = (p) => {
 
 # Concluding your work
 
-Once the work is functionally complete, lint and format it with Oxlint, Oxfmt, and Knip:
+Once the work is functionally complete, lint and format it with Oxlint, Oxfmt,
+Prettier, and Knip. Oxfmt only formats TypeScript; CI runs Prettier over the
+whole repo, including the CSS and Markdown that Oxfmt leaves untouched, so run
+it too or those files fail CI:
 
 ```console
-$ pnpm oxlint:fix && pnpm exec oxfmt apps/lite && pnpm knip:prod && pnpm knip:non-prod
+$ pnpm oxlint:fix && pnpm exec oxfmt apps/lite && pnpm exec prettier --write . && pnpm knip:prod && pnpm knip:non-prod
 ```

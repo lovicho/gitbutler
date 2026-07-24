@@ -1,11 +1,10 @@
 use anyhow::Context as _;
 use bstr::{BStr, BString};
-use but_core::{DiffSpec, HunkHeader, ref_metadata::StackId};
-use but_hunk_assignment::HunkAssignment;
+use but_core::{DiffSpec, HunkHeader};
 
 use crate::{
     CliId,
-    id::{ShortId, UncommittedHunkOrFile},
+    id::{CommitId, CommittedFileId, ShortId, UncommittedHunkOrFile, WorktreeHunk},
 };
 
 #[cfg(feature = "legacy")]
@@ -17,7 +16,6 @@ pub struct DiffSpecBuilder<'a> {
     repo: &'a gix::Repository,
     workspace: &'a but_graph::Workspace,
     context_lines: u32,
-    scope_to_stack: Option<StackId>,
     worktree_changes: Option<Vec<but_core::ui::TreeChange>>,
     diff_specs: Vec<DiffSpec>,
 }
@@ -34,16 +32,9 @@ impl<'a> DiffSpecBuilder<'a> {
             repo,
             workspace,
             context_lines,
-            scope_to_stack: None,
             worktree_changes: None,
             diff_specs: Default::default(),
         }
-    }
-
-    #[expect(dead_code)] // TODO: remove this when we're removing assignments
-    pub fn with_scope_to_stack(mut self, scope_to_stack: Option<StackId>) -> Self {
-        self.scope_to_stack = scope_to_stack;
-        self
     }
 
     pub fn push_changes_from_id(&mut self, id: &CliId) -> anyhow::Result<()> {
@@ -55,22 +46,24 @@ impl<'a> DiffSpecBuilder<'a> {
                 id,
                 hunk_assignments,
             } => self.push_changes_from_path_prefix(id, hunk_assignments),
-            CliId::CommittedFile {
+            CliId::CommittedFile(CommittedFileId {
                 commit_id,
                 path,
                 id: _,
                 change_id: _,
-            } => self.push_changes_from_committed_file(*commit_id, path.as_ref()),
-            CliId::Branch { name, id, stack_id } => {
-                self.push_changes_from_branch(name, id, *stack_id)
+            }) => self.push_changes_from_committed_file(*commit_id, path.as_ref()),
+            CliId::Branch(branch) => {
+                anyhow::bail!("Cannot compute diff specs for branch `{}`", branch.name)
             }
-            CliId::Commit {
+            CliId::Commit(CommitId {
                 commit_id,
                 id,
                 change_id: _,
-            } => self.push_changes_from_commit(*commit_id, id),
+            }) => self.push_changes_from_commit(*commit_id, id),
             CliId::Uncommitted { id: _ } => self.push_changes_from_uncommitted_area(),
-            CliId::Stack { id: _, stack_id } => self.push_changes_from_stack(*stack_id),
+            CliId::Stack { .. } => {
+                anyhow::bail!("Cannot compute diff specs for stacks")
+            }
         }
     }
 
@@ -78,19 +71,14 @@ impl<'a> DiffSpecBuilder<'a> {
         &mut self,
         uncommitted: &UncommittedHunkOrFile,
     ) -> anyhow::Result<()> {
-        let scope_to_stack = self.scope_to_stack;
-        let assignments = uncommitted
-            .hunk_assignments
-            .iter()
-            .filter(|assignment| assignment.stack_id == scope_to_stack)
-            .cloned();
+        let assignments = uncommitted.hunk_assignments.iter().cloned();
         self.push_hunk_assignments(assignments)
     }
 
     pub fn push_changes_from_path_prefix(
         &mut self,
         _id: &str,
-        hunk_assignments: &nonempty::NonEmpty<(ShortId, HunkAssignment)>,
+        hunk_assignments: &nonempty::NonEmpty<(ShortId, WorktreeHunk)>,
     ) -> anyhow::Result<()> {
         self.push_hunk_assignments(
             hunk_assignments
@@ -118,15 +106,6 @@ impl<'a> DiffSpecBuilder<'a> {
         Ok(())
     }
 
-    pub fn push_changes_from_branch(
-        &mut self,
-        name: &str,
-        _id: &str,
-        _stack_id: Option<StackId>,
-    ) -> anyhow::Result<()> {
-        anyhow::bail!("Cannot compute diff specs for branch `{name}`")
-    }
-
     pub fn push_changes_from_commit(
         &mut self,
         commit_id: gix::ObjectId,
@@ -146,32 +125,14 @@ impl<'a> DiffSpecBuilder<'a> {
             Some(changes.clone()),
             self.context_lines,
         )?;
-        let assignments = assignments
-            .into_iter()
-            .filter(|assignment| assignment.stack_id.is_none());
-        self.push_hunk_assignments_with_changes(assignments, &changes);
-        Ok(())
-    }
-
-    pub fn push_changes_from_stack(&mut self, stack_id: StackId) -> anyhow::Result<()> {
-        let changes = self.worktree_changes()?.to_vec();
-        let (assignments, _assignments_error) = but_hunk_assignment::assignments_with_fallback(
-            self.db.hunk_assignments_mut()?,
-            self.repo,
-            self.workspace,
-            Some(changes.clone()),
-            self.context_lines,
-        )?;
-        let assignments = assignments
-            .into_iter()
-            .filter(|assignment| assignment.stack_id == Some(stack_id));
+        let assignments = assignments.into_iter().map(WorktreeHunk::from);
         self.push_hunk_assignments_with_changes(assignments, &changes);
         Ok(())
     }
 
     pub fn push_hunk_assignments(
         &mut self,
-        assignments: impl IntoIterator<Item = HunkAssignment>,
+        assignments: impl IntoIterator<Item = WorktreeHunk>,
     ) -> anyhow::Result<()> {
         let changes = self.worktree_changes()?.to_vec();
         self.push_hunk_assignments_with_changes(assignments, &changes);
@@ -290,9 +251,12 @@ impl<'a> DiffSpecBuilder<'a> {
 
     fn push_hunk_assignments_with_changes(
         &mut self,
-        assignments: impl IntoIterator<Item = HunkAssignment>,
+        assignments: impl IntoIterator<Item = WorktreeHunk>,
         changes: &[but_core::ui::TreeChange],
     ) {
+        let assignments = assignments
+            .into_iter()
+            .map(|hunk| hunk.into_hunk_assignment_ignoring_stack_assignments());
         self.diff_specs.extend(
             but_hunk_assignment::diff_specs_from_assignments_with_changes(assignments, changes),
         );

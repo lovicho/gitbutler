@@ -26,6 +26,7 @@ use crate::{
             StackMode, find_jump_match,
         },
     },
+    id::{CommitId, CommittedFileId},
     theme::Theme,
 };
 
@@ -377,7 +378,7 @@ fn row_stack_ids(lines: &[StatusOutputLine]) -> Vec<Option<StackId>> {
             stack_id: Some(stack_id),
             ..
         } = &line.data
-            && let CliId::Commit { commit_id, .. } = &**cli_id
+            && let CliId::Commit(CommitId { commit_id, .. }) = &**cli_id
         {
             commit_stack_ids.insert(*commit_id, *stack_id);
         }
@@ -405,7 +406,7 @@ fn row_stack_ids(lines: &[StatusOutputLine]) -> Vec<Option<StackId>> {
             | StatusOutputLineData::EmptyCommitMessage => current_stack_id,
             StatusOutputLineData::Connector | StatusOutputLineData::BetweenStacks => None,
             StatusOutputLineData::File { cli_id } => match &**cli_id {
-                CliId::CommittedFile { commit_id, .. } => {
+                CliId::CommittedFile(CommittedFileId { commit_id, .. }) => {
                     let stack_id = commit_stack_ids
                         .get(commit_id)
                         .copied()
@@ -414,7 +415,7 @@ fn row_stack_ids(lines: &[StatusOutputLine]) -> Vec<Option<StackId>> {
                     stack_id
                 }
                 CliId::UncommittedHunkOrFile(..) | CliId::PathPrefix { .. } => current_stack_id,
-                CliId::Branch { .. }
+                CliId::Branch(..)
                 | CliId::Commit { .. }
                 | CliId::Uncommitted { .. }
                 | CliId::Stack { .. } => None,
@@ -456,7 +457,7 @@ fn row_stack_ids(lines: &[StatusOutputLine]) -> Vec<Option<StackId>> {
 
 fn stack_id_from_cli_id(cli_id: &CliId) -> Option<StackId> {
     match cli_id {
-        CliId::Branch { stack_id, .. } => *stack_id,
+        CliId::Branch(branch) => branch.stack_id,
         CliId::Stack { stack_id, .. } => Some(*stack_id),
         CliId::UncommittedHunkOrFile(..)
         | CliId::PathPrefix { .. }
@@ -666,7 +667,7 @@ fn render_status_list_item(
                 line.extend(author);
 
                 if let Some(id) = data.cli_id()
-                    && let CliId::Commit { commit_id, .. } = &**id
+                    && let CliId::Commit(CommitId { commit_id, .. }) = &**id
                     && let Mode::InlineReword(InlineRewordMode::Commit {
                         textarea,
                         commit_id: source,
@@ -701,13 +702,13 @@ fn render_status_list_item(
                 line.extend(decoration_start);
 
                 if let Some(id) = data.cli_id()
-                    && let CliId::Branch { name, .. } = &**id
+                    && let CliId::Branch(branch) = &**id
                     && let Mode::InlineReword(InlineRewordMode::Branch {
                         textarea,
                         name: source,
                         ..
                     }) = &*app.mode
-                    && name == source
+                    && branch.name == *source
                 {
                     line.render_textarea(textarea);
                 } else {
@@ -843,7 +844,7 @@ fn selected_operation_extension<'a>(
             {
                 let source_is_commit = match &*mode.source {
                     MoveSource::Marks(..) | MoveSource::Commit { .. } => true,
-                    MoveSource::Branch { .. } => false,
+                    MoveSource::Branch(..) => false,
                 };
                 Some(OperationExtension::Move {
                     mode,
@@ -1283,7 +1284,7 @@ pub fn move_operation_display(
             | StatusOutputLineData::Hint
             | StatusOutputLineData::NoAssignmentsUnstaged => None,
         },
-        MoveSource::Branch { .. } => match data {
+        MoveSource::Branch(..) => match data {
             StatusOutputLineData::Branch { .. } => Some("stack branch"),
             StatusOutputLineData::MergeBase => Some("unstack branch"),
             StatusOutputLineData::UpdateNotice
@@ -1337,10 +1338,10 @@ pub fn stack_operation_display(
     let StackMode { stack_heads } = mode;
     match data {
         StatusOutputLineData::Branch { cli_id, .. } => {
-            let CliId::Branch { name, .. } = &**cli_id else {
+            let CliId::Branch(branch) = &**cli_id else {
                 return None;
             };
-            if stack_heads.iter().any(|head| head.shorten() == name) {
+            if stack_heads.iter().any(|head| head.shorten() == branch.name) {
                 Some("stack")
             } else {
                 None

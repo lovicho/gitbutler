@@ -1,0 +1,87 @@
+.container {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	background-color: var(--bg-2);
+}
+
+.toolbar {
+	display: flex;
+	column-gap: 8px;
+	align-items: center;
+	padding-inline: var(--panel-padding-inline);
+	padding-block-start: var(--panel-padding-block);
+}
+
+.filterInput {
+	flex-grow: 1;
+}
+
+.list {
+	display: flex;
+	row-gap: 8px;
+	flex-grow: 1;
+	flex-direction: column;
+
+	/* The scrollbar gutter takes up part of the inline end padding so the
+	   thumb visually overlays the panel margin. */
+	padding-inline: var(--panel-padding-inline)
+		calc(var(--panel-padding-inline) - var(--overlay-scrollbar-size));
+	padding-block: var(--panel-padding-block);
+	overflow-y: auto;
+}
+
+/* The tree holds only stack groups, so the heading and empty-state message
+   above it stay out of the ARIA tree. */
+.tree {
+	display: flex;
+	row-gap: 8px;
+	flex-direction: column;
+
+	&:focus {
+		/* The focus state is displayed on the item row instead. */
+		outline: none;
+	}
+}
+
+.heading {
+	color: var(--text-2);
+}
+
+.stack {
+	display: flex;
+	flex-direction: column;
+	padding: 6px;
+	border-radius: var(--radius-card);
+	background-color: var(--bg-1);
+	box-shadow: var(--shadow-card);
+}
+
+.foldToggle {
+	display: flex;
+	align-self: stretch;
+	padding: 0;
+	border: none;
+	background: none;
+	color: inherit;
+	cursor: pointer;
+}
+
+.label {
+	display: flex;
+	flex-grow: 1;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.labelMeta {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.labelMetaItem {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}

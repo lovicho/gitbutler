@@ -12,6 +12,7 @@ import type {
 	Editor,
 	ForgeReview,
 	ProjectForFrontend,
+	PublishReviewOutcome,
 	PushResult,
 	RefInfo,
 	TreeChanges,
@@ -27,6 +28,7 @@ import type {
 	MoveBranchResult,
 	MoveChangesResult,
 	InitialBranchIntegration,
+	ListedStack,
 	IntegrateBranchResult,
 	UnifiedPatch,
 	WatcherEvent,
@@ -86,6 +88,8 @@ const api: LiteElectronApi = {
 		ipcRenderer.invoke("workspace:branch-details", params) as Promise<BranchDetails>,
 	branchDiff: (params) =>
 		ipcRenderer.invoke("workspace:branch-diff", params) as Promise<TreeChanges>,
+	branchList: (projectId) =>
+		ipcRenderer.invoke("workspace:branch-list", projectId) as Promise<Array<ListedStack>>,
 	changesInWorktree: (projectId) =>
 		ipcRenderer.invoke("workspace:changes-in-worktree", projectId) as Promise<WorktreeChanges>,
 	clipboardWriteText: (text) =>
@@ -180,7 +184,7 @@ const api: LiteElectronApi = {
 	pathJoin: (path, ...paths) =>
 		ipcRenderer.invoke("lite:path-join", path, ...paths) as Promise<string>,
 	publishReview: (params) =>
-		ipcRenderer.invoke("workspace:publish-review", params) as Promise<ForgeReview>,
+		ipcRenderer.invoke("workspace:publish-review", params) as Promise<PublishReviewOutcome>,
 	updateBranchName: (params) =>
 		ipcRenderer.invoke("workspace:update-branch-name", params) as Promise<UpdateBranchNameResult>,
 	updateReview: (params) => ipcRenderer.invoke("workspace:update-review", params) as Promise<void>,

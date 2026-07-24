@@ -12,8 +12,6 @@ pub enum CommandName {
     Rub,
     Uncommit,
     Amend,
-    Stage,
-    Unstage,
     Squash,
     Squash2,
     Move,

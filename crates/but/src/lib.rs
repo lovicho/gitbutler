@@ -473,7 +473,10 @@ async fn match_subcommand(
                 .emit_metrics(metrics_ctx)
                 .map_err(CliError::from)
         }
-        Subcommands::_Open { id, program_id } => {
+        Subcommands::_Open {
+            sources,
+            program_id,
+        } => {
             let ctx = setup::init_ctx(
                 &args,
                 InitCtxOptions {
@@ -482,7 +485,7 @@ async fn match_subcommand(
                 },
                 out,
             )?;
-            command::open::open(&ctx, id, program_id).emit_metrics(metrics_ctx)
+            command::open::open(&ctx, sources, program_id).emit_metrics(metrics_ctx)
         }
         Subcommands::Completions { shell } => command::completions::generate_completions(shell)
             .emit_metrics(metrics_ctx)
@@ -1075,9 +1078,6 @@ async fn match_subcommand(
                             "--before/--after must be passed after 'empty'. Use `but commit empty --before <target>`."
                         ).into());
                     }
-                    if commit_args.only {
-                        return Err(bad_input("--only cannot be used with 'commit empty'.").into());
-                    }
                     if commit_args.all {
                         return Err(bad_input("--all cannot be used with 'commit empty'.").into());
                     }
@@ -1142,7 +1142,6 @@ async fn match_subcommand(
                         commit_args.before.clone(),
                         commit_args.after.clone(),
                         &commit_args.changes,
-                        commit_args.only,
                         commit_args.all,
                         commit_args.create,
                         commit_args.no_hooks,
@@ -1668,65 +1667,6 @@ async fn match_subcommand(
                 .emit_metrics(metrics_ctx);
             run_status_after_if_ok(status_after, &result, &mut ctx, out);
             result.show_root_cause_error_then_exit_without_destructors(output)
-        }
-        #[cfg(feature = "legacy")]
-        Subcommands::Stage {
-            file_or_hunk,
-            branch_pos,
-            branch,
-        } => {
-            let status_after = args.status_after;
-            let mut ctx = setup::init_ctx(
-                &args,
-                InitCtxOptions {
-                    background_sync: BackgroundSync::Enabled { silent: false },
-                    ..Default::default()
-                },
-                out,
-            )?;
-            out.begin_status_after(status_after);
-            let result = if let Some(file_or_hunk) = file_or_hunk.as_deref() {
-                // Direct mode: but stage <file_or_hunk> <branch>
-                let branch = branch.as_deref().or(branch_pos.as_deref()).ok_or_else(|| {
-                    bad_input("Missing required argument: <branch>. Usage: but stage <file_or_hunk> <branch>")
-                        .arg_name("<BRANCH>")
-                })?;
-                command::legacy::rub::handle_stage(&mut ctx, out, file_or_hunk, branch)
-                    .context("Failed to stage.")
-                    .map_err(command::legacy::rub::stage_cli_error)
-                    .emit_metrics(metrics_ctx)
-            } else {
-                // Interactive mode: but stage [--branch <branch>]
-                if !out.can_prompt() {
-                    return Err(bad_input(
-                        "Interactive stage requires a terminal. Use: but stage <file_or_hunk> <branch>"
-                    ).into());
-                }
-                command::legacy::rub::handle_stage_tui(&mut ctx, out, branch.as_deref())
-                    .context("Failed to stage.")
-                    .map_err(command::legacy::rub::stage_cli_error)
-                    .emit_metrics(metrics_ctx)
-            };
-            run_status_after_if_ok(status_after, &result, &mut ctx, out);
-            result
-        }
-        #[cfg(feature = "legacy")]
-        Subcommands::Unstage {
-            file_or_hunk,
-            branch,
-        } => {
-            let mut ctx = setup::init_ctx(
-                &args,
-                InitCtxOptions {
-                    background_sync: BackgroundSync::Enabled { silent: false },
-                    ..Default::default()
-                },
-                out,
-            )?;
-            command::legacy::rub::handle_unstage(&mut ctx, out, &file_or_hunk, branch.as_deref())
-                .context("Failed to unstage.")
-                .emit_metrics(metrics_ctx)
-                .show_root_cause_error_then_exit_without_destructors(output)
         }
         #[cfg(feature = "legacy")]
         Subcommands::Squash {

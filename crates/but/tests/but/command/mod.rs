@@ -59,8 +59,6 @@ mod squash;
 #[cfg(feature = "legacy")]
 mod squash2;
 #[cfg(feature = "legacy")]
-mod stage;
-#[cfg(feature = "legacy")]
 mod status;
 mod r#switch;
 #[cfg(feature = "legacy")]
@@ -69,8 +67,6 @@ mod teardown;
 mod uncommit;
 #[cfg(feature = "legacy")]
 mod undo;
-#[cfg(feature = "legacy")]
-mod unstage;
 #[cfg(feature = "legacy")]
 mod worktree;
 
@@ -105,7 +101,7 @@ mod util {
             format!("{first_line}\n{}last\n", "line\n".repeat(context_distance)),
         );
         env.but(format!(
-            "commit {branch} -m 'create {filename1} and {filename2}'"
+            "_commit2 -b {branch} -m 'create {filename1} and {filename2}'"
         ))
         .assert()
         .success();
