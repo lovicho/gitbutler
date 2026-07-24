@@ -119,6 +119,38 @@ fn status(info: &RefInfo, branch: &str) -> but_workspace::ui::PushStatus {
         .push_status
 }
 
+fn logical_scope(info: &RefInfo, branch: &str) -> Vec<String> {
+    let branch = gix::refs::Category::LocalBranch
+        .to_full_name(branch)
+        .expect("valid fixture branch name");
+    but_workspace::legacy::push::branch_and_ancestor_segments(info, branch.as_ref())
+        .values()
+        .filter_map(|segment| {
+            segment
+                .ref_info
+                .as_ref()
+                .map(|ref_info| ref_info.ref_name.shorten().to_string())
+        })
+        .collect()
+}
+
+#[test]
+fn logical_push_scope_is_selected_branch_plus_ancestors() -> anyhow::Result<()> {
+    let (_tmp, repo, meta) = fixture("push")?;
+    let (info, _) = head_info(&repo, &meta)?;
+
+    assert_eq!(logical_scope(&info, "bottom"), ["bottom"]);
+    assert_eq!(logical_scope(&info, "middle"), ["middle", "bottom"]);
+    assert_eq!(logical_scope(&info, "top"), ["top", "middle", "bottom"]);
+    assert_eq!(
+        logical_scope(&info, "solo"),
+        ["solo"],
+        "an unrelated stack must not enter the selected scope"
+    );
+
+    Ok(())
+}
+
 #[test]
 fn pushing_bottom_of_stack_reports_only_bottom_as_pushed() -> anyhow::Result<()> {
     let (_tmp, repo, meta) = fixture("push")?;
@@ -148,6 +180,8 @@ fn pushing_top_of_stack_reports_top_as_pushed_after_bottom_is_current() -> anyho
 
     let bottom_result = push(&repo, &meta, r("refs/heads/bottom"), false, false, false)?;
     apply_remote_tracking_updates(&repo, &bottom_result)?;
+    let middle_result = push(&repo, &meta, r("refs/heads/middle"), false, false, false)?;
+    apply_remote_tracking_updates(&repo, &middle_result)?;
 
     let result = push(&repo, &meta, r("refs/heads/top"), false, false, false)?;
     assert_eq!(
@@ -157,12 +191,18 @@ fn pushing_top_of_stack_reports_top_as_pushed_after_bottom_is_current() -> anyho
             .map(|(branch, _)| branch.as_str())
             .collect::<Vec<_>>(),
         ["top"],
-        "once the bottom branch is current, pushing the top branch should report only the top"
+        "once the ancestors are current, pushing the top branch should report only the top"
     );
 
     apply_remote_tracking_updates(&repo, &result)?;
     let (info, _) = head_info(&repo, &meta)?;
+    assert_eq!(
+        logical_scope(&info, "top"),
+        ["top", "middle", "bottom"],
+        "already-current ancestors remain in the logical synchronization scope"
+    );
     assert_eq!(status(&info, "bottom"), NothingToPush);
+    assert_eq!(status(&info, "middle"), NothingToPush);
     assert_eq!(status(&info, "top"), NothingToPush);
 
     Ok(())

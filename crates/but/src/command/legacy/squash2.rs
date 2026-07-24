@@ -670,7 +670,12 @@ pub fn resolve_target(
                         continue;
                     };
                     if ref_info.ref_name == branch_name {
-                        return if let Some(commit) = ref_info.commit_id {
+                        let commit = segment
+                            .commits
+                            .first()
+                            .map(|commit| commit.id)
+                            .or(ref_info.commit_id);
+                        return if let Some(commit) = commit {
                             Ok(SquashTarget::Commit { commit, reword })
                         } else {
                             Err(ResolveTargetError::CannotBeEmptyBranch)

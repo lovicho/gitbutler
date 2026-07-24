@@ -11,7 +11,11 @@ use but_testsupport::{
 #[test]
 fn new_from_project_handle_uses_repo_gitdir() -> anyhow::Result<()> {
     but_testsupport::isolated_app_data_dir(|| {
-        let repo = but_testsupport::read_only_in_memory_scenario("unborn-empty")?;
+        // Keep this fixture private and writable while Context construction migrates project
+        // metadata into local Git config.
+        let tmp = TempDir::new_in(".")?;
+        gix::init(tmp.path())?;
+        let repo = open_repo(tmp.path().strip_prefix(std::env::current_dir()?)?)?;
         let worktree = repo.workdir().expect("fixture is non-bare").to_owned();
 
         assert!(repo.path().is_relative());
@@ -49,7 +53,9 @@ fn new_from_project_handle_uses_repo_gitdir() -> anyhow::Result<()> {
 #[test]
 fn new_from_project_handle_keeps_repo_cached() -> anyhow::Result<()> {
     but_testsupport::isolated_app_data_dir(|| {
-        let repo = but_testsupport::read_only_in_memory_scenario("unborn-empty")?;
+        // Keep this fixture private and writable while Context construction migrates project
+        // metadata into local Git config.
+        let (repo, _tmp) = but_testsupport::writable_scenario("unborn-empty");
         let handle = ProjectHandle::from_path(repo.git_dir())?;
         let ctx = Context::new_from_project_handle(handle)?;
 

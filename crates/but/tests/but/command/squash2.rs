@@ -2404,3 +2404,55 @@ Hint: run `but help` for all commands
 
 "#]]);
 }
+
+#[test]
+fn squashing_into_branch_that_sits_below_empty_branch() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    env.file("file", "content");
+
+    env.but("branch new -a A").assert().success();
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted]
+┊   qs A file
+┊
+┊╭┄ br [a-branch-1] (no commits)
+┊│
+┊├┄ g0 [A]
+┊●   tpm add A
+┊│     tpm:t A A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
+
+"#]]);
+
+    env.but("_squash2 file -t A").assert().success();
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ br [a-branch-1] (no commits)
+┊│
+┊├┄ g0 [A]
+┊●   tpm add A
+┊│     tpm:t A A
+┊│     tpm:q A file
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}

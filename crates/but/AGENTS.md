@@ -8,13 +8,7 @@ changes, also read `crates/WORKSPACE_MODEL.md`.
 
 ## Command structure and I/O
 
-- Use CLI atoms for arguments that resolve to Git objects, workspace files etc.
-  See `crates/but/src/args/atoms/mod.rs`.
-- Command outcome should be returned as a struct that implements `CliOutput` or
-  `CliOutputHuman` - it should never be printed inline in the command itself
-- Progress and interactive output may be written intermittently in commands
-  using `IntermediateChannel` when applicable
-- See `crates/but/src/command/legacy/commit2.rs` for a modern example
+- Use the `cli-commands` skill for guidance on how to write new CLI commands.
 
 ## Worktree Guards And Deadlocks
 

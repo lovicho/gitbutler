@@ -12,6 +12,8 @@ git push --quiet -u origin main
 
 git checkout -b bottom main
 commit bottom
+git checkout -b middle
+commit middle
 git checkout -b top
 commit top
 
@@ -19,4 +21,3 @@ git checkout -b solo main
 commit solo
 
 create_workspace_commit_once top solo
-
