@@ -266,7 +266,7 @@ No such program found
 }
 
 #[test]
-fn user_defined_program_shell_executable_handles_shell_metacharacters() {
+fn user_defined_program_path_executable_handles_shell_metacharacters() {
     let env = setup_multi_hunk_uncommitted_changes(
         "file with some $meta; cat A > new-file.txt; spaces in it.txt",
     );
@@ -283,6 +283,7 @@ fn user_defined_program_shell_executable_handles_shell_metacharacters() {
      "id": "test-program",
      "name": "Test Program",
      "executable": {
+       "type": "pathExecutable",
        "nameOrPath": "echo",
        "requiresTerminal": true
      },
@@ -366,6 +367,7 @@ fn user_defined_program_defaults_to_default_open_args() {
      "id": "test-program-no-args",
      "name": "Test Program No Args",
      "executable": {
+       "type": "pathExecutable",
        "nameOrPath": "echo",
        "requiresTerminal": true
      },
@@ -375,6 +377,7 @@ fn user_defined_program_defaults_to_default_open_args() {
      "id": "test-program-only-open-args",
      "name": "Test Program Only Open Args",
      "executable": {
+       "type": "pathExecutable",
        "nameOrPath": "echo",
        "requiresTerminal": true
      },
@@ -387,6 +390,7 @@ fn user_defined_program_defaults_to_default_open_args() {
      "id": "test-program-only-open-at-args",
      "name": "Test Program Only Open At Args",
      "executable": {
+       "type": "pathExecutable",
        "nameOrPath": "echo",
        "requiresTerminal": true
      },
@@ -501,6 +505,7 @@ fn ignores_malformed_user_defined_programs_file() {
      "id": "test-program",
      "name": "Test Program",
      "executable": {
+       "type": "pathExecutable",
        "nameOrPath": "echo",
    "#,
     )
@@ -541,6 +546,7 @@ fn user_defined_program_derives_id_from_name_if_id_is_omitted() {
    {
      "name": "Test Program",
      "executable": {
+       "type": "pathExecutable",
        "nameOrPath": "echo",
        "requiresTerminal": true
      },

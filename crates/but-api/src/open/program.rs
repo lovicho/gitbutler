@@ -46,7 +46,7 @@ impl From<UserDefinedProgramCategory> for ProgramCategory {
 }
 
 /// Supported program to open a file or directory in.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ProgramSpec {
     /// Identifier used to refer to the program.
     pub id: String,
@@ -69,9 +69,7 @@ impl ProgramSpec {
     /// True if this program requires control over the current terminal to execute.
     pub fn requires_terminal(&self) -> bool {
         match &self.executable {
-            ExecutableProgram::ShellExecutable(ShellExecutable { requires_tty, .. }) => {
-                *requires_tty
-            }
+            ExecutableProgram::PathExecutable(PathExecutable { requires_tty, .. }) => *requires_tty,
             #[cfg(target_os = "macos")]
             ExecutableProgram::MacosApplication(_) => false,
         }
@@ -93,9 +91,9 @@ impl From<UserDefinedProgramSpec> for ProgramSpec {
     }
 }
 
-/// A named executable that can be invoked from a shell.
-#[derive(Clone, Debug)]
-pub struct ShellExecutable {
+/// An executable that can be invoked by name or path.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PathExecutable {
     /// Name of the executable on the PATH, or a qualified path to it.
     pub name_or_path: String,
     /// Whether the program requires an attached TTY or not.
@@ -106,21 +104,45 @@ pub struct ShellExecutable {
 }
 
 /// The executable to invoke for a program.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ExecutableProgram {
-    /// A program that can be executed from a shell.
-    ShellExecutable(ShellExecutable),
+    /// A program that can be executed by name or path.
+    PathExecutable(PathExecutable),
     /// A macOS application installed s.t. it has a bundle identifier.
     #[cfg(target_os = "macos")]
     MacosApplication(MacosApplication),
 }
 
-impl From<UserDefinedShellExecutable> for ExecutableProgram {
-    fn from(value: UserDefinedShellExecutable) -> Self {
-        ExecutableProgram::ShellExecutable(ShellExecutable {
+impl From<UserDefinedExecutableProgram> for ExecutableProgram {
+    fn from(value: UserDefinedExecutableProgram) -> Self {
+        match value {
+            UserDefinedExecutableProgram::PathExecutable(path_executable) => {
+                Self::PathExecutable(path_executable.into())
+            }
+            #[cfg(target_os = "macos")]
+            UserDefinedExecutableProgram::MacosApplication(macos_app) => {
+                Self::MacosApplication(macos_app.into())
+            }
+        }
+    }
+}
+
+impl From<UserDefinedPathExecutable> for PathExecutable {
+    fn from(value: UserDefinedPathExecutable) -> Self {
+        Self {
             name_or_path: value.name_or_path,
             requires_tty: value.requires_terminal,
-        })
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+impl From<UserDefinedMacosApplication> for MacosApplication {
+    fn from(value: UserDefinedMacosApplication) -> Self {
+        Self {
+            bundle_identifier: value.bundle_id,
+            cli_wrapper_path: value.cli_wrapper_path,
+        }
     }
 }
 
@@ -145,14 +167,14 @@ impl From<&ProgramSpec> for Editor {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 enum CliArgumentSupplier {
     VSCodeLike,
     Zed,
     Neovim,
     Sublime,
     Custom(CustomCliArgumentSupplier),
-    #[cfg(target_os = "macos")]
+    #[cfg(all(target_os = "macos", not(debug_assertions)))]
     Xcode,
     /// For programs that don't support any special "open at" semantics
     #[allow(dead_code)]
@@ -172,7 +194,7 @@ impl CliArgumentSupplier {
             Self::VSCodeLike => cmd.arg("--goto").arg(self.path_with_line_nr(path, line_nr)),
             Self::Zed => cmd.arg(self.path_with_line_nr(path, line_nr)),
             Self::Sublime => cmd.arg(self.path_with_line_nr(path, line_nr)),
-            #[cfg(target_os = "macos")]
+            #[cfg(all(target_os = "macos", not(debug_assertions)))]
             Self::Xcode => cmd.arg("--line").arg(line_nr.to_string()).arg(path),
             Self::Neovim => cmd.arg(format!("+{line_nr}")).arg(path),
             Self::Custom(open_at_line) => open_at_line.open_at_line(cmd, path, line_nr),
@@ -190,7 +212,7 @@ impl CliArgumentSupplier {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 struct CustomCliArgumentSupplier {
     /// Arguments to pass to the executable when invoked to open a file.
     ///
@@ -252,7 +274,7 @@ pub(crate) static PROGRAMS: LazyLock<Vec<ProgramSpec>> = LazyLock::new(|| {
             id: "nvim".into(),
             name: "Neovim".into(),
             cli_arg_supplier: CliArgumentSupplier::Neovim,
-            executable: ExecutableProgram::ShellExecutable(ShellExecutable {
+            executable: ExecutableProgram::PathExecutable(PathExecutable {
                 name_or_path: "nvim".into(),
                 requires_tty: true,
             }),
@@ -263,7 +285,7 @@ pub(crate) static PROGRAMS: LazyLock<Vec<ProgramSpec>> = LazyLock::new(|| {
             name: "Cursor".into(),
             cli_arg_supplier: CliArgumentSupplier::VSCodeLike,
             #[cfg(not(target_os = "macos"))]
-            executable: ExecutableProgram::ShellExecutable(ShellExecutable {
+            executable: ExecutableProgram::PathExecutable(PathExecutable {
                 #[cfg(target_os = "linux")]
                 name_or_path: "cursor".into(),
                 #[cfg(target_os = "windows")]
@@ -283,7 +305,7 @@ pub(crate) static PROGRAMS: LazyLock<Vec<ProgramSpec>> = LazyLock::new(|| {
             name: "Sublime Text".into(),
             cli_arg_supplier: CliArgumentSupplier::Sublime,
             #[cfg(not(target_os = "macos"))]
-            executable: ExecutableProgram::ShellExecutable(ShellExecutable {
+            executable: ExecutableProgram::PathExecutable(PathExecutable {
                 #[cfg(target_os = "linux")]
                 name_or_path: "subl".into(),
                 #[cfg(target_os = "windows")]
@@ -302,7 +324,7 @@ pub(crate) static PROGRAMS: LazyLock<Vec<ProgramSpec>> = LazyLock::new(|| {
             name: "VS Code".into(),
             cli_arg_supplier: CliArgumentSupplier::VSCodeLike,
             #[cfg(not(target_os = "macos"))]
-            executable: ExecutableProgram::ShellExecutable(ShellExecutable {
+            executable: ExecutableProgram::PathExecutable(PathExecutable {
                 #[cfg(target_os = "linux")]
                 name_or_path: "code".into(),
                 #[cfg(target_os = "windows")]
@@ -332,7 +354,7 @@ pub(crate) static PROGRAMS: LazyLock<Vec<ProgramSpec>> = LazyLock::new(|| {
             name: "Zed".into(),
             cli_arg_supplier: CliArgumentSupplier::Zed,
             #[cfg(not(target_os = "macos"))]
-            executable: ExecutableProgram::ShellExecutable(ShellExecutable {
+            executable: ExecutableProgram::PathExecutable(PathExecutable {
                 #[cfg(target_os = "linux")]
                 name_or_path: "zed".into(),
                 #[cfg(target_os = "windows")]
@@ -357,7 +379,7 @@ pub(crate) static PROGRAMS: LazyLock<Vec<ProgramSpec>> = LazyLock::new(|| {
                 ]),
                 open_args: Some(vec!["filepath='{{filepath}}'".into()]),
             }),
-            executable: ExecutableProgram::ShellExecutable(ShellExecutable {
+            executable: ExecutableProgram::PathExecutable(PathExecutable {
                 name_or_path: "echo".into(),
                 requires_tty: true,
             }),
@@ -371,7 +393,7 @@ pub(crate) static PROGRAMS: LazyLock<Vec<ProgramSpec>> = LazyLock::new(|| {
                 open_args: Some(vec!["{{filepath}}.touch".into()]),
                 open_at_line_args: Some(vec!["{{filepath}}.touch.{{line_number}}".into()]),
             }),
-            executable: ExecutableProgram::ShellExecutable(ShellExecutable {
+            executable: ExecutableProgram::PathExecutable(PathExecutable {
                 name_or_path: "touch".into(),
                 requires_tty: true,
             }),
@@ -382,7 +404,7 @@ pub(crate) static PROGRAMS: LazyLock<Vec<ProgramSpec>> = LazyLock::new(|| {
             id: "thunar".into(),
             name: "Thunar".into(),
             cli_arg_supplier: CliArgumentSupplier::Default,
-            executable: ExecutableProgram::ShellExecutable(ShellExecutable {
+            executable: ExecutableProgram::PathExecutable(PathExecutable {
                 name_or_path: "thunar".into(),
                 requires_tty: false,
             }),
@@ -403,8 +425,8 @@ pub fn open_in_program_unchecked(
     line_nr: Option<u32>,
 ) -> anyhow::Result<()> {
     match &program.executable {
-        ExecutableProgram::ShellExecutable(shell_executable) => {
-            open_in_shell_executable(shell_executable, &program.cli_arg_supplier, path, line_nr)
+        ExecutableProgram::PathExecutable(path_executable) => {
+            open_in_path_executable(path_executable, &program.cli_arg_supplier, path, line_nr)
         }
         #[cfg(target_os = "macos")]
         ExecutableProgram::MacosApplication(macos_application) => {
@@ -413,13 +435,13 @@ pub fn open_in_program_unchecked(
     }
 }
 
-fn open_in_shell_executable(
-    shell_executable: &ShellExecutable,
+fn open_in_path_executable(
+    path_executable: &PathExecutable,
     cli_arg_supplier: &CliArgumentSupplier,
     path: &Path,
     line_nr: Option<u32>,
 ) -> anyhow::Result<()> {
-    let mut cmd = Command::new(&shell_executable.name_or_path);
+    let mut cmd = Command::new(&path_executable.name_or_path);
 
     if let Some(line_nr) = line_nr {
         cli_arg_supplier.open_at_line(&mut cmd, path, line_nr)?
@@ -429,14 +451,14 @@ fn open_in_shell_executable(
         cmd.arg(path)
     };
 
-    if shell_executable.requires_tty {
+    if path_executable.requires_tty {
         cmd.stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .stdin(Stdio::inherit())
             .status()?;
     } else {
         cmd.stdout(Stdio::null()).stderr(Stdio::null());
-        spawn_and_reap(cmd, &shell_executable.name_or_path, &path.to_string_lossy())?;
+        spawn_and_reap(cmd, &path_executable.name_or_path, &path.to_string_lossy())?;
     }
 
     Ok(())
@@ -444,7 +466,7 @@ fn open_in_shell_executable(
 
 /// A canonically installed macOS application with a bundle ID and an optional CLI wrapper.
 #[cfg(target_os = "macos")]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct MacosApplication {
     /// macOS bundle identifier for the application.
     pub bundle_identifier: String,
@@ -495,8 +517,7 @@ fn open_in_macos_application(
     path: &Path,
     line_nr: Option<u32>,
 ) -> anyhow::Result<()> {
-    if let Some(line_nr) = line_nr {
-        let cli_abspath = app.resolve_cli_wrapper_abspath()?;
+    if let (Some(line_nr), Ok(cli_abspath)) = (line_nr, app.resolve_cli_wrapper_abspath()) {
         let mut cmd = Command::new(cli_abspath);
         cli_arg_supplier.open_at_line(&mut cmd, path, line_nr)?;
         cmd.stdout(Stdio::null()).stderr(Stdio::null());
@@ -533,7 +554,7 @@ pub struct UserDefinedProgramSpec {
     /// The display name of the program.
     pub name: String,
     /// The exuctable to invoke to start the program.
-    pub executable: UserDefinedShellExecutable,
+    pub executable: UserDefinedExecutableProgram,
     /// The kind of the program.
     pub category: UserDefinedProgramCategory,
     /// Arguments to pass to the executable when invoked to open a file.
@@ -551,10 +572,21 @@ pub struct UserDefinedProgramSpec {
     pub open_at_line_args: Option<Vec<String>>,
 }
 
+/// The executable to invoke for a program.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "type")]
+pub enum UserDefinedExecutableProgram {
+    /// A program that can be executed by name or path.
+    PathExecutable(UserDefinedPathExecutable),
+    /// A macOS application installed s.t. it has a bundle identifier.
+    #[cfg(target_os = "macos")]
+    MacosApplication(UserDefinedMacosApplication),
+}
+
 /// A user defined executable.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct UserDefinedShellExecutable {
+pub struct UserDefinedPathExecutable {
     /// Name of the executable on the PATH, or a qualified path to it.
     pub name_or_path: String,
     /// Whether the program requires an attached terminal or not.
@@ -574,4 +606,55 @@ pub enum UserDefinedProgramCategory {
     FileManager,
     /// Anything else.
     Other,
+}
+
+/// A canonically installed macOS application with a bundle ID and an optional CLI wrapper.
+#[cfg(target_os = "macos")]
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserDefinedMacosApplication {
+    /// macOS bundle identifier for the application.
+    pub bundle_id: String,
+    /// Location of the CLI wrapper inside the application bundle, if it exists.
+    pub cli_wrapper_path: Option<String>,
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn user_defined_macos_application_deserializes_into_program_spec() {
+        let spec: UserDefinedProgramSpec = serde_json::from_str(
+            r#"{
+                "name": "Visual Studio Code",
+                "executable": {
+                    "type": "macosApplication",
+                    "bundleId": "com.microsoft.VSCode",
+                    "cliWrapperPath": "Contents/Resources/app/bin/code"
+                },
+                "category": "editor"
+            }"#,
+        )
+        .expect("macOS application should deserialize");
+
+        let spec: ProgramSpec = spec.into();
+        assert_eq!(
+            spec,
+            ProgramSpec {
+                id: "Visual Studio Code".into(),
+                name: "Visual Studio Code".into(),
+                cli_arg_supplier: CliArgumentSupplier::Custom(CustomCliArgumentSupplier {
+                    open_args: None,
+                    open_at_line_args: None,
+                }),
+                executable: ExecutableProgram::MacosApplication(MacosApplication {
+                    bundle_identifier: "com.microsoft.VSCode".into(),
+                    cli_wrapper_path: Some("Contents/Resources/app/bin/code".into()),
+                }),
+                category: ProgramCategory::Editor,
+            },
+            "JSON should convert to expected internal program specification"
+        );
+    }
 }
