@@ -6,7 +6,7 @@
 
 mod actions;
 // This is our API
-pub use actions::{set_base_branch, set_target_push_remote};
+pub use actions::set_base_branch;
 
 mod branch_manager;
 pub use branch_manager::BranchManagerExt;
@@ -15,10 +15,7 @@ pub mod base;
 pub use base::BaseBranch;
 
 mod integration;
-pub use integration::{
-    GITBUTLER_WORKSPACE_COMMIT_TITLE, update_workspace_commit,
-    update_workspace_commit_with_vb_state,
-};
+pub use integration::{GITBUTLER_WORKSPACE_COMMIT_TITLE, update_workspace_commit};
 
 mod remote;
 
@@ -41,5 +38,4 @@ pub use branch::{
     list_branches,
 };
 
-pub mod hooks;
 pub mod stack;
