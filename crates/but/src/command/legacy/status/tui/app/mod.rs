@@ -53,6 +53,7 @@ use super::{
 
 mod details_layout;
 mod discard;
+pub(super) use discard::run_discard;
 pub mod mark;
 mod undo_redo;
 
@@ -502,7 +503,7 @@ impl App {
                 self.incoming_out_of_band_messages.push(rx);
             }
             Message::Discard => {
-                self.handle_discard(ctx, messages)?;
+                self.handle_discard(messages)?;
             }
             Message::DropToBeDiscarded => {
                 self.to_be_discarded.clear();

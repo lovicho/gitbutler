@@ -7,7 +7,7 @@
 use anyhow::Context as _;
 use bstr::BString;
 use but_api::{
-    commit::types::{CommitDiscardResult, CommitInsertBlankResult, CommitRewordResult},
+    commit::types::{CommitInsertBlankResult, CommitRewordResult},
     diff::ComputeLineStats,
     legacy::oplog::RestoreKind,
 };
@@ -24,8 +24,7 @@ use crate::{
         self, ShowDiffInEditor,
         status::{StatusFlags, StatusOutput, StatusOutputLine, StatusRenderMode, TuiLaunchOptions},
     },
-    id::WorktreeHunk,
-    utils::{WriteWithUtils, diff_specs},
+    utils::WriteWithUtils,
 };
 
 pub fn head_sha(ctx: &mut Context) -> anyhow::Result<String> {
@@ -226,59 +225,6 @@ pub fn reword_branch_legacy(
     new_name: String,
 ) -> anyhow::Result<String> {
     gitbutler_branch_actions::stack::update_branch_name(ctx, stack_id, branch_name, new_name)
-}
-
-fn discard_uncommitted_legacy_with_assignments(
-    ctx: &mut Context,
-    hunk_assignments: Vec<WorktreeHunk>,
-) -> anyhow::Result<()> {
-    let changes_to_discard = {
-        let context_lines = ctx.settings.context_lines;
-        let (_guard, repo, ws, mut db) = ctx.workspace_and_db_mut()?;
-        let mut builder = diff_specs::DiffSpecBuilder::new(&mut db, &repo, &ws, context_lines);
-        builder.push_hunk_assignments(hunk_assignments)?;
-        builder.into_diff_specs()
-    };
-
-    if changes_to_discard.is_empty() {
-        return Ok(());
-    }
-
-    but_api::legacy::workspace::discard_worktree_changes(ctx, changes_to_discard)?;
-
-    Ok(())
-}
-
-pub fn discard_uncommitted_hunks_legacy(
-    ctx: &mut Context,
-    hunk_assignments: Vec<WorktreeHunk>,
-) -> anyhow::Result<()> {
-    discard_uncommitted_legacy_with_assignments(ctx, hunk_assignments)
-}
-
-pub fn discard_uncommitted_legacy(ctx: &mut Context) -> anyhow::Result<()> {
-    let uncommitted_changes = {
-        let context_lines = ctx.settings.context_lines;
-        let (_guard, repo, ws, mut db) = ctx.workspace_and_db_mut()?;
-        let mut builder = diff_specs::DiffSpecBuilder::new(&mut db, &repo, &ws, context_lines);
-        builder.push_changes_from_uncommitted_area()?;
-        builder.into_diff_specs()
-    };
-
-    if uncommitted_changes.is_empty() {
-        return Ok(());
-    }
-
-    but_api::legacy::workspace::discard_worktree_changes(ctx, uncommitted_changes)?;
-
-    Ok(())
-}
-
-pub fn commit_discard(
-    ctx: &mut Context,
-    commit_id: gix::ObjectId,
-) -> anyhow::Result<CommitDiscardResult> {
-    but_api::commit::discard_commit::commit_discard(ctx, commit_id, DryRun::No)
 }
 
 pub fn get_undo_target_snapshot_legacy(ctx: &Context) -> anyhow::Result<Option<Snapshot>> {

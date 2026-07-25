@@ -24,23 +24,28 @@ use syntect::{easy::HighlightLines, highlighting, parsing::SyntaxSet};
 
 use crate::{
     CliId,
-    command::legacy::status::tui::{
-        Message, ReloadCause, SelectAfterReload,
-        app::{
-            Modal,
-            mark::{
-                MarkStore, MarkableRef, Marks, MarksRef, synthetic_parent_hunk, toggle_markables,
+    command::legacy::{
+        discard::{DiscardOperation, DiscardOutcome, UncommittedSelection},
+        status::tui::{
+            Message, ReloadCause, SelectAfterReload,
+            app::{
+                Modal,
+                mark::{
+                    MarkStore, MarkableRef, Marks, MarksRef, synthetic_parent_hunk,
+                    toggle_markables,
+                },
+                run_discard,
             },
+            backstack::Backstack,
+            confirm::Confirm,
+            copy_selection_picker::Clipboard,
+            count_allocations,
+            details::worker::Worker,
+            highlight::{self, Highlights},
+            message_on_drop::message_on_drop,
+            mode::ModeDiscriminant,
+            render::{RenderSingleLineSpans, available_lines_in_area},
         },
-        backstack::Backstack,
-        confirm::Confirm,
-        copy_selection_picker::Clipboard,
-        count_allocations,
-        details::worker::Worker,
-        highlight::{self, Highlights},
-        message_on_drop::message_on_drop,
-        mode::ModeDiscriminant,
-        render::{RenderSingleLineSpans, available_lines_in_area},
     },
     id::{CommitId, CommittedFileId},
     theme::{Rgb, Theme},
@@ -49,7 +54,6 @@ use crate::{
         diff_rendering::{
             self, CodeLineKind, DetailsLine, DiffLineWriter, IdGen, SectionId, load_syntax_set,
         },
-        diff_specs::DiffSpecBuilder,
         string_interning::Strings,
     },
 };
@@ -1242,11 +1246,14 @@ impl Details {
             messages,
         );
 
-        let (formatted_cli_id, formatted_path) =
+        let (formatted_cli_id, formatted_path, operation) =
             if let CliId::UncommittedHunkOrFile(hunk) = &*section_cli_id {
                 (
                     Span::raw(section_cli_id.to_short_string()).style(self.theme.cli_id),
                     Span::raw(hunk.hunk_assignments.head.path.clone()),
+                    DiscardOperation::Uncommitted(UncommittedSelection::Changes(Box::new(
+                        NonEmpty::new(hunk.clone()),
+                    ))),
                 )
             } else {
                 return;
@@ -1262,23 +1269,13 @@ impl Details {
             ])),
             self.theme,
             move |ctx, messages| {
-                let changes = {
-                    let context_lines = ctx.settings.context_lines;
-                    let (_guard, repo, ws, mut db) = ctx.workspace_and_db_mut()?;
-                    let mut builder = DiffSpecBuilder::new(&mut db, &repo, &ws, context_lines);
-                    builder.push_changes_from_id(&section_cli_id)?;
-                    builder.into_diff_specs()
+                let DiscardOutcome::Uncommitted { paths: _ } = run_discard(ctx, operation)? else {
+                    anyhow::bail!("BUG: uncommitted discard returned an unexpected outcome")
                 };
-
-                if changes.is_empty() {
-                    return Ok(());
-                }
-
-                but_api::legacy::workspace::discard_worktree_changes(ctx, changes)?;
 
                 let PendingSectionSelection::Section { index, direction } = select_after_discard
                 else {
-                    unreachable!("discard selection is always a specific details section")
+                    anyhow::bail!("BUG: discard selection must be a specific details section")
                 };
                 messages.push(Message::Reload(
                     Some(SelectAfterReload::UncommittedDetailsSection { index, direction }),
@@ -1363,72 +1360,41 @@ impl Details {
             messages,
         );
 
-        let confirm = {
-            let marks = marks.to_owned();
-
-            Confirm::new(
-                NonEmpty::new(Span::raw("Discard?").into()),
-                self.theme,
-                move |ctx, messages| {
-                    let changes = {
-                        let context_lines = ctx.settings.context_lines;
-                        let (_guard, repo, ws, mut db) = ctx.workspace_and_db_mut()?;
-                        let mut builder = DiffSpecBuilder::new(&mut db, &repo, &ws, context_lines);
-                        for mark in marks.iter() {
-                            match mark {
-                                MarkableRef::Uncommitted(hunk) => {
-                                    builder.push_changes_from_uncommitted(hunk)?;
-                                }
-                                MarkableRef::Commit(c) => {
-                                    builder.push_changes_from_commit(c.commit_id, c.id)?;
-                                }
-                                MarkableRef::CommittedFile(c) => {
-                                    builder
-                                        .push_changes_from_committed_file(c.commit_id, c.path)?;
-                                }
-                                MarkableRef::Branch(..) => {
-                                    anyhow::bail!(
-                                        "BUG: it should not be possible to mark and discard branches"
-                                    );
-                                }
-                            }
-                        }
-                        match marks {
-                            Marks::Hunks(..) => {
-                                builder.reconcile_worktree_diff_specs()?;
-                            }
-                            Marks::Empty
-                            | Marks::Commits(..)
-                            | Marks::CommittedFiles(..)
-                            | Marks::Branches(..) => {}
-                        }
-                        builder.into_diff_specs()
-                    };
-
-                    if changes.is_empty() {
-                        return Ok(());
-                    }
-
-                    but_api::legacy::workspace::discard_worktree_changes(ctx, changes)?;
-
-                    let select_after_reload = select_after_discard.map(|selection| {
-                        let PendingSectionSelection::Section { index, direction } = selection
-                        else {
-                            unreachable!("discard marks can only select a specific details section")
-                        };
-                        SelectAfterReload::UncommittedDetailsSection { index, direction }
-                    });
-                    messages.extend([
-                        Message::Reload(select_after_reload, ReloadCause::Mutation),
-                        Message::ClearMarks,
-                    ]);
-
-                    drop(drop_to_be_discarded);
-
-                    Ok(())
-                },
-            )
+        let Marks::Hunks(hunks) = marks.to_owned() else {
+            return;
         };
+        let operation =
+            DiscardOperation::Uncommitted(UncommittedSelection::Changes(Box::new(hunks)));
+
+        let confirm = Confirm::new(
+            NonEmpty::new(Span::raw("Discard?").into()),
+            self.theme,
+            move |ctx, messages| {
+                let DiscardOutcome::Uncommitted { paths: _ } = run_discard(ctx, operation)? else {
+                    anyhow::bail!("BUG: uncommitted discard returned an unexpected outcome")
+                };
+
+                let select_after_reload = match select_after_discard {
+                    Some(PendingSectionSelection::Section { index, direction }) => {
+                        Some(SelectAfterReload::UncommittedDetailsSection { index, direction })
+                    }
+                    Some(PendingSectionSelection::None | PendingSectionSelection::First) => {
+                        anyhow::bail!(
+                            "BUG: discard marks selection must be a specific details section"
+                        )
+                    }
+                    None => None,
+                };
+                messages.extend([
+                    Message::Reload(select_after_reload, ReloadCause::Mutation),
+                    Message::ClearMarks,
+                ]);
+
+                drop(drop_to_be_discarded);
+
+                Ok(())
+            },
+        );
 
         messages.push(Message::ShowModal(Modal::Confirm { confirm }));
     }

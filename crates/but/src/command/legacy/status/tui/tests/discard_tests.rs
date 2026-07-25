@@ -144,6 +144,31 @@ fn discard_top_commit_selects_next_commit_in_branch() {
 }
 
 #[test]
+fn discard_bottom_commit_selects_rewritten_commit_above() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    let mut tui = test_tui(env);
+
+    tui.input(KeyCode::Down)
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"]);
+
+    for message in ["one", "two"] {
+        tui.input('n');
+        tui.input(KeyCode::Enter);
+        tui.input(message);
+        tui.input(KeyCode::Enter);
+    }
+
+    tui.input([KeyCode::Down, KeyCode::Down])
+        .assert_current_line_eq(str!["┊●   tpm add A"]);
+
+    tui.input('x').assert_rendered_contains("Discard commit");
+    tui.input('y')
+        .assert_current_line_eq(str!["┊●   1#1 one (no changes)"]);
+}
+
+#[test]
 fn discard_stack_confirm_yes_discards_staged_changes() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
     env.setup_metadata(&["A"]);

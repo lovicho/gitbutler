@@ -1,5 +1,7 @@
 //! Implementation of the `but discard` command.
 
+use std::collections::BTreeMap;
+
 use anyhow::{Context as _, bail};
 use bstr::{BString, ByteSlice as _};
 use but_api::json::HexHash;
@@ -105,7 +107,11 @@ pub enum UncommittedSelection {
 #[must_use]
 pub enum DiscardOutcome {
     Branches(NonEmpty<FullName>),
-    Commits(NonEmpty<ObjectId>),
+    Commits {
+        commits: NonEmpty<ObjectId>,
+        /// Rewritten surviving commits, used by callers to retain their selection.
+        replaced_commits: BTreeMap<ObjectId, ObjectId>,
+    },
     CommittedFiles {
         source: ObjectId,
         paths: NonEmpty<BString>,
@@ -127,7 +133,10 @@ impl CliOutputHuman for DiscardOutcome {
                     writeln!(out, "Discarded branches {branches}")?;
                 }
             }
-            DiscardOutcome::Commits(commits) => {
+            DiscardOutcome::Commits {
+                commits,
+                replaced_commits: _,
+            } => {
                 if commits.len() == 1 {
                     writeln!(
                         out,
@@ -173,7 +182,10 @@ impl CliOutput for DiscardOutcome {
                     writeln!(out, "{}", branch.shorten())?;
                 }
             }
-            DiscardOutcome::Commits(commits) => {
+            DiscardOutcome::Commits {
+                commits,
+                replaced_commits: _,
+            } => {
                 for commit in commits {
                     writeln!(out, "{}", commit.to_hex_with_len(7))?;
                 }
@@ -222,7 +234,10 @@ impl CliOutput for DiscardOutcome {
                     .map(|branch| branch.shorten().to_string())
                     .collect(),
             },
-            DiscardOutcome::Commits(commits) => Output::Commits {
+            DiscardOutcome::Commits {
+                commits,
+                replaced_commits: _,
+            } => Output::Commits {
                 commits: commits.into_iter().map(HexHash).collect(),
             },
             DiscardOutcome::CommittedFiles {
@@ -422,7 +437,7 @@ pub fn run(
         }
     };
 
-    let (outcome, _workspace) = but_transaction::with_transaction_with_perm(
+    let (mut outcome, workspace) = but_transaction::with_transaction_with_perm(
         ctx,
         meta,
         perm,
@@ -441,7 +456,10 @@ pub fn run(
                 }
                 ExecutableDiscardOperation::Commits(commits) => {
                     tx.discard_commits(commits.iter().copied())?;
-                    DiscardOutcome::Commits(commits)
+                    DiscardOutcome::Commits {
+                        commits,
+                        replaced_commits: BTreeMap::new(),
+                    }
                 }
                 ExecutableDiscardOperation::CommittedFiles {
                     source,
@@ -475,6 +493,13 @@ pub fn run(
             Ok(Commit(outcome))
         },
     )?;
+
+    if let DiscardOutcome::Commits {
+        replaced_commits, ..
+    } = &mut outcome
+    {
+        *replaced_commits = workspace.replaced_commits;
+    }
 
     Ok(outcome)
 }

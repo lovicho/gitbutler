@@ -34,6 +34,7 @@ impl<'a> DiffSpecBuilder<'a> {
         }
     }
 
+    #[expect(dead_code)]
     pub fn push_changes_from_id(&mut self, id: &CliId) -> anyhow::Result<()> {
         match id {
             CliId::UncommittedHunkOrFile(uncommitted) => {
