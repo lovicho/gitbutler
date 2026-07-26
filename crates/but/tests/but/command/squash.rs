@@ -203,6 +203,72 @@ Hint: run `but help` for all commands
 }
 
 #[test]
+fn squash_between_oldest_and_newest_commit() {
+    let env = one_branch_three_commits();
+
+    // Squashing the oldest commit into the newest one has to carry `one` into the target,
+    // even though removing the source rewrites the commits in between.
+    env.but("squash 1#2 --target 1#0 --message 'squashed'")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+Squashed ea345ba into f55169f to create 7e2f6f7
+
+"#]]);
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ br [a-branch-1]
+┊●   1#0 squashed
+┊│     1#0:k A one
+┊│     1#0:o A three
+┊●   1#1 add two
+┊│     1#1:t A two
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    env.but("undo").assert().success();
+
+    // The same squash in the other direction ends up with the same files per commit.
+    env.but("squash 1#0 --target 1#2 --message 'squashed'")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+Squashed f55169f into ea345ba to create 734e151
+
+"#]]);
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ br [a-branch-1]
+┊●   1#0 add two
+┊│     1#0:t A two
+┊●   1#1 squashed
+┊│     1#1:k A one
+┊│     1#1:o A three
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}
+
+#[test]
 fn use_target_message() {
     let env = one_branch_three_commits();
 
@@ -937,7 +1003,7 @@ fn amend_uncommitted_files_into_commit() {
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
 
-Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
+Hint: run `but diff` to see uncommitted changes and `but commit -b <branch> -m "message" <id>` to commit them
 
 "#]]);
 
@@ -964,7 +1030,7 @@ Amended 7adb8e6 to create d2f176a
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
 
-Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
+Hint: run `but diff` to see uncommitted changes and `but commit -b <branch> -m "message" <id>` to commit them
 
 "#]]);
 }
@@ -988,7 +1054,7 @@ fn amend_all_uncommitted_changes_into_commit() {
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
 
-Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
+Hint: run `but diff` to see uncommitted changes and `but commit -b <branch> -m "message" <id>` to commit them
 
 "#]]);
 
@@ -1315,7 +1381,7 @@ Error: --target cannot be an empty branch
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
 
-Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
+Hint: run `but diff` to see uncommitted changes and `but commit -b <branch> -m "message" <id>` to commit them
 
 "#]]);
     // middle should be considered empty even though there are commits on its parent
@@ -1374,7 +1440,7 @@ Uncommitted f55169f
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
 
-Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
+Hint: run `but diff` to see uncommitted changes and `but commit -b <branch> -m "message" <id>` to commit them
 
 "#]]);
 
@@ -1436,7 +1502,7 @@ Uncommitted from f55169f
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
 
-Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
+Hint: run `but diff` to see uncommitted changes and `but commit -b <branch> -m "message" <id>` to commit them
 
 "#]]);
 }
@@ -2214,7 +2280,7 @@ Hint: run `but help` for all commands
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
 
-Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
+Hint: run `but diff` to see uncommitted changes and `but commit -b <branch> -m "message" <id>` to commit them
 
 "#]]);
 
@@ -2422,7 +2488,7 @@ fn squashing_into_branch_that_sits_below_empty_branch() {
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
 
-Hint: run `but diff` to see uncommitted changes and `but commit <branch> -m "message" --changes <id>` to commit them
+Hint: run `but diff` to see uncommitted changes and `but commit -b <branch> -m "message" <id>` to commit them
 
 "#]]);
 
