@@ -254,6 +254,21 @@ pub(crate) enum Checkout {
         /// and don't reappear as uncommitted changes.
         merge_base_override: Option<gix::ObjectId>,
     },
+    /// A visible linked worktree whose `HEAD` should follow this edit.
+    Worktree {
+        /// The stable worktree name under `$GIT_COMMON_DIR/worktrees/`.
+        worktree_name: gix::bstr::BString,
+        /// The worktree's `HEAD` selector: a reference when attached, or a commit when detached.
+        selector: Selector,
+        /// The symbolic referent at editor creation, or `None` for a detached `HEAD`.
+        ref_name: Option<gix::refs::FullName>,
+        /// The peeled `HEAD` at editor creation, used to reject stale worktree state.
+        initial_head: gix::ObjectId,
+        /// Like [`Checkout::Head`]'s `merge_base_override`, but computed against this
+        /// worktree's own `HEAD^{tree}`, so changes consumed *from this worktree*
+        /// cancel out during its checkout.
+        merge_base_override: Option<gix::ObjectId>,
+    },
 }
 
 /// Used to manipulate a set of picks.
@@ -311,6 +326,39 @@ impl<'ws, 'meta, M: RefMetadata> SuccessfulRebase<'ws, 'meta, M> {
     /// workspace preview computed from [`Self::overlayed_graph`].
     pub fn repo_and_meta_mut(&mut self) -> (&gix::Repository, &mut M) {
         (&self.repo, self.meta)
+    }
+
+    fn checkout_target(
+        &self,
+        selector: Selector,
+    ) -> Result<Option<(gix::ObjectId, Option<gix::refs::FullName>)>> {
+        let selector = self.history.normalize_selector(selector)?;
+        Ok(match &self.graph[selector.id] {
+            Step::None => None,
+            Step::Pick(Pick { id, .. }) => Some((*id, None)),
+            Step::Reference { refname, .. } => {
+                let parent = collect_ordered_parents(&self.graph, selector.id)
+                    .into_iter()
+                    .next()
+                    .context("No first parent to reference")?;
+                let Step::Pick(Pick { id, .. }) = self.graph[parent] else {
+                    bail!("collect_ordered_parents should always return a commit pick");
+                };
+                Some((id, Some(refname.clone())))
+            }
+        })
+    }
+
+    fn worktree_tips_after_rebase(&self) -> Result<Vec<but_graph::init::WorktreeTip>> {
+        Ok(self
+            .linked_checkout_specs()?
+            .into_iter()
+            .map(|spec| but_graph::init::WorktreeTip {
+                name: spec.name,
+                ref_name: spec.ref_name,
+                id: spec.target,
+            })
+            .collect())
     }
 
     /// Return the commit targeted by `ref_name` in the post-rebase step graph.
@@ -374,26 +422,8 @@ impl<'ws, 'meta, M: RefMetadata> SuccessfulRebase<'ws, 'meta, M> {
             .checkouts
             .iter()
             .filter_map(|checkout| match checkout {
-                Checkout::Head { selector, .. } => {
-                    let selector = self.history.normalize_selector(*selector).ok()?;
-                    let step = &self.graph[selector.id];
-
-                    match step {
-                        Step::None => None,
-                        Step::Pick(Pick { id, .. }) => Some((*id, None)),
-                        Step::Reference { refname, .. } => {
-                            let parents = collect_ordered_parents(&self.graph, selector.id);
-
-                            if let Some(to_reference) = parents.first()
-                                && let Step::Pick(Pick { id, .. }) = self.graph[*to_reference]
-                            {
-                                Some((id, Some(refname.clone())))
-                            } else {
-                                None
-                            }
-                        }
-                    }
-                }
+                Checkout::Head { selector, .. } => self.checkout_target(*selector).ok().flatten(),
+                Checkout::Worktree { .. } => None,
             })
             .next()
         else {
@@ -411,9 +441,9 @@ impl<'ws, 'meta, M: RefMetadata> SuccessfulRebase<'ws, 'meta, M> {
         if let Some(branch_stack_order) = branch_stack_order {
             overlay = overlay.with_branch_stack_order_override(branch_stack_order.iter().cloned());
         }
-        self.workspace
-            .graph
-            .redo_traversal_with_overlay(&self.repo, self.meta, overlay)
+        let mut graph = self.workspace.graph.clone();
+        graph.options.worktree_tips = self.worktree_tips_after_rebase()?;
+        graph.redo_traversal_with_overlay(&self.repo, self.meta, overlay)
     }
 }
 

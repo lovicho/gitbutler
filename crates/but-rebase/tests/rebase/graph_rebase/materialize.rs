@@ -1,9 +1,13 @@
 //! Tests for `materialize` vs `materialize_without_checkout` behavior differences
-use anyhow::Result;
+use anyhow::{Context, Result};
 use but_graph::Graph;
-use but_rebase::graph_rebase::{Editor, Step};
+use but_rebase::graph_rebase::{
+    Editor, Step,
+    mutate::{SegmentDelimiter, SelectorSet},
+};
 use but_testsupport::{
-    StackState, graph_tree, visualize_commit_graph_all, visualize_disk_tree_skip_dot_git,
+    StackState, git_status, graph_tree, visualize_commit_graph_all,
+    visualize_disk_tree_skip_dot_git,
 };
 use snapbox::IntoData;
 
@@ -11,6 +15,76 @@ use crate::{
     graph_rebase::add_stack_with_segments,
     utils::{fixture_writable, standard_options, target_meta},
 };
+
+fn worktree_fixture(
+    name: &str,
+) -> Result<(
+    gix::Repository,
+    tempfile::TempDir,
+    std::mem::ManuallyDrop<but_meta::VirtualBranchesTomlMetadata>,
+)> {
+    let (repo, tmp) = but_testsupport::writable_scenario_slow(name);
+    let meta = but_meta::VirtualBranchesTomlMetadata::from_path(
+        repo.path()
+            .join(".git")
+            .join("should-never-be-written.toml"),
+    )?;
+    Ok((repo, tmp, std::mem::ManuallyDrop::new(meta)))
+}
+
+fn worktree_tip(repo: &gix::Repository, name: &str) -> Result<but_graph::init::WorktreeTip> {
+    let proxy = repo
+        .worktrees()?
+        .into_iter()
+        .find(|proxy| proxy.id() == name)
+        .with_context(|| format!("missing worktree {name}"))?;
+    let name = proxy.id().to_owned();
+    let worktree_repo = proxy.into_repo()?;
+    let mut head = worktree_repo.head()?;
+    let ref_name = head.referent_name().map(ToOwned::to_owned);
+    let id = head.peel_to_commit()?.id;
+    Ok(but_graph::init::WorktreeTip { name, ref_name, id })
+}
+
+fn options_with_worktrees(
+    repo: &gix::Repository,
+    names: &[&str],
+) -> Result<but_graph::init::Options> {
+    let mut options = standard_options();
+    options.worktree_tips = names
+        .iter()
+        .map(|name| worktree_tip(repo, name))
+        .collect::<Result<Vec<_>>>()?;
+    Ok(options)
+}
+
+fn repoint_reference(
+    editor: &mut Editor<'_, '_, impl but_core::RefMetadata>,
+    refname: &str,
+    target: gix::ObjectId,
+) -> Result<()> {
+    let reference = editor.select_reference(refname.try_into()?)?;
+    let target = editor.select_commit(target)?;
+    editor.disconnect_segment_from(
+        SegmentDelimiter {
+            child: reference,
+            parent: reference,
+        },
+        SelectorSet::All,
+        SelectorSet::All,
+        false,
+    )?;
+    editor.add_edge(reference, target, 0)
+}
+
+fn linked_repo(repo: &gix::Repository, name: &str) -> Result<gix::Repository> {
+    repo.worktrees()?
+        .into_iter()
+        .find(|proxy| proxy.id() == name)
+        .with_context(|| format!("missing worktree {name}"))?
+        .into_repo()
+        .map_err(Into::into)
+}
 
 #[test]
 fn materialize_removes_dropped_commit_changes_from_worktree() -> Result<()> {
@@ -439,5 +513,355 @@ fn materialize_does_not_delete_immutable_refs_removed_from_graph() -> Result<()>
         .raw()
     );
 
+    Ok(())
+}
+
+#[test]
+fn visible_attached_and_detached_worktrees_follow_a_rewritten_commit() -> Result<()> {
+    let (repo, _tmpdir, mut meta) = worktree_fixture("worktree-checkout-heads")?;
+    let old_middle = repo.rev_parse_single("middle")?.detach();
+    let attached_dir = repo.workdir().unwrap().join("wt");
+    let detached_dir = repo.workdir().unwrap().join("wt-detached");
+
+    let graph = Graph::from_head(
+        &repo,
+        &*meta,
+        Default::default(),
+        options_with_worktrees(&repo, &["wt", "wt-detached"])?,
+    )?
+    .validated()?;
+    let mut ws = graph.into_workspace()?;
+    let mut editor = Editor::create(&mut ws, &mut *meta, &repo)?;
+
+    let mut replacement = but_core::Commit::from_id(repo.rev_parse_single("middle")?)?;
+    let a = repo.rev_parse_single("middle:a")?.detach();
+    let mut tree = repo.edit_tree(replacement.tree)?;
+    tree.remove("a")?;
+    tree.upsert("a-renamed", gix::objs::tree::EntryKind::Blob, a)?;
+    replacement.tree = tree.write()?.detach();
+    replacement.message = "a rewritten".into();
+    let replacement = repo.write_object(replacement.inner)?.detach();
+    let old_middle_selector = editor.select_commit(old_middle)?;
+    editor.replace(old_middle_selector, Step::new_pick(replacement))?;
+    editor.rebase()?.materialize()?;
+
+    let new_middle = repo.rev_parse_single("middle")?.detach();
+    assert_ne!(new_middle, old_middle);
+
+    let attached = gix::open(&attached_dir)?;
+    assert_eq!(
+        std::fs::read_to_string(attached.git_dir().join("HEAD"))?,
+        "ref: refs/heads/middle\n"
+    );
+    assert_eq!(
+        attached.head_name()?,
+        Some("refs/heads/middle".try_into()?),
+        "the branch-backed worktree stays attached"
+    );
+    assert_eq!(attached.head_id()?.detach(), new_middle);
+    assert!(
+        !attached_dir.join("a").exists(),
+        "the attached worktree removes the rename source"
+    );
+    assert_eq!(
+        std::fs::read_to_string(attached_dir.join("a-renamed"))?,
+        "a\n",
+        "the attached worktree writes the rename target"
+    );
+    // The attached worktree's index and files match its rewritten branch.
+    snapbox::assert_data_eq!(git_status(&attached)?, snapbox::str![""]);
+
+    let detached = gix::open(&detached_dir)?;
+    assert_eq!(
+        detached.head_name()?,
+        None,
+        "the detached worktree stays detached"
+    );
+    assert_eq!(detached.head_id()?.detach(), new_middle);
+    assert_eq!(
+        std::fs::read_to_string(detached.git_dir().join("HEAD"))?,
+        format!("{new_middle}\n")
+    );
+    assert!(
+        !detached_dir.join("a").exists(),
+        "the detached worktree removes the rename source"
+    );
+    assert_eq!(
+        std::fs::read_to_string(detached_dir.join("a-renamed"))?,
+        "a\n",
+        "the detached worktree writes the rename target"
+    );
+    // The detached worktree's index and files match its rewritten HEAD.
+    snapbox::assert_data_eq!(git_status(&detached)?, snapbox::str![""]);
+    Ok(())
+}
+
+#[test]
+fn references_checked_out_in_linked_worktrees_are_not_deleted() -> Result<()> {
+    let (repo, _tmpdir, mut meta) = worktree_fixture("worktree-checkout-heads")?;
+    let middle = repo.rev_parse_single("middle")?.detach();
+    repo.reference(
+        "refs/heads/doomed",
+        middle,
+        gix::refs::transaction::PreviousValue::MustNotExist,
+        "test setup",
+    )?;
+
+    let graph =
+        Graph::from_head(&repo, &*meta, Default::default(), standard_options())?.validated()?;
+    let mut ws = graph.into_workspace()?;
+    let mut editor = Editor::create(&mut ws, &mut *meta, &repo)?;
+    for refname in ["refs/heads/middle", "refs/heads/doomed"] {
+        let selector = editor.select_reference(refname.try_into()?)?;
+        editor.replace(selector, Step::None)?;
+    }
+    editor.rebase()?.materialize()?;
+
+    assert!(
+        repo.try_find_reference("middle")?.is_some(),
+        "a checked-out branch must not be deleted, even when the worktree is not visible"
+    );
+    assert!(
+        repo.try_find_reference("doomed")?.is_none(),
+        "an otherwise-identical unchecked-out branch is deleted"
+    );
+    Ok(())
+}
+
+#[test]
+fn every_linked_worktree_is_prepared_before_reference_edits() -> Result<()> {
+    let (repo, _tmpdir, mut meta) = worktree_fixture("worktree-checkout-dirt")?;
+    let worktree_dir = repo.workdir().unwrap().join("wt");
+    let conflicting_dir = repo.workdir().unwrap().join("wt2");
+    std::fs::write(conflicting_dir.join("main-only"), "local collision\n")?;
+
+    let worktree = linked_repo(&repo, "wt")?;
+    let conflicting = linked_repo(&repo, "wt2")?;
+    let refs_before = visualize_commit_graph_all(&repo)?;
+    let middle_before = repo.rev_parse_single("middle")?.detach();
+    let second_before = repo.rev_parse_single("second")?.detach();
+    let worktree_head_before = std::fs::read(worktree.git_dir().join("HEAD"))?;
+    let conflicting_head_before = std::fs::read(conflicting.git_dir().join("HEAD"))?;
+    let worktree_index_before = std::fs::read(worktree.git_dir().join("index"))?;
+    let conflicting_index_before = std::fs::read(conflicting.git_dir().join("index"))?;
+    let worktree_shared_before = std::fs::read(worktree_dir.join("shared"))?;
+    let conflicting_main_before = std::fs::read(conflicting_dir.join("main-only"))?;
+
+    let graph = Graph::from_head(
+        &repo,
+        &*meta,
+        Default::default(),
+        options_with_worktrees(&repo, &["wt", "wt2"])?,
+    )?
+    .validated()?;
+    let mut ws = graph.into_workspace()?;
+    let mut editor = Editor::create(&mut ws, &mut *meta, &repo)?;
+    repoint_reference(
+        &mut editor,
+        "refs/heads/middle",
+        repo.rev_parse_single("main~2")?.detach(),
+    )?;
+    repoint_reference(
+        &mut editor,
+        "refs/heads/second",
+        repo.rev_parse_single("main")?.detach(),
+    )?;
+
+    let err = editor
+        .rebase()?
+        .materialize()
+        .expect_err("the second checkout must fail during preparation");
+    assert!(
+        format!("{err:#}").contains("Uncommitted files would be overwritten by checkout"),
+        "the checkout conflict is surfaced: {err:#}"
+    );
+
+    assert_eq!(visualize_commit_graph_all(&repo)?, refs_before);
+    assert_eq!(repo.rev_parse_single("middle")?.detach(), middle_before);
+    assert_eq!(repo.rev_parse_single("second")?.detach(), second_before);
+    assert_eq!(
+        std::fs::read(worktree.git_dir().join("HEAD"))?,
+        worktree_head_before
+    );
+    assert_eq!(
+        std::fs::read(conflicting.git_dir().join("HEAD"))?,
+        conflicting_head_before
+    );
+    assert_eq!(
+        std::fs::read(worktree.git_dir().join("index"))?,
+        worktree_index_before
+    );
+    assert_eq!(
+        std::fs::read(conflicting.git_dir().join("index"))?,
+        conflicting_index_before
+    );
+    assert_eq!(
+        std::fs::read(worktree_dir.join("shared"))?,
+        worktree_shared_before
+    );
+    assert!(worktree_dir.join("middle-only").exists());
+    assert_eq!(
+        std::fs::read(conflicting_dir.join("main-only"))?,
+        conflicting_main_before
+    );
+    Ok(())
+}
+
+#[test]
+fn changes_consumed_from_a_linked_worktree_cancel_during_its_checkout() -> Result<()> {
+    let (repo, _tmpdir, mut meta) = worktree_fixture("worktree-partial-amend")?;
+    let worktree_dir = repo.workdir().unwrap().join("wt");
+    let middle = repo.rev_parse_single("middle")?.detach();
+
+    // Stand in for `commit_amend_from_worktree`: bake the worktree's first hunk into
+    // its branch and hand the checkout the matching additive merge base.
+    let mut amended = but_core::Commit::from_id(repo.rev_parse_single("middle")?)?;
+    let blob = repo
+        .write_blob("line 1\nline 1.1\nline 2\nline 3\n")?
+        .detach();
+    let mut tree = repo.edit_tree(amended.tree)?;
+    tree.upsert("test.txt", gix::objs::tree::EntryKind::Blob, blob)?;
+    let consumed_tree = tree.write()?.detach();
+    amended.tree = consumed_tree;
+    amended.message = "base, with line 1.1".into();
+    let amended = repo.write_object(amended.inner)?.detach();
+
+    let graph = Graph::from_head(
+        &repo,
+        &*meta,
+        Default::default(),
+        options_with_worktrees(&repo, &["wt"])?,
+    )?
+    .validated()?;
+    let mut ws = graph.into_workspace()?;
+    let mut editor = Editor::create(&mut ws, &mut *meta, &repo)?;
+    let middle_selector = editor.select_commit(middle)?;
+    editor.replace(middle_selector, Step::new_pick(amended))?;
+    editor.set_worktree_merge_base_override(gix::bstr::BStr::new("wt"), consumed_tree)?;
+    editor.rebase()?.materialize()?;
+
+    assert_eq!(repo.rev_parse_single("middle")?.detach(), amended);
+    assert_eq!(
+        std::fs::read_to_string(worktree_dir.join("test.txt"))?,
+        "line 1\nline 1.1\nline 1.2\nline 2\nline 3\n",
+        "only the hunk that wasn't consumed is left in the worktree - \
+         without the merge-base override the consumed one is duplicated"
+    );
+    snapbox::assert_data_eq!(
+        git_status(&linked_repo(&repo, "wt")?)?,
+        snapbox::str![[r#"
+M  test.txt
+
+"#]]
+    );
+    Ok(())
+}
+
+#[test]
+fn a_merge_base_override_for_an_unknown_worktree_is_rejected() -> Result<()> {
+    let (repo, _tmpdir, mut meta) = worktree_fixture("worktree-partial-amend")?;
+    let graph = Graph::from_head(
+        &repo,
+        &*meta,
+        Default::default(),
+        options_with_worktrees(&repo, &["wt"])?,
+    )?
+    .validated()?;
+    let mut ws = graph.into_workspace()?;
+    let mut editor = Editor::create(&mut ws, &mut *meta, &repo)?;
+    let tree = repo.rev_parse_single("middle^{tree}")?.detach();
+
+    let err = editor
+        .set_worktree_merge_base_override(gix::bstr::BStr::new("nope"), tree)
+        .expect_err("callers must be able to bail before mutating the step graph");
+    assert!(
+        format!("{err:#}").contains("no checkout recorded"),
+        "{err:#}"
+    );
+    Ok(())
+}
+
+#[test]
+fn materialize_without_checkout_moves_detached_worktree_heads_only() -> Result<()> {
+    let (repo, _tmpdir, mut meta) = worktree_fixture("worktree-checkout-heads")?;
+    let detached_dir = repo.workdir().unwrap().join("wt-detached");
+    let old_middle = repo.rev_parse_single("middle")?.detach();
+    let files_before = visualize_disk_tree_skip_dot_git(&detached_dir)?.to_string();
+
+    let graph = Graph::from_head(
+        &repo,
+        &*meta,
+        Default::default(),
+        options_with_worktrees(&repo, &["wt", "wt-detached"])?,
+    )?
+    .validated()?;
+    let mut ws = graph.into_workspace()?;
+    let mut editor = Editor::create(&mut ws, &mut *meta, &repo)?;
+
+    let mut replacement = but_core::Commit::from_id(repo.rev_parse_single("middle")?)?;
+    replacement.message = "a rewritten".into();
+    let replacement = repo.write_object(replacement.inner)?.detach();
+    let selector = editor.select_commit(old_middle)?;
+    editor.replace(selector, Step::new_pick(replacement))?;
+    editor.rebase()?.materialize_without_checkout()?;
+
+    let new_middle = repo.rev_parse_single("middle")?.detach();
+    assert_ne!(new_middle, old_middle);
+
+    let detached = linked_repo(&repo, "wt-detached")?;
+    assert_eq!(
+        detached.head_id()?.detach(),
+        new_middle,
+        "the detached worktree's HEAD follows the rewrite through the ref transaction"
+    );
+    assert_eq!(detached.head_name()?, None, "and stays detached");
+    assert_eq!(
+        visualize_disk_tree_skip_dot_git(&detached_dir)?.to_string(),
+        files_before,
+        "while its checkout is left exactly as it was"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_detached_worktree_that_moved_since_editor_creation_is_rejected() -> Result<()> {
+    let (repo, _tmpdir, mut meta) = worktree_fixture("worktree-checkout-heads")?;
+    let old_middle = repo.rev_parse_single("middle")?.detach();
+
+    let graph = Graph::from_head(
+        &repo,
+        &*meta,
+        Default::default(),
+        options_with_worktrees(&repo, &["wt", "wt-detached"])?,
+    )?
+    .validated()?;
+    let mut ws = graph.into_workspace()?;
+    let mut editor = Editor::create(&mut ws, &mut *meta, &repo)?;
+
+    let mut replacement = but_core::Commit::from_id(repo.rev_parse_single("middle")?)?;
+    replacement.message = "a rewritten".into();
+    let replacement = repo.write_object(replacement.inner)?.detach();
+    let selector = editor.select_commit(old_middle)?;
+    editor.replace(selector, Step::new_pick(replacement))?;
+    let outcome = editor.rebase()?;
+
+    // Someone checks the detached worktree out somewhere else in the meantime.
+    let detached = linked_repo(&repo, "wt-detached")?;
+    let elsewhere = repo.rev_parse_single("main")?.detach();
+    but_core::worktree::safe_checkout_from_head(elsewhere, &detached, Default::default())?;
+    assert_eq!(detached.head_id()?.detach(), elsewhere);
+
+    let err = outcome
+        .materialize_without_checkout()
+        .expect_err("the transaction must not move a HEAD it never looked at");
+    assert!(
+        format!("{err:#}").contains("worktrees/wt-detached/HEAD"),
+        "{err:#}"
+    );
+    assert_eq!(
+        linked_repo(&repo, "wt-detached")?.head_id()?.detach(),
+        elsewhere,
+        "the worktree keeps what someone else put there"
+    );
     Ok(())
 }

@@ -36,6 +36,7 @@ impl Context {
             .worktree_tips
             .extend(self.active_worktrees()?.into_iter().map(|worktree| {
                 but_graph::init::WorktreeTip {
+                    name: worktree.name,
                     ref_name: worktree.ref_name,
                     id: worktree.head,
                 }
@@ -92,6 +93,26 @@ impl Context {
             wt.archived = archived.contains(&wt.name);
         }
         Ok(worktrees)
+    }
+
+    /// Persist whether the linked worktree named `name` is archived.
+    ///
+    /// This runs the one-time adoption of [`Self::worktrees_with_state()`] first:
+    /// adoption archives every worktree on disk, so letting it run afterwards would
+    /// silently revert what was explicitly asked for here.
+    ///
+    /// Rows are never pruned, so this also succeeds for a worktree that isn't on
+    /// disk (any more) - such a row simply stays invisible to listings.
+    ///
+    /// Must not be called while a database handle is borrowed.
+    pub fn set_worktree_archived(&self, name: &gix::bstr::BStr, archived: bool) -> Result<()> {
+        self.worktrees_with_state()?;
+        let mut db = self.db.get_cache_mut()?;
+        db.worktree_meta_mut().upsert(but_db::WorktreeMeta {
+            name: name.to_vec(),
+            archived,
+        })?;
+        Ok(())
     }
 
     /// List all non-archived linked worktrees with their resolved `HEAD`s; every
