@@ -29,6 +29,14 @@ fn assert_default_policy(policy: &str) {
         "policy should point agents to the installed skill for command details, got: {policy}"
     );
     assert!(
+        policy.contains("Mutation commands report their result without appending workspace status"),
+        "policy should explain concise mutation output, got: {policy}"
+    );
+    assert!(
+        policy.contains("Add `--status-after` only when the next step needs"),
+        "policy should explain situational status opt-in, got: {policy}"
+    );
+    assert!(
         policy.contains("amend an unpublished local commit"),
         "policy should include default fold-fixes preference, got: {policy}"
     );
@@ -70,7 +78,7 @@ fn agent_setup_print_json_outputs_policy_field() -> anyhow::Result<()> {
     let env = Sandbox::empty();
 
     let output = env
-        .but("--format json agent setup --print")
+        .but("--json agent setup --print")
         .allow_json()
         .assert()
         .success()

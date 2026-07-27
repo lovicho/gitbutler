@@ -60,55 +60,35 @@ mod tui;
 
 const CLI_DATE: CustomFormat = gix::date::time::format::ISO8601;
 
-/// The format for help output printed before clap parses arguments, taken from a
-/// `--format` argument, the `BUT_OUTPUT_FORMAT` environment variable, or agent detection.
-///
-/// Help is always human-readable text; the format only decides whether terminal affordances
-/// like truncation apply, so formats other than human or agent fall back to human output.
-fn early_help_format(args: &[OsString], agent_detected: bool) -> OutputFormat {
-    let parse = |value: &str| {
-        <OutputFormat as clap::ValueEnum>::from_str(value, false)
-            .ok()
-            .map(|format| {
-                if format.is_human_text() {
-                    format
-                } else {
-                    OutputFormat::Human
-                }
-            })
-    };
-    args.iter()
-        .enumerate()
-        .find_map(|(index, arg)| {
-            let arg = arg.to_str()?;
-            match arg.strip_prefix("--format=") {
-                Some(value) => parse(value),
-                None if arg == "--format" => parse(args.get(index + 1)?.to_str()?),
-                None => None,
-            }
-        })
-        .or_else(|| {
-            std::env::var(envs::BUT_OUTPUT_FORMAT)
-                .ok()
-                .and_then(|value| parse(&value))
-        })
-        .unwrap_or(if agent_detected {
-            OutputFormat::Agent
-        } else {
-            OutputFormat::Human
-        })
+/// The format for help output printed before clap parses arguments.
+fn early_help_format(_args: &[OsString], agent_detected: bool) -> OutputFormat {
+    if let Some(output_format_from_env) = OutputFormat::try_from_env(agent_detected)
+        && output_format_from_env.is_human_text()
+    {
+        return output_format_from_env;
+    }
+
+    OutputFormat::Human {
+        agent: agent_detected,
+    }
 }
 
-fn parse_args(args: Vec<OsString>, agent_detected: bool) -> Args {
-    let mut command = Args::command();
-    if agent_detected {
-        command = command.mut_arg("format", |arg| arg.default_value("agent"));
-    }
+fn parse_args_and_output_format(args: Vec<OsString>, agent_detected: bool) -> (Args, OutputFormat) {
+    let command = Args::command();
     let matches = command.get_matches_from(args);
-    let mut args = Args::from_arg_matches(&matches).unwrap_or_else(|err| err.exit());
+    let args = Args::from_arg_matches(&matches).unwrap_or_else(|err| err.exit());
 
-    args.status_after = agent_detected;
-    args
+    let output_format = if args.format.json {
+        OutputFormat::Json
+    } else if let Some(output_format_from_env) = OutputFormat::try_from_env(agent_detected) {
+        output_format_from_env
+    } else {
+        OutputFormat::Human {
+            agent: agent_detected,
+        }
+    };
+
+    (args, output_format)
 }
 
 static APP_SETTINGS: std::sync::OnceLock<AppSettings> = std::sync::OnceLock::new();
@@ -202,7 +182,7 @@ pub async fn handle_args(args: impl Iterator<Item = OsString>) -> Result<()> {
         return Ok(());
     }
 
-    let mut args = parse_args(args, agent_detected);
+    let (mut args, output_format) = parse_args_and_output_format(args, agent_detected);
     let _tracing_appender_worker_guard = if args.trace > 0 {
         trace::init(args.trace, args.log_file.as_deref())?
     } else {
@@ -215,7 +195,7 @@ pub async fn handle_args(args: impl Iterator<Item = OsString>) -> Result<()> {
     let namespace = option_env!("IDENTIFIER").unwrap_or("com.gitbutler.app");
     but_secret::secret::set_application_namespace(namespace);
 
-    let mut out = OutputChannel::new(args.format.format);
+    let mut out = OutputChannel::new(output_format);
     #[cfg(feature = "legacy")]
     if matches!(
         &args.cmd,
@@ -437,7 +417,6 @@ async fn match_subcommand(
         writeln!(human, "{}", notice.text()).ok();
         writeln!(human).ok();
     }
-
     let mut metrics_ctx = cmd.to_metrics_context(&app_settings, &args.current_dir);
     if agent_skill_notice.is_some_and(|notice| notice.is_hint())
         && let Some(metrics_ctx) = metrics_ctx.as_mut()
@@ -829,8 +808,7 @@ async fn match_subcommand(
                 use std::fmt::Write;
                 let mut progress = out.progress_channel();
                 writeln!(progress, "Pulling latest...")?;
-                let mut pull_out = OutputChannel::new(OutputFormat::None);
-                command::legacy::pull::handle(&mut ctx, &mut pull_out, false).await?;
+                command::legacy::pull::handle(&mut ctx, out, false).await?;
                 writeln!(progress, "Pull complete.")?;
             }
             out.begin_status_after(status_after);
@@ -1028,6 +1006,7 @@ async fn match_subcommand(
             )?;
             out.begin_status_after(status_after);
 
+            let conflicts_before = command::legacy::conflict_notice::snapshot(&ctx);
             let outcome = command::legacy::commit::commit(
                 &mut ctx,
                 IntermediateChannel::new(out),
@@ -1035,6 +1014,7 @@ async fn match_subcommand(
             )
             .emit_metrics(metrics_ctx)?;
             out.print_cli_output(outcome)?;
+            command::legacy::conflict_notice::report_newly_conflicted(&ctx, out, conflicts_before);
             run_status_after_if_requested(status_after, &mut ctx, out);
             Ok(())
         }
@@ -1053,6 +1033,7 @@ async fn match_subcommand(
             )?;
             out.begin_status_after(status_after);
 
+            let conflicts_before = command::legacy::conflict_notice::snapshot(&ctx);
             let outcome = command::legacy::squash::squash(
                 &mut ctx,
                 IntermediateChannel::new(out),
@@ -1060,6 +1041,7 @@ async fn match_subcommand(
             )
             .emit_metrics(metrics_ctx)?;
             out.print_cli_output(outcome)?;
+            command::legacy::conflict_notice::report_newly_conflicted(&ctx, out, conflicts_before);
             run_status_after_if_requested(status_after, &mut ctx, out);
             Ok(())
         }
@@ -1078,10 +1060,12 @@ async fn match_subcommand(
             )?;
             out.begin_status_after(status_after);
 
+            let conflicts_before = command::legacy::conflict_notice::snapshot(&ctx);
             let outcome =
                 command::legacy::r#move::r#move(&mut ctx, IntermediateChannel::new(out), move_args)
                     .emit_metrics(metrics_ctx)?;
             out.print_cli_output_human(outcome)?;
+            command::legacy::conflict_notice::report_newly_conflicted(&ctx, out, conflicts_before);
             run_status_after_if_requested(status_after, &mut ctx, out);
             Ok(())
         }
@@ -1120,6 +1104,7 @@ async fn match_subcommand(
             diff,
             no_diff,
         } => {
+            let status_after = args.status_after;
             let mut ctx = setup::init_ctx(
                 &args,
                 InitCtxOptions {
@@ -1128,7 +1113,8 @@ async fn match_subcommand(
                 },
                 out,
             )?;
-            command::legacy::reword::reword_target(
+            out.begin_status_after(status_after);
+            let result = command::legacy::reword::reword_target(
                 &mut ctx,
                 out,
                 target,
@@ -1138,7 +1124,9 @@ async fn match_subcommand(
                 // sorry
                 ShowDiffInEditor::from_args(diff, no_diff).unwrap_or(ShowDiffInEditor::Unspecified),
             )
-            .emit_metrics(metrics_ctx)
+            .emit_metrics(metrics_ctx);
+            run_status_after_if_ok(status_after, &result, &mut ctx, out);
+            result
         }
         #[cfg(feature = "legacy")]
         Subcommands::Oplog(args::oplog::Platform { cmd }) => {
@@ -1198,8 +1186,16 @@ async fn match_subcommand(
                 out,
             )?;
             out.begin_status_after(status_after);
+            let conflicts_before = command::legacy::conflict_notice::snapshot(&ctx);
             let result = command::legacy::absorb::handle(&mut ctx, out, source.as_deref(), dry_run)
                 .emit_metrics(metrics_ctx);
+            if result.is_ok() {
+                command::legacy::conflict_notice::report_newly_conflicted(
+                    &ctx,
+                    out,
+                    conflicts_before,
+                );
+            }
             run_status_after_if_ok(status_after, &result, &mut ctx, out);
             result.map_err(CliError::from)
         }
@@ -1218,6 +1214,7 @@ async fn match_subcommand(
             )?;
             out.begin_status_after(status_after);
 
+            let conflicts_before = command::legacy::conflict_notice::snapshot(&ctx);
             let outcome = command::legacy::discard::discard(
                 &mut ctx,
                 IntermediateChannel::new(out),
@@ -1225,6 +1222,7 @@ async fn match_subcommand(
             )
             .emit_metrics(metrics_ctx)?;
             out.print_cli_output(outcome)?;
+            command::legacy::conflict_notice::report_newly_conflicted(&ctx, out, conflicts_before);
             run_status_after_if_requested(status_after, &mut ctx, out);
             Ok(())
         }
@@ -1438,6 +1436,7 @@ async fn match_subcommand(
             )?;
             out.begin_status_after(status_after);
 
+            let conflicts_before = command::legacy::conflict_notice::snapshot(&ctx);
             let outcome = command::legacy::uncommit::uncommit(
                 &mut ctx,
                 IntermediateChannel::new(out),
@@ -1445,6 +1444,7 @@ async fn match_subcommand(
             )
             .emit_metrics(metrics_ctx)?;
             out.print_cli_output(outcome)?;
+            command::legacy::conflict_notice::report_newly_conflicted(&ctx, out, conflicts_before);
             run_status_after_if_requested(status_after, &mut ctx, out);
             Ok(())
         }
@@ -1463,20 +1463,30 @@ async fn match_subcommand(
             )?;
             out.begin_status_after(status_after);
 
+            let conflicts_before = command::legacy::conflict_notice::snapshot(&ctx);
             let outcome =
                 command::legacy::amend::amend(&mut ctx, IntermediateChannel::new(out), amend_args)
                     .emit_metrics(metrics_ctx)?;
             out.print_cli_output(outcome)?;
+            command::legacy::conflict_notice::report_newly_conflicted(&ctx, out, conflicts_before);
             run_status_after_if_requested(status_after, &mut ctx, out);
             Ok(())
         }
         #[cfg(feature = "legacy")]
         Subcommands::Land { branch, yes, no_ff } => {
             let mut ctx = setup::init_ctx(&args, InitCtxOptions::default(), out)?;
-            command::legacy::land::handle(&mut ctx, out, &branch, yes, no_ff)
+            let conflicts_before = command::legacy::conflict_notice::snapshot(&ctx);
+            let result = command::legacy::land::handle(&mut ctx, out, &branch, yes, no_ff)
                 .context("Failed to land branch.")
-                .emit_metrics(metrics_ctx)
-                .show_root_cause_error_then_exit_without_destructors(output)
+                .emit_metrics(metrics_ctx);
+            if result.is_ok() {
+                command::legacy::conflict_notice::report_newly_conflicted(
+                    &ctx,
+                    out,
+                    conflicts_before,
+                );
+            }
+            result.show_root_cause_error_then_exit_without_destructors(output)
         }
         #[cfg(feature = "legacy")]
         Subcommands::Pick {
@@ -1491,10 +1501,19 @@ async fn match_subcommand(
                 },
                 out,
             )?;
-            command::legacy::pick::handle(&mut ctx, out, &source, target_branch.as_deref())
-                .context("Failed to pick commit.")
-                .emit_metrics(metrics_ctx)
-                .show_root_cause_error_then_exit_without_destructors(output)
+            let conflicts_before = command::legacy::conflict_notice::snapshot(&ctx);
+            let result =
+                command::legacy::pick::handle(&mut ctx, out, &source, target_branch.as_deref())
+                    .context("Failed to pick commit.")
+                    .emit_metrics(metrics_ctx);
+            if result.is_ok() {
+                command::legacy::conflict_notice::report_newly_conflicted(
+                    &ctx,
+                    out,
+                    conflicts_before,
+                );
+            }
+            result.show_root_cause_error_then_exit_without_destructors(output)
         }
         #[cfg(feature = "legacy")]
         Subcommands::Unapply { identifier } => {
@@ -1650,6 +1669,11 @@ fn run_status_after_if_requested(
     out: &mut OutputChannel,
 ) {
     if !status_after {
+        if out.is_json()
+            && let Some(notice) = command::skill::agent_skill_update_notice()
+        {
+            eprintln!("{notice}");
+        }
         return;
     }
     let mutation_json = out.take_json_buffer();
@@ -1666,14 +1690,14 @@ fn run_status_after_if_ok<T, E>(
 ) {
 }
 
-/// Run workspace status output after an agent mutation command completes.
+/// Run workspace status output after a mutation command when explicitly requested.
 ///
 /// In human mode, prints a blank line then full status.
 /// In JSON mode, combines the mutation's buffered JSON with status JSON into
 /// `{"result": <mutation_output>, "status": <workspace_status>}`.
 /// For JSON commands, reconciles stale skill installations and includes an
 /// update announcement or failure notice under `agent_skill_notice`.
-/// This function only runs when the CLI caller was detected as an agent.
+/// The global `--status-after` flag controls whether this function runs.
 ///
 /// Status errors are handled gracefully: in JSON mode the mutation result is
 /// always emitted (with a `"status_error"` field on failure); in human mode
@@ -1769,31 +1793,46 @@ mod tests {
 
     #[test]
     fn detected_agent_defaults_to_agent_output() {
-        let format = temp_env::with_var(envs::BUT_OUTPUT_FORMAT, None::<&str>, || {
-            parse_args(os_args(&["but", "status"]), true).format.format
+        let (_, format) = temp_env::with_var(envs::BUT_OUTPUT_FORMAT, None::<&str>, || {
+            parse_args_and_output_format(os_args(&["but", "status"]), true)
         });
 
-        assert!(matches!(format, OutputFormat::Agent));
+        assert!(matches!(format, OutputFormat::Human { agent: true }));
     }
 
     #[test]
     fn detected_agent_preserves_environment_output_format() {
-        let format = temp_env::with_var(envs::BUT_OUTPUT_FORMAT, Some("json"), || {
-            parse_args(os_args(&["but", "status"]), true).format.format
+        let (_, format) = temp_env::with_var(envs::BUT_OUTPUT_FORMAT, Some("json"), || {
+            parse_args_and_output_format(os_args(&["but", "status"]), true)
         });
 
         assert!(matches!(format, OutputFormat::Json));
     }
 
     #[test]
-    fn detected_agent_preserves_command_line_output_format() {
-        let format = temp_env::with_var(envs::BUT_OUTPUT_FORMAT, Some("shell"), || {
-            parse_args(os_args(&["but", "--format", "json", "status"]), true)
-                .format
-                .format
-        });
+    #[cfg(feature = "legacy")]
+    fn detected_agent_omits_status_after_mutation_by_default() {
+        let (args, _) =
+            parse_args_and_output_format(os_args(&["but", "commit", "--no-message"]), true);
 
-        assert!(matches!(format, OutputFormat::Json));
+        assert!(
+            !args.status_after,
+            "detected agents must not request mutation status implicitly"
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "legacy")]
+    fn detected_agent_can_request_status_after_mutation() {
+        let (args, _) = parse_args_and_output_format(
+            os_args(&["but", "commit", "--status-after", "--no-message"]),
+            true,
+        );
+
+        assert!(
+            args.status_after,
+            "detected agents must retain an explicit mutation status request"
+        );
     }
 
     #[test]
@@ -1802,6 +1841,6 @@ mod tests {
             early_help_format(&os_args(&["but", "--help"]), true)
         });
 
-        assert!(matches!(format, OutputFormat::Agent));
+        assert!(matches!(format, OutputFormat::Human { agent: true }));
     }
 }

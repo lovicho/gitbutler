@@ -431,36 +431,31 @@ fn diff_help_explains_single_target() {
 }
 
 #[test]
-fn status_after_is_hidden_noop_compatibility_flag() {
-    use clap::Parser;
+fn status_after_is_global_and_shown_in_help() {
+    use clap::{CommandFactory, Parser};
 
-    let args = Args::try_parse_from(["but", "branch", "--format", "json", "--status-after"])
-        .expect("parse legacy status-after flag");
-
-    assert!(matches!(dbg!(args.format.format), OutputFormat::Json));
-    assert!(args.legacy_status_after);
-    assert!(!args.status_after);
-}
-
-#[test]
-fn status_after_is_not_shown_in_help() {
-    use clap::CommandFactory;
+    let before = Args::try_parse_from(["but", "--status-after", "branch"])
+        .expect("parse status-after before command");
+    let after = Args::try_parse_from(["but", "branch", "--status-after"])
+        .expect("parse status-after after command");
+    assert!(
+        before.status_after,
+        "a global status-after flag must parse before a built-in command"
+    );
+    assert!(
+        after.status_after,
+        "a global status-after flag must parse after a built-in command"
+    );
 
     let help = Args::command().render_long_help().to_string();
-
     assert!(
-        !help.contains("--status-after"),
-        "compatibility-only flag should stay hidden from help"
+        help.contains("--status-after"),
+        "status opt-in should be discoverable in help"
     );
-}
-
-#[test]
-fn output_format_parses_agent() {
-    use clap::Parser;
-
-    let args = Args::try_parse_from(["but", "--format", "agent"]).expect("parse agent format");
-
-    assert!(matches!(args.format.format, OutputFormat::Agent));
+    assert!(
+        help.contains("next step needs IDs or details"),
+        "help should explain when status is useful"
+    );
 }
 
 mod config_target {
@@ -586,13 +581,13 @@ mod config_feature {
 
 #[test]
 fn output_format_agent_is_text_without_human_ui() {
-    let format = OutputFormat::Agent;
+    let format = OutputFormat::Human { agent: true };
 
-    assert!(format.is_human_text());
-    assert!(format.is_text());
-    assert!(!format.allows_human_ui());
-    assert!(!format.allows_truncation());
-    assert!(!format.is_json());
+    assert!(format.is_human_text(), "is human text");
+    assert!(format.is_text(), "is text");
+    assert!(!format.allows_human_ui(), "doesn't allow human ui");
+    assert!(!format.allows_truncation(), "doesn't allow truncation");
+    assert!(!format.is_json(), "is not json");
 }
 
 mod agentlog {
