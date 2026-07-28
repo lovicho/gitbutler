@@ -1,6 +1,7 @@
 use std::io::Write;
 
 mod output_channel;
+use but_api::json::{ChangeIdString, HexHash};
 pub(crate) use output_channel::PromptLine;
 pub use output_channel::{
     CliOutput, CliOutputHuman, Confirm, ConfirmDefault, ConfirmOrEmpty, InputOutputChannel,
@@ -16,9 +17,9 @@ mod debug_as_type;
 pub(crate) use debug_as_type::DebugAsType;
 
 pub mod metrics;
-#[cfg(feature = "legacy")]
-pub use metrics::types::BackgroundMetrics;
 pub use metrics::types::OneshotMetricsContext;
+
+use crate::id::CommitId;
 
 pub mod detect_agent;
 pub mod time;
@@ -27,6 +28,8 @@ pub(crate) mod binary_path;
 pub(crate) mod diff_specs;
 #[cfg(feature = "legacy")]
 pub(crate) mod merged_upstream;
+#[cfg(feature = "legacy")]
+pub(crate) mod rejection;
 pub(crate) mod targeting;
 
 pub mod diff_rendering;
@@ -71,4 +74,21 @@ fn json_pretty_to_stdout(value: &impl serde::Serialize) -> std::io::Result<()> {
         stdout.write_all(b"\n").ok();
     }
     Ok(())
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommitIdJson {
+    pub commit_id: HexHash,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub change_id: Option<ChangeIdString>,
+}
+
+impl From<CommitId> for CommitIdJson {
+    fn from(value: CommitId) -> Self {
+        Self {
+            commit_id: HexHash(value.commit_id),
+            change_id: value.change_id.map(Into::into),
+        }
+    }
 }

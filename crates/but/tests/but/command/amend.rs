@@ -50,7 +50,12 @@ fn amend_rejects_dependency_changes() -> anyhow::Result<()> {
         .failure()
         .stdout_eq(str![""])
         .stderr_eq(str![[r#"
-Error: Couldn't squash all changes
+Error: Cannot amend: 1 change could not be applied:
+  first
+    line 1 depends on foo (1)
+
+Hint: to apply these changes, stack bar on top of foo and try again — commits already on the branch move with it:
+  but move bar --above foo
 
 "#]]);
 
@@ -80,6 +85,56 @@ fn amend_accepts_branch_target() {
     assert_multiple_amend(|_target_cli_id| "amend one.txt two.txt --target A".to_string()).unwrap();
 }
 
+#[test]
+fn amend_without_source_implies_uncommitted() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    env.file("file", "content");
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(str![[r#"
+╭┄ zz [uncommitted]
+┊   qs A file
+┊
+┊╭┄ g0 [A]
+┊●   tpm add A
+┊│     tpm:t A A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but diff` to see uncommitted changes and `but commit -b <branch> -m "message" <id>` to commit them
+
+"#]]);
+
+    env.but("amend -t tpm")
+        .assert()
+        .success()
+        .stdout_eq(str![[r#"
+Amended tpm
+
+"#]])
+        .stderr_eq(str![""]);
+
+    env.but("status -f").assert().success().stdout_eq(str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ g0 [A]
+┊●   tpm add A
+┊│     tpm:t A A
+┊│     tpm:q A file
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}
+
 fn assert_multiple_amend(args: impl FnOnce(&str) -> String) -> anyhow::Result<()> {
     let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
     env.setup_metadata(&["A", "B"]);
@@ -95,7 +150,7 @@ fn assert_multiple_amend(args: impl FnOnce(&str) -> String) -> anyhow::Result<()
         .assert()
         .success()
         .stdout_eq(str![[r#"
-Amended [..] to create [..]
+Amended tpm
 
 "#]])
         .stderr_eq(str![""]);
@@ -158,7 +213,7 @@ Hint: Most likely you want `but pull`, which updates the workspace and removes l
         .success()
         .stderr_eq(str![])
         .stdout_eq(str![[r#"
-Amended 756ee31 to create f18cbfd
+Amended nyq
 
 "#]]);
 }
@@ -194,4 +249,44 @@ Error: Commit e5378e0 is merged upstream
 Hint: Most likely you want `but pull`, which updates the workspace and removes landed work. In rare cases `--allow-merged` can bypass this check
 
 "#]]);
+}
+
+#[test]
+fn retired_syntax_gets_a_teaching_hint() {
+    let env = Sandbox::empty();
+
+    // The pre-revamp `but amend <commit> --changes <id>,<id>` form: the hint
+    // suggests the concrete modern equivalent before the parse error.
+    env.but("amend j4 --changes ab,cd")
+        .assert()
+        .failure()
+        .stderr_eq(str![[r#"
+
+note: this invocation used retired `but amend` syntax. The modern equivalent is:
+
+    but amend -t j4 ab cd
+
+See `but amend --help` for details.
+error: unexpected argument '--changes' found
+
+  tip: to pass '--changes' as a value, use '-- --changes'
+
+Usage: but amend --target <COMMIT_OR_BRANCH> <SOURCES>...
+
+For more information, try '--help'.
+
+"#]]);
+}
+
+#[test]
+fn retired_flag_with_help_passes_through_without_hint() {
+    let env = Sandbox::empty();
+
+    // Help requests arrive as clap parse errors too; when clap decides to
+    // show help despite the retired `--changes` marker being present, no
+    // retired-syntax note may precede it.
+    env.but("amend --help --changes ab")
+        .assert()
+        .success()
+        .stderr_eq(str![""]);
 }

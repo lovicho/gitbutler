@@ -113,7 +113,7 @@ Hint: run `but help` for all commands
         .success()
         .stderr_eq(str![])
         .stdout_eq(str![[r#"
-Uncommitted from 191c6ed
+Uncommitted from 1
 
 "#]]);
 
@@ -256,6 +256,31 @@ fn uncommit_rejects_merged_upstream_commit() {
 Error: Commit 756ee31 is merged upstream
 
 Hint: Most likely you want `but pull`, which updates the workspace and removes landed work. In rare cases `--allow-merged` can bypass this check
+
+"#]]);
+}
+
+#[test]
+fn retired_discard_flag_points_at_the_discard_command() {
+    let env = Sandbox::empty();
+
+    env.but("uncommit --discard ab")
+        .assert()
+        .failure()
+        .stderr_eq(str![[r#"
+
+note: the retired `but uncommit --discard` is now its own command:
+
+    but discard ab
+
+See `but discard --help` for details.
+error: unexpected argument '--discard' found
+
+  tip: to pass '--discard' as a value, use '-- --discard'
+
+Usage: but uncommit [OPTIONS] <SOURCES>...
+
+For more information, try '--help'.
 
 "#]]);
 }

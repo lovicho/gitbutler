@@ -89,7 +89,20 @@ fn parse_args_and_output_format(args: Vec<OsString>, agent_detected: bool) -> (A
                     Args::command().try_get_matches_from(translated).ok()
                 }
                 Translation::Refused => None,
-                Translation::NotRetired => err.exit(),
+                Translation::NotRetired => {
+                    // The other revamped commands are never translated, but a
+                    // rejected line that looks like their retired syntax gets
+                    // a teaching hint before the error. Help and version
+                    // requests also arrive as `Err` and must pass untouched.
+                    if err.use_stderr()
+                        && let Some((command, hint)) =
+                            retired_syntax::parse_failure_hint(&args, agent_detected)
+                    {
+                        print_err_infallible(hint);
+                        utils::metrics::emit_retired_syntax_hint(command);
+                    }
+                    err.exit()
+                }
             };
             match retry {
                 Some(matches) => {
@@ -101,6 +114,7 @@ fn parse_args_and_output_format(args: Vec<OsString>, agent_detected: bool) -> (A
                 // original error.
                 None => {
                     print_err_infallible(retired_syntax::hint(agent_detected));
+                    utils::metrics::emit_retired_syntax_hint(args::metrics::CommandName::Commit);
                     err.exit()
                 }
             }
@@ -302,6 +316,12 @@ pub async fn handle_args(args: impl Iterator<Item = OsString>) -> Result<()> {
         Err(CliError::Internal(err)) => Err(err),
         Err(CliError::BadInput(bad_input)) => print_and_exit_non_zero(bad_input),
         Err(CliError::ExternalCommandNotFound(command_name)) => {
+            // Commands removed by the revamp (`rub`) land here as unknown
+            // external subcommands; teach their replacements before the error.
+            if let Some(hint) = retired_syntax::removed_command_hint(&command_name, agent_detected)
+            {
+                print_err_infallible(hint);
+            }
             // We reparse without external subcommands allowed, which _should_ result in a proper
             // clap error, including suggestions for "near matches". This gives richer error
             // information than the plain ExternalCommandNotFound error.
@@ -438,6 +458,7 @@ async fn match_subcommand(
             &cmd,
             Subcommands::Skill(_)
                 | Subcommands::Agent(_)
+                | Subcommands::Mcp(_)
                 | Subcommands::Help { .. }
                 | Subcommands::Completions { .. }
                 | Subcommands::Metrics { .. }
@@ -784,10 +805,9 @@ async fn match_subcommand(
             command::r#switch::handle(&mut ctx, out, target, workspace, new)
                 .emit_metrics(metrics_ctx)
         }
-        #[cfg(feature = "legacy")]
-        Subcommands::Mcp => command::legacy::mcp::start(app_settings)
-            .await
-            .map_err(CliError::from),
+        Subcommands::Mcp(args::mcp::Platform { cmd }) => match cmd {
+            args::mcp::Subcommands::Serve => command::mcp::serve().await.map_err(CliError::from),
+        },
         #[cfg(feature = "legacy")]
         Subcommands::Actions(actions::Platform { cmd }) => match cmd {
             Some(actions::Subcommands::HandleChanges {
@@ -1103,7 +1123,7 @@ async fn match_subcommand(
             let outcome =
                 command::legacy::r#move::r#move(&mut ctx, IntermediateChannel::new(out), move_args)
                     .emit_metrics(metrics_ctx)?;
-            out.print_cli_output_human(outcome)?;
+            out.print_cli_output(outcome)?;
             command::legacy::conflict_notice::report_newly_conflicted(&ctx, out, conflicts_before);
             run_status_after_if_requested(status_after, &mut ctx, out);
             Ok(())

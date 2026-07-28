@@ -3,8 +3,91 @@ use crate::{
         branch_commit_cli_ids, commit_two_files_as_two_hunks_each,
         status_json_with_files as status_json,
     },
-    utils::Sandbox,
+    utils::{CommandExt as _, Sandbox},
 };
+
+#[test]
+fn move_commits_outputs_json() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack-two-commits");
+    env.setup_metadata(&["A"]);
+
+    env.but("--json move zll --above ywx")
+        .allow_json()
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+{
+  "commits": [
+    {
+      "sourceCommitId": "fe12bcd55e12fe5d43e54f44550d4c201f0ec770",
+      "sourceChangeId": "zllwszkrzvwxozppxxkxpsnxopskvrsp",
+      "newCommitId": "c6224e6e0af1ac247027c8f61ed6ef4037c2c230",
+      "newChangeId": "zllwszkrzvwxozppxxkxpsnxopskvrsp"
+    }
+  ]
+}
+
+"#]]);
+}
+
+#[test]
+fn move_committed_changes_outputs_json() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack-two-commits");
+    env.setup_metadata(&["A"]);
+
+    env.but("--json move ywx:wu --branch new-branch")
+        .allow_json()
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+{
+  "sourceCommitId": "9ac4652535fde457cb4cb3b36f0d9a64135de4c8",
+  "sourceChangeId": "ywxsopnrxtuqozktnmnmwxmwlpxsokpn",
+  "numChanges": 1,
+  "newCommitId": "8e35f84e6f99cf09d1fa04c8df71d98b954865c5",
+  "newChangeId": "1",
+  "branch": "new-branch"
+}
+
+"#]]);
+}
+
+#[test]
+fn stack_branch_outputs_json() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+    env.setup_metadata(&["A", "B"]);
+
+    env.but("--json move B --above A")
+        .allow_json()
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+{
+  "sourceBranch": "B",
+  "targetBranch": "A"
+}
+
+"#]]);
+}
+
+#[test]
+fn unstack_branch_outputs_json() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings(
+        "one-stack-three-dependent-branches",
+    );
+    env.setup_metadata(&["A", "B", "C"]);
+
+    env.but("--json move C --unstack")
+        .allow_json()
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+{
+  "sourceBranch": "C"
+}
+
+"#]]);
+}
 
 #[test]
 fn move_commit_above_other_commit() {
@@ -32,7 +115,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-Moved fe12bcd above commit 9ac4652
+Moved zll above commit ywx
 
 "#]]);
 
@@ -80,7 +163,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-Moved 9ac4652 below commit fe12bcd
+Moved ywx below commit zll
 
 "#]]);
 
@@ -141,10 +224,10 @@ Hint: run `but help` for all commands
             .arg(target_cli_id)
             .assert()
             .success()
-            .stdout_eq(snapbox::str![["
-Moved c472887, 8188106 [..]
+            .stdout_eq(snapbox::str![[r#"
+Moved vvl, mzz [..] commit [..]
 
-"]]);
+"#]]);
 
         env.but("status")
             .assert()
@@ -223,7 +306,7 @@ Hint: run `but help` for all commands
             .assert()
             .success()
             .stdout_eq(snapbox::str![["
-Moved 2a98cfc, 0748e42, c67c49e [..]
+Moved tpw, zpl, pyq [..] commit [..]
 
 "]]);
 
@@ -285,7 +368,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-Moved fe12bcd to new branch 'a-branch-1' above branch 'A'
+Moved zll to new branch 'a-branch-1' above branch 'A'
 
 "#]]);
 
@@ -335,7 +418,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-Moved 9ac4652 to new branch 'a-branch-1' above branch 'A'
+Moved ywx to new branch 'a-branch-1' above branch 'A'
 
 "#]]);
 
@@ -385,7 +468,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-Moved 9ac4652 to new branch 'a-branch-1' below branch 'A'
+Moved ywx to new branch 'a-branch-1' below branch 'A'
 
 "#]]);
 
@@ -435,7 +518,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-Moved fe12bcd to new branch 'a-branch-1' below branch 'A'
+Moved zll to new branch 'a-branch-1' below branch 'A'
 
 "#]]);
 
@@ -485,7 +568,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-Moved 9ac4652, fe12bcd to new branch 'a-branch-1' above branch 'A'
+Moved ywx, zll to new branch 'a-branch-1' above branch 'A'
 
 "#]]);
 
@@ -535,7 +618,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-Moved 9ac4652, fe12bcd to new branch 'a-branch-1' below branch 'A'
+Moved ywx, zll to new branch 'a-branch-1' below branch 'A'
 
 "#]]);
 
@@ -587,7 +670,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-Moved 9477ae7 to new branch 'a-branch-1' above branch 'B'
+Moved tpm to new branch 'a-branch-1' above branch 'B'
 
 "#]]);
 
@@ -641,7 +724,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-Moved 9477ae7 to new branch 'a-branch-1' below branch 'B'
+Moved tpm to new branch 'a-branch-1' below branch 'B'
 
 "#]]);
 
@@ -762,7 +845,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-Moved 9477ae7 to the tip of branch 'B'
+Moved tpm to the tip of branch 'B'
 
 "#]]);
 
@@ -815,7 +898,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-Moved 9477ae7 to the tip of branch 'B'
+Moved tpm to the tip of branch 'B'
 
 "#]]);
 
@@ -865,7 +948,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-Moved 9ac4652 to new branch 'new-branch'
+Moved ywx to new branch 'new-branch'
 
 "#]]);
 
@@ -916,7 +999,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-Moved 9ac4652 to new branch 'a-branch-1'
+Moved ywx to new branch 'a-branch-1'
 
 "#]]);
 
@@ -969,7 +1052,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-Moved 1 changes from 9ac4652 to new commit 8e35f84 below commit fe12bcd
+Moved 1 change from ywx to new commit 1 below commit zll
 
 "#]]);
 
@@ -1022,7 +1105,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-Moved 1 changes from fe12bcd to new commit c15e460 above commit 9ac4652
+Moved 1 change from zll to new commit 1 above commit ywx
 
 "#]]);
 
@@ -1075,7 +1158,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-Moved 1 changes from 9ac4652 to new commit 8e35f84 on new branch 'a-branch-1' below branch 'A'
+Moved 1 change from ywx to new commit 1 on new branch 'a-branch-1' below branch 'A'
 
 "#]]);
 
@@ -1130,7 +1213,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-Moved 1 changes from fe12bcd to new commit c15e460 on new branch 'a-branch-1' above branch 'A'
+Moved 1 change from zll to new commit 1 on new branch 'a-branch-1' above branch 'A'
 
 "#]]);
 
@@ -1188,7 +1271,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-Moved 1 changes from d3e2ba3 to new commit be174de to the tip of branch 'A'
+Moved 1 change from lrm to new commit 1 to the tip of branch 'A'
 
 "#]]);
 
@@ -1244,7 +1327,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-Moved 1 changes from 9ac4652 to new commit 8e35f84 on new branch 'new-branch'
+Moved 1 change from ywx to new commit 1 on new branch 'new-branch'
 
 "#]]);
 
@@ -1300,7 +1383,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-Moved 1 changes from 9ac4652 to new commit 8e35f84 on new branch 'a-branch-1'
+Moved 1 change from ywx to new commit 1 on new branch 'a-branch-1'
 
 "#]]);
 
@@ -1369,7 +1452,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-Moved 2 changes from e3d3e3a to new commit 99ef17e above commit e3d3e3a
+Moved 2 changes from 1 to new commit 1 above commit 1
 
 "#]]);
 
@@ -1401,7 +1484,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-Moved 2 changes from e3d3e3a to new commit 99ef17e above commit e3d3e3a
+Moved 2 changes from 1 to new commit 1 above commit 1
 
 "#]]);
 
@@ -2070,7 +2153,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-Moved fe12bcd to new branch 'a-branch-1'
+Moved zll to new branch 'a-branch-1'
 
 "#]]);
 }
@@ -2103,7 +2186,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-Moved 1 changes from fe12bcd to new commit d2fbd7a on new branch 'a-branch-1'
+Moved 1 change from zll to new commit 1 on new branch 'a-branch-1'
 
 "#]]);
 }
@@ -2679,6 +2762,34 @@ Hint: Most likely you want `but pull`, which updates the workspace and removes l
 Error: Branch 'A' is merged upstream
 
 Hint: Most likely you want `but pull`, which updates the workspace and removes landed work. In rare cases `--allow-merged` can bypass this check
+
+"#]]);
+}
+
+#[test]
+fn retired_syntax_gets_a_teaching_hint() {
+    let env = Sandbox::empty();
+
+    // The pre-revamp `but move <source> <target>` form placed the source
+    // below the target; the hint suggests the flagged modern equivalent.
+    env.but("move ab cd")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+
+note: this invocation used retired `but move` syntax. The modern equivalent is:
+
+    but move ab --below cd     if cd is a commit
+    but move ab --branch cd    if cd is a branch
+    but move ab --above cd     to stack a branch onto branch cd
+
+See `but move --help` for details.
+error: the following required arguments were not provided:
+  <--above <BRANCH_OR_COMMIT>|--below <BRANCH_OR_COMMIT>|--branch [<BRANCH>]|--unstack>
+
+Usage: but move <--above <BRANCH_OR_COMMIT>|--below <BRANCH_OR_COMMIT>|--branch [<BRANCH>]|--unstack> <SOURCES>...
+
+For more information, try '--help'.
 
 "#]]);
 }
