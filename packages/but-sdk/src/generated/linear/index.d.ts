@@ -94,15 +94,17 @@ export declare function branchDiff(projectId: string, branch: string): Promise<T
  * Land `branch` directly onto the configured target ref.
  *
  * `branch` is the short name of the branch to land (its `refs/heads/<branch>` ref). The branch
- * must be the bottom segment of its stack and free of conflicted commits, and the workspace must
- * be a managed GitButler workspace with a configured, non-triangular target remote.
+ * must be the bottom segment of its stack — or, with `whole_stack`, the top segment, which
+ * publishes every segment below it as well — and the landed segments must be free of conflicted
+ * commits. The workspace must be a managed GitButler workspace with a configured, non-triangular
+ * target remote.
  *
  * This fetches the target, lands the branch (fast-forward or signed merge commit, retrying when
  * the target moves underneath us), then reconciles the remaining applied branches onto the moved
  * target. The remote push is not undoable; see [`BranchLandResult::reconcile_skipped`] and the
  * workspace state for what to report.
  */
-export declare function branchLand(projectId: string, branch: string, noFf: boolean): Promise<BranchLandResult>
+export declare function branchLand(projectId: string, branch: string, noFf: boolean, wholeStack: boolean): Promise<BranchLandResult>
 
 /**
  * Lists all local and remote branches of the project, grouped into stacks where
@@ -169,6 +171,29 @@ export declare function changesInWorktree(projectId: string, computeDepsAndAssig
  * [`but_hunk_dependency::ui::hunk_dependencies_for_workspace_changes_by_worktree_dir()`].
  */
 export declare function changesInWorktreeWithPerm(projectId: string, computeDepsAndAssignments: boolean): Promise<WorktreeChanges>
+
+/**
+ * Archive the comment with the given `id`, hiding it from all future listings.
+ * Returns `false` if the comment does not exist or was already archived.
+ */
+export declare function commentArchive(projectId: string, id: string): Promise<boolean>
+
+/**
+ * Create a new comment anchored to a line in a diff.
+ *
+ * See [`but_comments::create_comment`] for the anchoring semantics.
+ */
+export declare function commentCreate(projectId: string, comment: NewComment): Promise<DiffComment>
+
+/**
+ * List all unarchived comments, re-anchored against the current diffs.
+ *
+ * See [`but_comments::list_comments`] for the re-anchoring and auto-archiving semantics.
+ */
+export declare function commentsList(projectId: string): Promise<Array<DiffComment>>
+
+/** Replace the payload of the unarchived comment with the given `id`. */
+export declare function commentUpdate(projectId: string, id: string, payload: string): Promise<void>
 
 /**
  * Amend the commit at `commit_id` with the `changes` of `changes_source` and
@@ -748,9 +773,6 @@ export declare function updateFeatureFlags(update: FeatureFlagsUpdate): Promise<
 /** Update fetch settings; unset fields are left unchanged. */
 export declare function updateFetch(update: FetchUpdate): Promise<void>
 
-/** Update IRC settings; unset fields are left unchanged. */
-export declare function updateIrc(update: IrcUpdate): Promise<void>
-
 /** Set whether onboarding has been completed. */
 export declare function updateOnboardingComplete(update: boolean): Promise<void>
 
@@ -871,8 +893,6 @@ export type AppSettings = {
    * In the future, this will replace the legacy `ui.checkForUpdatesIntervalInSeconds` setting.
    */
   appUpdatesCheckIntervalSec: number;
-  /** IRC integration settings. */
-  irc: IrcSettings;
 };
 
 /** JSON sibling of [`but_workspace::branch::apply::Outcome`]. */
@@ -1537,6 +1557,37 @@ export type DetailedGraphWorkspace = {
   stacks: Array<DetailedGraphStack>;
 };
 
+/** A comment anchored to a line in a diff, as returned to every consumer. */
+export type DiffComment = {
+  /** The unique identifier of the comment. */
+  id: string;
+  /** The worktree-relative path of the file the comment is anchored to. */
+  path: string;
+  /**
+   * `None` when the comment is anchored to the uncommitted worktree diff, or the change-id of
+   * the commit whose first-parent diff the comment is anchored to.
+   */
+  commitChangeId: string | null;
+  /** The side of the diff the anchored line lives on. */
+  side: DiffSide;
+  /** The 1-based line number of the anchored line, in `side`'s coordinates. */
+  lineNumber: number;
+  /** The content of the anchored line (without the leading `+`/`-`/space diff marker). */
+  lineContent: string;
+  /** The comment text itself. */
+  payload: string;
+  /** When the comment was created, in milliseconds since the Unix epoch (UTC). */
+  createdAtMs: number;
+  /** When the comment payload was last updated, in milliseconds since the Unix epoch (UTC). */
+  updatedAtMs: number;
+  /**
+   * A unified-diff-formatted excerpt of the current diff around the anchored line, so consumers
+   * can understand what the comment is about without recomputing the diff.
+   * Only present on comments returned from [`list_comments`].
+   */
+  context: string | null;
+};
+
 /** A hunk as used in a [UnifiedPatch], which also contains all added and removed lines. */
 export type DiffHunk = {
   /** The 1-based line number at which the previous version of the file started. */
@@ -1567,6 +1618,12 @@ export type DiffHunk = {
    */
   diff: string;
 };
+
+/**
+ * The side of a diff a comment line lives on: `old` line numbers count in the pre-image,
+ * `new` line numbers in the post-image. Context lines exist on both sides.
+ */
+export type DiffSide = "old" | "new";
 
 /** A change that should be used to create a new commit or alter an existing one, along with enough information to know where to find it. */
 export type DiffSpec = {
@@ -1609,8 +1666,6 @@ export type FeatureFlags = {
   unapplyV3Pgm: boolean;
   /** Enable single branch mode. */
   singleBranch: boolean;
-  /** Enable IRC integration. */
-  irc: boolean;
   /**
    * Control how the filesystem watch should be established.
    * Possible values: "auto", "legacy", "modern".
@@ -1631,7 +1686,6 @@ export type FeatureFlags = {
 export type FeatureFlagsUpdate = {
   unapplyV3Pgm?: boolean | null;
   singleBranch?: boolean | null;
-  irc?: boolean | null;
   worktreeManipulation?: boolean | null;
 };
 
@@ -1851,7 +1905,7 @@ export type GitHubOAuthAppSettings = {
 };
 
 /** Controls whether GitButler registers reviewed stacks with GitHub's native stacks API. */
-export type GitHubStackingMode = "disabled" | "native";
+export type GitHubStackingMode = "auto" | "disabled" | "native";
 
 export type GithubAccountIdentifier = {
   type: "oAuthUsername";
@@ -2191,83 +2245,6 @@ export type InteractiveIntegrationStep = {
   kind: "merge";
 };
 
-export type IrcConnectionSettings = {
-  /** Whether this connection is enabled (controls connect/disconnect). */
-  enabled: boolean;
-  /** IRC nickname */
-  nickname: string | null;
-  /**
-   * Shared server connection password (the gate all clients must pass).
-   *
-   * # Security note
-   * Stored in plaintext on disk. Do not use a password that protects sensitive
-   * personal accounts — treat this as a low-value shared secret.
-   */
-  serverPassword: string | null;
-  /**
-   * Per-user SASL account password. On first use this registers the account.
-   *
-   * # Security note
-   * Stored in plaintext on disk. Do not reuse a password from another service.
-   */
-  saslPassword: string | null;
-  /** IRC real name */
-  realname: string | null;
-};
-
-/**
- * Update request for [`crate::app_settings::IrcConnectionSettings`].
- * Used for connection updates.
- */
-export type IrcConnectionUpdate = {
-  enabled?: boolean | null;
-  /** Pass `null` to clear the stored value; omit the field to leave it unchanged. */
-  nickname?: string | null;
-  /** Pass `null` to clear the stored value; omit the field to leave it unchanged. */
-  serverPassword?: string | null;
-  /** Pass `null` to clear the stored value; omit the field to leave it unchanged. */
-  saslPassword?: string | null;
-  /** Pass `null` to clear the stored value; omit the field to leave it unchanged. */
-  realname?: string | null;
-};
-
-export type IrcServerSettings = {
-  /** IRC server hostname (e.g., "irc.gitbutler.com") */
-  host: string;
-  /** IRC server port (default: 6697 for TLS) */
-  port: number;
-};
-
-/** Update request for [`crate::app_settings::IrcServerSettings`]. */
-export type IrcServerUpdate = {
-  host?: string | null;
-  port?: number | null;
-};
-
-export type IrcSettings = {
-  /** IRC server configuration */
-  server: IrcServerSettings;
-  /** Auto-share new Claude Code sessions to IRC channels */
-  autoShare: boolean;
-  /**
-   * Channel to auto-join when opening a project
-   * If set, joins that channel name (sanitized)
-   * If null, auto-constructs #project-name
-   */
-  projectChannel: string | null;
-  /** IRC connection settings */
-  connection: IrcConnectionSettings;
-};
-
-/** Update request for [`crate::app_settings::IrcSettings`]. */
-export type IrcUpdate = {
-  server?: IrcServerUpdate | null;
-  autoShare?: boolean | null;
-  /** Pass `null` to clear the stored value; omit the field to leave it unchanged. */
-  projectChannel?: string | null;
-  connection?: IrcConnectionUpdate | null;
-};
-
 /** Line statistics obtained from diffing the blobs of one or more [TreeChange](crate::TreeChange). */
 export type LineStats = {
   /** The total amount of lines added in the between blobs of the two trees. */
@@ -2421,6 +2398,25 @@ export type MoveBranchResult = {
 export type MoveChangesResult = {
   /** Workspace state after moving changes. */
   workspace: WorkspaceState;
+};
+
+/** Everything needed to create a new comment. See [`DiffComment`] for the field semantics. */
+export type NewComment = {
+  /** An optional client-supplied ID. An ID will be generated if this is absent. */
+  id: string | null;
+  /** The worktree-relative path of the file to anchor the comment to. */
+  path: string;
+  /**
+   * `None` to anchor to the uncommitted worktree diff, or the change-id of a workspace commit
+   * to anchor to that commit's first-parent diff.
+   */
+  commitChangeId: string | null;
+  /** The side of the diff the anchored line lives on. */
+  side: DiffSide;
+  /** The 1-based line number of the line to anchor to, in `side`'s coordinates. */
+  lineNumber: number;
+  /** The comment text. */
+  payload: string;
 };
 
 /** A column in a detailed graph node row. */

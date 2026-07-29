@@ -417,7 +417,10 @@ impl App {
             Message::CopyToClipboard(text) => {
                 self.clipboard.set_text(text)?;
             }
-            Message::PickProgramThenOpen => self.handle_pick_program_then_open(ctx, messages)?,
+            Message::PickProgramThenOpen => self.handle_pick_program_then_open(ctx)?,
+            Message::OpenInDefaultProgram => {
+                self.handle_open_in_default_program(ctx, messages)?;
+            }
             Message::OpenInProgram(program, to_open) => {
                 self.handle_open_in_program(&program, to_open, terminal_guard, messages)?;
             }
@@ -1358,52 +1361,66 @@ impl App {
         Ok(())
     }
 
-    fn handle_pick_program_then_open(
-        &mut self,
-        ctx: &Context,
-        messages: &mut Vec<Message>,
-    ) -> anyhow::Result<()> {
-        let selection = if matches!(&*self.mode, Mode::Details(..)) {
-            self.details.selected_section_cli_id()
-        } else {
-            self.cursor
-                .selected_line(&self.status_lines)
-                .and_then(|selection| selection.data.cli_id())
-        };
+    fn selected_openable(&self, ctx: &Context) -> anyhow::Result<Option<Openable>> {
+        match self.marks_ref() {
+            mark::MarksRef::Empty => {
+                let selection = if matches!(&*self.mode, Mode::Details(..)) {
+                    self.details.selected_section_cli_id()
+                } else {
+                    self.cursor
+                        .selected_line(&self.status_lines)
+                        .and_then(|selection| selection.data.cli_id())
+                };
 
-        let Some(selection) = selection else {
+                let Some(selection) = selection else {
+                    return Ok(None);
+                };
+
+                match &**selection {
+                    CliId::UncommittedHunkOrFile(uncommitted) => {
+                        Openable::try_from_uncommitted(&*ctx.repo.get()?, uncommitted).map(Some)
+                    }
+                    CliId::CommittedFile {
+                        committed_file: CommittedFileId { path, .. },
+                        id: _,
+                    } => Openable::try_from_relpath(&*ctx.repo.get()?, path.as_bstr()).map(Some),
+                    CliId::Commit { .. }
+                    | CliId::Branch(_)
+                    | CliId::PathPrefix { .. }
+                    | CliId::Uncommitted { .. }
+                    | CliId::Stack { .. } => Ok(None),
+                }
+            }
+            mark::MarksRef::Hunks { head, tail } => openable_from_paths(
+                ctx,
+                std::iter::once(head)
+                    .chain(tail)
+                    .map(|hunk| hunk.hunk_assignments.head.path_bytes.as_bstr()),
+            ),
+            mark::MarksRef::CommittedFiles { head, tail } => openable_from_paths(
+                ctx,
+                std::iter::once(head)
+                    .chain(tail)
+                    .map(|file| file.path.as_bstr()),
+            ),
+            mark::MarksRef::Commits { .. } | mark::MarksRef::Branches { .. } => Ok(None),
+        }
+    }
+
+    fn handle_pick_program_then_open(&mut self, ctx: &Context) -> anyhow::Result<()> {
+        let Some(to_open) = self.selected_openable(ctx)? else {
             return Ok(());
         };
 
-        let to_open = match &**selection {
-            CliId::UncommittedHunkOrFile(uncommitted) => {
-                Openable::try_from_uncommitted(&*ctx.repo.get()?, uncommitted)?
-            }
-            CliId::CommittedFile {
-                committed_file: CommittedFileId { path, .. },
-                id: _,
-            } => Openable::try_from_relpath(&*ctx.repo.get()?, path.as_bstr())?,
-            _ => {
-                return Ok(());
-            }
-        };
-
-        let mut program_specs = open::list_program_specs_for_openable(&to_open).into_iter();
-        let first_program = program_specs
-            .next()
-            .expect("BUG: Program specs cannot be empty");
-        let Some(second_program) = program_specs.next() else {
-            messages.push(Message::OpenInProgram(first_program, to_open));
+        let Some(program_specs) =
+            NonEmpty::from_vec(open::list_program_specs_for_openable(&to_open))
+        else {
             return Ok(());
         };
-
-        let mut items = NonEmpty::new(first_program);
-        items.push(second_program);
-        items.extend(program_specs);
 
         self.modal = Some(Modal::ProgramPicker {
             picker: Box::new(FuzzyPicker::new(
-                items,
+                program_specs,
                 self.theme,
                 |item, _ctx, messages| {
                     messages.push(Message::OpenInProgram(item, to_open));
@@ -1412,6 +1429,24 @@ impl App {
             )),
             key_binds: fuzzy_picker_key_binds(),
         });
+
+        Ok(())
+    }
+
+    fn handle_open_in_default_program(
+        &mut self,
+        ctx: &Context,
+        messages: &mut Vec<Message>,
+    ) -> anyhow::Result<()> {
+        let Some(to_open) = self.selected_openable(ctx)? else {
+            return Ok(());
+        };
+
+        let mut program_specs = open::list_program_specs_for_openable(&to_open).into_iter();
+        let Some(first_program) = program_specs.next() else {
+            return Ok(());
+        };
+        messages.push(Message::OpenInProgram(first_program, to_open));
 
         Ok(())
     }
@@ -1777,6 +1812,19 @@ impl FuzzyPickerItem for ProgramSpec {
 enum MoveCursorDiration {
     Up,
     Down,
+}
+
+fn openable_from_paths<'a>(
+    ctx: &Context,
+    paths: impl IntoIterator<Item = &'a BStr>,
+) -> anyhow::Result<Option<Openable>> {
+    let mut paths = paths.into_iter().collect::<Vec<_>>();
+    paths.sort();
+    paths.dedup();
+    let Some(paths) = NonEmpty::from_vec(paths) else {
+        return Ok(None);
+    };
+    Openable::try_from_relpaths(&*ctx.repo.get()?, paths).map(Some)
 }
 
 #[cfg(test)]

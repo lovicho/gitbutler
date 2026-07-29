@@ -12,7 +12,7 @@ Agent-focused reference for useful `but` commands.
 - [Remote Operations](#remote-operations) - `push`, `pull`, `pr`, `land`
 - [Workspace Maintenance](#workspace-maintenance) - `clean`
 - [History & Undo](#history--undo) - `undo`, `oplog`
-- [Setup & Configuration](#setup--configuration) - `setup`, `teardown`, `config`, `update`, `skill`, `gui`, `mcp`
+- [Setup & Configuration](#setup--configuration) - `setup`, `teardown`, `config`, `update`, `skill`
 - [Selected Options](#selected-options)
 
 ## Inspection (Understanding State)
@@ -414,20 +414,20 @@ Use `--no-hooks` to bypass pre-push hooks when needed.
 Review creation remains successful if the follow-up stack synchronization fails, and reports that
 partial success as a warning.
 
-If the GitButler MCP server exposes `gitbutler_review_card`, call it after a successful `but pr new` with every number from the command's `published` reviews. Omit `repository` when the MCP client supplied the current repository as a filesystem root; otherwise pass the repository path. The card displays each PR/MR, offers a ready-for-review action for drafts, and refreshes review and CI state while its monitoring conditions remain active.
-
 Selectors for `auto-merge`, `set-draft`, and `set-ready` can be branch names, branch IDs, stack IDs, or numeric review IDs, comma-separated.
 
 Agents must use `--message (-m)`, `--file (-F)`, or `--default (-t)` to avoid editor prompts. The `-t` flag uses the commit message as title/description for single-commit branches; for multi-commit branches it falls back to the branch name as the title.
 
 **Stacked branches:** Use `but pr` for stacked PRs. It creates reviews against the right bases and updates GitButler stack footers in PR descriptions. Creating stacked PRs with `gh pr create` or another forge tool loses that stack-aware behavior. To publish a whole stack, run `but pr new <top-branch-id> -t`; custom messages (`-m` or `-F`) only apply to the selected branch, while dependent branches use default messages (commit title/description).
 
+When the selected branch sits on dependencies that already have PRs, the summary lists those as "PR already exists for ..." and ends with the newly created review. The already-exists lines are normal stack reporting, not a failure to create the selected branch's PR.
+
 Requires forge integration to be configured via `but config forge auth`.
 
-Use `but config forge github-stacks enable` inside a repository to let GitButler register and
-reconcile same-repository pull requests with GitHub's native stacked pull requests API. The setting
-is project-local and shared with Desktop. The repository must be enrolled in GitHub's private
-preview. Use `but config forge github-stacks disable` to return to GitButler description footers.
+Same-repository pull requests are automatically registered with GitHub's native stacked pull
+requests API when the repository is enrolled in GitHub's private preview; otherwise GitButler uses
+description footers. `but config forge github-stacks disable` opts out. The setting is
+project-local and shared with Desktop.
 
 ### `but land <branch>`
 
@@ -436,11 +436,14 @@ when possible, otherwise makes a signed merge commit; for a `gb-local` target it
 locally. Then reconciles the remaining branches like `but pull`.
 
 ```bash
-but land <branch-id> --yes            # Land onto the target (--yes required non-interactively)
-but land <branch-id> --no-ff --yes    # Force a merge commit instead of fast-forwarding
+but land <branch-id> --yes                  # Land onto the target (--yes required non-interactively)
+but land <branch-id> --no-ff --yes          # Force a merge commit instead of fast-forwarding
+but land <top-branch> --whole-stack --yes   # Land an entire stack by naming its top segment
 ```
 
 Direct target updates are hard to reverse, so confirmation is required (agents must pass `--yes`).
+A branch stacked on other segments is refused (its tip would also publish them); `--whole-stack`
+is the explicit opt-in, and only the stack's top segment can be named with it.
 
 ## Workspace Maintenance
 

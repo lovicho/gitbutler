@@ -1,5 +1,5 @@
 import rowStyles from "./Row.module.css";
-import uiStyles from "#ui/components/ui.module.css";
+import { Scroller } from "#ui/components/Scroller.tsx";
 import { useApply } from "#ui/api/mutations.ts";
 import { branchDetailsQueryOptions } from "#ui/api/queries.ts";
 import { encodeBytes } from "#ui/api/bytes.ts";
@@ -30,11 +30,16 @@ import {
 	type Operand,
 } from "#ui/operands.ts";
 import { projectSlice } from "#ui/projects/state.ts";
-import { useNavigationIndexHotkeys, type SelectionScope } from "#ui/selection-scopes.ts";
+import {
+	autofocusSelectionScope,
+	useNavigationIndexHotkeys,
+	type SelectionScope,
+} from "#ui/selection-scopes.ts";
 import { useAppDispatch, useAppSelector } from "#ui/store.ts";
 import { formatRelativeTime } from "#ui/time.ts";
 import type { Commit, ListedBranch } from "@gitbutler/but-sdk";
 import { Toolbar } from "@base-ui/react";
+import { useMergedRefs } from "@base-ui/utils/useMergedRefs";
 import { useQuery } from "@tanstack/react-query";
 import {
 	type ComponentProps,
@@ -385,7 +390,7 @@ export const BranchesList: FC<
 				/>
 			</div>
 
-			<div className={classes(styles.list, uiStyles.overlayScrollbar)}>
+			<Scroller className={styles.listArea} viewportClassName={styles.list}>
 				<h4 id={headingId} className={classes("text-13", styles.heading)}>
 					Recent branches
 				</h4>
@@ -412,7 +417,9 @@ export const BranchesList: FC<
 					onFocus={() =>
 						dispatch(projectSlice.actions.setDetailsSelectionScope({ projectId, scope: "outline" }))
 					}
-					ref={hotkeysRef}
+					ref={useMergedRefs(hotkeysRef, (el) => {
+						if (el) autofocusSelectionScope(el);
+					})}
 				>
 					{stacks.map((stack) => (
 						// oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- A stack is an ARIA group of tree items.
@@ -423,7 +430,7 @@ export const BranchesList: FC<
 						</div>
 					))}
 				</div>
-			</div>
+			</Scroller>
 		</div>
 	);
 };

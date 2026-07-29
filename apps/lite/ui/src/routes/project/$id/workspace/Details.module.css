@@ -153,7 +153,7 @@
 		--diffs-selection-number-fg: var(--text-1);
 	}
 
-	[data-selection-focus-styles="true"] [data-selection-scope]:focus-within & {
+	[data-selection-focus-styles="true"] [data-selection-scope="diff"]:focus-within & {
 		--diffs-bg-selection-number-override: var(--fill-gray-bg);
 
 		diffs-container {
@@ -247,7 +247,10 @@
 }
 
 .filePath {
+	display: flex;
+	align-items: center;
 	overflow: hidden;
+	gap: 6px;
 	text-overflow: ellipsis;
 }
 
@@ -260,7 +263,6 @@
 }
 
 .pathInit {
-	margin-inline-start: 6px;
 	color: var(--text-2);
 }
 

@@ -451,8 +451,9 @@ async fn match_subcommand(
     };
 
     let is_expand = matches!(&cmd, Subcommands::_Expand { .. });
-    let show_agent_skill_notice = out.format().is_human_text()
-        && !out.can_prompt()
+    // A non-interactive invocation of a regular command: the situation where an
+    // agent-facing maintenance notice is worth printing.
+    let notice_worthy_command = !out.can_prompt()
         && !is_expand
         && !matches!(
             &cmd,
@@ -463,6 +464,7 @@ async fn match_subcommand(
                 | Subcommands::Completions { .. }
                 | Subcommands::Metrics { .. }
         );
+    let show_agent_skill_notice = out.format().is_human_text() && notice_worthy_command;
     let agent_skill_notice = show_agent_skill_notice
         .then(|| command::skill::agent_skill_notice(&args.current_dir))
         .flatten();
@@ -472,11 +474,30 @@ async fn match_subcommand(
         writeln!(human, "{}", notice.text()).ok();
         writeln!(human).ok();
     }
+    // Unlike the skill notice, the policy cleanup also runs for JSON-driven
+    // agents; its notice goes to stderr there so the JSON contract on stdout
+    // stays intact.
+    let retired_policy_notice = notice_worthy_command
+        .then(command::agent::retired_policy_syntax_notice)
+        .flatten();
+    if let Some(notice) = retired_policy_notice.as_ref() {
+        if let Some(human) = out.for_human() {
+            writeln!(human, "{notice}").ok();
+            writeln!(human).ok();
+        } else if out.is_json() {
+            print_err_infallible(format!("{notice}\n"));
+        }
+    }
     let mut metrics_ctx = cmd.to_metrics_context(&app_settings, &args.current_dir);
     if agent_skill_notice.is_some_and(|notice| notice.is_hint())
         && let Some(metrics_ctx) = metrics_ctx.as_mut()
     {
         metrics_ctx.push_extra_prop("agentSkillHintShown", true);
+    }
+    if retired_policy_notice.is_some()
+        && let Some(metrics_ctx) = metrics_ctx.as_mut()
+    {
+        metrics_ctx.push_extra_prop("retiredPolicySyntaxCleaned", true);
     }
     if retired_syntax::was_used()
         && let Some(metrics_ctx) = metrics_ctx.as_mut()
@@ -513,6 +534,8 @@ async fn match_subcommand(
             sources,
             program_id,
         } => {
+            use crate::utils::IntermediateChannel;
+
             let ctx = setup::init_ctx(
                 &args,
                 InitCtxOptions {
@@ -521,7 +544,8 @@ async fn match_subcommand(
                 },
                 out,
             )?;
-            command::open::open(&ctx, sources, program_id).emit_metrics(metrics_ctx)
+            let out = IntermediateChannel::new(out);
+            command::open::open(&ctx, out, sources, program_id).emit_metrics(metrics_ctx)
         }
         Subcommands::Completions { shell } => command::completions::generate_completions(shell)
             .emit_metrics(metrics_ctx)
@@ -1297,6 +1321,16 @@ async fn match_subcommand(
             run_status_after_if_requested(status_after, &mut ctx, out);
             Ok(())
         }
+        Subcommands::_Comment(comment_args) => {
+            use crate::utils::IntermediateChannel;
+
+            let mut ctx = setup::init_ctx(&args, InitCtxOptions::default(), out)?;
+            let outcome =
+                command::comment::comment(&mut ctx, IntermediateChannel::new(out), comment_args)
+                    .emit_metrics(metrics_ctx)?;
+            out.print_cli_output(outcome)?;
+            Ok(())
+        }
         #[cfg(feature = "legacy")]
         Subcommands::Setup { init } => {
             let repo = match but_api::legacy::projects::add_project_best_effort(
@@ -1544,12 +1578,18 @@ async fn match_subcommand(
             Ok(())
         }
         #[cfg(feature = "legacy")]
-        Subcommands::Land { branch, yes, no_ff } => {
+        Subcommands::Land {
+            branch,
+            yes,
+            no_ff,
+            whole_stack,
+        } => {
             let mut ctx = setup::init_ctx(&args, InitCtxOptions::default(), out)?;
             let conflicts_before = command::legacy::conflict_notice::snapshot(&ctx);
-            let result = command::legacy::land::handle(&mut ctx, out, &branch, yes, no_ff)
-                .context("Failed to land branch.")
-                .emit_metrics(metrics_ctx);
+            let result =
+                command::legacy::land::handle(&mut ctx, out, &branch, yes, no_ff, whole_stack)
+                    .context("Failed to land branch.")
+                    .emit_metrics(metrics_ctx);
             if result.is_ok() {
                 command::legacy::conflict_notice::report_newly_conflicted(
                     &ctx,

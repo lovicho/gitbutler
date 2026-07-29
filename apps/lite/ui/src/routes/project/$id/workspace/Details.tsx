@@ -1,4 +1,4 @@
-import uiStyles from "#ui/components/ui.module.css";
+import { Scroller } from "#ui/components/Scroller.tsx";
 import { SuspenseQuery } from "@suspensive/react-query";
 import {
 	useMergeReview,
@@ -12,6 +12,7 @@ import {
 import {
 	branchDiffQueryOptions,
 	changesInWorktreeQueryOptions,
+	commentsQueryOptions,
 	commitDetailsWithLineStatsQueryOptions,
 	forgeInfoOptions,
 	guiSettingsQueryOptions,
@@ -38,8 +39,8 @@ import {
 	type Operand,
 	weakCommitIdentityKey,
 	weakFileIdentityKey,
-	weakFileParentIdentityKey,
 } from "#ui/operands.ts";
+import type { BranchTab } from "#ui/projects/project.ts";
 import { projectSlice } from "#ui/projects/state.ts";
 import { interfaceSlice } from "#ui/interface/state.ts";
 import { Badge } from "#ui/components/Badge.tsx";
@@ -93,7 +94,11 @@ import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panel
 import styles from "./Details.module.css";
 import { diffHotkeys, pullRequestHotkeys, workspaceHotkeys } from "#ui/hotkeys.ts";
 import { useHotkey, useHotkeys } from "@tanstack/react-hotkeys";
-import { type SelectionScope, useNavigationIndexHotkeys } from "#ui/selection-scopes.ts";
+import {
+	autofocusSelectionScope,
+	type SelectionScope,
+	useNavigationIndexHotkeys,
+} from "#ui/selection-scopes.ts";
 import { FilesTree } from "#ui/routes/project/$id/workspace/FilesTree.tsx";
 import { TopLeftControls } from "#ui/routes/project/$id/workspace/TopLeftControls.tsx";
 import {
@@ -118,7 +123,7 @@ import type { GUISettings } from "#electron/settings.ts";
 import { defaultSettings } from "#ui/settings.ts";
 import type { AggregateCIChecks } from "#ui/ci.ts";
 import type { IconName } from "#ui/components/iconNames.ts";
-import { draftPRQueryOptions, usePersistDraftPR } from "#ui/pr.ts";
+import { draftPRQueryOptions, useDeleteDraftPR, usePersistDraftPR } from "#ui/pr.ts";
 import { combineHashes, hash } from "#ui/hash.ts";
 import { assert } from "#ui/assert.ts";
 import {
@@ -128,23 +133,22 @@ import {
 import { useDiffHunkDrag } from "./diff-hunk-drag.ts";
 import type { DiffLineTarget } from "./diff-line-target.ts";
 import { useHunkMenuItems } from "./useHunkMenuItems.ts";
-import { Annotation } from "#ui/components/Annotation.tsx";
+import { AnnotationCard } from "#ui/routes/project/$id/workspace/AnnotationCard.tsx";
 import {
-	createLocalAnnotation,
-	feedbackPrompt,
-	localAnnotationsQueryOptions,
-	type LocalAnnotation as PersistedLocalAnnotation,
+	annotationSideToDiffSide,
+	annotationsByPathForScope,
 	type LocalAnnotationsByPath,
-	usePersistLocalAnnotations,
+	useCommentCreate,
 } from "#ui/annotation.ts";
+import { FileIcon } from "#ui/components/FileIcon.tsx";
 
 type Annotation = { _tag: "local"; id: string };
-
-type BranchTab = "diff" | "pr";
 
 // This must be unique as to not collide with other IDs, and stable because it's
 // stored in local storage.
 type PanelId = "files-panel" | "diff-panel";
+
+const EMPTY_ANNOTATIONS_BY_PATH: LocalAnnotationsByPath = new Map();
 
 const diffDefaults = {
 	diffBackground: true,
@@ -193,7 +197,6 @@ const mkCodeViewItem = (
 	id: string,
 	change: TreeChange,
 	hunks: Array<DiffHunk>,
-	annotations: Array<PersistedLocalAnnotation>,
 ): CodeViewDiffItem<Annotation> => {
 	const combinedFilePatch = synthesizeFilePatch(change, hunks);
 	const version = hash(combinedFilePatch);
@@ -207,20 +210,11 @@ const mkCodeViewItem = (
 	if (!fileDiff) throw new Error("Failed to parse any files in patch");
 	if (restFiles.length > 0) throw new Error("Parsed more than one file in patch");
 
-	const itemAnnotations: Array<DiffLineAnnotation<Annotation>> = annotations.map(
-		({ id, lineNumber, side }) => ({
-			lineNumber,
-			side,
-			metadata: { _tag: "local", id },
-		}),
-	);
-
 	return {
 		type: "diff",
 		id,
-		version: combineHashes(version, itemAnnotations.length),
+		version,
 		fileDiff,
-		annotations: itemAnnotations,
 	};
 };
 
@@ -228,7 +222,6 @@ type DiffViewDeps = {
 	fileParent: FileParent;
 	changes: Array<TreeChange>;
 	treeChangeDiffs: Array<UnifiedPatch | null>;
-	annotationsByPath: LocalAnnotationsByPath;
 };
 
 type DiffViewFile = {
@@ -254,12 +247,7 @@ type DiffView = {
 };
 
 /** Build relationships between our SDK data and Pierre's view. */
-const getDiffView = ({
-	fileParent,
-	changes,
-	treeChangeDiffs,
-	annotationsByPath,
-}: DiffViewDeps): DiffView => {
+const getDiffView = ({ fileParent, changes, treeChangeDiffs }: DiffViewDeps): DiffView => {
 	const navigationIndex: NavigationIndex<HunkOperand> = {
 		items: [],
 		indexByKey: new Map(),
@@ -274,7 +262,6 @@ const getDiffView = ({
 
 	for (const [ci, change] of changes.entries()) {
 		const mdiff = treeChangeDiffs[ci];
-		const annotations = annotationsByPath.get(change.path) ?? [];
 
 		const file: FileOperand = {
 			parent: fileParent,
@@ -284,7 +271,6 @@ const getDiffView = ({
 			weakFileIdentityKey(file),
 			change,
 			mdiff && "subject" in mdiff && "hunks" in mdiff.subject ? mdiff.subject.hunks : [],
-			annotations,
 		);
 
 		items.push(item);
@@ -341,6 +327,43 @@ const getDiffView = ({
 	};
 };
 
+const withAnnotations = (
+	diffView: DiffView,
+	annotationsByPath: LocalAnnotationsByPath,
+): DiffView => ({
+	...diffView,
+	items: diffView.items.map((item) => {
+		const file = diffView.fileByItemId.get(item.id);
+		if (!file) throw new Error("Diff view file not found by ID");
+
+		const persistedAnnotations = annotationsByPath.get(file.operand.path);
+		if (!persistedAnnotations || persistedAnnotations.length === 0) return item;
+
+		const annotations: Array<DiffLineAnnotation<Annotation>> = persistedAnnotations.map(
+			({ id, lineNumber, side }) => ({
+				lineNumber,
+				side,
+				metadata: { _tag: "local", id },
+			}),
+		);
+
+		// Annotations move when their backend anchor drifts, so the version must cover their
+		// positions and identities, not just their count.
+		const annoHash = hash(
+			annotations.map((a) => `${a.metadata.id}:${a.side}:${a.lineNumber}`).join(),
+		);
+
+		const version = item.version;
+		if (version === undefined) throw new Error("Diff view item missing base version");
+
+		return {
+			...item,
+			version: combineHashes(version, annoHash),
+			annotations,
+		};
+	}),
+});
+
 const DiffContents: FC<{
 	localAnnotationFormId: string;
 	selectionScopeRef: RefObject<HTMLDivElement | null>;
@@ -371,22 +394,7 @@ const DiffContents: FC<{
 	const [collapsedItems, setCollapsedItems] = useState<Set<string>>(new Set());
 	const newFocusableAnnotationIdRef = useRef<string | null>(null);
 	const dispatch = useAppDispatch();
-	const { mutate: persistLocalAnnotations } = usePersistLocalAnnotations();
-
-	const persistFileAnnotations = (
-		path: string,
-		fileAnnotations: Array<PersistedLocalAnnotation>,
-	) => {
-		const updated = new Map(annotationsByPath);
-		if (fileAnnotations.length === 0) updated.delete(path);
-		else updated.set(path, fileAnnotations);
-
-		persistLocalAnnotations({
-			projectId,
-			fileParentKey: weakFileParentIdentityKey(fileParent),
-			annotations: updated,
-		});
-	};
+	const { mutate: createComment } = useCommentCreate();
 	const { data: editors } = useQuery(listEditorsQueryOptions);
 	const { data: preferredEditor } = useQuery({
 		...guiSettingsQueryOptions,
@@ -419,6 +427,18 @@ const DiffContents: FC<{
 	const selectedRange = diffSelection
 		? (hunkByKey.get(hunkOperandIdentityKey(diffSelection))?.selectedLines ?? null)
 		: null;
+
+	useLayoutEffect(() => {
+		if (!diffSelectionFile) return;
+
+		viewerRef.current?.scrollTo({
+			type: "item",
+			id: diffSelectionFile.item.id,
+			align: "start",
+			behavior: "instant",
+		});
+		// oxlint-disable-next-line react-hooks/exhaustive-deps react-hooks-js/exhaustive-deps -- Sync scroll only on mount, otherwise use events.
+	}, []);
 
 	const selectDiff = (selection: HunkOperand) => {
 		dispatch(projectSlice.actions.selectDiff({ projectId, selection }));
@@ -639,6 +659,9 @@ const DiffContents: FC<{
 				);
 			}}
 			renderGutterUtility={(getHoveredLine, item) => {
+				// We don't currently support annotations on branches.
+				if (fileParent._tag === "Branch") return;
+
 				const handleClick = () => {
 					const badlyTypedLine = getHoveredLine();
 					if (!badlyTypedLine || !("side" in badlyTypedLine)) return;
@@ -647,12 +670,20 @@ const DiffContents: FC<{
 					const file = fileByItemId.get(item.id);
 					if (!file) return;
 
-					const annotation = createLocalAnnotation(line.lineNumber, line.side);
-					newFocusableAnnotationIdRef.current = annotation.id;
-					persistFileAnnotations(file.operand.path, [
-						...(annotationsByPath.get(file.operand.path) ?? []),
-						annotation,
-					]);
+					const id = crypto.randomUUID();
+					newFocusableAnnotationIdRef.current = id;
+
+					createComment({
+						projectId,
+						comment: {
+							id,
+							path: file.operand.path,
+							commitChangeId: fileParent._tag === "Commit" ? fileParent.changeId : null,
+							side: annotationSideToDiffSide(line.side),
+							lineNumber: line.lineNumber,
+							payload: "",
+						},
+					});
 				};
 
 				return (
@@ -676,102 +707,19 @@ const DiffContents: FC<{
 				if (!file) return null;
 
 				const annotations = annotationsByPath.get(file.operand.path) ?? [];
-				const idx = annotations.findIndex(({ id }) => id === anno.metadata.id);
-				const annotation = annotations[idx];
+				const annotation = annotations.find(({ id }) => id === anno.metadata.id);
 				if (!annotation) return null;
 
 				return (
-					<Annotation
-						author="You"
-						defaultBody={annotation.body}
+					<AnnotationCard
+						projectId={projectId}
 						formId={localAnnotationFormId}
-						name={annotation.id}
-						textareaRef={(textarea) => {
-							if (textarea && newFocusableAnnotationIdRef.current === annotation.id) {
-								newFocusableAnnotationIdRef.current = null;
-								textarea.focus();
-							}
-						}}
-						// Pierre gracefully blurs focused annotations before virtualizing their item,
-						// permitting uncontrolled input state to be persisted.
-						onBlur={(body) =>
-							persistFileAnnotations(
-								file.operand.path,
-								annotations.with(idx, { ...annotation, body }),
-							)
-						}
-						actions={
-							<>
-								<button
-									type="button"
-									className={getButtonClassName({ variant: "ghost" })}
-									onClick={() => {
-										persistFileAnnotations(file.operand.path, annotations.toSpliced(idx, 1));
-										selectionScopeRef.current?.focus({ focusVisible: false });
-									}}
-								>
-									Delete
-								</button>
-
-								<button
-									type="button"
-									form={localAnnotationFormId}
-									className={getButtonClassName({ variant: "ghost" })}
-									onClick={(evt) => {
-										const form = evt.currentTarget.form;
-										if (!form) throw new Error("Missing owning form");
-
-										const body = new FormData(form).get(annotation.id);
-										if (typeof body !== "string") throw new Error("Missing or invalid body");
-
-										void window.lite.clipboardWriteText(
-											feedbackPrompt([
-												{
-													annotation: { ...annotation, body },
-													fileParent,
-													path: file.operand.path,
-												},
-											]),
-										);
-									}}
-								>
-									Copy as prompt
-								</button>
-
-								<button
-									type="button"
-									form={localAnnotationFormId}
-									className={getButtonClassName({ variant: "ghost" })}
-									onClick={(evt) => {
-										const form = evt.currentTarget.form;
-										if (!form) throw new Error("Missing owning form");
-
-										const formData = new FormData(form);
-										const feedback = annotationsByPath
-											.entries()
-											.flatMap(([path, annotations]) =>
-												annotations.map((annotation) => {
-													// Use any live mounted bodies, falling back to persisted.
-													const formBody = formData.get(annotation.id);
-													return {
-														annotation: {
-															...annotation,
-															body: typeof formBody === "string" ? formBody : annotation.body,
-														},
-														fileParent,
-														path,
-													};
-												}),
-											)
-											.toArray();
-
-										void window.lite.clipboardWriteText(feedbackPrompt(feedback));
-									}}
-								>
-									Copy all as prompt
-								</button>
-							</>
-						}
+						annotation={annotation}
+						path={file.operand.path}
+						fileParent={fileParent}
+						annotationsByPath={annotationsByPath}
+						focusAnnotationIdRef={newFocusableAnnotationIdRef}
+						selectionScopeRef={selectionScopeRef}
 					/>
 				);
 			}}
@@ -915,6 +863,7 @@ const DiffFileHeader: FC<DiffFileHeaderProps> = (p) => {
 					</Tooltip.Portal>
 				</Tooltip.Root>
 				<h4 className={classes("text-13", styles.filePath)}>
+					<FileIcon fileName={fileName} className={styles.icon} />
 					{fileName}
 					{directoryPath !== null && <span className={styles.pathInit}>{directoryPath}</span>}
 				</h4>
@@ -1128,19 +1077,28 @@ const Diff: FC<{
 		queries: changes.map((change) => treeChangeDiffsQueryOptions({ projectId, change })),
 		combine: (results) => results.map((result) => result.data),
 	});
-	const { data: annotationsByPath } = useSuspenseQuery(
-		localAnnotationsQueryOptions({
-			projectId,
-			fileParentKey: weakFileParentIdentityKey(fileParent),
-		}),
+
+	const { data: annotationsByPath = EMPTY_ANNOTATIONS_BY_PATH } = useQuery({
+		...commentsQueryOptions(projectId),
+		select: (comments) => annotationsByPathForScope(comments, fileParent),
+	});
+
+	const diffViewSansAnno = useMemo(
+		() =>
+			getDiffView({
+				fileParent,
+				changes,
+				treeChangeDiffs,
+			}),
+		[
+			fileParent,
+			changes,
+			// oxlint-disable-next-line @tanstack/query/no-unstable-deps -- False positive?: https://github.com/TanStack/query/issues/9718
+			treeChangeDiffs,
+		],
 	);
 
-	const diffView = getDiffView({
-		fileParent,
-		changes,
-		treeChangeDiffs,
-		annotationsByPath,
-	});
+	const diffView = withAnnotations(diffViewSansAnno, annotationsByPath);
 
 	const selectFileAndNavigateDiff = (selection: string) => {
 		onFileSelection(selection);
@@ -1273,16 +1231,17 @@ const Diff: FC<{
 							minSize={180}
 							groupResizeBehavior="preserve-pixel-size"
 						>
-							<FilesTree
-								data-selection-scope={"files" satisfies SelectionScope}
-								className={classes(styles.diffFiles, uiStyles.scrollerWithSeparator)}
-								onFileSelection={selectFileAndNavigateDiff}
-								projectId={projectId}
-								items={filesItems}
-								selection={filesSelection}
-								navigationIndex={filesNavigationIndex}
-								fileParent={fileParent}
-							/>
+							<Scroller withSeparator viewportClassName={styles.diffFiles}>
+								<FilesTree
+									data-selection-scope={"files" satisfies SelectionScope}
+									onFileSelection={selectFileAndNavigateDiff}
+									projectId={projectId}
+									items={filesItems}
+									selection={filesSelection}
+									navigationIndex={filesNavigationIndex}
+									fileParent={fileParent}
+								/>
+							</Scroller>
 						</Panel>
 						<Separator className={styles.resizeHandle} />
 					</>
@@ -1294,7 +1253,9 @@ const Diff: FC<{
 						// oxlint-disable-next-line jsx_a11y/no-noninteractive-tabindex -- Revisit this when we add hunk/line selection.
 						tabIndex={0}
 						className={styles.diffContentsContainer}
-						ref={useMergedRefs(selectionScopeRef, diffContentsEl)}
+						ref={useMergedRefs(selectionScopeRef, diffContentsEl, (el) => {
+							if (el) autofocusSelectionScope(el);
+						})}
 					>
 						<DiffContents
 							localAnnotationFormId={localAnnotationFormId}
@@ -1342,6 +1303,7 @@ const PullRequestForm: FC<{
 		isDraft: persistedDocument?.isDraft ?? false,
 	});
 	const { mutate: persistDraftPR } = usePersistDraftPR();
+	const { mutate: deleteDraftPR } = useDeleteDraftPR();
 
 	const isNew = reviewId === null;
 	const isAnyPending = isPublishReviewPending || isUpdateReviewPending;
@@ -1350,22 +1312,40 @@ const PullRequestForm: FC<{
 		localDocument.body !== remoteOrEmptyDocument.body ||
 		(isNew && localDocument.isDraft);
 
+	// Reset to latest remote data if we haven't locally diverged yet.
+	const [prevRemote, setPrevRemote] = useState(remoteOrEmptyDocument);
+	const remoteHasUpdated =
+		prevRemote.title !== remoteOrEmptyDocument.title ||
+		prevRemote.body !== remoteOrEmptyDocument.body;
+	if (remoteHasUpdated) {
+		setPrevRemote(remoteOrEmptyDocument);
+
+		const localHasDiverged =
+			localDocument.title !== prevRemote.title || localDocument.body !== prevRemote.body;
+		if (!localHasDiverged) {
+			setLocalDocument((prev) => ({
+				...prev,
+				...remoteOrEmptyDocument,
+			}));
+		}
+	}
+
 	const handleBlur = () => {
-		persistDraftPR({
-			projectId,
-			branchName: sourceBranch,
-			draft: localDocument,
-		});
+		if (hasChanges) {
+			persistDraftPR({
+				projectId,
+				branchName: sourceBranch,
+				draft: localDocument,
+			});
+		} else if (persistedDocument) {
+			deleteDraftPR({ projectId, branchName: sourceBranch });
+		}
 	};
 
 	const handleReset = () => {
 		const resetDocument = { ...remoteOrEmptyDocument, isDraft: false };
 		setLocalDocument(resetDocument);
-		persistDraftPR({
-			projectId,
-			branchName: sourceBranch,
-			draft: resetDocument,
-		});
+		deleteDraftPR({ projectId, branchName: sourceBranch });
 	};
 
 	const handleSubmit: SubmitEventHandler<HTMLFormElement> = (evt) => {
@@ -1409,6 +1389,10 @@ const PullRequestForm: FC<{
 				<Field.Control
 					render={<FieldControlStyles />}
 					className="text-15 text-semibold"
+					data-selection-scope={"pr" satisfies SelectionScope}
+					ref={(el) => {
+						if (el) autofocusSelectionScope(el);
+					}}
 					name="title"
 					onChange={(evt) => setLocalDocument({ ...localDocument, title: evt.currentTarget.value })}
 					placeholder="Title"
@@ -1789,7 +1773,62 @@ const BranchDetails: FC<{
 		projectSlice.selectors.selectCanShowFiles(state, projectId),
 	);
 	const filesVisible = canShowFiles && filesVisibleState;
-	const [branchTab, setBranchTab] = useState<BranchTab>("diff");
+	const branchRef = decodeBytes(selection.branchRef);
+	const branchName = branchDetailsParams(branchRef).branchName;
+	const branchTab = useAppSelector((state) =>
+		projectSlice.selectors.selectBranchTab(state, projectId, branchName),
+	);
+
+	const setBranchTab = (tab: BranchTab) => {
+		dispatch(projectSlice.actions.setSelectedBranchTab({ projectId, branchName, tab }));
+	};
+
+	const ref = useRef<HTMLDivElement>(null);
+
+	useHotkeys([
+		{
+			hotkey: "[",
+			callback: () => {
+				switch (branchTab) {
+					case "diff": {
+						setBranchTab("pr");
+						break;
+					}
+					case "pr": {
+						setBranchTab("diff");
+						break;
+					}
+					default:
+						branchTab satisfies never;
+				}
+			},
+			options: {
+				conflictBehavior: "allow",
+				target: ref,
+			},
+		},
+		{
+			hotkey: "]",
+			callback: () => {
+				switch (branchTab) {
+					case "diff": {
+						setBranchTab("pr");
+						break;
+					}
+					case "pr": {
+						setBranchTab("diff");
+						break;
+					}
+					default:
+						branchTab satisfies never;
+				}
+			},
+			options: {
+				conflictBehavior: "allow",
+				target: ref,
+			},
+		},
+	]);
 
 	const selectFile = (selection: string) => {
 		dispatch(projectSlice.actions.selectFiles({ projectId, selection }));
@@ -1806,10 +1845,8 @@ const BranchDetails: FC<{
 				? undefined
 				: parentSegment.refName?.displayName;
 
-	const branchName = branchDetailsParams(decodeBytes(selection.branchRef)).branchName;
-
 	return (
-		<div className={styles.container}>
+		<div className={styles.container} ref={ref}>
 			<div className={styles.headerWrap}>
 				<div className={styles.titleRow}>
 					{detailsFullWindow && <TopLeftControls />}
@@ -1934,9 +1971,7 @@ const BranchDetails: FC<{
 						)}
 					</div>
 				) : (
-					<SuspenseQuery
-						{...branchDiffQueryOptions({ projectId, branch: decodeBytes(selection.branchRef) })}
-					>
+					<SuspenseQuery {...branchDiffQueryOptions({ projectId, branch: branchRef })}>
 						{({ data: branchDiff }) => (
 							<Diff
 								changes={branchDiff.changes}
