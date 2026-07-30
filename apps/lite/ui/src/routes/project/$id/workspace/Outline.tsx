@@ -159,7 +159,10 @@ export const Outline: FC<{
 	};
 
 	const { data: headInfo } = useQuery(headInfoQueryOptions(projectId));
-	const { data: guiSettings } = useQuery(guiSettingsQueryOptions);
+	const { data: autoFetchFrequency } = useQuery({
+		...guiSettingsQueryOptions,
+		select: (cfg) => cfg.autoFetchFrequency,
+	});
 	const { data: workspaceFetchStatus } = useQuery(workspaceFetchStatusQueryOptions(projectId));
 	const rebaseUpdates =
 		headInfo?.stacks.flatMap((stack): Array<BottomUpdate> => {
@@ -169,7 +172,7 @@ export const Outline: FC<{
 	const { isPending: isWorkspaceIntegrateUpstreamPending, mutate: workspaceIntegrateUpstream } =
 		useWorkspaceIntegrateUpstream();
 	const { isFetching: isWorkspaceFetchFromRemotesPending, refetch: workspaceFetchFromRemotes } =
-		useQuery(workspaceFetchQueryOptions(projectId, guiSettings?.autoFetchFrequency));
+		useQuery(workspaceFetchQueryOptions(projectId, autoFetchFrequency));
 	const fetchFromRemotes = () => {
 		void workspaceFetchFromRemotes().then(({ error }) => {
 			if (!error) return;
@@ -391,17 +394,25 @@ export const Outline: FC<{
 					value={[outlineTab]}
 					onValueChange={selectOutlineTab}
 				>
-					<Toggle render={<ToggleStyles />} value={"workspace" satisfies OutlineTab}>
+					<Toggle
+						render={<ToggleStyles />}
+						value={"workspace" satisfies OutlineTab}
+						aria-label="Workspace"
+					>
 						<Icon name="workbench" />
-						Workspace
+						<span className={styles.tabLabel}>Workspace</span>
 					</Toggle>
-					<Toggle render={<ToggleStyles />} value="upstream" disabled>
+					<Toggle render={<ToggleStyles />} value="upstream" disabled aria-label="Upstream">
 						<Icon name="inbox" />
-						Upstream
+						<span className={styles.tabLabel}>Upstream</span>
 					</Toggle>
-					<Toggle render={<ToggleStyles />} value={"branches" satisfies OutlineTab}>
+					<Toggle
+						render={<ToggleStyles />}
+						value={"branches" satisfies OutlineTab}
+						aria-label="Branches"
+					>
 						<Icon name="branch" />
-						Branches
+						<span className={styles.tabLabel}>Branches</span>
 					</Toggle>
 				</ToggleGroup>
 			</div>
