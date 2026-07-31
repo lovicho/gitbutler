@@ -5,6 +5,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use ansi_to_tui::IntoText as _;
 use bstr::{BStr, ByteSlice};
 use but_api::open::program::ProgramSpec;
 use but_ctx::Context;
@@ -15,7 +16,8 @@ use nonempty::NonEmpty;
 use ratatui::prelude::*;
 
 use crate::{
-    CliId,
+    CliId, CliResult, IdMap,
+    args::atoms::Purpose,
     command::{
         legacy::status::{
             FilesStatusFlag, StatusFlags, StatusOutputLine, TuiLaunchOptions, TuiOutcome,
@@ -303,6 +305,7 @@ impl Tui for App {
 impl App {
     pub fn new(
         ctx: &Context,
+        id_map: &IdMap,
         status_lines: Vec<StatusOutputLine>,
         flags: StatusFlags,
         launch_options: TuiLaunchOptions,
@@ -312,9 +315,11 @@ impl App {
         head_sha: String,
         clipboard: Clipboard,
         operating_mode: OperatingMode,
-    ) -> Self {
-        let cursor = if let Some(object_id) = launch_options.select_commit {
-            Cursor::select_commit(object_id, &status_lines)
+    ) -> CliResult<Self> {
+        let cursor = if let Some(target) = launch_options.target.clone() {
+            let repo = ctx.repo.get()?;
+            let target = target.resolve_in_workspace(&repo, id_map, Purpose::Target, None)?;
+            Cursor::select_resolved_target(target, &status_lines)?
                 .unwrap_or_else(|| Cursor::new(&status_lines))
         } else if launch_options.remember_selection
             && let Some(cursor) = remember_selection::restore_selection(ctx, &status_lines)
@@ -345,7 +350,7 @@ impl App {
 
         let file_browser = show_file_browser.then(FileBrowser::default);
 
-        Self {
+        Ok(Self {
             status_lines,
             flags,
             cursor,
@@ -374,7 +379,7 @@ impl App {
             head_sha,
             clipboard,
             operating_mode,
-        }
+        })
     }
 
     pub fn active_key_binds(&self) -> &KeyBinds {
@@ -1224,7 +1229,7 @@ impl App {
             out,
             &self.operating_mode,
             self.flags,
-            self.launch_options,
+            self.launch_options.clone(),
         )?;
         self.head_sha = operations::head_sha(ctx)?;
 
@@ -1325,14 +1330,24 @@ impl App {
         Ok(())
     }
 
-    /// Handles showing a transient UI error.
     fn handle_show_error(&mut self, err: anyhow::Error, messages: &mut Vec<Message>) {
-        self.toasts
-            .insert(ToastKind::Error, format_error_for_tui(&err));
+        self.push_transient_error(err);
 
         // ensure we always enter normal mode when something does wrong
         // so we don't get stuck in whatever mode we were in previously
         messages.push(Message::EnterNormalModeAfterConfirmingOperation);
+    }
+
+    fn push_transient_error(&mut self, err: anyhow::Error) {
+        let text = format_error_for_tui(&err);
+        match text.into_text() {
+            Ok(text) => {
+                self.toasts.insert(ToastKind::Error, text);
+            }
+            Err(_) => {
+                self.toasts.insert(ToastKind::Error, text);
+            }
+        }
     }
 
     /// Handles creating an empty commit relative to the current selection.

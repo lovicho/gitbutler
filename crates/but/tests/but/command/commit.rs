@@ -1000,6 +1000,11 @@ Usage: but commit --above <BRANCH_OR_COMMIT> [CHANGES]...
 
 For more information, try '--help'.
 
+Examples:
+  but commit -b <branch> -m "message"                    # commit onto a branch (created if needed)
+  but commit -b <branch> -m "message" <file-or-hunk>...  # commit only the given changes
+  but commit -m "message"                                # commit when only one stack is applied
+
 "#]]);
 }
 
@@ -1018,6 +1023,11 @@ Usage: but commit --above <BRANCH_OR_COMMIT> [CHANGES]...
 
 For more information, try '--help'.
 
+Examples:
+  but commit -b <branch> -m "message"                    # commit onto a branch (created if needed)
+  but commit -b <branch> -m "message" <file-or-hunk>...  # commit only the given changes
+  but commit -m "message"                                # commit when only one stack is applied
+
 "#]]);
 }
 
@@ -1035,6 +1045,11 @@ error: the argument '--below <BRANCH_OR_COMMIT>' cannot be used with '--branch [
 Usage: but commit --below <BRANCH_OR_COMMIT> [CHANGES]...
 
 For more information, try '--help'.
+
+Examples:
+  but commit -b <branch> -m "message"                    # commit onto a branch (created if needed)
+  but commit -b <branch> -m "message" <file-or-hunk>...  # commit only the given changes
+  but commit -m "message"                                # commit when only one stack is applied
 
 "#]]);
 }
@@ -1891,22 +1906,26 @@ Hint: Use a longer ID to disambiguate
 }
 
 #[test]
-fn commit_does_not_needlessly_touch_file() -> anyhow::Result<()> {
+fn commit_does_not_needlessly_touch_file() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
     env.setup_metadata(&["A"]);
 
     env.file("A", "new content");
 
-    let old_time = std::fs::metadata(env.projects_root().join("A"))?.modified()?;
+    let old_time = std::fs::metadata(env.projects_root().join("A"))
+        .unwrap()
+        .modified()
+        .unwrap();
     env.but("commit -m test").assert().success();
-    let new_time = std::fs::metadata(env.projects_root().join("A"))?.modified()?;
+    let new_time = std::fs::metadata(env.projects_root().join("A"))
+        .unwrap()
+        .modified()
+        .unwrap();
 
     assert_eq!(
         new_time, old_time,
         "time should be the same, because file should not have been modified"
     );
-
-    Ok(())
 }
 
 #[test]
@@ -2124,8 +2143,7 @@ fn partially_integrated_stack_guards_only_the_landed_commit() {
     let env = Sandbox::init_scenario_with_target_and_default_settings(
         "pull-partially-integrated-multi-branch-stack",
     );
-    env.setup_single_stack_metadata_at_target(&["A", "C"], "refs/heads/base")
-        .unwrap();
+    env.setup_single_stack_metadata_at_target(&["A", "C"], "refs/heads/base");
     env.file("file.txt", "Some text");
 
     // Branch C at the bottom has landed; branch A on top is live. Committing
@@ -2270,6 +2288,11 @@ error: unexpected argument '-c' found
 Usage: but commit [OPTIONS] [CHANGES]...
 
 For more information, try '--help'.
+
+Examples:
+  but commit -b <branch> -m "message"                    # commit onto a branch (created if needed)
+  but commit -b <branch> -m "message" <file-or-hunk>...  # commit only the given changes
+  but commit -m "message"                                # commit when only one stack is applied
 
 "#]]);
 

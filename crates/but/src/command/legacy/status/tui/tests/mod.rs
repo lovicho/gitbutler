@@ -7,11 +7,14 @@ use crossterm::event::*;
 use snapbox::{ToDebug, file, str};
 use temp_env::with_var;
 
+use crate::args::atoms::CliIdArg;
+use crate::command::legacy::status::tui::app::{App, format_error_for_tui};
 use crate::command::legacy::status::tui::tests::utils::{
     TestTuiOptions, test_status_tui, test_status_tui_with_options,
 };
 use crate::command::legacy::status::tui::{BackstackEntry, Message, ReloadCause};
 use crate::command::legacy::status::{Selectable, TuiLaunchOptions, TuiOutcome, TuiRunOptions};
+use crate::tui::test_utils::TestTui;
 
 mod branch_picker_tests;
 mod branch_tests;
@@ -279,7 +282,7 @@ fn format_error_for_tui_shows_cause_chain_without_backtrace() {
         .context("context-level-1")
         .context("context-level-2");
 
-    let rendered = super::format_error_for_tui(&err);
+    let rendered = format_error_for_tui(&err);
 
     assert_eq!(
         rendered,
@@ -292,7 +295,7 @@ fn format_error_for_tui_shows_cause_chain_without_backtrace() {
 fn format_error_for_tui_shows_single_message_for_leaf_error() {
     let err = anyhow!("leaf-error");
 
-    let rendered = super::format_error_for_tui(&err);
+    let rendered = format_error_for_tui(&err);
 
     assert_eq!(rendered, "leaf-error");
     assert!(!rendered.contains("Caused by:"));
@@ -1184,7 +1187,7 @@ fn remember_selection() {
     let mut tui = test_status_tui_with_options(
         env,
         TestTuiOptions {
-            launch_options,
+            launch_options: launch_options.clone(),
             ..Default::default()
         },
     );
@@ -1199,7 +1202,7 @@ fn remember_selection() {
     let mut tui = test_status_tui_with_options(
         env,
         TestTuiOptions {
-            launch_options,
+            launch_options: launch_options.clone(),
             ..Default::default()
         },
     );
@@ -1223,7 +1226,7 @@ fn remember_selection_with_file_name_conflicting_with_branch() {
     let mut tui = test_status_tui_with_options(
         env,
         TestTuiOptions {
-            launch_options,
+            launch_options: launch_options.clone(),
             ..Default::default()
         },
     );
@@ -1243,4 +1246,38 @@ fn remember_selection_with_file_name_conflicting_with_branch() {
     );
 
     tui.reload().assert_current_line_eq(str![["┊╭┄ g0 [A]"]]);
+}
+
+fn open_tui_at(target: &str) -> TestTui<App> {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    test_status_tui_with_options(
+        env,
+        TestTuiOptions {
+            launch_options: TuiLaunchOptions {
+                target: Some(CliIdArg(target.to_owned())),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    )
+}
+
+#[test]
+fn opening_on_different_targets() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    open_tui_at("tpm")
+        .reload()
+        .assert_current_line_eq(str!["┊●   tpm add A"]);
+
+    open_tui_at("A")
+        .reload()
+        .assert_current_line_eq(str!["┊╭┄ g0 [A]"]);
+
+    open_tui_at("zz")
+        .reload()
+        .assert_current_line_eq(str!["╭┄ zz [uncommitted] (no changes)"]);
 }

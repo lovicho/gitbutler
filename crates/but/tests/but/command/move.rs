@@ -2288,45 +2288,7 @@ Error: Bad input 'B' for '--below'
 
 Invalid target for branch source
 
-Hint: Branches can only be moved with `--above <branch>` to stack or `--unstack` to unstack
-
-"#]]);
-}
-
-#[test]
-fn cannot_move_branch_to_branch_tip() {
-    let env = Sandbox::init_scenario_with_target_and_default_settings(
-        "one-stack-three-dependent-branches",
-    );
-    env.setup_metadata(&["A", "B", "C"]);
-
-    env.but("status")
-        .assert()
-        .success()
-        .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
-┊
-┊╭┄ g0 [C]
-┊●   wlx add C
-┊│
-┊├┄ h0 [B]
-┊●   wwm add B
-┊│
-┊├┄ i0 [A]
-┊●   tpm add A
-├╯
-┊
-┴ 0dc3733 (common base) 2000-01-02 add M
-
-Hint: run `but help` for all commands
-
-"#]]);
-
-    env.but("move C -b B")
-        .assert()
-        .failure()
-        .stderr_eq(snapbox::str![[r#"
-Error: Cannot combine `--branch` with a branch source
+Hint: Branches can only be moved with `--above <branch>` or `--branch <branch>` to stack or `--unstack` to unstack
 
 "#]]);
 }
@@ -2461,6 +2423,12 @@ Usage: but move <--above <BRANCH_OR_COMMIT>|--below <BRANCH_OR_COMMIT>|--branch 
 
 For more information, try '--help'.
 
+Examples:
+  but move <child-branch> --above <parent-branch>   # stack a branch on top of another
+  but move <commit> --below <other-commit>          # reorder commits
+  but move <commit> --branch <branch>               # move a commit onto a branch
+  but move <branch> --unstack                       # tear a branch off its stack
+
 "#]]);
 }
 
@@ -2480,6 +2448,12 @@ Usage: but move <--above <BRANCH_OR_COMMIT>|--below <BRANCH_OR_COMMIT>|--branch 
 
 For more information, try '--help'.
 
+Examples:
+  but move <child-branch> --above <parent-branch>   # stack a branch on top of another
+  but move <commit> --below <other-commit>          # reorder commits
+  but move <commit> --branch <branch>               # move a commit onto a branch
+  but move <branch> --unstack                       # tear a branch off its stack
+
 "#]]);
 }
 
@@ -2498,6 +2472,12 @@ error: the following required arguments were not provided:
 Usage: but move <--above <BRANCH_OR_COMMIT>|--below <BRANCH_OR_COMMIT>|--branch [<BRANCH>]|--unstack> <SOURCES>...
 
 For more information, try '--help'.
+
+Examples:
+  but move <child-branch> --above <parent-branch>   # stack a branch on top of another
+  but move <commit> --below <other-commit>          # reorder commits
+  but move <commit> --branch <branch>               # move a commit onto a branch
+  but move <branch> --unstack                       # tear a branch off its stack
 
 "#]]);
 }
@@ -2536,6 +2516,16 @@ Hint: Trying to move items below 'ywx'? Remove 'ywx' from '<SOURCES>' and try ag
         .failure()
         .stderr_eq(snapbox::str![[r#"
 Error: Bad input 'A' for '--above'
+
+Source cannot also be target
+
+"#]]);
+
+    env.but("move A --branch A")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: Bad input 'A' for '--branch'
 
 Source cannot also be target
 
@@ -2621,13 +2611,13 @@ Error: Expected a commit or a branch, got uncommitted changes
 }
 
 #[test]
-fn move_commit_to_branch_smoke() -> anyhow::Result<()> {
+fn move_commit_to_branch_smoke() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
     env.setup_metadata(&["A", "B"]);
 
     commit_two_files_as_two_hunks_each(&env, "A", "a.txt", "b.txt", "first commit");
 
-    let before = status_json(&env)?;
+    let before = status_json(&env);
     let branch_a_commits_before = branch_commit_cli_ids(&before, "A");
     let source_cli_id = branch_a_commits_before[0].clone();
     let branch_b_count_before = branch_commit_cli_ids(&before, "B").len();
@@ -2636,7 +2626,7 @@ fn move_commit_to_branch_smoke() -> anyhow::Result<()> {
         .assert()
         .success();
 
-    let after = status_json(&env)?;
+    let after = status_json(&env);
     let branch_a_commits_after = branch_commit_cli_ids(&after, "A");
     let branch_b_commits_after = branch_commit_cli_ids(&after, "B");
     assert_eq!(
@@ -2657,19 +2647,17 @@ fn move_commit_to_branch_smoke() -> anyhow::Result<()> {
         branch_b_commits_after.contains(&source_cli_id),
         "moved commit should be present on branch B"
     );
-
-    Ok(())
 }
 
 #[test]
-fn move_multiple_commits_to_branch_tip_preserves_order() -> anyhow::Result<()> {
+fn move_multiple_commits_to_branch_tip_preserves_order() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
     env.setup_metadata(&["A", "B"]);
 
     commit_two_files_as_two_hunks_each(&env, "A", "a1.txt", "a2.txt", "first");
     commit_two_files_as_two_hunks_each(&env, "A", "a3.txt", "a4.txt", "second");
 
-    let before = status_json(&env)?;
+    let before = status_json(&env);
     let branch_a = branch_commit_cli_ids(&before, "A");
     let newer = branch_a[0].clone();
     let older = branch_a[1].clone();
@@ -2678,24 +2666,22 @@ fn move_multiple_commits_to_branch_tip_preserves_order() -> anyhow::Result<()> {
         .assert()
         .success();
 
-    let after = status_json(&env)?;
+    let after = status_json(&env);
     let branch_b = branch_commit_cli_ids(&after, "B");
     assert_eq!(
         &branch_b[..2],
         &[newer, older],
         "moving a block to a branch tip should preserve its history order"
     );
-
-    Ok(())
 }
 
 #[test]
-fn move_that_conflicts_warns_about_newly_conflicted_commits() -> anyhow::Result<()> {
+fn move_that_conflicts_warns_about_newly_conflicted_commits() {
     let env =
         Sandbox::init_scenario_with_target_and_default_settings("one-stack-two-dependent-commits");
     env.setup_metadata(&["A"]);
 
-    let status = status_json(&env)?;
+    let status = status_json(&env);
     let commits = branch_commit_cli_ids(&status, "A");
     let (top, bottom) = (&commits[0], &commits[1]);
 
@@ -2712,12 +2698,10 @@ Moved [..] above commit [..]
 Resolve with but resolve, or back out with but undo.
 
 "#]]);
-
-    Ok(())
 }
 
 #[test]
-fn move_without_conflicts_prints_no_conflict_warning() -> anyhow::Result<()> {
+fn move_without_conflicts_prints_no_conflict_warning() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack-two-commits");
     env.setup_metadata(&["A"]);
 
@@ -2729,8 +2713,6 @@ fn move_without_conflicts_prints_no_conflict_warning() -> anyhow::Result<()> {
 Moved [..] above commit [..]
 
 "#]]);
-
-    Ok(())
 }
 
 #[test]
@@ -2790,6 +2772,96 @@ error: the following required arguments were not provided:
 Usage: but move <--above <BRANCH_OR_COMMIT>|--below <BRANCH_OR_COMMIT>|--branch [<BRANCH>]|--unstack> <SOURCES>...
 
 For more information, try '--help'.
+
+"#]]);
+}
+
+#[test]
+fn move_onto_branch_with_dash_dash_branch() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+    env.setup_metadata(&["A", "B"]);
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ g0 [A]
+┊●   tpm add A
+┊│     tpm:t A A
+├╯
+┊
+┊╭┄ h0 [B]
+┊●   lrm add B
+┊│     lrm:p A B
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    env.but("move B --branch A")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+Stacked branch 'B' on top of branch 'A'
+
+"#]]);
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ g0 [B]
+┊●   lrm add B
+┊│     lrm:p A B
+┊│
+┊├┄ h0 [A]
+┊●   tpm add A
+┊│     tpm:t A A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}
+
+#[test]
+fn cannot_move_onto_new_branch_with_dash_dash_branch() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ zz [uncommitted] (no changes)
+┊
+┊╭┄ g0 [A]
+┊●   tpm add A
+┊│     tpm:t A A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    env.but("move A --branch new-branch")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: Branch 'new-branch' not found
+
+Hint: `--branch` can only move branches onto existing branches
 
 "#]]);
 }

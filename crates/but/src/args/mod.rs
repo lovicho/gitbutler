@@ -744,61 +744,9 @@ pub enum Subcommands {
         program_id: Option<String>,
     },
 
-    /// Open a live terminal workspace for branches, commits, changes, and diffs.
-    ///
-    /// The GitButler TUI provides a visual experience similar to the GitButler GUI - right in your
-    /// terminal. For the full workflow and key bindings, see <https://docs.gitbutler.com/gitbutler-tui>
-    ///
-    /// **Environment variables:**
-    ///
-    /// **BUT_THEME**  Sets the theme for but. Options: dark, light. [default: dark]
-    ///
     #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
     #[cfg(feature = "legacy")]
-    Tui {
-        /// When the TUI quits save the selection and restore it when re-opening.
-        ///
-        /// If the saved selection cannot be restore the TUI launch normally as if
-        /// `--remember-selection` wasn't passed.
-        #[clap(long, default_value_t = false)]
-        remember_selection: bool,
-        /// Show debug pane with selected-line metadata.
-        ///
-        /// Requires `tui-profiling` feature.
-        #[cfg(feature = "tui-profiling")]
-        #[clap(long, default_value_t = false)]
-        debug: bool,
-        /// Quit after rendering this many frames.
-        ///
-        /// Requires `tui-profiling` feature.
-        #[cfg(feature = "tui-profiling")]
-        #[clap(long)]
-        quit_after: Option<u64>,
-        /// Run the TUI with an in-memory terminal and no terminal event polling.
-        ///
-        /// Requires `tui-profiling` feature.
-        #[cfg(feature = "tui-profiling")]
-        #[clap(long)]
-        headless: bool,
-        /// Do not print status when the TUI exits.
-        ///
-        /// Requires `tui-profiling` feature.
-        #[cfg(feature = "tui-profiling")]
-        #[clap(long)]
-        skip_status_after: bool,
-        /// Automatically show the diff when opening the TUI.
-        ///
-        /// Requires `tui-profiling` feature.
-        #[cfg(feature = "tui-profiling")]
-        #[clap(long)]
-        diff: bool,
-        /// Automatically select this commit when opening the TUI.
-        ///
-        /// Requires `tui-profiling` feature.
-        #[cfg(feature = "tui-profiling")]
-        #[clap(long)]
-        select_commit: Option<gix::ObjectId>,
-    },
+    Tui(tui::Platform),
 
     /// Remove empty branches from the workspace.
     ///
@@ -1234,6 +1182,8 @@ pub mod skill;
 #[cfg(feature = "legacy")]
 pub mod squash;
 #[cfg(feature = "legacy")]
+pub mod tui;
+#[cfg(feature = "legacy")]
 pub mod uncommit;
 pub mod update;
 
@@ -1310,6 +1260,50 @@ pub mod worktree {
 }
 
 pub mod branch;
+
+/// Find the subcommand token and its index in raw argv, skipping root options.
+pub(crate) fn find_subcommand(args: &[std::ffi::OsString]) -> Option<(usize, &std::ffi::OsString)> {
+    let mut ix = 1;
+    while ix < args.len() {
+        let token = &args[ix].as_encoded_bytes();
+        // Root options that consume a separate value token. `-C` is the only
+        // value-taking short option, so a short cluster ending in it (e.g.
+        // `-tC`) consumes the next token too; with an attached value
+        // (`-C.`, `-tC.`) the cluster ends in the value instead.
+        let cluster_ending_in_c =
+            token.starts_with(b"-") && !token.starts_with(b"--") && token.ends_with(b"C");
+        if cluster_ending_in_c || *token == b"--current-dir" || *token == b"--log-file" {
+            ix += 2;
+            continue;
+        }
+        if token.starts_with(b"-") {
+            ix += 1;
+            continue;
+        }
+        return Some((ix, &args[ix]));
+    }
+    None
+}
+
+/// Example invocations appended to a subcommand's parse error, for the
+/// commands whose grammar most often trips people up.
+pub(crate) fn error_examples(subcommand: &str) -> Option<&'static str> {
+    #[cfg(feature = "legacy")]
+    {
+        Some(match subcommand {
+            "commit" => commit::ERROR_EXAMPLES,
+            "amend" => amend::ERROR_EXAMPLES,
+            "move" => r#move::ERROR_EXAMPLES,
+            "squash" => squash::ERROR_EXAMPLES,
+            _ => return None,
+        })
+    }
+    #[cfg(not(feature = "legacy"))]
+    {
+        let _ = subcommand;
+        None
+    }
+}
 
 #[cfg(test)]
 mod tests;

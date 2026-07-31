@@ -30,7 +30,7 @@ fn branch_commits_contain_file(
 }
 
 #[test]
-fn amend_rejects_dependency_changes() -> anyhow::Result<()> {
+fn amend_rejects_dependency_changes() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
     env.setup_metadata(&[]);
 
@@ -43,7 +43,7 @@ fn amend_rejects_dependency_changes() -> anyhow::Result<()> {
     // Change `first` (which depends on foo) and try to amend it into bar's
     // commit. The squash internals reject the operation atomically.
     env.file("first", "changes");
-    let status = status_json(&env)?;
+    let status = status_json(&env);
     let bar_commit_cli_id = branch_commit_cli_ids(&status, "bar")[0].clone();
     env.but(format!("amend first --target {bar_commit_cli_id}"))
         .assert()
@@ -59,7 +59,7 @@ Hint: to apply these changes, stack bar on top of foo and try again — commits 
 
 "#]]);
 
-    let after = status_json(&env)?;
+    let after = status_json(&env);
     assert!(
         uncommitted_contains_file(&after, "first"),
         "a rejected amend must leave its source uncommitted"
@@ -68,21 +68,18 @@ Hint: to apply these changes, stack bar on top of foo and try again — commits 
         !branch_commits_contain_file(&after, "bar", "first"),
         "a rejected amend must not modify the target branch"
     );
-
-    Ok(())
 }
 
 #[test]
 fn amend_accepts_multiple_uncommitted_changes() {
     assert_multiple_amend(|target_cli_id| {
         format!("amend one.txt two.txt --target {target_cli_id}")
-    })
-    .unwrap();
+    });
 }
 
 #[test]
 fn amend_accepts_branch_target() {
-    assert_multiple_amend(|_target_cli_id| "amend one.txt two.txt --target A".to_string()).unwrap();
+    assert_multiple_amend(|_target_cli_id| "amend one.txt two.txt --target A".to_string());
 }
 
 #[test]
@@ -135,7 +132,7 @@ Hint: run `but help` for all commands
 "#]]);
 }
 
-fn assert_multiple_amend(args: impl FnOnce(&str) -> String) -> anyhow::Result<()> {
+fn assert_multiple_amend(args: impl FnOnce(&str) -> String) {
     let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
     env.setup_metadata(&["A", "B"]);
 
@@ -143,7 +140,7 @@ fn assert_multiple_amend(args: impl FnOnce(&str) -> String) -> anyhow::Result<()
     env.file("two.txt", "two\n");
     env.file("three.txt", "three\n");
 
-    let before = status_json(&env)?;
+    let before = status_json(&env);
     let target_cli_id = branch_commit_cli_ids(&before, "A")[0].clone();
 
     env.but(args(&target_cli_id))
@@ -155,7 +152,7 @@ Amended tpm
 "#]])
         .stderr_eq(str![""]);
 
-    let after = status_json(&env)?;
+    let after = status_json(&env);
     assert!(
         !uncommitted_contains_file(&after, "one.txt"),
         "first amended file should no longer be uncommitted"
@@ -176,8 +173,6 @@ Amended tpm
         branch_commits_contain_file(&after, "A", "two.txt"),
         "second file should be amended into a commit on branch A"
     );
-
-    Ok(())
 }
 
 #[test]
@@ -187,7 +182,7 @@ fn amend_rejects_merged_upstream_commit() {
     env.setup_metadata_at_target(&["A", "B"], "refs/heads/base");
     env.file("file.txt", "Some text");
 
-    let status = status_json(&env).unwrap();
+    let status = status_json(&env);
     let source = status["uncommittedChanges"][0]["cliId"]
         .as_str()
         .unwrap()
@@ -223,11 +218,10 @@ fn amend_rejects_landed_commit_in_partially_integrated_stack() {
     let env = Sandbox::init_scenario_with_target_and_default_settings(
         "pull-partially-integrated-multi-branch-stack",
     );
-    env.setup_single_stack_metadata_at_target(&["A", "C"], "refs/heads/base")
-        .unwrap();
+    env.setup_single_stack_metadata_at_target(&["A", "C"], "refs/heads/base");
     env.file("file.txt", "Some text");
 
-    let status = status_json(&env).unwrap();
+    let status = status_json(&env);
     let source = status["uncommittedChanges"][0]["cliId"]
         .as_str()
         .unwrap()
@@ -272,6 +266,47 @@ error: unexpected argument '--changes' found
   tip: to pass '--changes' as a value, use '-- --changes'
 
 Usage: but amend --target <COMMIT_OR_BRANCH> <SOURCES>...
+
+For more information, try '--help'.
+
+"#]]);
+}
+
+#[test]
+fn parse_error_appends_examples() {
+    let env = Sandbox::empty();
+
+    // A rejected amend command line must end with the registered example
+    // invocations, after clap's own error and usage output.
+    env.but("amend").assert().failure().stderr_eq(str![[r#"
+error: the following required arguments were not provided:
+  --target <COMMIT_OR_BRANCH>
+
+Usage: but amend --target <COMMIT_OR_BRANCH> [SOURCES]...
+
+For more information, try '--help'.
+
+Examples:
+  but amend -t <commit> <file-or-hunk>...   # amend selected uncommitted changes
+  but amend -t <commit>                     # amend all uncommitted changes
+  but amend -t <branch>                     # amend into the tip of a branch
+
+"#]]);
+}
+
+#[test]
+fn root_level_parse_error_gets_no_examples() {
+    let env = Sandbox::empty();
+
+    // The bad flag belongs to the root grammar; appending `amend` examples
+    // would misattribute the failure to the amend grammar.
+    env.but("--nope amend")
+        .assert()
+        .failure()
+        .stderr_eq(str![[r#"
+error: unexpected argument '--nope' found
+
+Usage: but [OPTIONS] [COMMAND]
 
 For more information, try '--help'.
 
