@@ -100,7 +100,8 @@ impl SquashSource {
             | SquashRoute::CommittedFileToBranch { .. }
             | SquashRoute::BranchToSelf { .. } => "squash",
             SquashRoute::CommittedFileToUncommitted { .. }
-            | SquashRoute::CommitToUncommitted { .. } => "uncommit",
+            | SquashRoute::CommitToUncommitted { .. }
+            | SquashRoute::BranchToUncommitted { .. } => "uncommit",
         })
     }
 
@@ -179,6 +180,9 @@ enum SquashRoute<'a> {
     BranchToBranch {
         sources: NonEmptyRef<'a, BranchId>,
         target: &'a str,
+    },
+    BranchToUncommitted {
+        sources: NonEmptyRef<'a, BranchId>,
     },
     BranchToSelf {
         source: &'a BranchId,
@@ -496,9 +500,9 @@ impl App {
             | SquashOutcome::Hunks { new_commit, .. } => {
                 SelectAfterReload::Commit(new_commit.commit_id)
             }
-            SquashOutcome::Uncommit { .. } | SquashOutcome::UncommitHunk { .. } => {
-                SelectAfterReload::Uncommitted
-            }
+            SquashOutcome::UncommitCommit { .. }
+            | SquashOutcome::UncommitHunk { .. }
+            | SquashOutcome::UncommitBranch { .. } => SelectAfterReload::Uncommitted,
         };
 
         drop(_suspend_guard);
@@ -641,6 +645,13 @@ fn resolve_squash_operation<'a>(
                 .collect(),
             target: SquashTarget::Uncommitted,
         },
+        SquashRoute::BranchToUncommitted { sources } => ResolvedSquashArgsRef::Normal {
+            sources: sources
+                .iter()
+                .map(|branch| ResolvedCliIdArgRef::Branch(&branch.name))
+                .collect(),
+            target: SquashTarget::Uncommitted,
+        },
     };
 
     let op = squash::resolve(resolved_args, ws, repo, merged).into_internal_error()?;
@@ -773,6 +784,9 @@ fn squash_route_from_branch<'a>(
             CliId::Branch(branch) => Some(SquashRoute::BranchToBranch {
                 sources: source_branches,
                 target: &branch.name,
+            }),
+            CliId::Uncommitted { .. } => Some(SquashRoute::BranchToUncommitted {
+                sources: source_branches,
             }),
             _ => None,
         }

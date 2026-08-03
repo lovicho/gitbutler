@@ -7,6 +7,7 @@ import {
 	treeChangeDiffsQueryOptions,
 } from "#ui/api/queries.ts";
 import { useRestoreSnapshot } from "#ui/api/mutations.ts";
+import { decodeBytes } from "#ui/api/bytes.ts";
 import {
 	focusHorizontalSelectionScope,
 	focusSelectionScope,
@@ -58,6 +59,7 @@ import { OperationControls } from "#ui/routes/project/$id/workspace/OperationCon
 import { WorkspacePageErrorBoundary } from "./WorkspacePageErrorBoundary.tsx";
 import { Settings } from "./Settings.tsx";
 import { useBranchesOutline } from "./useBranchesOutline.ts";
+import { useUpstreamOutline } from "./useUpstreamOutline.ts";
 import type { OutlineMode } from "#ui/outline/mode.ts";
 import { useStateReconciler as useReconcileState } from "#ui/reconcile.ts";
 import { defaultSettings } from "#ui/settings.ts";
@@ -168,6 +170,15 @@ const useWorkspaceHotkeys = (projectId: string) => {
 					},
 				},
 			]),
+			Match.when("upstream", () => [
+				{
+					hotkey: "1",
+					callback: () => focusSelectionScope("outline"),
+					options: {
+						enabled: outlineVisible,
+					},
+				},
+			]),
 			Match.exhaustive,
 		),
 		{
@@ -233,26 +244,32 @@ const buildOutlineNavigationIndex = ({
 	headInfo,
 	outlineMode,
 	absorptionTargetCommitIds,
+	foldedSegments,
 }: {
 	headInfo: RefInfo | undefined;
 	outlineMode: OutlineMode;
 	absorptionTargetCommitIds: ReadonlySet<string>;
+	foldedSegments: Record<string, true>;
 }): NavigationIndex<Operand> => {
 	const allItems = (): Array<Operand> =>
-		headInfo?.stacks
-			.toReversed()
-			.flatMap((stack) =>
-				stack.segments.flatMap(
-					(segment): Array<Operand> => [
-						...(segment.refName
-							? [branchOperand({ branchRef: segment.refName.fullNameBytes })]
-							: []),
-						...segment.commits.map((commit) =>
-							commitOperand({ commitId: commit.id, changeId: commit.changeId }),
-						),
-					],
-				),
-			) ?? [];
+		headInfo?.stacks.toReversed().flatMap((stack) =>
+			stack.segments.flatMap((segment): Array<Operand> => {
+				// Matches what OutlineTree renders: a folded segment shows a stub
+				// in place of its commits, so they are not navigable.
+				const folded =
+					segment.refName !== null &&
+					foldedSegments[decodeBytes(segment.refName.fullNameBytes)] === true;
+
+				return [
+					...(segment.refName ? [branchOperand({ branchRef: segment.refName.fullNameBytes })] : []),
+					...(folded
+						? []
+						: segment.commits.map((commit) =>
+								commitOperand({ commitId: commit.id, changeId: commit.changeId }),
+							)),
+				];
+			}),
+		) ?? [];
 
 	const filteredItems = Match.value(outlineMode).pipe(
 		Match.tagsExhaustive({
@@ -458,16 +475,21 @@ const WorkspacePage: FC = () => {
 		absorptionPlanQuery?.data?.map(({ commitId }) => commitId),
 	);
 
+	const foldedSegments = useAppSelector((state) =>
+		projectSlice.selectors.selectFoldedSegments(state, projectId),
+	);
 	const outlineNavigationIndex = buildOutlineNavigationIndex({
 		headInfo,
 		outlineMode,
 		absorptionTargetCommitIds,
+		foldedSegments,
 	});
 
 	const outlineTab = useAppSelector((state) =>
 		projectSlice.selectors.selectOutlineTab(state, projectId),
 	);
 	const branchesOutline = useBranchesOutline(projectId);
+	const upstreamOutline = useUpstreamOutline(projectId);
 
 	const outlineSelection = useAppSelector((state) =>
 		projectSlice.selectors.selectSelectionOutline(state, projectId, outlineNavigationIndex),
@@ -477,6 +499,13 @@ const WorkspacePage: FC = () => {
 			state,
 			projectId,
 			branchesOutline.navigationIndex,
+		),
+	);
+	const upstreamSelection = useAppSelector((state) =>
+		projectSlice.selectors.selectSelectionUpstream(
+			state,
+			projectId,
+			upstreamOutline.navigationIndex,
 		),
 	);
 
@@ -523,7 +552,14 @@ const WorkspacePage: FC = () => {
 		projectSlice.selectors.selectDetailsSelectionScope(state, projectId),
 	);
 	const detailsSelection = Match.value(detailsSelectionScope).pipe(
-		Match.when("outline", () => (outlineTab === "branches" ? branchesSelection : outlineSelection)),
+		Match.when("outline", () =>
+			Match.value(outlineTab).pipe(
+				Match.when("workspace", () => outlineSelection),
+				Match.when("upstream", () => upstreamSelection),
+				Match.when("branches", () => branchesSelection),
+				Match.exhaustive,
+			),
+		),
 		Match.when("uncommitted-files", () =>
 			uncommittedFilesSelection === null
 				? null
@@ -577,6 +613,7 @@ const WorkspacePage: FC = () => {
 							projectId={projectId}
 							project={selectedProject}
 							branchesOutline={branchesOutline}
+							upstreamOutline={upstreamOutline}
 							navigationIndex={outlineNavigationIndex}
 							uncommittedFilesNavigationIndex={uncommittedFilesNavigationIndex}
 							absorptionTargetCommitIds={absorptionTargetCommitIds}
