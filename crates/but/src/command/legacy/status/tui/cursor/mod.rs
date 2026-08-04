@@ -13,13 +13,13 @@ use crate::{
             Mode, NormalMode, PickChangesMode, SelectAfterReload,
             app::{
                 CommitSource, SquashMode,
-                mark::{MarkableRef, Marks},
+                mark::{MarkableRef, Marks, hunk_is_child_of},
                 prefix_match,
             },
             mode::ModeRef,
             render::{
-                commit_operation_display, move_operation_display, reorder_operation_display,
-                stack_operation_display,
+                cherry_pick_operation_display, commit_operation_display, move_operation_display,
+                reorder_operation_display, stack_operation_display,
             },
         },
     },
@@ -84,25 +84,13 @@ impl Cursor {
         target: ResolvedCliIdArg,
         lines: &[StatusOutputLine],
     ) -> CliResult<Option<Self>> {
-        let hint = "`TARGET` can be a commit, branch, or uncommitted file";
+        let hint = "`TARGET` can be a commit, branch, committed file, uncommitted file, or uncommitted hunk";
         match &target {
             ResolvedCliIdArg::Commit(..)
             | ResolvedCliIdArg::Branch(..)
-            | ResolvedCliIdArg::Uncommitted => {}
-            ResolvedCliIdArg::UncommittedHunkOrFile(hunk) => {
-                // https://linear.app/gitbutler/issue/GB-1798/support-opening-the-tui-on-committed-files-or-hunks
-                if !hunk.is_entire_file {
-                    return Err(bad_input("Selecting hunks is not supported")
-                        .hint(hint)
-                        .into());
-                }
-            }
-            ResolvedCliIdArg::CommittedFile(..) => {
-                // https://linear.app/gitbutler/issue/GB-1798/support-opening-the-tui-on-committed-files-or-hunks
-                return Err(bad_input("Selecting committed files is not supported")
-                    .hint(hint)
-                    .into());
-            }
+            | ResolvedCliIdArg::Uncommitted
+            | ResolvedCliIdArg::UncommittedHunkOrFile(..)
+            | ResolvedCliIdArg::CommittedFile(..) => {}
             ResolvedCliIdArg::PathPrefix { .. } => {
                 return Err(bad_input("Selecting path prefixes is not supported")
                     .hint(hint)
@@ -115,10 +103,28 @@ impl Cursor {
             }
         }
 
-        let Some(idx) = lines
-            .iter()
-            .position(|line| line.data.cli_id().is_some_and(|cli_id| target == **cli_id))
-        else {
+        let Some(idx) = lines.iter().position(|line| {
+            line.data.cli_id().is_some_and(|cli_id| match &target {
+                ResolvedCliIdArg::UncommittedHunkOrFile(hunk) if !hunk.is_entire_file => {
+                    match &**cli_id {
+                        CliId::UncommittedHunkOrFile(file) => hunk_is_child_of(file, hunk),
+                        CliId::PathPrefix { .. }
+                        | CliId::CommittedFile { .. }
+                        | CliId::Branch(..)
+                        | CliId::Commit { .. }
+                        | CliId::Uncommitted { .. }
+                        | CliId::Stack { .. } => false,
+                    }
+                }
+                ResolvedCliIdArg::Commit(..)
+                | ResolvedCliIdArg::Branch(..)
+                | ResolvedCliIdArg::UncommittedHunkOrFile(..)
+                | ResolvedCliIdArg::CommittedFile(..)
+                | ResolvedCliIdArg::Uncommitted
+                | ResolvedCliIdArg::PathPrefix { .. }
+                | ResolvedCliIdArg::Stack => target == **cli_id,
+            })
+        }) else {
             return Ok(None);
         };
         if !lines[idx].is_selectable() {
@@ -887,6 +893,7 @@ fn is_section_header(line: &StatusOutputLine, mode: &Mode) -> bool {
         | Mode::MoveStack(..)
         | Mode::Jump(..)
         | Mode::Squash(..)
+        | Mode::CherryPick(..)
         | Mode::Details(..) => {
             matches!(
                 line.data,
@@ -984,6 +991,13 @@ pub fn is_selectable_in_mode(
                 return true;
             }
         }
+        ModeRef::CherryPick(cherry_pick_mode) => {
+            if let Some(cli_id) = line.data.cli_id()
+                && cherry_pick_mode.source.contains(cli_id)
+            {
+                return true;
+            }
+        }
         ModeRef::Command(..)
         | ModeRef::InlineReword(..)
         | ModeRef::Normal(..)
@@ -1056,6 +1070,7 @@ pub fn is_selectable_in_mode(
         | ModeRef::Details(..)
         | ModeRef::MoveStack(..)
         | ModeRef::Jump(..)
+        | ModeRef::CherryPick(..)
         | ModeRef::Stack(..) => {}
     }
 
@@ -1086,6 +1101,9 @@ pub fn is_selectable_in_mode(
         ModeRef::Move(move_mode) => move_operation_display(&line.data, move_mode).is_some(),
         ModeRef::MoveStack(move_mode) => reorder_operation_display(&line.data, move_mode).is_some(),
         ModeRef::Stack(stack_mode) => stack_operation_display(&line.data, stack_mode).is_some(),
+        ModeRef::CherryPick(cherry_pick_mode) => {
+            cherry_pick_operation_display(&line.data, cherry_pick_mode).is_some()
+        }
         ModeRef::PickChanges(..) => {
             if let Some(cli_id) = line.data.cli_id() {
                 match &**cli_id {
