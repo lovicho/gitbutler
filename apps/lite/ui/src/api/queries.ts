@@ -2,12 +2,7 @@ import type { PayloadFor } from "#electron/ipc.ts";
 import { aggregateCIChecks } from "#ui/ci.ts";
 import { clampAutoFetch, defaultSettings } from "#ui/settings.ts";
 import type { ForgeReview } from "@gitbutler/but-sdk";
-import {
-	infiniteQueryOptions,
-	queryOptions,
-	skipToken,
-	type QueryClient,
-} from "@tanstack/react-query";
+import { queryOptions, type QueryClient } from "@tanstack/react-query";
 import * as ms from "ms";
 
 export type QueryKey =
@@ -32,15 +27,19 @@ export type QueryKey =
 	| "reviewerCandidates"
 	| "reviews"
 	| "editors"
+	| "terminals"
+	| "forgeAccounts"
+	| "userProfile"
+	| "gbConfig"
 	| "projects"
+	| "signingSettings"
 	| "treeChangeDiffs"
 	| "absorptionPlan"
 	| "dryRun"
 	| "guiSettings"
 	| "workspaceFetch"
 	| "workspaceFetchStatus"
-	| "workspaceTargetCommits"
-	| "workspaceTargetCommitsOlder";
+	| "workspaceTargetCommits";
 
 export const branchDetailsQueryOptions = ({ projectId, ...params }: PayloadFor<"branchDetails">) =>
 	queryOptions({
@@ -142,30 +141,6 @@ export const refreshIntegratedReviews = async (
 	);
 };
 
-const olderTargetCommitsPageSize = 25;
-
-/**
- * Pages of target history older than the workspace's fork point, continued
- * below `from` with a commit-id cursor. A `null` cursor means the base
- * listing has not arrived yet, so there is nothing to continue from.
- */
-export const olderTargetCommitsInfiniteQueryOptions = (projectId: string, from: string | null) =>
-	infiniteQueryOptions({
-		queryKey: ["workspaceTargetCommitsOlder" satisfies QueryKey, projectId, from],
-		queryFn:
-			from === null
-				? skipToken
-				: ({ pageParam }) =>
-						window.lite.workspaceTargetCommits({
-							projectId,
-							from: pageParam,
-							limit: olderTargetCommitsPageSize,
-						}),
-		initialPageParam: from ?? "",
-		getNextPageParam: (lastPage) =>
-			lastPage.hasMore ? (lastPage.commits.at(-1)?.commit.id ?? undefined) : undefined,
-	});
-
 export const workspaceFetchStatusQueryOptions = (projectId: string) =>
 	queryOptions({
 		queryKey: ["workspaceFetchStatus" satisfies QueryKey, projectId],
@@ -213,6 +188,25 @@ export const listReviewCommentsQueryOptions = ({
 		// so replies from others appear without a manual refresh.
 		staleTime: 60_000,
 		refetchInterval: 60_000,
+	});
+
+export const gbConfigQueryOptions = (projectId: string) =>
+	queryOptions({
+		queryKey: ["gbConfig" satisfies QueryKey, projectId],
+		queryFn: () => window.lite.getGbConfig(projectId),
+	});
+
+/**
+ * Whether the repository's signing configuration actually produces a signature.
+ * Runs git, so it is asked for on demand rather than polled.
+ */
+export const signingSettingsQueryOptions = (projectId: string) =>
+	queryOptions({
+		queryKey: ["signingSettings" satisfies QueryKey, projectId],
+		queryFn: () => window.lite.checkSigningSettings(projectId),
+		enabled: false,
+		retry: false,
+		staleTime: Number.POSITIVE_INFINITY,
 	});
 
 export const currentForgeLoginQueryOptions = (projectId: string) =>
@@ -331,6 +325,40 @@ export const listReviewsQueryOptions = ({ projectId, ...params }: PayloadFor<"li
 		// refetches on return instead.
 		refetchInterval: 60_000,
 	});
+
+/**
+ * The backend names platforms the way Rust does; electron reports node's names, so
+ * `darwin` would match nothing and quietly yield an empty list.
+ */
+const backendPlatform = (platform: string): string =>
+	platform === "darwin" ? "macos" : platform === "win32" ? "windows" : platform;
+
+/** Terminals are per-platform, and the platform cannot change while running. */
+export const terminalsQueryOptions = queryOptions({
+	queryKey: ["terminals" satisfies QueryKey],
+	queryFn: () => window.lite.getTerminalOptionsForPlatform(backendPlatform(window.lite.platform)),
+	staleTime: Number.POSITIVE_INFINITY,
+});
+
+export const userProfileQueryOptions = queryOptions({
+	queryKey: ["userProfile" satisfies QueryKey],
+	queryFn: () => window.lite.getUserProfileLocal(),
+});
+
+export const githubAccountsQueryOptions = queryOptions({
+	queryKey: ["forgeAccounts" satisfies QueryKey, "github"],
+	queryFn: () => window.lite.listKnownGithubAccounts(),
+});
+
+export const gitlabAccountsQueryOptions = queryOptions({
+	queryKey: ["forgeAccounts" satisfies QueryKey, "gitlab"],
+	queryFn: () => window.lite.listKnownGitlabAccounts(),
+});
+
+export const bitbucketAccountsQueryOptions = queryOptions({
+	queryKey: ["forgeAccounts" satisfies QueryKey, "bitbucket"],
+	queryFn: () => window.lite.listKnownBitbucketAccounts(),
+});
 
 export const listProjectsQueryOptions = queryOptions({
 	queryKey: ["projects" satisfies QueryKey],

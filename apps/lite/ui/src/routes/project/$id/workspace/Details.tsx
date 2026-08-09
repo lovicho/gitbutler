@@ -94,7 +94,7 @@ import {
 } from "./file-row.ts";
 import { FileFilterRow } from "./FileFilterRow.tsx";
 import { useFileFilter } from "./useFileFilter.ts";
-import { contiguousSelectionByLine } from "#ui/hunk.ts";
+import { contiguousSelectionByLine, wholeHunkSelectionByLine } from "#ui/hunk.ts";
 import { buildIndexByKey, type NavigationIndex } from "#ui/workspace/navigation-index.ts";
 import { showNativeContextMenu, showNativeMenuFromTrigger } from "#ui/native-menu.ts";
 import { useFileMenuItems } from "#ui/routes/project/$id/workspace/useFileMenuItems.ts";
@@ -130,7 +130,7 @@ import {
 	hunkOperandIdentityKey,
 } from "./diff-view.ts";
 import { DiffMinimap } from "./DiffMinimap.tsx";
-import { getMinimapFiles } from "./diff-minimap.ts";
+import { getMinimapFiles, measureWrapColumns, type MinimapSelection } from "./diff-minimap.ts";
 
 export type DiffViewerHandle = CodeViewHandle<Annotation>;
 
@@ -139,12 +139,6 @@ export type DiffViewerHandle = CodeViewHandle<Annotation>;
 type PanelId = "files-panel" | "diff-panel";
 
 const EMPTY_ANNOTATIONS_BY_PATH: LocalAnnotationsByPath = new Map();
-
-const diffDefaults = {
-	diffBackground: true,
-	diffOverflow: "scroll",
-	diffStyle: "split",
-} satisfies Partial<GUISettings>;
 
 const getCommitFileRowItems = ({
 	commitDetails,
@@ -255,7 +249,9 @@ const DiffContents: FC<{
 			editor: editors?.find((editor) => editor.id === cfg.editorId),
 			diffFontFamily: cfg.diffFontFamily,
 			diffFontSize: cfg.diffFontSize,
+			diffLigatures: cfg.diffLigatures,
 			diffTabSize: cfg.diffTabSize,
+			lineDiffType: cfg.lineDiffType,
 			theme: cfg.theme,
 		}),
 	});
@@ -413,15 +409,14 @@ const DiffContents: FC<{
 		itemId,
 		lineNumber,
 		side,
+		lineType,
 	}: DiffLineTarget): HunkOperand | null => {
 		const file = fileByItemId.get(itemId);
 		if (file?.patch?.type !== "Patch") return null;
 
-		const selection = contiguousSelectionByLine({
-			hunks: file.item.fileDiff.hunks,
-			line: lineNumber,
-			side,
-		});
+		const query = { hunks: file.item.fileDiff.hunks, line: lineNumber, side };
+		const selection =
+			lineType === "context" ? wholeHunkSelectionByLine(query) : contiguousSelectionByLine(query);
 		if (!selection) return null;
 
 		return {
@@ -578,9 +573,10 @@ const DiffContents: FC<{
 			selectedLines={selectedRange}
 			onSelectedLinesChange={handleLinesSelected}
 			options={{
-				diffStyle: diffStyle ?? diffDefaults.diffStyle,
-				disableBackground: !(diffBackgrounds ?? diffDefaults.diffBackground),
-				overflow: diffOverflow ?? diffDefaults.diffOverflow,
+				diffStyle: diffStyle ?? defaultSettings.diffStyle,
+				disableBackground: !(diffBackgrounds ?? defaultSettings.diffBackground),
+				lineDiffType: settings?.lineDiffType ?? defaultSettings.lineDiffType,
+				overflow: diffOverflow ?? defaultSettings.diffOverflow,
 				themeType: settings?.theme ?? defaultSettings.theme,
 				stickyHeaders: true,
 				enableLineSelection: true,
@@ -606,6 +602,11 @@ const DiffContents: FC<{
 				unsafeCSS: `
           :host {
             background-color: transparent;
+            /* Inherited, so this reaches the code inside the shadow root — which is the
+               only way in, since ligatures are not one of Pierre's options. */
+            font-variant-ligatures: ${
+							(settings?.diffLigatures ?? defaultSettings.diffLigatures) ? "normal" : "none"
+						};
           }
 
           [data-diffs-header="custom"] {
@@ -761,7 +762,7 @@ const DiffOverflowToggle: FC<
 					<Toggle
 						{...toggleProps}
 						aria-label="Toggle line wrapping"
-						pressed={(diffOverflow ?? diffDefaults.diffOverflow) === "wrap"}
+						pressed={(diffOverflow ?? defaultSettings.diffOverflow) === "wrap"}
 						onPressedChange={(pressed) =>
 							saveGUISettings({ diffOverflow: pressed ? "wrap" : "scroll" })
 						}
@@ -793,7 +794,7 @@ const DiffBackgroundsToggle: FC<
 					<Toggle
 						{...toggleProps}
 						aria-label="Toggle diff backgrounds"
-						pressed={diffBackgrounds ?? diffDefaults.diffBackground}
+						pressed={diffBackgrounds ?? defaultSettings.diffBackground}
 						onPressedChange={(enabled) => saveGUISettings({ diffBackground: enabled })}
 					/>
 				}
@@ -826,7 +827,7 @@ const DiffStyleToggleGroup: FC<
 					<ToggleGroup
 						{...toggleGroupProps}
 						aria-label={diffHotkeys.toggleDiffStyle.meta.name}
-						value={[diffStyle ?? diffDefaults.diffStyle]}
+						value={[diffStyle ?? defaultSettings.diffStyle]}
 						onValueChange={(value: Array<NonNullable<GUISettings["diffStyle"]>>) => {
 							const head = value[0];
 							if (head === undefined) return;
@@ -950,6 +951,26 @@ const Diff: FC<{
 
 	const diffView = withAnnotations(diffViewSansAnno, annotationsByPath);
 
+	// The diff panel resolves this selection for the viewer; the ruler wants it in
+	// file line numbers, which is what the hunk's own range already holds.
+	const diffSelection = useAppSelector((state) =>
+		projectSlice.selectors.selectSelectionDiff(state, projectId, diffViewSansAnno.navigationIndex),
+	);
+	const minimapSelection = useMemo((): MinimapSelection | null => {
+		if (!diffSelection) return null;
+
+		const key = hunkOperandIdentityKey(diffSelection);
+		const selected = diffViewSansAnno.hunkByKey.get(key)?.selectedLines;
+		if (!selected) return null;
+
+		return {
+			itemId: selected.id,
+			side: selected.range.side ?? "additions",
+			start: selected.range.start,
+			end: selected.range.end,
+		};
+	}, [diffSelection, diffViewSansAnno]);
+
 	const activateFile = (selection: string) => {
 		onPassiveFileSelection(selection);
 
@@ -988,11 +1009,16 @@ const Diff: FC<{
 
 	const diffContentsEl = useRef<HTMLElement | null>(null);
 	const [canUseSplitDiff, setCanUseSplitDiff] = useState<boolean | undefined>();
+	const [wrapColumns, setWrapColumns] = useState<number | null>(null);
+
+	// Wrapping stretches a long line over several rows, which the minimap has to
+	// model or its marks drift down the file it is mapping.
+	const wraps = (diffSettings?.diffOverflow ?? defaultSettings.diffOverflow) === "wrap";
 
 	// Split and unified lay hunks out differently, so the minimap has to model
 	// whichever style the viewer is actually rendering.
 	const diffStyle = canUseSplitDiff
-		? (diffSettings?.diffStyle ?? diffDefaults.diffStyle)
+		? (diffSettings?.diffStyle ?? defaultSettings.diffStyle)
 		: "unified";
 
 	const tabSize = diffSettings?.diffTabSize ?? defaultSettings.diffTabSize;
@@ -1013,8 +1039,9 @@ const Diff: FC<{
 					shownIndex < 0 ? treeChangeDiffs : treeChangeDiffs.slice(shownIndex, shownIndex + 1),
 				diffStyle,
 				tabSize,
+				wrapColumns,
 			}),
-		[shownIndex, fileParent, changes, treeChangeDiffs, diffStyle, tabSize],
+		[shownIndex, fileParent, changes, treeChangeDiffs, diffStyle, tabSize, wrapColumns],
 	);
 
 	useHotkeys([
@@ -1023,7 +1050,9 @@ const Diff: FC<{
 			callback: () =>
 				saveGUISettings({
 					diffStyle:
-						(diffSettings?.diffStyle ?? diffDefaults.diffStyle) === "split" ? "unified" : "split",
+						(diffSettings?.diffStyle ?? defaultSettings.diffStyle) === "split"
+							? "unified"
+							: "split",
 				}),
 			options: {
 				conflictBehavior: "allow",
@@ -1033,21 +1062,34 @@ const Diff: FC<{
 		},
 	]);
 
+	// Both of these are facts about the rendered pane rather than about the diff,
+	// so they are measured on the same resize rather than derived.
 	useLayoutEffect(() => {
 		const el = diffContentsEl.current;
 		if (!el) return;
 
-		const measureCanUseSplitDiff = () => el.getBoundingClientRect().width >= 700;
+		const measure = () => {
+			setCanUseSplitDiff(el.getBoundingClientRect().width >= 700);
 
-		setCanUseSplitDiff(measureCanUseSplitDiff());
+			if (!wraps) {
+				setWrapColumns(null);
+				return;
+			}
 
-		const resizeObserver = new ResizeObserver(() => {
-			setCanUseSplitDiff(measureCanUseSplitDiff());
-		});
+			// Held only once it can be read: a resize that lands between renders would
+			// otherwise drop the count and unwrap the whole model for a frame.
+			const viewer = viewerRef.current?.getInstance();
+			const columns = viewer ? measureWrapColumns(viewer) : null;
+			if (columns !== null) setWrapColumns(columns);
+		};
+
+		measure();
+
+		const resizeObserver = new ResizeObserver(measure);
 		resizeObserver.observe(el);
 
 		return () => resizeObserver.disconnect();
-	}, [diffContentsEl]);
+	}, [diffContentsEl, viewerRef, wraps, diffViewSansAnno]);
 
 	const layoutId = `project=${projectId}:details`;
 	const panelIds: Array<PanelId> = filesVisible ? ["files-panel", "diff-panel"] : ["diff-panel"];
@@ -1182,7 +1224,13 @@ const Diff: FC<{
 							didScrollToViaFileRef={didScrollToViaFileRef}
 						/>
 
-						<DiffMinimap viewerRef={viewerRef} files={minimapFiles} diffStyle={diffStyle} />
+						<DiffMinimap
+							viewerRef={viewerRef}
+							files={minimapFiles}
+							diffStyle={diffStyle}
+							annotationsByPath={annotationsByPath}
+							selection={minimapSelection}
+						/>
 					</div>
 				</Panel>
 			</Group>
