@@ -3,6 +3,7 @@ import {
 	getMinimapScale,
 	type MinimapFile,
 	type MinimapGeometry,
+	type MinimapLayout,
 	type MinimapOverlays,
 	type MinimapSide,
 } from "./diff-minimap.ts";
@@ -21,17 +22,47 @@ const PIN_HEIGHT = 3;
 const ICON_MIN_SECTION = 24;
 
 /**
- * Per device pixel: line widths and indents summed against how much of the
- * pixel each line covers, so dividing one by the other gives the average. Held
- * as sums rather than averages because they are accumulated a line at a time.
+ * Room a badge takes below where it hangs, its own height and the margin
+ * clearing the rule. One offered past the end of the ruler would still be
+ * placed there, and an absolute box hanging out of the ruler makes an ancestor
+ * scrollable — so a wheel over the map would scroll the pane instead.
+ */
+const ICON_HEIGHT = 23;
+
+/**
+ * Coverage per pixel, rather than an average width per pixel row.
+ *
+ * Where a row holds one line the two say the same thing. Where it holds many,
+ * an average is a single number standing in for a distribution — and every
+ * such number is wrong in its own way: the widest squares the run off, the
+ * narrowest cuts it short, the mean lands where no line actually ends. Coverage
+ * keeps all of them: the row is solid as far as every line reaches and thins
+ * out towards the longest, and that fade is the shape of the code.
+ *
+ * Held as a difference array — coverage added where a line starts and taken
+ * away where it ends — so a line costs two writes however long it is, and one
+ * running sum along the row turns them back into coverage per pixel.
  */
 type Lane = {
-	widths: Float32Array;
-	indents: Float32Array;
-	/** Everything that landed here, blank lines included. */
+	/** Two entries per line, on a row of its own: `stride` wide, `columns` used. */
+	edges: Float32Array;
+	/** Everything that landed on the row, which the running sums divide by. */
 	coverage: Float32Array;
-	/** Only the lines with something on them, which is what the sums average by. */
-	content: Float32Array;
+};
+
+/** Kept between paints: these run to megabytes, and a winding map repaints per frame. */
+const held = new Map<string, Float32Array>();
+
+const scratch = (key: string, length: number): Float32Array => {
+	const kept = held.get(key);
+	if (kept?.length === length) {
+		kept.fill(0);
+		return kept;
+	}
+
+	const made = new Float32Array(length);
+	held.set(key, made);
+	return made;
 };
 
 /** A file section with room for its type icon, and where that icon goes. */
@@ -51,20 +82,29 @@ const resolveLanes = ({
 	files,
 	geometry,
 	rows,
+	columns,
 	scale,
+	offset,
 }: {
 	files: Array<MinimapFile>;
 	geometry: MinimapGeometry;
 	rows: number;
+	columns: number;
 	scale: number;
+	offset: number;
 }): Record<MinimapSide, Lane> => {
-	const lane = (): Lane => ({
-		widths: new Float32Array(rows),
-		indents: new Float32Array(rows),
-		coverage: new Float32Array(rows),
-		content: new Float32Array(rows),
+	// One past the last column, so a line reaching the far edge has somewhere to
+	// be taken away again.
+	const stride = columns + 1;
+	const lane = (name: MinimapSide): Lane => ({
+		edges: scratch(`${name}.edges`, rows * stride),
+		coverage: scratch(`${name}.coverage`, rows),
 	});
-	const lanes = { context: lane(), deletions: lane(), additions: lane() };
+	const lanes = {
+		context: lane("context"),
+		deletions: lane("deletions"),
+		additions: lane("additions"),
+	};
 
 	for (const [index, file] of files.entries()) {
 		const block = geometry.blocks[index];
@@ -73,14 +113,22 @@ const resolveLanes = ({
 		// Straight off the file's own marks: a scaled copy of every one of them,
 		// on every paint, is a lot of garbage for two multiplications.
 		const correction = getMinimapScale(file, block) * scale;
-		const origin = block.top * scale;
+		const origin = block.top * scale - offset;
+
+		// A wound-on map leaves most of the diff off either end of the ruler, and
+		// the whole point of drawing at a fixed scale is that there can be a great
+		// deal of it. Whole files first, then runs within the file that survives.
+		if (origin > rows || origin + block.height * scale < 0) continue;
 
 		for (const mark of file.marks) {
 			const lane = lanes[mark.side];
+			const markTop = origin + mark.top * correction;
+			if (markTop > rows) break;
+			if (markTop + mark.height * correction < 0) continue;
 			// One rendered row, which is also each line's height unless wrapping gave
 			// some of them more than one.
 			const rowHeight = (mark.height * correction) / mark.rowCount;
-			let y = origin + mark.top * correction;
+			let y = markTop;
 
 			for (const [line, width] of mark.widths.entries()) {
 				const lineHeight = (mark.rows?.[line] ?? 1) * rowHeight;
@@ -93,20 +141,21 @@ const resolveLanes = ({
 				const last = Math.min(tall ? Math.ceil(y + lineHeight) - 1 : first, rows - 1);
 
 				const indent = mark.indents[line] ?? 0;
-				// A line with nothing but whitespace on it marks its pixel, but averaging
-				// its zero length in would drag the shape of the lines around it down.
-				const blank = width === indent;
+
+				// Leading whitespace is left uncovered, so indentation reads as the gap
+				// before a line's code. Every line marks at least the one pixel, however
+				// little of the lane it fills.
+				const start = Math.min(Math.round((indent * columns) / 255), columns - 1);
+				const end = Math.min(Math.max(Math.round((width * columns) / 255), start + 1), columns);
 
 				for (let row = first; row <= last; row++) {
 					// A sub-pixel line was pinned to one row, so all of it counts there.
 					const covered = tall ? Math.min(y + lineHeight, row + 1) - Math.max(y, row) : lineHeight;
+					const base = row * stride;
 
 					lane.coverage[row] = (lane.coverage[row] ?? 0) + covered;
-					if (blank) continue;
-
-					lane.content[row] = (lane.content[row] ?? 0) + covered;
-					lane.widths[row] = (lane.widths[row] ?? 0) + width * covered;
-					lane.indents[row] = (lane.indents[row] ?? 0) + indent * covered;
+					lane.edges[base + start] = (lane.edges[base + start] ?? 0) + covered;
+					lane.edges[base + end] = (lane.edges[base + end] ?? 0) - covered;
 				}
 				y += lineHeight;
 			}
@@ -117,30 +166,33 @@ const resolveLanes = ({
 };
 
 /**
- * One rule per file, snapped to a whole pixel. Where two would collide the
- * taller section keeps the slot, so a sliver can't take it from the file after
- * it. The first file gets none — the ruler's top edge is already where it
- * starts, and the toolbar above draws its own border there.
+ * One rule per file boundary that falls on the ruler, snapped to a whole pixel.
+ * Where two would collide the taller section keeps the slot, so a sliver can't
+ * take it from the file after it.
+ *
+ * A boundary off either end draws nothing, which is also why the first file
+ * needs no special case: at rest its top sits on the ruler's own top edge,
+ * where the toolbar above already draws a border.
  */
 const resolveRules = ({
 	geometry,
 	scale,
+	offset,
 	limit,
 }: {
 	geometry: MinimapGeometry;
 	scale: number;
+	offset: number;
 	limit: number;
 }): Array<{ index: number; y: number; height: number }> => {
 	const rules: Array<{ index: number; y: number; height: number }> = [];
 
 	for (const [index, block] of geometry.blocks.entries()) {
-		if (index === 0) continue;
+		const y = Math.round(block.top * scale - offset);
+		if (y <= 0) continue;
+		if (y > limit) break;
 
-		const rule = {
-			index,
-			y: Math.min(Math.round(block.top * scale), limit),
-			height: block.height * scale,
-		};
+		const rule = { index, y, height: block.height * scale };
 		const previous = rules.at(-1);
 
 		if (previous && rule.y - previous.y < RULE_MIN_GAP) {
@@ -154,6 +206,69 @@ const resolveRules = ({
 };
 
 /**
+ * The file the top of the ruler falls inside, so it can be badged there the way
+ * the files below are badged against their rules. Only worth an icon if enough
+ * of it is left on the ruler to hang one on.
+ */
+const resolveOpening = ({
+	geometry,
+	scale,
+	offset,
+}: {
+	geometry: MinimapGeometry;
+	scale: number;
+	offset: number;
+}): Array<MinimapBadge> => {
+	const index = geometry.blocks.findLastIndex((block) => block.top * scale - offset <= 0);
+	const block = geometry.blocks[index];
+	if (!block) return [];
+
+	const remaining = (block.top + block.height) * scale - offset;
+	return remaining >= ICON_MIN_SECTION ? [{ index, top: 0 }] : [];
+};
+
+/**
+ * Marks are composited through a surface of their own so the selection band
+ * keeps showing between the lines it covers: writing pixels straight onto the
+ * ruler would put them over it rather than on top of it.
+ */
+const surface: { canvas: HTMLCanvasElement | null; image: ImageData | null } = {
+	canvas: null,
+	image: null,
+};
+
+/**
+ * Canvas takes a colour as CSS writes it, but pixels have to be numbers — and
+ * these arrive as whatever `color-mix` resolved to. Painting one and reading it
+ * back is the only reader of modern colour syntax we have to hand.
+ */
+const swatch: { canvas: HTMLCanvasElement | null; read: Map<string, [number, number, number]> } = {
+	canvas: null,
+	read: new Map(),
+};
+
+const resolveColour = (colour: string): [number, number, number] => {
+	const known = swatch.read.get(colour);
+	if (known) return known;
+
+	swatch.canvas ??= document.createElement("canvas");
+	swatch.canvas.width = 1;
+	swatch.canvas.height = 1;
+
+	const context = swatch.canvas.getContext("2d", { willReadFrequently: true });
+	if (!context) return [0, 0, 0];
+
+	context.clearRect(0, 0, 1, 1);
+	context.fillStyle = colour;
+	context.fillRect(0, 0, 1, 1);
+
+	const [red = 0, green = 0, blue = 0] = context.getImageData(0, 0, 1, 1).data;
+	const resolved: [number, number, number] = [red, green, blue];
+	swatch.read.set(colour, resolved);
+	return resolved;
+};
+
+/**
  * Paint the ruler, and report which files have room for a type icon. Badges are
  * only offered for files that kept a rule, so one always sits the same distance
  * under the line opening its section rather than measuring to one further up.
@@ -163,11 +278,13 @@ export const paintMinimap = (
 	{
 		files,
 		geometry,
+		layout,
 		diffStyle,
 		overlays,
 	}: {
 		files: Array<MinimapFile>;
 		geometry: MinimapGeometry;
+		layout: MinimapLayout;
 		diffStyle: GUISettings["diffStyle"];
 		overlays: MinimapOverlays;
 	},
@@ -197,12 +314,21 @@ export const paintMinimap = (
 	};
 
 	const split = diffStyle === "split";
-	const laneWidth = Math.max(split ? (width - LANE_SPLIT) / 2 : width, 1);
 	// One device pixel, in the CSS units the context is scaled to.
 	const thinnest = 1 / ratio;
-	const scale = height / geometry.contentHeight;
+	const { scale, offset } = layout;
 	const rows = deviceHeight;
-	const lanes = resolveLanes({ files, geometry, rows, scale: scale * ratio });
+	const channel = Math.round(LANE_SPLIT * ratio);
+	const columns = Math.max(split ? Math.floor((deviceWidth - channel) / 2) : deviceWidth, 1);
+	const stride = columns + 1;
+	const lanes = resolveLanes({
+		files,
+		geometry,
+		rows,
+		columns,
+		scale: scale * ratio,
+		offset: offset * ratio,
+	});
 
 	for (let row = 0; row < rows; row++) {
 		const removed = lanes.deletions.coverage[row] ?? 0;
@@ -222,25 +348,42 @@ export const paintMinimap = (
 		losing.coverage[row] = 0;
 	}
 
-	// Leading whitespace is left unpainted, so indentation reads as the gap
-	// before a line's code. Every line grows from its own lane's left edge, the
-	// way the text does in the column it stands for.
-	const drawLane = (lane: Lane, origin: number, fill: string): void => {
-		context.fillStyle = fill;
-
+	/**
+	 * Dividing the running sum by the row's own coverage gives the share of its
+	 * lines reaching each pixel: a row of one line is solid to its end, a row of
+	 * many fades out across the lengths they run to.
+	 */
+	const paintLane = (
+		data: Uint8ClampedArray,
+		lane: Lane,
+		origin: number,
+		[red, green, blue]: [number, number, number],
+	): void => {
 		for (let row = 0; row < rows; row++) {
-			if ((lane.coverage[row] ?? 0) === 0) continue;
+			const covered = lane.coverage[row] ?? 0;
+			if (covered === 0) continue;
 
-			// Nothing but blank lines here: the pixel still gets the single-pixel
-			// minimum below, so the change stays countable rather than vanishing.
-			const content = lane.content[row] ?? 0;
-			const width = content === 0 ? 0 : (lane.widths[row] ?? 0) / content;
-			const indent = content === 0 ? 0 : (lane.indents[row] ?? 0) / content;
+			const base = row * stride;
+			let running = 0;
 
-			const outer = Math.max((laneWidth * width) / 255, thinnest);
-			const inner = Math.min((laneWidth * indent) / 255, outer - thinnest);
+			for (let column = 0; column < columns; column++) {
+				running += lane.edges[base + column] ?? 0;
+				if (running <= 0) continue;
 
-			context.fillRect(origin + inner, row / ratio, outer - inner, thinnest);
+				const alpha = Math.min(running / covered, 1);
+				const at = (row * deviceWidth + origin + column) * 4;
+
+				// Over whatever a lane before it left, so the two columns of a split
+				// diff and the context under them compose rather than overwrite.
+				const beneath = ((data[at + 3] ?? 0) / 255) * (1 - alpha);
+				const total = alpha + beneath;
+				if (total <= 0) continue;
+
+				data[at] = (red * alpha + (data[at] ?? 0) * beneath) / total;
+				data[at + 1] = (green * alpha + (data[at + 1] ?? 0) * beneath) / total;
+				data[at + 2] = (blue * alpha + (data[at + 2] ?? 0) * beneath) / total;
+				data[at + 3] = total * 255;
+			}
 		}
 	};
 
@@ -250,40 +393,67 @@ export const paintMinimap = (
 		context.fillStyle = fills.selection;
 		context.fillRect(
 			0,
-			overlays.band.top * scale,
+			overlays.band.top * scale - offset,
 			width,
 			Math.max(overlays.band.height * scale, thinnest),
 		);
 	}
 
-	const right = laneWidth + LANE_SPLIT;
-	// Unchanged code is the same on both sides, so split shows it in both columns.
-	drawLane(lanes.context, 0, fills.context);
-	if (split) drawLane(lanes.context, right, fills.context);
-	drawLane(lanes.deletions, 0, fills.deletions);
-	drawLane(lanes.additions, split ? right : 0, fills.additions);
+	surface.canvas ??= document.createElement("canvas");
+	if (surface.canvas.width !== deviceWidth || surface.canvas.height !== deviceHeight) {
+		surface.canvas.width = deviceWidth;
+		surface.canvas.height = deviceHeight;
+		surface.image = null;
+	}
+
+	const marks = surface.canvas.getContext("2d");
+	if (marks) {
+		surface.image ??= marks.createImageData(deviceWidth, deviceHeight);
+		surface.image.data.fill(0);
+
+		const right = columns + channel;
+		// Unchanged code is the same on both sides, so split shows it in both columns.
+		paintLane(surface.image.data, lanes.context, 0, resolveColour(fills.context));
+		if (split) paintLane(surface.image.data, lanes.context, right, resolveColour(fills.context));
+		paintLane(surface.image.data, lanes.deletions, 0, resolveColour(fills.deletions));
+		paintLane(
+			surface.image.data,
+			lanes.additions,
+			split ? right : 0,
+			resolveColour(fills.additions),
+		);
+
+		marks.putImageData(surface.image, 0, 0);
+		// Drawn rather than written, so the band beneath shows through the gaps.
+		context.drawImage(surface.canvas, 0, 0, width, height);
+	}
 
 	// Drawn last and opaque, so a rule reads over the marks it crosses rather
 	// than tinting with them.
-	const rules = resolveRules({ geometry, scale, limit: height - thinnest });
+	const rules = resolveRules({ geometry, scale, offset, limit: height - thinnest });
 	context.fillStyle = palette.getPropertyValue("--minimap-file-rule");
 	for (const rule of rules) context.fillRect(0, rule.y, width, thinnest);
 
 	// Pinned to the right edge, opposite the file badges, so a commented line is
-	// findable without covering the marks it belongs to.
+	// findable without covering the marks it belongs to. Nudged inside the ends
+	// rather than clamped to them, so one just off the wound-on map stays off it.
 	context.fillStyle = fills.pin;
 	for (const pin of overlays.pins) {
-		const top = Math.min(Math.max(pin * scale - PIN_HEIGHT / 2, 0), height - PIN_HEIGHT);
-		context.fillRect(width - PIN_WIDTH, top, PIN_WIDTH, PIN_HEIGHT);
+		const top = pin * scale - offset - PIN_HEIGHT / 2;
+		if (top < -PIN_HEIGHT || top > height) continue;
+
+		context.fillRect(
+			width - PIN_WIDTH,
+			Math.min(Math.max(top, 0), height - PIN_HEIGHT),
+			PIN_WIDTH,
+			PIN_HEIGHT,
+		);
 	}
 
-	const first = geometry.blocks[0];
-	const opening = first && first.height * scale >= ICON_MIN_SECTION ? [{ index: 0, top: 0 }] : [];
-
 	return [
-		...opening,
+		...resolveOpening({ geometry, scale, offset }),
 		...rules
-			.filter((rule) => rule.height >= ICON_MIN_SECTION)
+			.filter((rule) => rule.height >= ICON_MIN_SECTION && rule.y + ICON_HEIGHT <= height)
 			.map(({ index, y }) => ({ index, top: y })),
 	];
 };

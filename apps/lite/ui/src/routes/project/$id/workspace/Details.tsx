@@ -49,12 +49,13 @@ import { useAppDispatch, useAppSelector } from "#ui/store.ts";
 import { classes } from "#ui/components/classes.ts";
 import { Toggle, ToggleGroup, Toolbar, Tooltip } from "@base-ui/react";
 import type { CommitDetails, TreeChange } from "@gitbutler/but-sdk";
-import type {
-	CodeViewDiffItem,
-	CodeView as CodeViewClass,
-	CodeViewLineSelection,
-	GetHoveredLineResult,
-	DiffLineAnnotation,
+import {
+	type CodeViewDiffItem,
+	type CodeView as CodeViewClass,
+	type CodeViewLineSelection,
+	type GetHoveredLineResult,
+	type DiffLineAnnotation,
+	isDiffAnnotation,
 } from "@pierre/diffs";
 import { CodeView, type CodeViewHandle } from "@pierre/diffs/react";
 import { useQuery, useSuspenseQueries, useSuspenseQuery } from "@tanstack/react-query";
@@ -492,7 +493,7 @@ const DiffContents: FC<{
 				const file = fileByItemId.get(item.id);
 
 				// CodeView may briefly hold onto stale snapshots of our data.
-				if (!file) return <div style={{ height: 38 }} />;
+				if (!file) return <div style={{ height: codeViewItemMetrics.diffHeaderHeight }} />;
 
 				return (
 					<DiffFileHeader
@@ -549,7 +550,7 @@ const DiffContents: FC<{
 				);
 			}}
 			renderAnnotation={(anno, item) => {
-				if (!("side" in anno)) throw new Error("Only diff items may be rendered");
+				if (!isDiffAnnotation(anno)) throw new Error("Only diff items may be rendered");
 
 				const file = fileByItemId.get(item.id);
 				if (!file) return null;
@@ -1058,6 +1059,7 @@ const Diff: FC<{
 			diffOverflow: cfg.diffOverflow,
 			diffStyle: cfg.diffStyle,
 			diffTabSize: cfg.diffTabSize,
+			minimap: cfg.minimap,
 		}),
 	});
 
@@ -1086,18 +1088,32 @@ const Diff: FC<{
 		? -1
 		: changes.findIndex((change) => change.path === activeFilePath);
 
+	const minimapShown = diffSettings?.minimap ?? defaultSettings.minimap;
+	// Modelling the map reads every line of the diff, so a ruler nobody asked for
+	// shouldn't be parsed for either.
 	const minimapFiles = useMemo(
 		() =>
-			getMinimapFiles({
-				fileParent,
-				changes: shownIndex < 0 ? changes : changes.slice(shownIndex, shownIndex + 1),
-				treeChangeDiffs:
-					shownIndex < 0 ? treeChangeDiffs : treeChangeDiffs.slice(shownIndex, shownIndex + 1),
-				diffStyle,
-				tabSize,
-				wrapColumns,
-			}),
-		[shownIndex, fileParent, changes, treeChangeDiffs, diffStyle, tabSize, wrapColumns],
+			minimapShown
+				? getMinimapFiles({
+						fileParent,
+						changes: shownIndex < 0 ? changes : changes.slice(shownIndex, shownIndex + 1),
+						treeChangeDiffs:
+							shownIndex < 0 ? treeChangeDiffs : treeChangeDiffs.slice(shownIndex, shownIndex + 1),
+						diffStyle,
+						tabSize,
+						wrapColumns,
+					})
+				: [],
+		[
+			minimapShown,
+			shownIndex,
+			fileParent,
+			changes,
+			treeChangeDiffs,
+			diffStyle,
+			tabSize,
+			wrapColumns,
+		],
 	);
 
 	useHotkeys([
@@ -1286,13 +1302,15 @@ const Diff: FC<{
 							didScrollToViaFileRef={didScrollToViaFileRef}
 						/>
 
-						<DiffMinimap
-							viewerRef={viewerRef}
-							files={minimapFiles}
-							diffStyle={diffStyle}
-							annotationsByPath={annotationsByPath}
-							selection={minimapSelection}
-						/>
+						{minimapShown && (
+							<DiffMinimap
+								viewerRef={viewerRef}
+								files={minimapFiles}
+								diffStyle={diffStyle}
+								annotationsByPath={annotationsByPath}
+								selection={minimapSelection}
+							/>
+						)}
 					</div>
 				</Panel>
 			</Group>
