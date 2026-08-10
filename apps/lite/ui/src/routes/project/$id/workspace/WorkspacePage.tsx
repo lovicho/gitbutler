@@ -18,10 +18,11 @@ import {
 import { projectSlice } from "#ui/projects/state.ts";
 import { interfaceSlice } from "#ui/interface/state.ts";
 import { PickerDialog } from "#ui/components/PickerDialog.tsx";
+import { ResizeHandle } from "#ui/components/ResizeHandle.tsx";
 import { globalHotkeys, workspaceHotkeys } from "#ui/hotkeys.ts";
 import { writeLastOpenedProject } from "#ui/project.ts";
 import { useAppDispatch, useAppSelector } from "#ui/store.ts";
-import type { ProjectForFrontend, RefInfo, WorktreeChanges } from "@gitbutler/but-sdk";
+import type { ProjectForFrontend, RefInfo, TreeChange, WorktreeChanges } from "@gitbutler/but-sdk";
 import { useHotkey, useHotkeys, type UseHotkeyDefinition } from "@tanstack/react-hotkeys";
 import {
 	QueryErrorResetBoundary,
@@ -32,7 +33,7 @@ import {
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { Match } from "effect";
 import { type FC, Activity, useDeferredValue, useRef } from "react";
-import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panels";
+import { Group, Panel, useDefaultLayout } from "react-resizable-panels";
 import {
 	branchOperand,
 	commitOperand,
@@ -48,6 +49,14 @@ import {
 import { Details, type DiffViewerHandle } from "./Details.tsx";
 import { getDiffFileNavigation } from "./diff-view.ts";
 import { pathMatchesFilter } from "./file-row.ts";
+import {
+	buildFileTreeRows,
+	fileTreeNavigationIndex,
+	selectedFilePath,
+	type FileDisplayMode,
+	type FileTreeRow,
+} from "./file-tree.ts";
+import { useFileDisplayMode } from "./useFileDisplayMode.ts";
 import styles from "./WorkspacePage.module.css";
 import { useActiveElement } from "#ui/focus.ts";
 import { ApplyBranchPicker } from "./ApplyBranchPicker.tsx";
@@ -232,19 +241,23 @@ const hasAnyOperation = (sources: Array<Operand>, target: Operand) => {
 	return !!operations.into || !!operations.above || !!operations.below;
 };
 
-const buildUncommittedFilesNavigationIndex = ({
+const buildUncommittedFileRows = ({
 	worktreeChanges,
 	filter,
+	mode,
+	collapsedDirectories,
 }: {
 	worktreeChanges: WorktreeChanges | undefined;
 	filter: string | null;
-}): NavigationIndex<string> => {
-	const items =
-		worktreeChanges?.changes.flatMap((change) =>
-			pathMatchesFilter(change.path, filter) ? change.path : [],
-		) ?? [];
-	return { items, indexByKey: buildIndexByKey(items, (path) => path) };
-};
+	mode: FileDisplayMode;
+	collapsedDirectories: Record<string, true>;
+}): Array<FileTreeRow<TreeChange>> =>
+	buildFileTreeRows({
+		items:
+			worktreeChanges?.changes.filter((change) => pathMatchesFilter(change.path, filter)) ?? [],
+		mode,
+		collapsedDirectories,
+	});
 
 const buildOutlineNavigationIndex = ({
 	headInfo,
@@ -519,10 +532,19 @@ const WorkspacePage: FC = () => {
 	const uncommittedFilesFilter = useAppSelector((state) =>
 		projectSlice.selectors.selectUncommittedFilesFilter(state, projectId),
 	);
-	const uncommittedFilesNavigationIndex = buildUncommittedFilesNavigationIndex({
+	const uncommittedFilesDisplayMode = useFileDisplayMode();
+	const uncommittedFilesCollapsedDirectories = useAppSelector((state) =>
+		projectSlice.selectors.selectUncommittedFilesCollapsedDirectories(state, projectId),
+	);
+	const uncommittedFileRows = buildUncommittedFileRows({
 		worktreeChanges,
 		filter: uncommittedFilesFilter,
+		mode: uncommittedFilesDisplayMode,
+		collapsedDirectories: uncommittedFilesCollapsedDirectories,
 	});
+	// Directories take the cursor as files do, so the index follows the layout the
+	// list renders — and a collapsed directory takes its files out of it too.
+	const uncommittedFilesNavigationIndex = fileTreeNavigationIndex(uncommittedFileRows);
 	const uncommittedTreeChangeDiffs = useQueries({
 		queries:
 			worktreeChanges?.changes.map((change) =>
@@ -536,9 +558,12 @@ const WorkspacePage: FC = () => {
 	});
 
 	const onActiveUncommittedFileSelection = (selection: string) => {
+		// A directory row stands for the first file below it, so activating a
+		// folder still gives the details pane somewhere to go.
+		const path = selectedFilePath(uncommittedFileRows, selection);
 		// Indexed against the worktree changes rather than the navigation index,
 		// which the file filter can narrow out from under them.
-		const index = worktreeChanges?.changes.findIndex((change) => change.path === selection) ?? -1;
+		const index = worktreeChanges?.changes.findIndex((change) => change.path === path) ?? -1;
 		const change = index === -1 ? undefined : worktreeChanges?.changes[index];
 		const treeChangeDiff = index === -1 ? undefined : uncommittedTreeChangeDiffs?.[index];
 		const navigation =
@@ -653,7 +678,7 @@ const WorkspacePage: FC = () => {
 							onActiveFileSelection={onActiveUncommittedFileSelection}
 						/>
 					</Panel>
-					<Separator className={styles.resizeHandle} />
+					<ResizeHandle />
 				</Activity>
 
 				<Panel

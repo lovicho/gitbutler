@@ -28,6 +28,7 @@ import { classes } from "#ui/components/classes.ts";
 import { navigationIndexIncludes, type NavigationIndex } from "#ui/workspace/navigation-index.ts";
 import { mergeProps, Tooltip, useRender } from "@base-ui/react";
 import { useMergedRefs } from "@base-ui/utils/useMergedRefs";
+import { ResizeHandle } from "#ui/components/ResizeHandle.tsx";
 import { Scroller } from "#ui/components/Scroller.tsx";
 import type {
 	BranchReference,
@@ -49,7 +50,7 @@ import {
 	use,
 	useRef,
 } from "react";
-import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panels";
+import { Group, Panel, useDefaultLayout } from "react-resizable-panels";
 import styles from "./OutlineTree.module.css";
 import { Row, RowLabel, RowLabelContainer, SectionHeaderRow } from "../Row.tsx";
 import { StackCard } from "../StackCard.tsx";
@@ -67,7 +68,9 @@ import { useOutlineTreeHotkeys } from "./hotkeys.ts";
 import { UncommittedChangesRow } from "./UncommittedChangesRow.tsx";
 import { FileFilterRow } from "../FileFilterRow.tsx";
 import { useFileFilter } from "../useFileFilter.ts";
-import { getChangesFileRowItems, pathMatchesFilter } from "../file-row.ts";
+import { getChangesFileRowItems, pathMatchesFilter, type FileRowItem } from "../file-row.ts";
+import { buildFileTreeRows, type FileDisplayMode, type FileTreeRow } from "../file-tree.ts";
+import { useFileDisplayMode } from "../useFileDisplayMode.ts";
 import {
 	canRemoveBranchReference,
 	downstackPushStatusesFromSegments,
@@ -237,6 +240,30 @@ const OperandC: FC<
 	});
 };
 
+/**
+ * Laid out from the same source and settings as the navigation index the page
+ * builds, so the rows and the keys that move between them stay in step. Kept
+ * out of the component so the compiler memoises it on those inputs.
+ */
+const buildUncommittedFileRows = ({
+	worktreeChanges,
+	filter,
+	mode,
+	collapsedDirectories,
+}: {
+	worktreeChanges: WorktreeChanges | undefined;
+	filter: string | null;
+	mode: FileDisplayMode;
+	collapsedDirectories: Record<string, true>;
+}): Array<FileTreeRow<FileRowItem>> =>
+	buildFileTreeRows({
+		items: (worktreeChanges ? getChangesFileRowItems(worktreeChanges) : []).filter((item) =>
+			pathMatchesFilter(item.path, filter),
+		),
+		mode,
+		collapsedDirectories,
+	});
+
 const UncommittedChanges: FC<{
 	navigationIndex: NavigationIndex<string>;
 	commitTarget: CommitTargetComboboxItem | null;
@@ -261,9 +288,16 @@ const UncommittedChanges: FC<{
 	const filter = useAppSelector((state) =>
 		projectSlice.selectors.selectUncommittedFilesFilter(state, projectId),
 	);
-	const fileRowItems = (worktreeChanges ? getChangesFileRowItems(worktreeChanges) : []).filter(
-		(item) => pathMatchesFilter(item.path, filter),
+	const fileDisplayMode = useFileDisplayMode();
+	const collapsedDirectories = useAppSelector((state) =>
+		projectSlice.selectors.selectUncommittedFilesCollapsedDirectories(state, projectId),
 	);
+	const fileRows = buildUncommittedFileRows({
+		worktreeChanges,
+		filter,
+		mode: fileDisplayMode,
+		collapsedDirectories,
+	});
 
 	const fileSelection = useAppSelector((state) =>
 		projectSlice.selectors.selectSelectionUncommittedFiles(state, projectId, navigationIndex),
@@ -278,7 +312,7 @@ const UncommittedChanges: FC<{
 		inputId: "uncommitted-files-filter-input",
 		scope: "uncommitted-files",
 		selection: fileSelection,
-		firstPath: fileRowItems[0]?.path,
+		firstPath: fileRows[0]?.path,
 		onEnterList: onActiveFileSelection,
 		panelRef,
 		listRef: fileListRef,
@@ -318,9 +352,15 @@ const UncommittedChanges: FC<{
 							: "Nothing to commit"
 					}
 					fileParent={uncommittedChangesFileParent}
-					items={fileRowItems}
+					rows={fileRows}
+					collapsedDirectories={collapsedDirectories}
+					onToggleDirectoryCollapsed={(path) =>
+						dispatch(
+							projectSlice.actions.toggleUncommittedFilesDirectoryCollapsed({ projectId, path }),
+						)
+					}
 					navigationIndex={navigationIndex}
-					onFileSelection={onActiveFileSelection}
+					onRowSelection={onActiveFileSelection}
 					projectId={projectId}
 					ref={useMergedRefs(fileListRef, useAutofocusSelectionScope())}
 					selection={fileSelection}
@@ -851,7 +891,7 @@ export const OutlineTree: FC<
 						/>
 					</Panel>
 
-					<Separator className={styles.resizeHandle} />
+					<ResizeHandle />
 
 					<Panel id={"stacks-panel" satisfies PanelId} className={styles.stacksPanel} minSize={120}>
 						<SectionHeaderRow
