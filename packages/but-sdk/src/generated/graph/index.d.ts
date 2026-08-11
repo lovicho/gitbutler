@@ -58,6 +58,18 @@ export declare function applyBranchIntegration(projectId: string, branch: string
 export declare function assignHunk(projectId: string, assignments: Array<HunkAssignmentRequest>): Promise<void>
 
 /**
+ * Returns an unused short branch name derived from the configured Git author,
+ * like `jd-branch-1`.
+ *
+ * This is the very name [`branch_create()`] falls back to when `new_ref` is
+ * omitted, so callers can show the branch they are about to create before it
+ * exists. Uniqueness only holds at the time of the call: the name is
+ * deduplicated against local branches and the short names of remote-tracking
+ * branches, both of which can change afterwards.
+ */
+export declare function branchCannedName(projectId: string): Promise<string>
+
+/**
  * Checks out an existing local branch and returns the resulting workspace state.
  *
  * This acquires exclusive worktree access from `ctx`, updates the worktree and
@@ -3851,6 +3863,11 @@ export type WorkspaceState = {
    * rendered graph projection.
    */
   graphWorkspace: DetailedGraphWorkspace;
+  /**
+   * True if a checkout occurred, and a conflict occurred during that
+   * checkout.
+   */
+  checkoutConflictOccurred: boolean;
 };
 
 /** Same as `but_core::ui::WorktreeChanges`, but with the addition of hunk assignments. */
