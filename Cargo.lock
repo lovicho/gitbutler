@@ -1381,6 +1381,7 @@ dependencies = [
  "gix",
  "itertools",
  "petgraph",
+ "sapling-renderdag",
  "snapbox",
  "tracing",
 ]
@@ -1702,6 +1703,7 @@ dependencies = [
  "but-core",
  "but-ctx",
  "but-db",
+ "but-graph",
  "but-oplog",
  "but-rebase",
  "but-testsupport",
