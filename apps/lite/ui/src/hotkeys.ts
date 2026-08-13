@@ -123,12 +123,6 @@ export const workspaceHotkeys = {
 	focusHorizontalSelectionScopeRight: {
 		hotkey: "ArrowRight",
 	},
-	focusVerticalSelectionScopeUp: {
-		hotkey: "Mod+Alt+ArrowUp",
-	},
-	focusVerticalSelectionScopeDown: {
-		hotkey: "Mod+Alt+ArrowDown",
-	},
 	openInTerminal: {
 		hotkey: "Mod+Shift+T",
 		meta: { group: "Workspace", name: "Open project in terminal" },
@@ -320,9 +314,16 @@ export const operationHotkeys = {
 } satisfies Record<string, HotkeyWithMeta>;
 
 export const diffHotkeys = {
+	checkHunk: {
+		hotkey: "Space",
+		meta: { group: "Diff", name: "Check hunk" },
+	},
 	toggleFoldFile: {
 		hotkey: "Z",
 		meta: { group: "Diff", name: "Fold/unfold file" },
+	},
+	toggleReviewedFile: {
+		hotkey: "R",
 	},
 	toggleDiffStyle: {
 		hotkey: "Mod+B",

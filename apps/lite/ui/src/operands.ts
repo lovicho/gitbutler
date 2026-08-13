@@ -61,7 +61,7 @@ export const hunkOperand = ({
 	parent,
 	isResultOfBinaryToTextConversion,
 	...lineSelection
-}: HunkOperand): Operand => ({
+}: HunkOperand): Extract<Operand, { _tag: "Hunk" }> => ({
 	_tag: "Hunk",
 	parent,
 	isResultOfBinaryToTextConversion,
@@ -105,7 +105,7 @@ const fileParentIdentityKey = (fp: FileParent): string => {
 	}
 };
 
-const weakFileParentIdentityKey = (fp: FileParent): string => {
+export const weakFileParentIdentityKey = (fp: FileParent): string => {
 	switch (fp._tag) {
 		case "UncommittedChanges":
 			return uncommittedChangesIdentityKey;

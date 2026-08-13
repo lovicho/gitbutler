@@ -19,6 +19,7 @@ export const projectQueryKeys = Object.keys(apiProvides) as ReadonlyArray<Projec
 
 /** Keyed without a project id, so no project event can invalidate them. */
 type GlobalQueryKey =
+	| "aiConfiguration"
 	| "editors"
 	| "terminals"
 	| "forgeAccounts"
@@ -31,7 +32,12 @@ type GlobalQueryKey =
  * memoizes an imperative preview: its key carries the operation and changes it
  * was measured against, and nothing refreshes it in place.
  */
-type LocalQueryKey = "commitMessageDraft" | "dryRun" | "prMergeMethod" | "prDraft";
+type LocalQueryKey =
+	| "commitMessageDraft"
+	| "dryRun"
+	| "prMergeMethod"
+	| "prDraft"
+	| "reviewedFiles";
 
 export type QueryKey = ProjectQueryKey | GlobalQueryKey | LocalQueryKey;
 
@@ -380,6 +386,11 @@ export const terminalsQueryOptions = queryOptions({
 export const userProfileQueryOptions = queryOptions({
 	queryKey: ["userProfile"],
 	queryFn: () => window.lite.getUserProfileLocal(),
+});
+
+export const aiConfigurationQueryOptions = queryOptions({
+	queryKey: ["aiConfiguration"],
+	queryFn: () => window.lite.getAiConfiguration(),
 });
 
 export const githubAccountsQueryOptions = queryOptions({

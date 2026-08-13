@@ -1453,6 +1453,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-openai",
+ "but-core",
  "but-secret",
  "but-tools",
  "futures",
@@ -1464,6 +1465,7 @@ dependencies = [
  "strum 0.27.2",
  "tokio",
  "tracing",
+ "url",
 ]
 
 [[package]]
@@ -1499,15 +1501,20 @@ dependencies = [
  "anyhow",
  "but-api",
  "but-askpass",
+ "but-core",
  "but-ctx",
+ "but-llm",
  "but-path",
+ "but-secret",
  "but-settings",
  "gitbutler-watcher",
+ "gix",
  "napi",
  "napi-build",
  "napi-derive",
  "serde",
  "serde_json",
+ "tokio",
  "tracing",
 ]
 
@@ -1781,7 +1788,6 @@ dependencies = [
  "gitbutler-git",
  "gitbutler-reference",
  "gitbutler-repo",
- "gitbutler-stack",
  "gix",
  "indexmap 2.14.0",
  "itertools",
@@ -3895,7 +3901,6 @@ dependencies = [
  "but-testsupport",
  "but-workspace",
  "ctor 0.6.3",
- "git2",
  "gitbutler-branch",
  "gitbutler-commit",
  "gitbutler-operating-modes",
@@ -3903,11 +3908,8 @@ dependencies = [
  "gitbutler-project",
  "gitbutler-reference",
  "gitbutler-repo",
- "gitbutler-stack",
  "gitbutler-workspace",
  "gix",
- "glob",
- "itertools",
  "md5",
  "pretty_assertions",
  "schemars 1.2.1",
@@ -4055,6 +4057,7 @@ dependencies = [
  "but-serde",
  "but-testsupport",
  "but-utils",
+ "git2",
  "gitbutler-cherry-pick",
  "gitbutler-repo",
  "gix",
@@ -4137,7 +4140,6 @@ name = "gitbutler-stack"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "bstr",
  "but-askpass",
  "but-core",
  "but-ctx",
@@ -4217,6 +4219,7 @@ dependencies = [
  "but-path",
  "but-schemars",
  "but-secret",
+ "but-testsupport",
  "but-utils",
  "keyring",
  "reqwest",
@@ -4258,11 +4261,11 @@ dependencies = [
  "anyhow",
  "but-core",
  "but-ctx",
- "but-meta",
  "but-oxidize",
  "git2",
  "gitbutler-cherry-pick",
  "gix",
+ "tempfile",
 ]
 
 [[package]]

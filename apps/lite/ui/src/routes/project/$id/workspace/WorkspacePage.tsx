@@ -11,7 +11,6 @@ import { decodeBytes } from "#ui/api/bytes.ts";
 import {
 	focusHorizontalSelectionScope,
 	focusSelectionScope,
-	focusVerticalSelectionScope,
 	getFocusedSelectionScope,
 	type SelectionScope,
 } from "#ui/selection-scopes.ts";
@@ -235,20 +234,6 @@ const useWorkspaceHotkeys = (projectId: string) => {
 				conflictBehavior: "allow",
 			},
 		},
-		{
-			hotkey: workspaceHotkeys.focusVerticalSelectionScopeUp.hotkey,
-			callback: () => focusVerticalSelectionScope(-1),
-			options: {
-				conflictBehavior: "allow",
-			},
-		},
-		{
-			hotkey: workspaceHotkeys.focusVerticalSelectionScopeDown.hotkey,
-			callback: () => focusVerticalSelectionScope(1),
-			options: {
-				conflictBehavior: "allow",
-			},
-		},
 	]);
 };
 
@@ -408,7 +393,11 @@ const WorkspacePage: FC = () => {
 
 		if (renderAllFiles) {
 			didScrollToViaFileRef.current = true;
-			viewerRef.current?.scrollTo({
+			const viewer = viewerRef.current?.getInstance();
+			// Details selection is deferred, so the ref may still point at a viewer without this file.
+			if (!viewer?.getItem(itemId)) return;
+
+			viewer.scrollTo({
 				type: "item",
 				id: itemId,
 			});

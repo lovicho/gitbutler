@@ -1014,17 +1014,6 @@ export declare function treeChangeDiffs(projectId: string, change: TreeChange): 
 export declare function unapplyStack(projectId: string, stackId: string): Promise<void>
 
 /**
- * Change the branch name from `branch_name` to `new_name` in the stack
- * identified by `stack_id`.
- *
- * This acquires exclusive worktree access from `ctx` before applying the
- * rename.
- *
- * See [`update_branch_name_with_perm()`] for the underlying mutation.
- */
-export declare function updateBranchName(projectId: string, stackId: string, branchName: string, newName: string): Promise<BranchReference>
-
-/**
  * Change the profile on gitbutler.com and keep the stored account in step.
  *
  * The API call alone would leave the local copy stale, so the name shown next to the
@@ -1132,6 +1121,36 @@ export declare class WatcherHandle {
   get active(): boolean
 }
 
+export interface AiConfiguration {
+  provider: 'openai' | 'anthropic' | 'ollama' | 'lmstudio' | 'openrouter'
+  openaiKeyOption: 'butlerAPI' | 'bringYourOwn'
+  openaiModel: string
+  openaiCustomEndpoint?: string
+  openaiHasApiKey: boolean
+  anthropicKeyOption: 'butlerAPI' | 'bringYourOwn'
+  anthropicModel: string
+  anthropicHasApiKey: boolean
+  ollamaEndpoint: string
+  ollamaModel: string
+  lmstudioEndpoint: string
+  lmstudioModel: string
+}
+
+export interface AiConfigurationUpdate {
+  provider: 'openai' | 'anthropic' | 'ollama' | 'lmstudio'
+  openaiKeyOption: 'butlerAPI' | 'bringYourOwn'
+  openaiModel: string
+  openaiCustomEndpoint?: string
+  openaiApiKey?: string
+  anthropicKeyOption: 'butlerAPI' | 'bringYourOwn'
+  anthropicModel: string
+  anthropicApiKey?: string
+  ollamaEndpoint: string
+  ollamaModel: string
+  lmstudioEndpoint: string
+  lmstudioModel: string
+}
+
 /** Any fork link line. */
 export const ANY_FORK: number
 
@@ -1167,6 +1186,9 @@ export declare function askpassSubmitPromptResponse(id: string, response?: strin
 /** The target node of this link line is the child of this column. */
 export const CHILD: number
 
+/** Read application-global AI configuration without exposing stored secrets. */
+export declare function getAiConfiguration(): Promise<AiConfiguration>
+
 /** Get the application settings. */
 export declare function getAppSettings(): Promise<AppSettings>
 
@@ -1197,6 +1219,9 @@ export const LEFT_MERGE_ANCESTOR: number
 /** The child of this cell is linked to parents on the left. */
 export const LEFT_MERGE_PARENT: number
 
+/** Clear application-global AI configuration and stored provider API keys. */
+export declare function resetAiConfiguration(): Promise<AiConfiguration>
+
 /** Any right fork link line. */
 export const RIGHT_FORK: number
 
@@ -1214,6 +1239,12 @@ export const RIGHT_MERGE_ANCESTOR: number
 
 /** The child of this cell is linked to parents on the right. */
 export const RIGHT_MERGE_PARENT: number
+
+/** Stream a text response from the configured provider. */
+export declare function streamAiResponse(systemMessage: string, prompt: string, onToken: ((err: Error | null, arg: string) => void)): Promise<string>
+
+/** Validate and save one complete application-global AI configuration. */
+export declare function updateAiConfiguration(update: AiConfigurationUpdate): Promise<AiConfiguration>
 
 /** Update feature flags; unset fields are left unchanged. */
 export declare function updateFeatureFlags(update: FeatureFlagsUpdate): Promise<void>
@@ -1770,7 +1801,7 @@ export type Claude = {
  */
 export type Code = "Validation" | "RepoOwnership" | "ProjectGitAuth" | "DefaultTargetNotFound" | "CommitSigningFailed" | "CommitMergeConflictFailure" | "ProjectMissing" | "AuthorMissing" | "BranchNotFound" | "SecretKeychainNotFound" | "MissingLoginKeychain" | "GitForcePushProtection" | "NetworkError" | "ProjectDatabaseIncompatible" | "DefaultTerminalNotFound" | "Unknown" | "GitNonFastForward" | "CliInstallCancelled" | "GitHubTokenExpired" | "PreconditionFailed" | "EditorExitedWithNonZeroStatus";
 
-/** Commit that is a part of a [`StackBranch`](gitbutler_stack::StackBranch) and, as such, containing state derived in relation to the specific branch. */
+/** Commit that is part of a legacy stack branch and contains state derived in relation to it. */
 export type Commit = {
   /** The OID of the commit. */
   id: string;
@@ -1928,6 +1959,12 @@ export type ConflictEntryPresence = {
  * lines of surrounding context.
  */
 export type ConflictHunk = {
+  /**
+   * Survives the rewrites resolving causes, unlike `hunks` positions: a
+   * hash of the three sides — which narrowing keeps, unlike contexts —
+   * plus an occurrence counter. Treat an id that stops matching as dropped.
+   */
+  id: string;
   /**
    * The 1-based line where the conflicted region starts, counted in the
    * intended result — the merge with every conflict taking the commit's
@@ -3579,7 +3616,7 @@ export type StackDetails = {
 };
 
 /**
- * Represents a lightweight version of a [`gitbutler_stack::Stack`] for listing.
+ * Represents a lightweight version of a legacy stack for listing.
  * NOTE: this is a UI type mostly because it's still modeled after the legacy stack with StackId, something that doesn't exist anymore.
  */
 export type StackEntry = {
