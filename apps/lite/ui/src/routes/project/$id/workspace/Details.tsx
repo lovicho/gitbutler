@@ -2,6 +2,7 @@ import { ResizeHandle } from "#ui/components/ResizeHandle.tsx";
 import { Scroller } from "#ui/components/Scroller.tsx";
 import { SuspenseQuery } from "@suspensive/react-query";
 import {
+	useCommitUncommitChanges,
 	useOpenInProgram,
 	useResolveCommitConflictHunks,
 	useSaveGUISettings,
@@ -29,6 +30,7 @@ import {
 	type FileOperand,
 	fileOperand,
 	hunkOperand,
+	operandEquals,
 	type FileParent,
 	type HunkOperand,
 	type Operand,
@@ -98,6 +100,7 @@ import { ChangeStats } from "#ui/routes/project/$id/workspace/ChangeStats.tsx";
 import { ChangesHeaderRow } from "#ui/routes/project/$id/workspace/ChangesHeaderRow.tsx";
 import { getLineStats } from "#ui/routes/project/$id/workspace/lineStats.ts";
 import { FilesTree } from "#ui/routes/project/$id/workspace/FilesTree.tsx";
+import { createDiffSpec } from "#ui/operations/diff-specs.ts";
 import { TopLeftControls } from "#ui/routes/project/$id/workspace/TopLeftControls.tsx";
 import {
 	changeFileRowItem,
@@ -164,6 +167,7 @@ import {
 	type SetFilesReviewedInput,
 	useSetFilesReviewed,
 } from "#ui/reviewed-files.ts";
+import { useApplyToWorkspace } from "./useApplyToWorkspace.ts";
 
 export type DiffViewerHandle = CodeViewHandle<Annotation>;
 
@@ -279,6 +283,8 @@ const DiffContents: FC<{
 	setFilesReviewed: (input: SetFilesReviewedInput) => void;
 	viewerRef: RefObject<CodeViewHandle<Annotation> | null>;
 	didScrollToViaFileRef: RefObject<boolean>;
+	canUncommit: boolean;
+	uncommit: (change: TreeChange, extendToCheckedFiles: boolean) => void;
 }> = ({
 	activeFileItemId,
 	selectionScopeRef,
@@ -296,6 +302,8 @@ const DiffContents: FC<{
 	setFilesReviewed,
 	viewerRef,
 	didScrollToViaFileRef,
+	canUncommit,
+	uncommit,
 }) => {
 	const newFocusableAnnotationIdRef = useRef<string | null>(null);
 	const dispatch = useAppDispatch();
@@ -749,6 +757,8 @@ const DiffContents: FC<{
 							selected={item.id === selectedFoldedFileId}
 							setCollapsed={handleSetCollapsed(item.id)}
 							setReviewed={handleSetReviewed(item.id, file.change.path, version)}
+							canUncommit={canUncommit}
+							uncommit={uncommit}
 						/>
 					);
 				}}
@@ -904,6 +914,8 @@ type DiffFileHeaderProps = {
 	selected: boolean;
 	setCollapsed: (collapsed: boolean) => void;
 	setReviewed: (reviewed: boolean) => void;
+	canUncommit: boolean;
+	uncommit: (change: TreeChange, extendToCheckedFiles: boolean) => void;
 };
 
 const DiffFileHeader: FC<DiffFileHeaderProps> = (p) => {
@@ -912,6 +924,8 @@ const DiffFileHeader: FC<DiffFileHeaderProps> = (p) => {
 		operand: p.operand,
 		path: p.change.path,
 		change: p.change,
+		canUncommit: p.canUncommit,
+		uncommit: p.uncommit,
 	});
 
 	const lastSepIdx = p.change.path.lastIndexOf("/");
@@ -1193,6 +1207,7 @@ const Diff: FC<{
 	headerSlot,
 }) => {
 	const selectionScopeRef = useRef<HTMLDivElement>(null);
+	const store = useAppStore();
 	const dispatch = useAppDispatch();
 	const { mutate: setFilesReviewed } = useSetFilesReviewed();
 	const [manualCollapseByItem, setManualCollapseByItem] = useState<Map<string, boolean>>(new Map());
@@ -1269,6 +1284,41 @@ const Diff: FC<{
 			),
 		[selection],
 	);
+
+	const { isPending: isCommitUncommitChangesPending, mutate: commitUncommitChanges } =
+		useCommitUncommitChanges();
+
+	const uncommit = (change: TreeChange, extendToCheckedFiles: boolean): void => {
+		if (fileParent._tag !== "Commit") return;
+
+		const sources = projectSlice.selectors.selectCheckedOperands(store.getState(), projectId);
+
+		let subjectChanges = [change];
+		if (
+			extendToCheckedFiles &&
+			sources.length > 0 &&
+			sources.every(
+				(operand) => operand._tag === "File" && operandEquals(operand.parent, fileParent),
+			)
+		) {
+			const checkedChanges = sources.flatMap(
+				(source) =>
+					changes.find((candidate) => source._tag === "File" && candidate.path === source.path) ??
+					[],
+			);
+			if (checkedChanges.length !== sources.length) return;
+
+			subjectChanges = checkedChanges;
+		}
+
+		commitUncommitChanges({
+			projectId,
+			commitId: fileParent.commitId,
+			assignTo: null,
+			changes: subjectChanges.map((change) => createDiffSpec(change, [])),
+			dryRun: false,
+		});
+	};
 	const reviewedFilesContextId = weakFileParentIdentityKey(fileParent);
 	const { data: reviewedFiles } = useSuspenseQuery(
 		reviewedFilesQueryOptions(projectId, reviewedFilesContextId),
@@ -1537,6 +1587,8 @@ const Diff: FC<{
 										selection={filesSelection}
 										navigationIndex={filesNavigationIndex}
 										fileParent={fileParent}
+										canUncommit={!isCommitUncommitChangesPending}
+										uncommit={uncommit}
 										emptyLabel={
 											filesFilter !== null && filesItems.length > 0
 												? "No matching files."
@@ -1642,6 +1694,8 @@ const Diff: FC<{
 								manualCollapseByItem={manualCollapseByItem}
 								setManualCollapse={setManualCollapse}
 								setFilesReviewed={setFilesReviewed}
+								canUncommit={!isCommitUncommitChangesPending}
+								uncommit={uncommit}
 								selectionScopeRef={selectionScopeRef}
 								viewerRef={viewerRef}
 								didScrollToViaFileRef={didScrollToViaFileRef}
@@ -1987,9 +2041,15 @@ const BranchDetails: FC<{
 		dispatch(projectSlice.actions.selectFiles({ projectId, selection }));
 	};
 
+	const { isPending: isApplyPending, apply } = useApplyToWorkspace(projectId);
+
 	// Use push status of segment, not branch details; something about remote
 	// tracking refs.
 	const branchCtx = headInfoIndex?.branchContextByRefBytes(selection.branchRef);
+	// Appliedness is a workspace fact: applied iff head info resolves the ref to
+	// a segment. Unknown until head info loads, so the apply affordance stays
+	// hidden rather than flashing on applied branches.
+	const unapplied = headInfo !== undefined && branchCtx === undefined;
 	const parentSegment = branchCtx?.stack.segments[branchCtx.segmentIndex + 1];
 	const targetBranch =
 		!parentSegment || parentSegment.pushStatus === "integrated"
@@ -2029,6 +2089,20 @@ const BranchDetails: FC<{
 							Pull Request
 						</Toggle>
 					</ToggleGroup>
+
+					{unapplied && (
+						<div className={styles.tabsRowRight}>
+							<button
+								type="button"
+								className={getButtonClassName({ variant: "pop" })}
+								disabled={isApplyPending}
+								onClick={() => apply(branchRef)}
+							>
+								{isApplyPending && <Icon name="spinner" />}
+								Apply to workspace
+							</button>
+						</div>
+					)}
 
 					{branchTab === "pr" && !!forgeInfo?.capabilities.prService && (
 						<Suspense>
