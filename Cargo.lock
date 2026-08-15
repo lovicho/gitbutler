@@ -860,6 +860,7 @@ dependencies = [
  "but-llm",
  "but-meta",
  "but-path",
+ "but-project-handle",
  "but-rebase",
  "but-secret",
  "but-settings",
@@ -1784,7 +1785,6 @@ dependencies = [
  "but-workspace",
  "chrono",
  "git2",
- "gitbutler-cherry-pick",
  "gitbutler-commit",
  "gitbutler-git",
  "gitbutler-reference",
@@ -3923,15 +3923,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gitbutler-cherry-pick"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "gitbutler-commit",
- "gix",
-]
-
-[[package]]
 name = "gitbutler-commit"
 version = "0.0.0"
 dependencies = [
@@ -3956,7 +3947,6 @@ dependencies = [
  "but-testsupport",
  "git-meta-lib",
  "git2",
- "gitbutler-cherry-pick",
  "gitbutler-commit",
  "gitbutler-operating-modes",
  "gitbutler-oplog",
@@ -4060,7 +4050,6 @@ dependencies = [
  "but-testsupport",
  "but-utils",
  "git2",
- "gitbutler-cherry-pick",
  "gitbutler-repo",
  "gix",
  "itertools",
@@ -4265,7 +4254,6 @@ dependencies = [
  "but-ctx",
  "but-oxidize",
  "git2",
- "gitbutler-cherry-pick",
  "gix",
  "tempfile",
 ]
