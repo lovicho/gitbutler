@@ -219,16 +219,16 @@ export const projectReducers = {
 	enterAbsorbMode: (
 		state: ProjectState,
 		{
-			source,
+			sources,
 			sourceTarget,
 			restoreSelection,
 		}: {
-			source: Operand;
+			sources: Array<Operand>;
 			sourceTarget: AbsorptionTarget;
 			restoreSelection: WorkspaceCursorSnapshot;
 		},
 	) => {
-		state.workspace.mode = absorbOutlineMode({ source, restoreSelection, sourceTarget });
+		state.workspace.mode = absorbOutlineMode({ sources, restoreSelection, sourceTarget });
 	},
 	updatePointerTransfer: (
 		state: ProjectState,
@@ -435,7 +435,7 @@ export const projectReducers = {
 		if (collapsed[path]) delete collapsed[path];
 		else collapsed[path] = true;
 	},
-	setBranchSearch: (state: ProjectState, { search }: { search: string }) => {
+	setBranchSearch: (state: ProjectState, { search }: { search: string | null }) => {
 		branchesReducers.setSearch(state.branches, { search });
 	},
 	toggleBranchFilter: (state: ProjectState, { filter }: { filter: BranchFilter }) => {

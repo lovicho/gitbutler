@@ -106,6 +106,14 @@ export const workspaceHotkeys = {
 		hotkey: "Mod+N",
 		meta: { group: "Workspace", name: "Add new branch" },
 	},
+	/**
+	 * The shifted counterpart of `createIndependentBranch`: the same act, but
+	 * leaving the workspace for the new branch rather than adding it alongside.
+	 */
+	createBranchAndSwitch: {
+		hotkey: "Mod+Shift+N",
+		meta: { group: "Workspace", name: "Add new branch and switch to it" },
+	},
 	fetchFromRemotes: {
 		hotkey: "Alt+Shift+F",
 		meta: { group: "Workspace", name: "Fetch" },
@@ -314,9 +322,13 @@ export const operationHotkeys = {
 } satisfies Record<string, HotkeyWithMeta>;
 
 export const diffHotkeys = {
+	absorb: {
+		hotkey: "A",
+		meta: { group: "Diff", name: "Absorb hunk" },
+	},
 	checkHunk: {
 		hotkey: "Space",
-		meta: { group: "Diff", name: "Check hunk" },
+		meta: { group: "Diff", name: "Check selected lines" },
 	},
 	toggleFoldFile: {
 		hotkey: "Z",

@@ -146,7 +146,7 @@ const CheckedOperandOperationControls: FC<{ checkedOperandCount: number; project
 			case "File":
 				return "file";
 			case "Hunk":
-				return "hunk";
+				return "line";
 			case null:
 				return null;
 		}
@@ -203,7 +203,7 @@ const AbsorbOperationControls: FC<{
 					<Label>Failed to load absorb plan</Label>
 				) : (
 					<Label>
-						Absorb {operandLabel({ headInfoIndex, operand: mode.source })} into{" "}
+						Absorb {operandsLabel({ headInfoIndex, operands: mode.sources })} into{" "}
 						{absorptionPlan.length} commits
 					</Label>
 				)}
