@@ -32,7 +32,7 @@ export declare const apiParamNames: {
 	readonly commitConflicts: readonly ["projectId", "commitId"];
 	readonly commitCreate: readonly ["projectId", "relativeTo", "side", "changes", "changesSource", "message", "dryRun"];
 	readonly commitDetailsWithLineStats: readonly ["projectId", "commitId"];
-	readonly commitDiscard: readonly ["projectId", "subjectCommitId", "dryRun"];
+	readonly commitDiscard: readonly ["projectId", "subjectCommitIds", "dryRun"];
 	readonly commitDiscardChanges: readonly ["projectId", "commitId", "changes", "dryRun"];
 	readonly commitInsertBlank: readonly ["projectId", "relativeTo", "side", "dryRun"];
 	readonly commitMove: readonly ["projectId", "subjectCommitIds", "relativeTo", "side", "dryRun"];
@@ -106,6 +106,7 @@ export declare const apiParamNames: {
 	readonly removeReviewReaction: readonly ["projectId", "reviewId", "reactionId"];
 	readonly requestReview: readonly ["projectId", "reviewId", "logins"];
 	readonly resolveCommitConflictHunks: readonly ["projectId", "commitId", "specs"];
+	readonly resolveWorktreeConflicts: readonly ["projectId", "paths"];
 	readonly restoreSnapshotWithKind: readonly ["projectId", "restoreKind", "sha"];
 	readonly reviewApply: readonly ["projectId", "reviewId"];
 	readonly reviewTemplate: readonly ["projectId"];

@@ -299,15 +299,15 @@ export declare function commitCreate(projectId: string, relativeTo: RelativeTo, 
 export declare function commitDetailsWithLineStats(projectId: string, commitId: string): Promise<CommitDetails>
 
 /**
- * Discard `subject_commit_id`, removing it from the branch history.
+ * Discard `subject_commit_ids`, removing them from branch history.
  *
- * Unlike [`super::uncommit::commit_uncommit()`], the commit's changes are **not**
- * reassigned to the workspace — they are permanently removed from the branch.
+ * Unlike [`super::uncommit::commit_uncommit()`], the commits' changes are **not**
+ * reassigned to the workspace — they are permanently removed from their branches.
  *
  * When `dry_run` is enabled, the returned workspace previews the discard and
  * no oplog entry is persisted. See [`commit_discard_with_perm()`] for details.
  */
-export declare function commitDiscard(projectId: string, subjectCommitId: string, dryRun: boolean): Promise<CommitDiscardResult>
+export declare function commitDiscard(projectId: string, subjectCommitIds: Array<string>, dryRun: boolean): Promise<CommitDiscardResult>
 
 /**
  * Discard specific changes from `commit_id`, removing them from the commit
@@ -875,6 +875,14 @@ export declare function requestReview(projectId: string, reviewId: number, login
 export declare function resolveCommitConflictHunks(projectId: string, commitId: string, specs: Array<ResolutionSpec>): Promise<HunkResolutionResult>
 
 /**
+ * Mark the conflicted uncommitted files at the worktree-relative `paths` as resolved,
+ * taking the current worktree content (or the file's absence) as the resolution.
+ *
+ * For lower-level details, see [`but_workspace::resolve_worktree_conflicts()`].
+ */
+export declare function resolveWorktreeConflicts(projectId: string, paths: Array<string>): Promise<void>
+
+/**
  * Restores the project to a specific snapshot using a specific kind of restore. This operation
  * also creates a new snapshot in the oplog.
  */
@@ -1106,12 +1114,12 @@ export declare function workspaceIntegrateUpstream(projectId: string, updates: A
  * commits, allowing clients to page through target history older than the
  * workspace's fork point.
  *
- * Each commit is enriched with the cached merged review (PR/MR) it landed,
- * when the forge cache recorded that commit as the review's integration
- * commit. This covers merge, squash, and rebase integrations to the extent
- * the forge reports them; it reads only the local cache and performs no
- * network requests or diffs, and enrichment failures degrade to unannotated
- * commits.
+ * Each commit is enriched with the merged review (PR/MR) it landed, when
+ * the forge cache recorded that commit as the review's integration commit
+ * or, failing that, when the commit's own message names it (see
+ * [`but_forge::merged_review_from_message`]). Enrichment reads only local
+ * state and performs no network requests or diffs, and its failures degrade
+ * to unannotated commits.
  */
 export declare function workspaceTargetCommits(projectId: string, from: string | null, limit: number | null): Promise<TargetCommitPage>
 export declare class WatcherHandle {
@@ -1898,11 +1906,11 @@ export type CommitDetails = {
   conflictEntries: ConflictEntries | null;
 };
 
-/** JSON transport type for discarding a commit. */
+/** JSON transport type for discarding one or more commits. */
 export type CommitDiscardResult = {
-  /** The commit that was discarded as a result of this operation. */
-  discardedCommit: string;
-  /** Workspace state after discarding the commit. */
+  /** The commits that were discarded as a result of this operation. */
+  discardedCommits: Array<string>;
+  /** Workspace state after discarding the commits. */
   workspace: WorkspaceState;
 };
 
@@ -3719,17 +3727,20 @@ export type Target = {
   isCurrent: boolean;
 };
 
-/** JSON transport type for a commit on the target branch's first-parent line. */
+/**
+ * A commit on the target branch's first-parent line, its relation to the
+ * workspace, and the merged review it landed, if known.
+ */
 export type TargetCommit = {
   /** The commit itself. */
   commit: UpstreamCommit;
-  /** The merged review this commit integrated, if the forge cache knows it. */
+  /** The merged review this commit integrated, if known. */
   review: TargetCommitReview | null;
   /** Whether the commit is already reachable from the workspace. */
   inWorkspace: boolean;
 };
 
-/** A bounded page from the target branch's first-parent history. */
+/** One bounded page of target commits and the state needed to continue it. */
 export type TargetCommitPage = {
   /** The commits in this page, newest first. */
   commits: Array<TargetCommit>;
@@ -3738,12 +3749,12 @@ export type TargetCommitPage = {
 };
 
 /**
- * JSON transport type for the cached merged review attached to a
- * target commit.
+ * The merged review a target commit landed.
  *
  * Only what the target-commit listing displays; the full review is
- * available from the per-review APIs. `sourceBranch` is included so
- * clients can match workspace branches to the commit that landed them.
+ * available from the per-review APIs. The source branch lets clients match
+ * workspace branches to the commit that landed them; it is empty when
+ * unknown.
  */
 export type TargetCommitReview = {
   /** The number identifying the review within its repository, e.g. `123`. */
