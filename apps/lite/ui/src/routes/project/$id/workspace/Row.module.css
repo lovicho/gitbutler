@@ -24,7 +24,7 @@
 	flex-shrink: 0;
 	align-items: center;
 	height: 44px;
-	padding-inline: 14px;
+	padding-inline: var(--panel-padding-inline);
 }
 
 /* Square, and edge to edge in every list that has them: a row's fill is a band
@@ -227,6 +227,12 @@
 	opacity: 0.4;
 }
 
+/* Button sitting in a meta row: stands a little further off from the facts it
+   follows, since no separator dot divides them. */
+.metaButton {
+	margin-left: 4px;
+}
+
 /* Item that yields space to its siblings by truncating its text. */
 .metaItemShrinkable {
 	flex-shrink: 1;
@@ -299,9 +305,9 @@
 	}
 }
 
-/* Flag consumed by Badge.module.css via `@container style()` so badges can
-   restyle themselves for the selected state without cross-module class
-   references. */
+/* Flag consumed via `@container style()` by the components that sit in a row —
+   badges and graph segments — so they can restyle themselves for the selected
+   state without cross-module class references. */
 [data-selection-focus-styles="true"] [data-selection-scope]:focus .containerSelected {
-	--badge-inverted: true;
+	--selection-inverted: true;
 }

@@ -22,7 +22,13 @@ import {
 } from "#ui/api/queries.ts";
 import { decodeBytes } from "#ui/api/bytes.ts";
 import { Button, Toast, Toolbar, Tooltip } from "@base-ui/react";
-import type { BranchReference, InsertSide, PushStatus, RelativeTo } from "@gitbutler/but-sdk";
+import type {
+	BranchReference,
+	InsertSide,
+	PushStatus,
+	RelativeTo,
+	Stack,
+} from "@gitbutler/but-sdk";
 import { useQuery } from "@tanstack/react-query";
 import { Match } from "effect";
 import { type ComponentProps, type FC, type MouseEvent, useOptimistic, useTransition } from "react";
@@ -60,6 +66,7 @@ import { toggleFoldedSegment } from "./fold.ts";
 import { InlineEditor } from "./InlineEditor.tsx";
 import { insertBlankCommitMenuItem } from "./insertBlankCommitMenuItem.ts";
 import { ItemRow } from "./ItemRow.tsx";
+import { useStackMenuItems } from "./useStackMenuItems.ts";
 import { ciChecksSummaryUrl, type AggregateCIChecks } from "#ui/ci.ts";
 import { type DownstackPushStatus, downstackPushStatusDisabled } from "#ui/segment.ts";
 
@@ -123,6 +130,8 @@ export const BranchRow: FC<
 		bottomRelativeTo: RelativeTo | null;
 		isTopSegment: boolean;
 		commitCount: number;
+		/** The stack this branch sits in, for the stack-wide menu items. */
+		stack: Stack;
 	} & ComponentProps<"div">
 > = ({
 	projectId,
@@ -135,6 +144,7 @@ export const BranchRow: FC<
 	bottomRelativeTo,
 	isTopSegment,
 	commitCount,
+	stack,
 	...restProps
 }) => {
 	const { data: forgeInfo } = useQuery(forgeInfoOptions(projectId));
@@ -340,6 +350,8 @@ export const BranchRow: FC<
 		});
 	};
 
+	const stackMenuItems = useStackMenuItems(projectId, stack);
+
 	const menuItems: Array<NativeMenuItem> = [
 		nativeMenuItem({
 			label: isFolded ? "Unfold Commits" : "Fold Commits",
@@ -409,6 +421,8 @@ export const BranchRow: FC<
 					refName: refName.fullNameBytes,
 				}),
 		}),
+		nativeMenuSeparator,
+		...stackMenuItems,
 	];
 
 	return (
@@ -548,47 +562,47 @@ export const BranchRow: FC<
 								}${workspaceBranchAndAncestorsPushDisabledReason !== null ? ` (${workspaceBranchAndAncestorsPushDisabledReason})` : ""}`;
 
 								return (
-									<>
-										<RowMetaSeparator />
-										<Tooltip.Root>
-											<Tooltip.Trigger
-												aria-label={pushButtonLabel}
-												onClick={pushBranch}
-												className={getRowButtonClassName({ variant: "outline" })}
-												// We pass `disabled` here because we want to disable the button, not
-												// the tooltip. Other props should be passed above.
-												render={
-													<Button
-														focusableWhenDisabled
-														disabled={workspaceBranchAndAncestorsPushDisabled}
-													/>
-												}
-											>
-												Push
-												{isWorkspaceBranchAndAncestorsPushPending ? (
-													<Icon name="spinner" />
-												) : pushesMultipleBranches ? (
-													<Icon size={12} name="arrow-double-up" />
-												) : (
-													<Icon size={12} name="arrow-up" />
-												)}
-											</Tooltip.Trigger>
-											<Tooltip.Portal>
-												<Tooltip.Positioner sideOffset={4}>
-													<Tooltip.Popup
-														render={
-															<TooltipPopup
-																kbd={outlineHotkeys.workspaceBranchAndAncestorsPush.hotkey}
-																kbdScope="outline"
-															/>
-														}
-													>
-														{pushButtonLabel}
-													</Tooltip.Popup>
-												</Tooltip.Positioner>
-											</Tooltip.Portal>
-										</Tooltip.Root>
-									</>
+									<Tooltip.Root>
+										<Tooltip.Trigger
+											aria-label={pushButtonLabel}
+											onClick={pushBranch}
+											className={classes(
+												getRowButtonClassName({ variant: "outline" }),
+												rowStyles.metaButton,
+											)}
+											// We pass `disabled` here because we want to disable the button, not
+											// the tooltip. Other props should be passed above.
+											render={
+												<Button
+													focusableWhenDisabled
+													disabled={workspaceBranchAndAncestorsPushDisabled}
+												/>
+											}
+										>
+											Push
+											{isWorkspaceBranchAndAncestorsPushPending ? (
+												<Icon name="spinner" />
+											) : pushesMultipleBranches ? (
+												<Icon size={12} name="arrow-double-up" />
+											) : (
+												<Icon size={12} name="arrow-up" />
+											)}
+										</Tooltip.Trigger>
+										<Tooltip.Portal>
+											<Tooltip.Positioner sideOffset={4}>
+												<Tooltip.Popup
+													render={
+														<TooltipPopup
+															kbd={outlineHotkeys.workspaceBranchAndAncestorsPush.hotkey}
+															kbdScope="outline"
+														/>
+													}
+												>
+													{pushButtonLabel}
+												</Tooltip.Popup>
+											</Tooltip.Positioner>
+										</Tooltip.Portal>
+									</Tooltip.Root>
 								);
 							})()}
 					</RowMeta>
