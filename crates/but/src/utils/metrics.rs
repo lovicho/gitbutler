@@ -385,6 +385,13 @@ impl Props {
     }
 
     fn insert_internal_error_details(&mut self, error: &anyhow::Error, command: CommandName) {
+        #[cfg(feature = "legacy")]
+        if error.is::<crate::utils::rejection::ExplainedRejection>() {
+            self.insert("error", "Command rejection");
+            self.insert("errorKind", "commandRejection");
+            return;
+        }
+
         self.insert("error", "Internal error");
         self.insert("errorKind", "internal");
         if captures_detailed_error_message(command) {
@@ -474,7 +481,7 @@ fn external_subcommand_metric_value(command_name: &std::ffi::OsStr) -> String {
 fn captures_detailed_error_message(command: CommandName) -> bool {
     matches!(
         command,
-        CommandName::Uncommit | CommandName::Amend | CommandName::Squash
+        CommandName::Commit | CommandName::Uncommit | CommandName::Amend | CommandName::Squash
     )
 }
 
@@ -606,8 +613,10 @@ impl Event {
 
 /// Capture an event *only* if `app_settings.telemetry.app_metrics_enabled` is `true`.
 pub async fn capture_event_blocking(app_settings: &AppSettings, event: Event) {
-    if let Some(client) = posthog_client(app_settings.clone()) {
-        do_capture(&client.await, event, app_settings).await.ok();
+    if let Some(client) = posthog_client(app_settings).await {
+        do_capture(&client, event, app_settings).await.ok();
+        // Explicit shutdown so dropping the client doesn't block the executor thread.
+        client.shutdown().await;
     }
 }
 
@@ -630,7 +639,8 @@ async fn do_capture(
     for (key, prop) in event.props {
         let _ = posthog_event.insert_prop(key, prop);
     }
-    client.capture(posthog_event).await
+    // The CLI exits right after this, so send inline instead of via the background queue.
+    client.capture_immediate(posthog_event).await.map(|_| ())
 }
 
 fn machine() -> String {
@@ -645,19 +655,18 @@ fn machine() -> String {
 }
 
 /// Creates a PostHog client if metrics are enabled and the API key is set.
-fn posthog_client(app_settings: AppSettings) -> Option<impl Future<Output = posthog_rs::Client>> {
-    if app_settings.telemetry.app_metrics_enabled
-        && let Some(api_key) = option_env!("POSTHOG_API_KEY")
-    {
-        let options = posthog_rs::ClientOptionsBuilder::default()
-            .api_key(api_key.to_string())
-            .host("https://eu.i.posthog.com".to_string())
-            .build()
-            .ok()?;
-        Some(posthog_rs::client(options))
-    } else {
-        None
+async fn posthog_client(app_settings: &AppSettings) -> Option<Client> {
+    if !app_settings.telemetry.app_metrics_enabled {
+        return None;
     }
+    let api_key = option_env!("POSTHOG_API_KEY")?;
+    let options = posthog_rs::ClientOptionsBuilder::default()
+        .api_key(api_key.to_string())
+        .host("https://eu.i.posthog.com".to_string())
+        .is_server(false)
+        .build()
+        .ok()?;
+    Some(posthog_rs::client(options).await)
 }
 
 impl<T> ResultMetricsExt<T, anyhow::Error> for anyhow::Result<T> {
@@ -963,7 +972,7 @@ mod tests {
         );
 
         let props =
-            Props::from_anyhow_result(std::time::Instant::now(), &result, CommandName::Commit);
+            Props::from_anyhow_result(std::time::Instant::now(), &result, CommandName::Status);
 
         assert_eq!(props.values["error"], "Internal error");
         assert_eq!(props.values["errorKind"], "internal");
@@ -971,6 +980,40 @@ mod tests {
         assert!(!props.values.contains_key("errorRoot"));
         assert!(!props.as_json_string().contains("private-branch-name"));
         assert!(!props.as_json_string().contains("private-path"));
+    }
+
+    #[test]
+    fn commit_internal_error_details_are_captured() {
+        let result = Err::<(), _>(CliError::Internal(
+            anyhow::anyhow!("stale id. If you just performed a Git operation, refresh")
+                .context("Failed to commit."),
+        ));
+
+        let props =
+            Props::from_cli_error_result(std::time::Instant::now(), &result, CommandName::Commit);
+
+        assert_eq!(props.values["errorMessage"], "Failed to commit.: stale id.");
+        assert_eq!(props.values["errorRoot"], "stale id.");
+    }
+
+    #[cfg(feature = "legacy")]
+    #[test]
+    fn explained_commit_rejections_omit_private_details() {
+        let result = Err::<(), _>(CliError::Internal(anyhow::Error::new(
+            crate::utils::rejection::ExplainedRejection(
+                "Cannot commit private/path on private-branch".to_string(),
+            ),
+        )));
+
+        let props =
+            Props::from_cli_error_result(std::time::Instant::now(), &result, CommandName::Commit);
+
+        assert_eq!(props.values["error"], "Command rejection");
+        assert_eq!(props.values["errorKind"], "commandRejection");
+        assert!(!props.values.contains_key("errorMessage"));
+        assert!(!props.values.contains_key("errorRoot"));
+        assert!(!props.as_json_string().contains("private/path"));
+        assert!(!props.as_json_string().contains("private-branch"));
     }
 
     #[test]

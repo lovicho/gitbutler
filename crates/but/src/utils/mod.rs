@@ -25,12 +25,15 @@ pub mod detect_agent;
 pub mod time;
 
 pub(crate) mod binary_path;
+pub(crate) mod change_source;
 pub(crate) mod diff_specs;
 #[cfg(feature = "legacy")]
 pub(crate) mod merged_upstream;
 #[cfg(feature = "legacy")]
 pub(crate) mod rejection;
 pub(crate) mod targeting;
+#[cfg(feature = "legacy")]
+pub(crate) mod worktrees;
 
 pub mod diff_rendering;
 pub mod string_interning;

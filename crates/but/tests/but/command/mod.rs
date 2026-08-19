@@ -247,4 +247,60 @@ mod util {
             .iter()
             .any(|change| change["filePath"].as_str().unwrap() == file_path)
     }
+
+    /// Turn on the experimental `worktreeManipulation` feature flag, which has no CLI toggle.
+    pub fn enable_worktree_manipulation(env: &Sandbox) {
+        let path = env.app_data_dir().join("gitbutler/settings.json");
+        let mut settings: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).expect("settings were written"))
+                .expect("settings are valid JSON");
+        settings["featureFlags"]["worktreeManipulation"] = true.into();
+        std::fs::write(&path, settings.to_string()).expect("settings are writable");
+    }
+
+    /// Add a dirty linked worktree named `name` on a new branch of the same name at
+    /// `start_point`, with `note.txt` uncommitted in it.
+    ///
+    /// The caller must have run a flag-on command first: the first read with the
+    /// flag on archives every worktree already on disk, so the ones under test
+    /// have to be created after it. Checked out into the per-test temp dir, as
+    /// scenario directories are reused across runs.
+    pub fn add_dirty_worktree(env: &Sandbox, name: &str, start_point: &str) {
+        let wt = env.app_data_dir().join("worktrees");
+        but_testsupport::invoke_bash_at_dir(
+            &format!(
+                r#"
+        git worktree add -q -b {name} "{wt}/{name}" {start_point}
+        (cd "{wt}/{name}" && echo dirty >note.txt)
+        "#,
+                wt = wt.display()
+            ),
+            env.projects_root(),
+        );
+    }
+
+    /// Add a linked worktree named `name` on a new branch of the same name at
+    /// `start_point`, with a commit of its own adding `wt-file.txt` and a clean
+    /// checkout, then return the worktree's directory.
+    ///
+    /// The same archiving caveat as [`add_dirty_worktree`] applies: create the
+    /// worktree only after a flag-on command has run.
+    pub fn add_worktree_with_commit(
+        env: &Sandbox,
+        name: &str,
+        start_point: &str,
+    ) -> std::path::PathBuf {
+        let wt = env.app_data_dir().join("worktrees");
+        but_testsupport::invoke_bash_at_dir(
+            &format!(
+                r#"
+        git worktree add -q -b {name} "{wt}/{name}" {start_point}
+        (cd "{wt}/{name}" && echo change >wt-file.txt && git add wt-file.txt && git commit -q -m "add W")
+        "#,
+                wt = wt.display()
+            ),
+            env.projects_root(),
+        );
+        wt.join(name)
+    }
 }

@@ -32,6 +32,7 @@ mod pick_tests;
 mod squash_tests;
 mod stack_tests;
 mod utils;
+mod worktree_tests;
 
 #[test]
 fn directory_watcher_paths_affect_nested_uncommitted_details() {
@@ -1329,6 +1330,7 @@ fn open_tui_on_uncommitted_hunk(show_diff: bool) -> TestTui<App> {
                 | CliId::Branch(..)
                 | CliId::Commit { .. }
                 | CliId::Uncommitted { .. }
+                | CliId::Worktree { .. }
                 | CliId::Stack { .. } => None,
             })
             .expect("target file should have a CLI ID");

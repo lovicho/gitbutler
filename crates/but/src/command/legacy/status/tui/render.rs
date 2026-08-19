@@ -424,6 +424,7 @@ fn row_stack_ids(lines: &[StatusOutputLine]) -> Vec<Option<StackId>> {
                 CliId::Branch(..)
                 | CliId::Commit { .. }
                 | CliId::Uncommitted { .. }
+                | CliId::Worktree { .. }
                 | CliId::Stack { .. } => None,
             },
             StatusOutputLineData::UpdateNotice
@@ -469,6 +470,7 @@ fn stack_id_from_cli_id(cli_id: &CliId) -> Option<StackId> {
         | CliId::PathPrefix { .. }
         | CliId::CommittedFile { .. }
         | CliId::Commit { .. }
+        | CliId::Worktree { .. }
         | CliId::Uncommitted { .. } => None,
     }
 }
@@ -870,7 +872,9 @@ pub(crate) fn render_commit_operation_target_marker(
         return;
     };
 
-    if mode.source.contains(target) {
+    // A line that is both the source and a genuine destination - a worktree heading - commits
+    // rather than cancelling, so it must not advertise itself as a no-op.
+    if mode.source.contains(target) && commit_operation_display(data, mode).is_none() {
         line.extend([source_span(app.theme), Span::raw(" ")]);
         line.extend(
             [
@@ -1191,6 +1195,14 @@ pub fn commit_operation_display(
                 }
             }
         }
+        // A linked worktree's heading doubles as the top of its lane, which is the only place a
+        // commit made from that checkout can go. Scoping to a stack excludes it, as a worktree
+        // branch is by definition outside the workspace.
+        StatusOutputLineData::UncommittedChanges { cli_id }
+            if matches!(&**cli_id, CliId::Worktree { .. }) =>
+        {
+            scope_to_stack.is_none().then_some("commit to worktree")
+        }
         StatusOutputLineData::StagedChanges { .. }
         | StatusOutputLineData::StagedFile { .. }
         | StatusOutputLineData::UncommittedChanges { .. }
@@ -1224,6 +1236,13 @@ pub fn move_operation_display(
                 InsertSide::Below => Some("move commit below"),
             },
             StatusOutputLineData::Branch { .. } => Some("move commit to branch"),
+            // A linked worktree's heading doubles as the top of its lane, which is the only
+            // place in the lane a whole commit can move to.
+            StatusOutputLineData::UncommittedChanges { cli_id }
+                if matches!(&**cli_id, CliId::Worktree { .. }) =>
+            {
+                Some("move commit to worktree")
+            }
             StatusOutputLineData::UpdateNotice
             | StatusOutputLineData::Connector
             | StatusOutputLineData::BetweenStacks
@@ -1252,6 +1271,15 @@ pub fn move_operation_display(
                     Some("move commit to branch")
                 } else {
                     Some("move commits to branch")
+                }
+            }
+            StatusOutputLineData::UncommittedChanges { cli_id }
+                if matches!(&**cli_id, CliId::Worktree { .. }) =>
+            {
+                if marks.len() == 1 {
+                    Some("move commit to worktree")
+                } else {
+                    Some("move commits to worktree")
                 }
             }
             StatusOutputLineData::UpdateNotice
