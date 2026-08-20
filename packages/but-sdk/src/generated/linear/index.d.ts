@@ -34,6 +34,67 @@ export declare function addReviewLabels(projectId: string, reviewId: number, lab
 export declare function addReviewReaction(projectId: string, reviewId: number, kind: string): Promise<ForgeReviewReaction>
 
 /**
+ * The AI configuration as clients see it, with secrets reduced to whether
+ * they are present.
+ */
+export interface AiConfiguration {
+  /** The provider requests go to. */
+  provider: 'openai' | 'anthropic' | 'ollama' | 'lmstudio' | 'openrouter'
+  /** Whether OpenAI calls use GitButler's key or the user's own. */
+  openaiKeyOption: 'butlerAPI' | 'bringYourOwn'
+  /** The OpenAI model to request. */
+  openaiModel: string
+  /** An OpenAI-compatible endpoint to use instead of OpenAI's own. */
+  openaiCustomEndpoint?: string
+  /** Whether an OpenAI key is stored, never the key itself. */
+  openaiHasApiKey: boolean
+  /** Whether Anthropic calls use GitButler's key or the user's own. */
+  anthropicKeyOption: 'butlerAPI' | 'bringYourOwn'
+  /** The Anthropic model to request. */
+  anthropicModel: string
+  /** Whether an Anthropic key is stored, never the key itself. */
+  anthropicHasApiKey: boolean
+  /** Where the local Ollama server listens. */
+  ollamaEndpoint: string
+  /** The Ollama model to request. */
+  ollamaModel: string
+  /** Where the local LM Studio server listens. */
+  lmstudioEndpoint: string
+  /** The LM Studio model to request. */
+  lmstudioModel: string
+  /** Whether the active provider has everything it needs to answer. */
+  isConfigured: boolean
+}
+
+/** One complete AI configuration to save, with any newly entered API keys. */
+export interface AiConfigurationUpdate {
+  /** The provider requests should go to. Streaming-only providers cannot be chosen here. */
+  provider: 'openai' | 'anthropic' | 'ollama' | 'lmstudio'
+  /** Whether OpenAI calls should use GitButler's key or the user's own. */
+  openaiKeyOption: 'butlerAPI' | 'bringYourOwn'
+  /** The OpenAI model to request. */
+  openaiModel: string
+  /** An OpenAI-compatible endpoint to use instead of OpenAI's own. */
+  openaiCustomEndpoint?: string
+  /** A newly entered OpenAI key to store; omitted leaves any stored key alone. */
+  openaiApiKey?: string
+  /** Whether Anthropic calls should use GitButler's key or the user's own. */
+  anthropicKeyOption: 'butlerAPI' | 'bringYourOwn'
+  /** The Anthropic model to request. */
+  anthropicModel: string
+  /** A newly entered Anthropic key to store; omitted leaves any stored key alone. */
+  anthropicApiKey?: string
+  /** Where the local Ollama server listens. */
+  ollamaEndpoint: string
+  /** The Ollama model to request. */
+  ollamaModel: string
+  /** Where the local LM Studio server listens. */
+  lmstudioEndpoint: string
+  /** The LM Studio model to request. */
+  lmstudioModel: string
+}
+
+/**
  * Applies `existing_branch` using the behavior described by
  * [`apply_with_perm()`].
  *
@@ -515,6 +576,9 @@ export declare function forgetGithubAccount(account: GithubAccountIdentifier): P
  */
 export declare function forgetGitlabAccount(account: GitlabAccountIdentifier): Promise<void>
 
+/** Read application-global AI configuration without exposing stored secrets. */
+export declare function getAiConfiguration(): Promise<AiConfiguration>
+
 /**
  * Retrieves the authenticated user information for a Bitbucket account.
  *
@@ -529,6 +593,18 @@ export declare function forgetGitlabAccount(account: GitlabAccountIdentifier): P
  * * `Err(_)` - If the API request fails or credentials are invalid
  */
 export declare function getBbUser(account: BitbucketAccountIdentifier): Promise<BitbucketAuthenticatedUserSensitive | null>
+
+/**
+ * Retrieves file content directly from a Git blob object by its blob ID.
+ *
+ * This function is used for displaying image diff previews when the file
+ * isn't available in the current workspace or a specific commit (e.g., for
+ * deleted files or when comparing against a previous state).
+ *
+ * # Arguments
+ * * `blob_id` - Git blob object ID as a hexadecimal string
+ */
+export declare function getBlobFile(projectId: string, relativePath: string, blobId: string): Promise<FileInfo>
 
 export declare function getGbConfig(projectId: string): Promise<GitConfigSettings>
 
@@ -618,6 +694,8 @@ export declare function getUserProfileLocal(): Promise<UserProfile | null>
  * mutate the cached [`WorkspaceState`] returned by mutation APIs.
  */
 export declare function getWorkspace(projectId: string): Promise<DetailedGraphWorkspace>
+
+export declare function getWorkspaceFile(projectId: string, relativePath: string): Promise<FileInfo>
 
 export declare function gitTestFetch(projectId: string, remoteName: string, action: string | null): Promise<void>
 
@@ -865,6 +943,9 @@ export declare function removeReviewReaction(projectId: string, reviewId: number
 /** Request reviews from the given users on a review. */
 export declare function requestReview(projectId: string, reviewId: number, logins: Array<string>): Promise<void>
 
+/** Clear application-global AI configuration and stored provider API keys. */
+export declare function resetAiConfiguration(): Promise<AiConfiguration>
+
 /**
  * Apply `specs` to the conflicted commit `commit_id` and rebase descendants.
  *
@@ -1027,6 +1108,9 @@ export declare function treeChangeDiffs(projectId: string, change: TreeChange): 
  */
 export declare function unapplyStack(projectId: string, stackId: string): Promise<void>
 
+/** Validate and save one complete application-global AI configuration. */
+export declare function updateAiConfiguration(update: AiConfigurationUpdate): Promise<AiConfiguration>
+
 /**
  * Change the profile on gitbutler.com and keep the stored account in step.
  *
@@ -1135,37 +1219,6 @@ export declare class WatcherHandle {
   get active(): boolean
 }
 
-export interface AiConfiguration {
-  provider: 'openai' | 'anthropic' | 'ollama' | 'lmstudio' | 'openrouter'
-  openaiKeyOption: 'butlerAPI' | 'bringYourOwn'
-  openaiModel: string
-  openaiCustomEndpoint?: string
-  openaiHasApiKey: boolean
-  anthropicKeyOption: 'butlerAPI' | 'bringYourOwn'
-  anthropicModel: string
-  anthropicHasApiKey: boolean
-  ollamaEndpoint: string
-  ollamaModel: string
-  lmstudioEndpoint: string
-  lmstudioModel: string
-  isConfigured: boolean
-}
-
-export interface AiConfigurationUpdate {
-  provider: 'openai' | 'anthropic' | 'ollama' | 'lmstudio'
-  openaiKeyOption: 'butlerAPI' | 'bringYourOwn'
-  openaiModel: string
-  openaiCustomEndpoint?: string
-  openaiApiKey?: string
-  anthropicKeyOption: 'butlerAPI' | 'bringYourOwn'
-  anthropicModel: string
-  anthropicApiKey?: string
-  ollamaEndpoint: string
-  ollamaModel: string
-  lmstudioEndpoint: string
-  lmstudioModel: string
-}
-
 /** Any fork link line. */
 export const ANY_FORK: number
 
@@ -1200,9 +1253,6 @@ export declare function askpassSubmitPromptResponse(id: string, response?: strin
 
 /** The target node of this link line is the child of this column. */
 export const CHILD: number
-
-/** Read application-global AI configuration without exposing stored secrets. */
-export declare function getAiConfiguration(): Promise<AiConfiguration>
 
 /** Get the application settings. */
 export declare function getAppSettings(): Promise<AppSettings>
@@ -1241,9 +1291,6 @@ export const LEFT_MERGE_ANCESTOR: number
 /** The child of this cell is linked to parents on the left. */
 export const LEFT_MERGE_PARENT: number
 
-/** Clear application-global AI configuration and stored provider API keys. */
-export declare function resetAiConfiguration(): Promise<AiConfiguration>
-
 /** Any right fork link line. */
 export const RIGHT_FORK: number
 
@@ -1264,9 +1311,6 @@ export const RIGHT_MERGE_PARENT: number
 
 /** Stream a text response from the configured provider. */
 export declare function streamAiResponse(systemMessage: string, prompt: string, onToken: ((err: Error | null, arg: string) => void)): Promise<string>
-
-/** Validate and save one complete application-global AI configuration. */
-export declare function updateAiConfiguration(update: AiConfigurationUpdate): Promise<AiConfiguration>
 
 /** Update feature flags; unset fields are left unchanged. */
 export declare function updateFeatureFlags(update: FeatureFlagsUpdate): Promise<void>
@@ -1566,11 +1610,6 @@ export type BranchDetails = {
   name: string;
   /** The full reference of the branch */
   reference: string;
-  /**
-   * The id of the linked worktree that has the reference of `name` checked out.
-   * Note that we don't list the main worktree here.
-   */
-  linkedWorktreeId: string | null;
   /** Upstream reference, e.g. `refs/remotes/origin/base-branch-improvements` */
   remoteTrackingBranch: string | null;
   /** The pull(merge) request associated with the branch, or None if no such entity has not been created. */
@@ -2293,6 +2332,18 @@ export type Fetch = {
 /** Update request for [`crate::app_settings::Fetch`]. */
 export type FetchUpdate = {
   autoFetchIntervalMinutes?: number | null;
+};
+
+/** File contents and metadata suitable for display in a frontend. */
+export type FileInfo = {
+  /** File content, base64 encoded when `mime_type` is present. */
+  content: string | null;
+  /** The basename derived from the relative path. */
+  fileName: string;
+  /** The decoded content size in bytes. */
+  size: number | null;
+  /** The inferred MIME type for binary displayable content. */
+  mimeType: string | null;
 };
 
 export type ForgeCapabilities = {
@@ -3662,39 +3713,6 @@ export type Stack = {
    * This array is never empty.
    */
   segments: Array<Segment>;
-};
-
-/** Information about the current state of a stack */
-export type StackDetails = {
-  /** This is the name of the top-most branch, provided by the API for convenience */
-  derivedName: string;
-  /** The pushable status for the stack */
-  pushStatus: PushStatus;
-  /** The details about the contained branches */
-  branchDetails: Array<BranchDetails>;
-  /** Whether the stack is conflicted. */
-  isConflicted: boolean;
-};
-
-/**
- * Represents a lightweight version of a legacy stack for listing.
- * NOTE: this is a UI type mostly because it's still modeled after the legacy stack with StackId, something that doesn't exist anymore.
- */
-export type StackEntry = {
-  /** The ID of the stack. */
-  id: string | null;
-  /**
-   * The list of the branch information that are part of the stack.
-   * The list is never empty.
-   * The first entry in the list is always the most recent branch on top the stack.
-   */
-  heads: Array<StackHeadInfo>;
-  /** The tip of the top-most branch, i.e., the most recent commit that would become the parent of new commits of the topmost stack branch. */
-  tip: string;
-  /** The zero-based index for sorting stacks. */
-  order: number | null;
-  /** If `true`, then any head in this stack is checked directly so `HEAD` points to it, and this is only ever `true` for a single stack. */
-  isCheckedOut: boolean;
 };
 
 /**

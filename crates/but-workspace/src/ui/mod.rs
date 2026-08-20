@@ -221,14 +221,6 @@ pub struct BranchDetails {
     )]
     /// The full reference of the branch
     pub reference: gix::refs::FullName,
-    /// The id of the linked worktree that has the reference of `name` checked out.
-    /// Note that we don't list the main worktree here.
-    #[serde(with = "but_serde::bstring_lossy_opt")]
-    #[cfg_attr(
-        feature = "export-schema",
-        schemars(schema_with = "but_schemars::bstring_lossy_opt")
-    )]
-    pub linked_worktree_id: Option<BString>,
     /// Upstream reference, e.g. `refs/remotes/origin/base-branch-improvements`
     #[serde(with = "but_serde::bstring_lossy_opt")]
     #[cfg_attr(
@@ -279,23 +271,6 @@ pub struct BranchDetails {
 }
 #[cfg(feature = "export-schema")]
 but_schemars::register_sdk_type!(BranchDetails);
-
-/// Information about the current state of a stack
-#[derive(Debug, Clone, Serialize)]
-#[cfg_attr(feature = "export-schema", derive(schemars::JsonSchema))]
-#[serde(rename_all = "camelCase")]
-pub struct StackDetails {
-    /// This is the name of the top-most branch, provided by the API for convenience
-    pub derived_name: String,
-    /// The pushable status for the stack
-    pub push_status: PushStatus,
-    /// The details about the contained branches
-    pub branch_details: Vec<BranchDetails>,
-    /// Whether the stack is conflicted.
-    pub is_conflicted: bool,
-}
-#[cfg(feature = "export-schema")]
-but_schemars::register_sdk_type!(StackDetails);
 
 /// Represents a branch in a `Stack`. It contains commits derived from the local pseudo branch and it's respective remote
 #[derive(Debug, Clone, Serialize)]

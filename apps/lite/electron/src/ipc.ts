@@ -18,6 +18,8 @@ export type LiteElectronApi = {
 	onAskpassPrompt: (callback: (event: AskpassPromptEvent) => void) => () => void;
 	askpassSubmitPromptResponse: (params: AskpassSubmitPromptResponseParams) => Promise<void>;
 	clipboardWriteText: (text: string) => Promise<void>;
+	/** A `but://app/...` link the app was asked to open, as an in-app path. */
+	onDeepLink: (callback: (path: string) => void) => () => void;
 	getAiConfiguration: () => Promise<AiConfiguration>;
 	getVersion: () => Promise<string>;
 	isFullScreen: () => Promise<boolean>;
@@ -54,18 +56,16 @@ export const localEndpoints = [
 	"askpassPrompt",
 	"askpassSubmitPromptResponse",
 	"clipboardWriteText",
+	"deepLink",
 	"fullScreenChange",
-	"getAiConfiguration",
 	"getVersion",
 	"isFullScreen",
 	"openInWebBrowser",
 	"pathJoin",
 	"pickDirectory",
 	"readGUISettings",
-	"resetAiConfiguration",
 	"showNativeMenu",
 	"streamAiResponse",
-	"updateAiConfiguration",
 	"watcherStopAll",
 	"watcherSubscribe",
 	"watcherUnsubscribe",

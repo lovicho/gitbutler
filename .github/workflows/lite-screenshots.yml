@@ -1,7 +1,8 @@
 name: Lite UI Screenshots
 
 # Reminds a pull request that touches Lite's UI to attach before/after
-# screenshots, and does nothing else.
+# screenshots, tagging the designer so a visual change does not go by unseen.
+# It renders nothing itself.
 #
 # Capturing them in CI was tried and abandoned: under the bare X server on the
 # Linux runners this Electron build paints a frame on load and not reliably
@@ -42,12 +43,12 @@ jobs:
   remind:
     needs: changes
     # The paths filter is not redundant with the label. pr-labeler applies
-    # `screenshots` using GITHUB_TOKEN, and GitHub does not start workflow runs
+    # `screenshots needed` using GITHUB_TOKEN, and GitHub does not start workflow runs
     # from token-generated events — so an auto-applied label fires nothing. Only
     # a human applying it does. The filter is what makes this run on its own.
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
-      (contains(github.event.pull_request.labels.*.name, 'screenshots') ||
+      (contains(github.event.pull_request.labels.*.name, 'screenshots needed') ||
        needs.changes.outputs.css == 'true')
     runs-on: ubuntu-latest
     permissions:
@@ -56,6 +57,11 @@ jobs:
       PR: ${{ github.event.pull_request.number }}
       REPO: ${{ github.repository }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      AUTHOR: ${{ github.event.pull_request.user.login }}
+      # Who to tag on Lite's visual changes. One name, in one place, to change.
+      # A mention, not a review request: it says a visual change landed here
+      # without putting the pull request in anyone's review queue.
+      DESIGNER: PavelLaptev
     steps:
       # One comment, posted once. Nothing here edits or re-posts on later pushes:
       # a reminder that repeats is a reminder people mute.
@@ -70,15 +76,21 @@ jobs:
           fi
           cat > /tmp/comment.md <<EOF
           ${marker}
-          This pull request changes Lite's UI. Before/after screenshots make it
-          reviewable without checking the branch out.
+          This pull request changes Lite's UI, so it is labelled
+          \`screenshots needed\`. Before/after screenshots make it reviewable
+          without checking the branch out.
 
-          To attach them, ask your agent for the \`lite-screenshots\` skill — it
-          captures both sides against seeded fixtures, publishes the surfaces that
-          changed, and posts them here.
+          Attach them however you like — drag images straight into a comment, or
+          have an agent capture them for you (the \`lite-screenshots\` skill in
+          this repository does it against seeded fixtures).
 
-          Remove the \`screenshots\` label if this change is not visual.
+          Swap the label for \`screenshots\` once they are posted, or remove it if
+          this change is not visual.
           EOF
+          # No point tagging them on their own pull request.
+          if [ "${AUTHOR}" != "${DESIGNER}" ]; then
+            printf '\ncc @%s — visual change.\n' "${DESIGNER}" >> /tmp/comment.md
+          fi
           gh api -X POST "repos/${REPO}/issues/${PR}/comments" \
             --input <(jq -Rs '{body: .}' /tmp/comment.md) --silent
           echo "Asked for screenshots on #${PR}."
