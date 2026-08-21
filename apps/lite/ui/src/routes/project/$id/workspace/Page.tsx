@@ -15,7 +15,6 @@ import {
 	treeChangeDiffsQueryOptions,
 } from "#ui/api/queries.ts";
 import { useRestoreSnapshot } from "#ui/api/mutations.ts";
-import { decodeBytes } from "#ui/api/bytes.ts";
 import {
 	focusHorizontalScope,
 	focusScope,
@@ -32,7 +31,7 @@ import { ResizeHandle } from "#ui/components/ResizeHandle.tsx";
 import { globalHotkeys, workspaceHotkeys } from "#ui/hotkeys.ts";
 import { writeLastOpenedProject } from "#ui/project.ts";
 import { useAppDispatch, useAppSelector } from "#ui/store.ts";
-import type { ProjectForFrontend, RefInfo } from "@gitbutler/but-sdk";
+import type { ProjectForFrontend } from "@gitbutler/but-sdk";
 import { useHotkey, useHotkeys, type UseHotkeyDefinition } from "@tanstack/react-hotkeys";
 import {
 	QueryErrorResetBoundary,
@@ -42,20 +41,21 @@ import {
 } from "@tanstack/react-query";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { Match } from "effect";
-import { type FC, Activity, useCallback, useDeferredValue, useMemo, useRef } from "react";
-import { Group, Panel, useDefaultLayout } from "react-resizable-panels";
 import {
-	branchAddress,
-	commitAddress,
-	addressContains,
-	addressEquals,
-	addressIdentityKey,
-	type BranchAddress,
-	type HunkAddress,
-	type Address,
-	uncommittedChangesFileParent,
-} from "#ui/addresses.ts";
+	type FC,
+	Activity,
+	useCallback,
+	useDeferredValue,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
+import { Group, Panel, useDefaultLayout } from "react-resizable-panels";
+import { branchAddress, type BranchAddress, uncommittedChangesFileParent } from "#ui/addresses.ts";
+import type { DiffLineSelection } from "#ui/cursors.ts";
 import { Details, type DiffViewerHandle, UncommittedFilesDetails } from "./Details.tsx";
+import { buildAppliedAddressSpace } from "./applied-address-space.ts";
 import { getDiffFileNavigation } from "./diff-view.ts";
 import { buildUncommittedFileRows } from "./file-row.ts";
 import { fileTreeAddressSpace, selectedFilePath } from "./file-tree.ts";
@@ -66,14 +66,11 @@ import { ApplyBranchPicker } from "./ApplyBranchPicker.tsx";
 import { BranchPicker } from "./BranchPicker.tsx";
 import { CommandPalette } from "./CommandPalette.tsx";
 import { Sidebar } from "./Sidebar.tsx";
-import { getOperations, type TransferKind } from "#ui/operations/operation.ts";
-import { buildIndexByKey, type AddressSpace } from "#ui/workspace/address-space.ts";
 import { OperationControls } from "#ui/routes/project/$id/workspace/OperationControls.tsx";
 import { ErrorBoundary } from "#ui/components/ErrorBoundary.tsx";
 import { Settings } from "./Settings/Settings.tsx";
 import { useBranchesList } from "./useBranchesList.ts";
 import { upstreamCommitReview, useUpstreamList } from "./useUpstreamList.ts";
-import { getTransferKind, type PendingOperation } from "#ui/operations/pending-operation.ts";
 import { useStateReconciler as useReconcileState } from "#ui/reconcile.ts";
 import {
 	setCursor,
@@ -243,85 +240,6 @@ const useWorkspaceHotkeys = (projectId: string) => {
 	]);
 };
 
-const hasAnyOperation = (sources: Array<Address>, target: Address, kind: TransferKind) => {
-	const operations = getOperations(sources, target, kind);
-	return !!operations.into || !!operations.above || !!operations.below;
-};
-
-const buildAppliedAddressSpace = ({
-	headInfo,
-	pendingOperation,
-	absorptionTargetCommitIds,
-	foldedSegments,
-}: {
-	headInfo: RefInfo | undefined;
-	pendingOperation: PendingOperation;
-	absorptionTargetCommitIds: ReadonlySet<string>;
-	foldedSegments: Record<string, true>;
-}): AddressSpace<Address> => {
-	const allItems = (): Array<Address> =>
-		headInfo?.stacks.toReversed().flatMap((stack) =>
-			stack.segments.flatMap((segment): Array<Address> => {
-				// Matches what WorkspaceLists renders: a folded segment shows a stub
-				// in place of its commits, so they are not navigable.
-				const folded =
-					segment.refName !== null &&
-					foldedSegments[decodeBytes(segment.refName.fullNameBytes)] === true;
-
-				return [
-					...(segment.refName ? [branchAddress({ branchRef: segment.refName.fullNameBytes })] : []),
-					...(folded
-						? []
-						: segment.commits.map((commit) =>
-								commitAddress({ commitId: commit.id, changeId: commit.changeId }),
-							)),
-				];
-			}),
-		) ?? [];
-
-	/**
-	 * The action-compatibility filter: while a target-seeking operation collects
-	 * its second input, only its sources and the compatible targets stay
-	 * navigable — invalid destinations are unlisted, never validated.
-	 */
-	const compatibleItems = ({
-		sources,
-		isCompatibleTarget,
-	}: {
-		sources: Array<Address>;
-		isCompatibleTarget: (address: Address) => boolean;
-	}): Array<Address> =>
-		allItems().filter(
-			(address) =>
-				sources.some(
-					(source) => addressEquals(address, source) || addressContains(address, source),
-				) || isCompatibleTarget(address),
-		);
-
-	const filteredItems = Match.value(pendingOperation).pipe(
-		Match.tagsExhaustive({
-			None: () => allItems(),
-			Absorb: (operation) =>
-				compatibleItems({
-					sources: operation.sources,
-					isCompatibleTarget: (address) =>
-						address._tag === "Commit" && absorptionTargetCommitIds.has(address.commitId),
-				}),
-			Transfer: ({ value: operation }) =>
-				compatibleItems({
-					sources: operation.sources,
-					isCompatibleTarget: (address) =>
-						hasAnyOperation(operation.sources, address, getTransferKind(operation)),
-				}),
-			InlineEdit: (x) => [x.address],
-		}),
-	);
-
-	const indexByKey = buildIndexByKey(filteredItems, addressIdentityKey);
-
-	return { items: filteredItems, indexByKey };
-};
-
 type ProjectPickerProps = {
 	open: boolean;
 	projects: Array<ProjectForFrontend>;
@@ -401,8 +319,8 @@ const PageBody: FC<{ projectId: string }> = ({ projectId }) => {
 	// useCallback, not compiler memoisation: the deferred details element below
 	// keys on this identity, so it must be stable by construction.
 	const onActiveFileSelection = useCallback(
-		(itemId: string, firstHunk: HunkAddress | null) => {
-			setCursor("diff", firstHunk);
+		(itemId: string, firstSelection: DiffLineSelection | null) => {
+			setCursor("diff", firstSelection);
 
 			if (renderAllFiles) {
 				didScrollToViaFileRef.current = true;
@@ -579,7 +497,7 @@ const PageBody: FC<{ projectId: string }> = ({ projectId }) => {
 				: null;
 
 		setCursor("uncommitted", selection);
-		if (navigation) onActiveFileSelection(navigation.itemId, navigation.firstHunk);
+		if (navigation) onActiveFileSelection(navigation.itemId, navigation.firstSelection);
 	};
 
 	const uncommittedFilesSelection = useSelection("uncommitted", uncommittedAddressSpace);
@@ -635,6 +553,24 @@ const PageBody: FC<{ projectId: string }> = ({ projectId }) => {
 	]);
 
 	const deferredDetails = useDeferredValue(details);
+	const [focusRestoreRequest, setFocusRestoreRequest] = useState<{ scope: FocusScope } | null>(
+		null,
+	);
+	const consumedFocusRestoreRequest = useRef(focusRestoreRequest);
+	// The event callback cannot restore focus itself: the router settles before deferred details do.
+	// oxlint-disable react-you-might-not-need-an-effect/no-event-handler
+	useEffect(() => {
+		if (
+			focusRestoreRequest === null ||
+			consumedFocusRestoreRequest.current === focusRestoreRequest ||
+			deferredDetails !== details
+		)
+			return;
+
+		focusScope(focusRestoreRequest.scope);
+		consumedFocusRestoreRequest.current = focusRestoreRequest;
+	}, [deferredDetails, details, focusRestoreRequest]);
+	// oxlint-enable react-you-might-not-need-an-effect/no-event-handler
 
 	const { data: projects } = useSuspenseQuery(listProjectsQueryOptions);
 	const project = projects.find((candidate) => candidate.id === projectId);
@@ -729,7 +665,11 @@ const PageBody: FC<{ projectId: string }> = ({ projectId }) => {
 				</Panel>
 			</Group>
 
-			<OperationControls projectId={projectId} appliedAddressSpace={appliedAddressSpace} />
+			<OperationControls
+				projectId={projectId}
+				appliedAddressSpace={appliedAddressSpace}
+				onFocusRestore={(scope) => setFocusRestoreRequest({ scope })}
+			/>
 
 			{Match.value(dialog).pipe(
 				Match.tagsExhaustive({
