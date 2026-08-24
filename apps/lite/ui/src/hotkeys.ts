@@ -297,6 +297,11 @@ export const pullRequestHotkeys = {
 	update: {
 		hotkey: "Mod+Enter",
 	},
+	/* Same chord as `update`, but bound on the comment composer rather than the
+	   description form, so only the focused one fires. */
+	comment: {
+		hotkey: "Mod+Enter",
+	},
 } satisfies Record<string, HotkeyWithMeta>;
 
 export const selectionOperationHotkeys = {
@@ -339,6 +344,10 @@ export const diffHotkeys = {
 	absorb: {
 		hotkey: "A",
 		meta: { group: "Diff", name: "Absorb hunk" },
+	},
+	addComment: {
+		hotkey: "C",
+		meta: { group: "Diff", name: "Add comment" },
 	},
 	checkHunk: {
 		hotkey: "Space",
