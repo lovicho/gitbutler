@@ -3,10 +3,10 @@ use crossterm::event::*;
 use snapbox::{IntoData as _, file, str};
 use temp_env::with_var;
 
-use crate::command::legacy::status::tui::App;
 use crate::command::legacy::status::tui::tests::utils::{
     TestTuiOptions, test_status_tui_with_options,
 };
+use crate::command::legacy::status::{TuiLaunchOptions, tui::App};
 use crate::tui::test_utils::TestTui;
 
 const TEST_EDITOR_MESSAGE: &str = "commit from worktree";
@@ -35,6 +35,31 @@ fn worktree_tui() -> (TestTui<App>, String) {
     (tui, editor_command)
 }
 
+/// Sibling worktrees nested below a dirty worktree's first commit keep a blank lane between them.
+#[test]
+fn sibling_worktree_lanes_are_separated_after_uncommitted_files() {
+    let env =
+        Sandbox::init_scenario_with_target_and_default_settings_slow("one-stack-with-worktree");
+    env.setup_metadata(&["A"]);
+    env.invoke_git(
+        "worktree add -b wt-child-one .git/gitbutler/test-worktrees/zz-child-one wt-branch",
+    );
+    env.invoke_git(
+        "worktree add -b wt-child-two .git/gitbutler/test-worktrees/zz-child-two wt-branch",
+    );
+    let mut tui = test_status_tui_with_options(
+        env,
+        TestTuiOptions {
+            worktree_manipulation: true,
+            ..Default::default()
+        },
+    );
+
+    tui.reload().assert_rendered_term_svg_eq(file![
+        "snapshots/sibling_worktree_lanes_are_separated_after_uncommitted_files_001.svg"
+    ]);
+}
+
 /// The lane, its heading, its uncommitted file and its commit are all reachable with the cursor.
 #[test]
 fn worktree_lane_is_navigable() {
@@ -51,6 +76,32 @@ fn worktree_lane_is_navigable() {
     tui.input(KeyCode::Down)
         .assert_current_line_eq(str!["┊┊●   nll add W"])
         .assert_rendered_term_svg_eq(file!["snapshots/worktree_lane_is_navigable_final.svg"]);
+}
+
+#[test]
+fn remember_selection_on_worktree_heading() {
+    let env =
+        Sandbox::init_scenario_with_target_and_default_settings_slow("one-stack-with-worktree");
+    env.setup_metadata(&["A"]);
+    let launch_options = TuiLaunchOptions {
+        remember_selection: true,
+        ..Default::default()
+    };
+    let options = || TestTuiOptions {
+        launch_options: launch_options.clone(),
+        worktree_manipulation: true,
+        ..Default::default()
+    };
+    let mut tui = test_status_tui_with_options(env, options());
+
+    tui.reload();
+    tui.input([KeyCode::Down, KeyCode::Down])
+        .assert_current_line_eq(str!["┊┊╭┄ v {wt-branch}"]);
+    tui.input('q');
+
+    let mut tui = test_status_tui_with_options(tui.into_env(), options());
+    tui.reload()
+        .assert_current_line_eq(str!["┊┊╭┄ v {wt-branch}"]);
 }
 
 /// A worktree heading names that checkout's uncommitted area, the way `zz` names the main
