@@ -443,22 +443,26 @@ fn row_stack_ids(lines: &[StatusOutputLine]) -> Vec<Option<StackId>> {
         })
         .collect::<Vec<_>>();
 
-    for idx in 0..lines.len() {
-        if !matches!(lines[idx].data, StatusOutputLineData::Connector) {
+    let mut gap_start = 0;
+    while gap_start < row_stack_ids.len() {
+        if row_stack_ids[gap_start].is_some() {
+            gap_start += 1;
             continue;
         }
 
-        let stack_id_before = row_stack_ids[..idx]
-            .iter()
-            .rev()
-            .find_map(|stack_id| *stack_id);
-        let stack_id_after = row_stack_ids[idx + 1..]
-            .iter()
-            .find_map(|stack_id| *stack_id);
+        let Some(gap_len) = row_stack_ids[gap_start..].iter().position(Option::is_some) else {
+            break;
+        };
+        let gap_end = gap_start + gap_len;
+        let stack_id_before = gap_start.checked_sub(1).and_then(|idx| row_stack_ids[idx]);
+        let stack_id_after = row_stack_ids[gap_end];
 
+        // Linked worktree lanes have no stack ID of their own, but are rendered inside the stack
+        // they branch from. Fill gaps bounded by the same stack so its highlight stays contiguous.
         if stack_id_before == stack_id_after {
-            row_stack_ids[idx] = stack_id_before;
+            row_stack_ids[gap_start..gap_end].fill(stack_id_before);
         }
+        gap_start = gap_end + 1;
     }
 
     row_stack_ids
@@ -1417,12 +1421,18 @@ pub fn cherry_pick_operation_display(
             InsertSide::Above => Some("pick above"),
             InsertSide::Below => Some("pick below"),
         },
+        StatusOutputLineData::UncommittedChanges { cli_id } => {
+            if let CliId::Worktree { .. } = &**cli_id {
+                Some("pick to worktree")
+            } else {
+                None
+            }
+        }
         StatusOutputLineData::UpdateNotice
         | StatusOutputLineData::Connector
         | StatusOutputLineData::BetweenStacks
         | StatusOutputLineData::StagedChanges { .. }
         | StatusOutputLineData::StagedFile { .. }
-        | StatusOutputLineData::UncommittedChanges { .. }
         | StatusOutputLineData::UncommittedFile { .. }
         | StatusOutputLineData::CommitMessage
         | StatusOutputLineData::EmptyCommitMessage
