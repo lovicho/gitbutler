@@ -63,7 +63,6 @@ import { interfaceSlice } from "#ui/interface/state.ts";
 import { Badge } from "#ui/components/Badge.tsx";
 import { getButtonClassName } from "#ui/components/Button.tsx";
 import { Icon } from "#ui/components/Icon.tsx";
-import { FocusScopeKbd } from "#ui/components/FocusScopeKbd.tsx";
 import { TooltipPopup } from "#ui/components/Tooltip.tsx";
 import { ToggleGroupStyles, ToggleStyles } from "#ui/components/ToggleGroup.tsx";
 import { OperationSourceC } from "#ui/routes/project/$id/workspace/OperationSourceC.tsx";
@@ -184,6 +183,7 @@ import { diffGutterUnsafeCSS, useDiffGutterCheckboxes } from "./diff-gutter.ts";
 import { useDiffHunkDrag } from "./diff-hunk-drag.ts";
 import { diffLineTargetFromElement, type DiffLineTarget } from "./diff-line-target.ts";
 import { useHunkMenuItems } from "./useHunkMenuItems.ts";
+import { useRevealInFolder } from "./useRevealInFolder.ts";
 import { ChangeTypeBadge } from "./ChangeTypeBadge.tsx";
 import { AnnotationCard } from "#ui/routes/project/$id/workspace/AnnotationCard.tsx";
 import { ConflictBar } from "#ui/routes/project/$id/workspace/ConflictBar.tsx";
@@ -438,6 +438,7 @@ const DiffContents: FC<{
 	});
 	const { mutate: openInProgram } = useOpenInProgram();
 	const hunkMenuItems = useHunkMenuItems({ projectId });
+	const revealInFolder = useRevealInFolder(projectId);
 	const store = useAppStore();
 	const queryClient = useQueryClient();
 	const lineCheckRangeAnchor = useRef<string>(null);
@@ -920,6 +921,19 @@ const DiffContents: FC<{
 				conflictBehavior: "allow",
 				target: focusScopeRef,
 				meta: diffHotkeys.openInEditor.meta,
+			},
+		},
+		{
+			hotkey: diffHotkeys.revealInFolder.hotkey,
+			callback: () => {
+				if (!diffSelectionHunk) return;
+				void revealInFolder(diffSelectionHunk.file.change.path);
+			},
+			options: {
+				enabled: !!diffSelectionHunk,
+				conflictBehavior: "allow",
+				target: focusScopeRef,
+				meta: diffHotkeys.revealInFolder.meta,
 			},
 		},
 	]);
@@ -1664,7 +1678,8 @@ const DiffFileHeader: FC<DiffFileHeaderProps> = (p) => {
 	return (
 		<OperationSourceC
 			projectId={p.projectId}
-			source={fileAddress(p.address)}
+			sources={[fileAddress(p.address)]}
+			respectChecked={false}
 			outline="inside"
 			acceptOriginDrop
 		>
@@ -1961,7 +1976,7 @@ const Diff: FC<{
 		[unsortedChanges],
 	);
 
-	const { data: renderAllFiles } = useSuspenseQuery({
+	const { data: allInOneDiff } = useSuspenseQuery({
 		...guiSettingsQueryOptions,
 		select: (cfg) => cfg.unidiff ?? defaultSettings.unidiff,
 	});
@@ -1969,10 +1984,15 @@ const Diff: FC<{
 	const canShowFiles = useCanShowFiles();
 	const detailsFullWindow = useAppSelector(interfaceSlice.selectors.selectDetailsFullWindow);
 
-	// Change stats live in the files panel, or — in the uncommitted scope, which has no files
-	// panel — in the sidebar's "Uncommitted" row. Surface them in the toolbar below whenever
-	// whichever of those owns them is hidden, so they never disappear entirely.
-	const statsShownElsewhere = canShowFiles ? filesVisible : !detailsFullWindow;
+	// The file list lives in the files panel, or — in the uncommitted scope, which has no
+	// files panel — in the sidebar's "Uncommitted" rows, hidden only by full-window mode.
+	const fileListVisible = canShowFiles ? filesVisible : !detailsFullWindow;
+	// Change stats live alongside that list; surface them in the toolbar below whenever
+	// it is hidden, so they never disappear entirely.
+	const statsShownElsewhere = fileListVisible;
+	// Selected-file-only diffing leans on the file list to say which file the pane is
+	// showing, so without the list every file renders regardless of the setting.
+	const renderAllFiles = allInOneDiff || !fileListVisible;
 
 	const filesFilter = useAppSelector((state) =>
 		projectSlice.selectors.selectFilesFilter(state, projectId),
@@ -2477,7 +2497,6 @@ const CommitDetailsSkeleton: FC = () => {
 					{detailsFullWindow && <TopLeftControls />}
 
 					<div className={styles.title}>
-						<FocusScopeKbd hotkey="0" scope="details" />
 						<Icon name="commit" />
 						<h3 className={classes("text-15", "text-semibold")}>Loading…</h3>
 					</div>
@@ -2577,7 +2596,6 @@ const CommitDetails: FC<{
 					{detailsFullWindow && <TopLeftControls />}
 
 					<div className={styles.title}>
-						<FocusScopeKbd hotkey="0" scope="details" />
 						<Icon name="commit" />
 						<h3 className={classes(styles.titleContentWrapper, "text-15", "text-semibold")}>
 							<span className={styles.titleContent}>
@@ -2757,7 +2775,6 @@ const BranchTitleRow: FC<{ branchName: string }> = ({ branchName }) => {
 			{detailsFullWindow && <TopLeftControls />}
 
 			<div className={styles.title}>
-				<FocusScopeKbd hotkey="0" scope="details" />
 				<Icon name="branch" />
 				<h3 className={classes(styles.titleContent, "text-15", "text-semibold")}>{branchName}</h3>
 			</div>
@@ -2894,8 +2911,8 @@ const NewPullRequestView: FC<{
 		persistDraftPR({ projectId, branchName, draft: { ...draft, ...next } });
 	};
 
-	const { mutate: addReviewLabels } = useAddReviewLabels();
-	const { mutate: requestReview } = useRequestReview();
+	const { mutate: addReviewLabels } = useAddReviewLabels(projectId);
+	const { mutate: requestReview } = useRequestReview(projectId);
 
 	// The forge takes none of these when a PR is created — GitHub's create
 	// endpoint accepts neither labels nor reviewers — so they are applied the
@@ -3225,7 +3242,6 @@ const FileDetailsSkeleton: FC = () => {
 					{detailsFullWindow && <TopLeftControls />}
 
 					<div className={styles.title}>
-						<FocusScopeKbd hotkey="0" scope="details" />
 						<Icon name="file" />
 						<h3 className={classes("text-15", "text-semibold")}>Uncommitted</h3>
 					</div>
@@ -3263,7 +3279,6 @@ const FileDetails: FC<{
 			{detailsFullWindow && <TopLeftControls />}
 
 			<div className={styles.title}>
-				<FocusScopeKbd hotkey="0" scope="details" />
 				<Icon name="file-diff" />
 				<h3 className={classes("text-15", "text-semibold")}>Uncommitted</h3>
 			</div>
