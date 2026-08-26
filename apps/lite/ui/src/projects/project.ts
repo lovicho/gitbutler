@@ -81,6 +81,12 @@ type WorkspaceState = {
 	foldedSegments: Record<string, true>;
 	highlightedCommitIds: Array<string>;
 	pendingOperation: PendingOperation;
+	/**
+	 * What became of the last operation that ended without one, stated where the operation's own
+	 * controls stood. An operation that cannot run must not hold the workspace open waiting to be
+	 * aimed, so it clears itself and leaves this behind to say why.
+	 */
+	notice: string | null;
 	selectedBranchTabs: Record<string, BranchTab>;
 	/**
 	 * The diff cursor. Its five siblings live in the URL (use-cursor.ts); this
@@ -115,6 +121,7 @@ const createInitialWorkspaceState = (): WorkspaceState => ({
 	foldedSegments: {},
 	highlightedCommitIds: [],
 	pendingOperation: noPendingOperation,
+	notice: null,
 	selectedBranchTabs: {},
 	diffCursor: null,
 	uncommittedFilesFilter: null,
@@ -124,8 +131,6 @@ const createInitialWorkspaceState = (): WorkspaceState => ({
 });
 
 export type PageId = "workspace" | "upstream" | "branches";
-
-const defaultBranchTab: BranchTab = "diff";
 
 export type ProjectState = {
 	filesVisible: boolean;
@@ -161,6 +166,7 @@ export const projectReducers = {
 	},
 	startInlineEdit: (state: ProjectState, edit: PendingInlineEdit) => {
 		state.workspace.pendingOperation = pendingInlineEdit(edit);
+		state.workspace.notice = null;
 	},
 	updateRewrittenBranchReferences: (
 		state: ProjectState,
@@ -201,6 +207,7 @@ export const projectReducers = {
 	},
 	startTransfer: (state: ProjectState, { transfer }: { transfer: PendingTransfer }) => {
 		state.workspace.pendingOperation = pendingTransfer(transfer);
+		state.workspace.notice = null;
 	},
 	startKeyboardTransfer: (
 		state: ProjectState,
@@ -227,6 +234,7 @@ export const projectReducers = {
 				restoreFocus,
 			}),
 		);
+		state.workspace.notice = null;
 	},
 	startAbsorb: (
 		state: ProjectState,
@@ -241,6 +249,7 @@ export const projectReducers = {
 		},
 	) => {
 		state.workspace.pendingOperation = pendingAbsorb({ sources, restoreSelection, sourceTarget });
+		state.workspace.notice = null;
 	},
 	updatePointerTransfer: (
 		state: ProjectState,
@@ -306,6 +315,14 @@ export const projectReducers = {
 	},
 	clearPendingOperation: (state: ProjectState) => {
 		state.workspace.pendingOperation = noPendingOperation;
+	},
+	/** Ends the pending operation and says why in its place. */
+	refusePendingOperation: (state: ProjectState, { notice }: { notice: string }) => {
+		state.workspace.pendingOperation = noPendingOperation;
+		state.workspace.notice = notice;
+	},
+	clearNotice: (state: ProjectState) => {
+		state.workspace.notice = null;
 	},
 	setHighlightedCommitIds: (
 		state: ProjectState,
@@ -577,8 +594,13 @@ const selectCheckedAddressCount = createSelector(
 
 export const projectSelectors = {
 	selectFilesVisible: (state: ProjectState) => state.filesVisible,
-	selectBranchTab: (state: ProjectState, branchName: string): BranchTab =>
-		state.workspace.selectedBranchTabs[branchName] ?? defaultBranchTab,
+	/**
+	 * The explicitly chosen tab, or `undefined` when none was picked — the
+	 * caller supplies the default, since whether the Pull Request tab is worth
+	 * opening on depends on forge data the store does not hold.
+	 */
+	selectBranchTab: (state: ProjectState, branchName: string): BranchTab | undefined =>
+		state.workspace.selectedBranchTabs[branchName],
 
 	selectUncommittedFilesFilter: (state: ProjectState) => state.workspace.uncommittedFilesFilter,
 	selectFilesFilter: (state: ProjectState) => state.workspace.filesFilter,
@@ -593,6 +615,7 @@ export const projectSelectors = {
 		conflictCheckKey(conflict) in state.workspace.checkedConflicts,
 	selectCheckedConflicts: selectCheckedConflictsFor,
 	selectPendingOperation: (state: ProjectState) => state.workspace.pendingOperation,
+	selectNotice: (state: ProjectState) => state.workspace.notice,
 	selectFoldedSegments: (state: ProjectState) => state.workspace.foldedSegments,
 	selectSegmentFolded: (state: ProjectState, branchRef: string) =>
 		state.workspace.foldedSegments[branchRef] === true,
