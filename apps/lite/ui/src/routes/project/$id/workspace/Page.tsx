@@ -328,9 +328,6 @@ const PageBody: FC<{ projectId: string }> = ({ projectId }) => {
 
 	const dispatch = useAppDispatch();
 
-	// The stored setting is enough here even though the details pane also renders all
-	// files whenever the file list is hidden: file activation only ever comes from a
-	// visible list, and while the list is visible the pane follows the setting.
 	const { data: renderAllFiles } = useSuspenseQuery({
 		...guiSettingsQueryOptions,
 		select: (cfg) => cfg.unidiff ?? defaultSettings.unidiff,
@@ -492,6 +489,9 @@ const PageBody: FC<{ projectId: string }> = ({ projectId }) => {
 		projectSlice.selectors.selectUncommittedFilesFilter(state, projectId),
 	);
 	const uncommittedFilesDisplayMode = useFileDisplayMode();
+	const uncommittedFilesRecentFirst = useAppSelector((state) =>
+		projectSlice.selectors.selectUncommittedFilesRecentFirst(state, projectId),
+	);
 	const uncommittedFilesCollapsedDirectories = useAppSelector((state) =>
 		projectSlice.selectors.selectUncommittedFilesCollapsedDirectories(state, projectId),
 	);
@@ -500,6 +500,7 @@ const PageBody: FC<{ projectId: string }> = ({ projectId }) => {
 		filter: uncommittedFilesFilter,
 		mode: uncommittedFilesDisplayMode,
 		collapsedDirectories: uncommittedFilesCollapsedDirectories,
+		recentFirst: uncommittedFilesRecentFirst,
 	});
 	// Directories take the cursor as files do, so the index follows the layout the
 	// list renders — and a collapsed directory takes its files out of it too.

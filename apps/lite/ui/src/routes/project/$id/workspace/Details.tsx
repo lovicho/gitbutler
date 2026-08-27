@@ -128,6 +128,7 @@ import {
 } from "#ui/focus-scopes.ts";
 import { buildIndexByKey, getAdjacent } from "#ui/workspace/address-space.ts";
 import { ChangeStats } from "#ui/routes/project/$id/workspace/ChangeStats.tsx";
+import { DiffStats } from "#ui/components/DiffStats.tsx";
 import { ChangesHeaderRow } from "#ui/routes/project/$id/workspace/ChangesHeaderRow.tsx";
 import {
 	getLineStats,
@@ -381,6 +382,7 @@ const DadJokeFooter: FC = () => {
 
 const DiffContents: FC<{
 	activeFileItemId: string | null;
+	diffContextKey: string;
 	focusScopeRef: RefObject<HTMLDivElement | null>;
 	onViewerFileSelection: (path: string) => void;
 	fileParent: FileParent;
@@ -390,6 +392,7 @@ const DiffContents: FC<{
 	diffBackgrounds?: GUISettings["diffBackground"];
 	diffOverflow?: GUISettings["diffOverflow"];
 	diffStyle?: GUISettings["diffStyle"];
+	commentAnnotations: boolean;
 	reviewedFiles: ReviewedFileVersions;
 	manualCollapseByItem: Map<string, boolean>;
 	setManualCollapse: (itemId: string, collapsed: boolean | undefined) => void;
@@ -401,6 +404,7 @@ const DiffContents: FC<{
 	uncommit: (change: TreeChange, extendToCheckedFiles: boolean) => void;
 }> = ({
 	activeFileItemId,
+	diffContextKey,
 	focusScopeRef,
 	onViewerFileSelection,
 	fileParent,
@@ -410,6 +414,7 @@ const DiffContents: FC<{
 	diffBackgrounds,
 	diffOverflow,
 	diffStyle,
+	commentAnnotations,
 	reviewedFiles,
 	manualCollapseByItem,
 	setManualCollapse,
@@ -522,12 +527,15 @@ const DiffContents: FC<{
 	}, [selectedLines]);
 	const selectedLinesHunk = storedSelectionHunk ?? diffSelection;
 	const effectiveDiffStyle = diffStyle ?? defaultSettings.diffStyle;
-	// A primitive, null while the selection sits on a visible hunk, so the item
-	// list and header closures below only pick up new identities when a folded
-	// file gains or loses the selection — not on every j/k move.
+	// Primitives, so the item list and header closures below only pick up new
+	// identities when the selection crosses into another file — not on every
+	// j/k move within one.
+	const selectedFileItemId = diffSelectionHunk?.file.item.id ?? null;
+	// Null while the selection sits on a visible hunk: only a folded file needs
+	// its stand-in hunk rebuilt when it gains or loses the selection.
 	const selectedFoldedFileId =
-		diffSelectionHunk != null && collapsedItems.has(diffSelectionHunk.file.item.id)
-			? diffSelectionHunk.file.item.id
+		selectedFileItemId != null && collapsedItems.has(selectedFileItemId)
+			? selectedFileItemId
 			: null;
 
 	useLayoutEffect(() => {
@@ -1302,13 +1310,14 @@ const DiffContents: FC<{
 			projectId,
 			checkLine,
 			checkHunkLines,
-			fileParent._tag === "Branch" ? undefined : handleCreateComment,
+			commentAnnotations && fileParent._tag !== "Branch" ? handleCreateComment : undefined,
 		);
 	const {
 		onPostRender: handleMarkedDiffPostRender,
 		setSearchMatches,
+		getSearchSource,
 		searchMarks,
-	} = useDiffSearchMarks(handleDiffPostRender);
+	} = useDiffSearchMarks(handleDiffPostRender, items);
 
 	const handOffCollapsedSelection = (itemId: string): void => {
 		// Folding hides the selected hunk's lines; hand the selection to the
@@ -1451,7 +1460,7 @@ const DiffContents: FC<{
 		<>
 			<CodeView
 				ref={viewerRef}
-				renderCodeViewFooter={() => <DadJokeFooter />}
+				renderCodeViewFooter={() => <DadJokeFooter key={diffContextKey} />}
 				renderCustomHeader={(item) => {
 					const file = fileByItemId.get(item.id);
 					// CodeView may briefly hold onto stale snapshots of our data.
@@ -1479,7 +1488,7 @@ const DiffContents: FC<{
 							collapsed={item.collapsed ?? false}
 							reviewState={reviewState}
 							lineStats={patchLineStats(file.patch)}
-							selected={item.id === selectedFoldedFileId}
+							selected={item.id === selectedFileItemId}
 							setCollapsed={handleSetCollapsed(item.id)}
 							setReviewed={handleSetReviewed(item.id, file.change.path, version)}
 							canUncommit={canUncommit}
@@ -1616,6 +1625,7 @@ const DiffContents: FC<{
 
 			<DiffSearchBar
 				items={items}
+				getSearchSource={getSearchSource}
 				focusScopeRef={focusScopeRef}
 				onNavigate={navigateToSearchMatch}
 				onMatchesChange={setSearchMatches}
@@ -1645,7 +1655,7 @@ type DiffFileHeaderProps = {
 	reviewState: "reviewed" | "changed" | null;
 	/** The change's counted deltas, or `null` when there is no patch to count. */
 	lineStats: LineStats | null;
-	/** Whether the folded file's stand-in hunk holds the diff selection. */
+	/** Whether the diff selection sits in this file. */
 	selected: boolean;
 	setCollapsed: (collapsed: boolean) => void;
 	setReviewed: (reviewed: boolean) => void;
@@ -1733,17 +1743,12 @@ const DiffFileHeader: FC<DiffFileHeaderProps> = (p) => {
 					</span>
 					{reviewLabel}
 				</button>
-				<ChangeTypeBadge type={p.item.fileDiff.type} />
-				{p.lineStats && (p.lineStats.linesAdded > 0 || p.lineStats.linesRemoved > 0) && (
-					<span>
-						{p.lineStats.linesAdded > 0 && (
-							<span className={styles.fileDiffAdded}>+{p.lineStats.linesAdded}</span>
-						)}{" "}
-						{p.lineStats.linesRemoved > 0 && (
-							<span className={styles.fileDiffDeleted}>-{p.lineStats.linesRemoved}</span>
-						)}
-					</span>
-				)}
+				<div className={styles.fileMeta}>
+					<ChangeTypeBadge type={p.item.fileDiff.type} />
+					{p.lineStats && (
+						<DiffStats added={p.lineStats.linesAdded} removed={p.lineStats.linesRemoved} />
+					)}
+				</div>
 
 				<Toolbar.Root aria-label="File actions" className={styles.fileHeaderActions}>
 					<Toolbar.Button
@@ -1976,23 +1981,23 @@ const Diff: FC<{
 		[unsortedChanges],
 	);
 
-	const { data: allInOneDiff } = useSuspenseQuery({
+	const {
+		data: { unidiff: renderAllFiles, commentAnnotations },
+	} = useSuspenseQuery({
 		...guiSettingsQueryOptions,
-		select: (cfg) => cfg.unidiff ?? defaultSettings.unidiff,
+		select: (cfg) => ({
+			commentAnnotations: cfg.commentAnnotations ?? defaultSettings.commentAnnotations,
+			unidiff: cfg.unidiff ?? defaultSettings.unidiff,
+		}),
 	});
 
 	const canShowFiles = useCanShowFiles();
 	const detailsFullWindow = useAppSelector(interfaceSlice.selectors.selectDetailsFullWindow);
 
-	// The file list lives in the files panel, or — in the uncommitted scope, which has no
-	// files panel — in the sidebar's "Uncommitted" rows, hidden only by full-window mode.
-	const fileListVisible = canShowFiles ? filesVisible : !detailsFullWindow;
-	// Change stats live alongside that list; surface them in the toolbar below whenever
-	// it is hidden, so they never disappear entirely.
-	const statsShownElsewhere = fileListVisible;
-	// Selected-file-only diffing leans on the file list to say which file the pane is
-	// showing, so without the list every file renders regardless of the setting.
-	const renderAllFiles = allInOneDiff || !fileListVisible;
+	// Change stats live in the files panel, or — in the uncommitted scope, which has no files
+	// panel — in the sidebar's "Uncommitted" row. Surface them in the toolbar below whenever
+	// whichever of those owns them is hidden, so they never disappear entirely.
+	const statsShownElsewhere = canShowFiles ? filesVisible : !detailsFullWindow;
 
 	const filesFilter = useAppSelector((state) =>
 		projectSlice.selectors.selectFilesFilter(state, projectId),
@@ -2081,10 +2086,15 @@ const Diff: FC<{
 		},
 	});
 
-	const { data: annotationsByPath = EMPTY_ANNOTATIONS_BY_PATH } = useQuery({
+	const { data: loadedAnnotationsByPath = EMPTY_ANNOTATIONS_BY_PATH } = useQuery({
 		...commentsQueryOptions(projectId),
+		enabled: commentAnnotations,
 		select: (comments) => annotationsByPathForScope(comments, fileParent),
 	});
+	// The query fallback covers loading; this also hides cached data after opting out.
+	const annotationsByPath = commentAnnotations
+		? loadedAnnotationsByPath
+		: EMPTY_ANNOTATIONS_BY_PATH;
 
 	// A directory row stands for the first file below it, so the diff has
 	// something to show while the cursor rests on a folder.
@@ -2117,6 +2127,8 @@ const Diff: FC<{
 		activeFilePath === null
 			? null
 			: (diffViewSansAnno.fileByPath.get(activeFilePath)?.item.id ?? null);
+	const diffContextKey =
+		shownFileIndex === null ? reviewedFilesContextId : (activeFileItemId ?? reviewedFilesContextId);
 
 	const allFilesReviewed =
 		preparedDiffFiles.length > 0 &&
@@ -2417,6 +2429,7 @@ const Diff: FC<{
 						>
 							<DiffContents
 								activeFileItemId={activeFileItemId}
+								diffContextKey={diffContextKey}
 								onViewerFileSelection={onPassiveFileSelection}
 								fileParent={fileParent}
 								projectId={projectId}
@@ -2425,6 +2438,7 @@ const Diff: FC<{
 								diffBackgrounds={diffSettings?.diffBackground}
 								diffOverflow={diffSettings?.diffOverflow}
 								diffStyle={diffStyle}
+								commentAnnotations={commentAnnotations}
 								reviewedFiles={reviewedFiles}
 								manualCollapseByItem={manualCollapseByItem}
 								setManualCollapse={setManualCollapse}
@@ -2648,6 +2662,13 @@ const CommitDetails: FC<{
 					</p>
 				)}
 				<div className={classes("text-13", styles.commitDetailsMeta)}>
+					{review && (
+						<BranchTabToggle
+							branchTab={tab}
+							setBranchTab={setTab}
+							className={styles.commitDetailsMetaTabs}
+						/>
+					)}
 					<img
 						src={commitDetails.commit.author.gravatarUrl}
 						className={styles.avatar}
@@ -2672,12 +2693,6 @@ const CommitDetails: FC<{
 						copyValue={commitDetails.commit.id}
 					/>
 				</div>
-
-				{review && (
-					<div className={styles.tabsRow}>
-						<BranchTabToggle branchTab={tab} setBranchTab={setTab} />
-					</div>
-				)}
 			</div>
 
 			{review && tab === "pr" ? (
@@ -2793,9 +2808,10 @@ const BranchTabToggle: FC<{
 	branchTab: BranchTab;
 	setBranchTab: (tab: BranchTab) => void;
 	prDisabled?: boolean;
-}> = ({ branchTab, setBranchTab, prDisabled = false }) => (
+	className?: string;
+}> = ({ branchTab, setBranchTab, prDisabled = false, className }) => (
 	<ToggleGroup
-		render={<ToggleGroupStyles />}
+		render={<ToggleGroupStyles className={className} />}
 		value={[branchTab]}
 		onValueChange={(value: Array<BranchTab>) => {
 			const head = value[0];
