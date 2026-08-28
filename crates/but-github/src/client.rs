@@ -467,9 +467,7 @@ impl GitHubClient {
             self.base_url, owner, repo, pr_number
         );
         let response = self.client.get(&url).send().await?;
-        if !response.status().is_success() {
-            bail!("Failed to get PR merge status: {}", response.status());
-        }
+        let response = ensure_success(response).await?;
         let body: PrMergeStatusResponse = response.json().await?;
         let is_mergeable = matches!(
             body.mergeable_state.as_deref(),
@@ -2007,7 +2005,7 @@ impl From<GitHubPullRequest> for PullRequest {
 /// serving cached data instead of surfacing an error.
 pub(crate) const NOT_AUTHENTICATED: but_error::Context = but_error::Context::new_static(
     but_error::Code::ForgeNotAuthenticated,
-    "Not authenticated with GitHub.",
+    "Not authenticated with GitHub. Connect your account under Settings → Integrations.",
 );
 
 pub(crate) fn resolve_account(
