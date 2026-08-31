@@ -120,7 +120,8 @@ pub enum HelpTopic {
     /// obvious identifiers like full commit hashes and entire branch names are viable CLI IDs,
     /// there are also various shorter identifiers that can be used in place of the full names.
     ///
-    /// In general, `but status` will show all currently available CLI IDs in front of the "thing".
+    /// In general, `but status` or `but diff` will show currently available CLI IDs in front of
+    /// the "thing".
     ///
     /// Typical CLI IDs include:
     ///
@@ -138,6 +139,9 @@ pub enum HelpTopic {
     /// * **Uncommitted area:** Always `zz`
     /// * **Committed file:** `<commit_cli_id>:<file_cli_id>`
     ///     - Run `but status -f` to show committed files
+    /// * **Committed hunk:** `<commit_cli_id>:<file_cli_id>:<hunk_cli_id>`
+    ///     - Run `but diff <commit_cli_id>` to show committed hunks and their IDs
+    ///     - Committed hunk IDs are informational for now; no command accepts them yet
     ///
     /// Many CLI IDs depend on the context and may change if the context changes, such as when new
     /// data is written to files, commits are made or rearranged and branches are created or
@@ -282,6 +286,10 @@ pub enum Subcommands {
     #[cfg(feature = "legacy")]
     #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
     Move(r#move::Platform),
+
+    #[cfg(feature = "legacy")]
+    #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
+    Split(split::Platform),
 
     #[cfg(feature = "legacy")]
     #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
@@ -476,7 +484,6 @@ pub enum Subcommands {
     /// will prompt you to select a branch to create a PR for.
     ///
     #[cfg(feature = "legacy")]
-    #[clap(visible_alias = "review")]
     #[clap(visible_alias = "mr")]
     Pr(forge::pr::Platform),
 
@@ -1022,6 +1029,8 @@ pub mod redo;
 #[cfg(feature = "legacy")]
 pub mod reword2;
 pub mod skill;
+#[cfg(feature = "legacy")]
+pub mod split;
 #[cfg(feature = "legacy")]
 pub mod squash;
 #[cfg(feature = "legacy")]

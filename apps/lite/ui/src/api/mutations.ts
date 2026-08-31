@@ -9,6 +9,7 @@ import {
 	guiSettingsQueryOptions,
 	listCommentReactionsQueryOptions,
 	listReviewCommentsQueryOptions,
+	listReviewThreadsQueryOptions,
 	listReviewReactionsQueryOptions,
 	treeChangeDiffsQueryOptions,
 	workspaceFetchQueryOptions,
@@ -44,6 +45,7 @@ import type {
 	DiffSpec,
 	ForgeReview,
 	ForgeReviewComment,
+	ForgeReviewThreadComment,
 	ForgeReviewReaction,
 	ForgeReviewUser,
 	Snapshot,
@@ -573,6 +575,53 @@ export const useCreateReviewComment = (projectId: string) =>
 			void ctx.client.invalidateQueries({
 				queryKey: listReviewCommentsQueryOptions(input).queryKey,
 			});
+		},
+	});
+
+/**
+ * Reply into a review's diff comment thread. The reply is keyed on the
+ * thread, but the cache is keyed on the review, so the number comes from the
+ * caller rather than the forge's reply.
+ */
+export const useCreateReviewThreadReply = (projectId: string, reviewId: number) =>
+	useMutation({
+		mutationKey: [projectId, "createReviewThreadReply"],
+		mutationFn: window.lite.createReviewThreadReply,
+		meta: { failureTitle: "Failed to post reply" },
+		onMutate: async (input, ctx) => {
+			const key = listReviewThreadsQueryOptions({ projectId, reviewId }).queryKey;
+			await ctx.client.cancelQueries({ queryKey: key });
+
+			const prev = ctx.client.getQueryData(key);
+			const login = ctx.client.getQueryData(
+				currentForgeLoginQueryOptions(input.projectId).queryKey,
+			);
+			const ghost: ForgeReviewThreadComment = {
+				id: takeOptimisticForgeId(),
+				body: input.body,
+				author: login == null ? null : ghostForgeUser(login),
+				createdAt: new Date().toISOString(),
+				modifiedAt: null,
+				htmlUrl: "",
+				diffHunk: null,
+				reviewId: null,
+			};
+			ctx.client.setQueryData(key, (threads) =>
+				threads?.map((thread) =>
+					thread.id === input.threadId
+						? { ...thread, comments: thread.comments.concat(ghost) }
+						: thread,
+				),
+			);
+
+			return prev;
+		},
+		onError: (error, input, prev, ctx) => {
+			const key = listReviewThreadsQueryOptions({ projectId, reviewId }).queryKey;
+			// Roll the optimistic write back, then refetch: the rollback snapshot
+			// may itself be stale by now.
+			if (prev) ctx.client.setQueryData(key, prev);
+			void ctx.client.invalidateQueries({ queryKey: key });
 		},
 	});
 
@@ -1135,9 +1184,10 @@ export const useWorkspaceIntegrateUpstream = () => {
 	});
 };
 
-export const useBranchRemove = () => {
+export const useBranchRemove = (projectId: string) => {
 	const dispatch = useAppDispatch();
 	return useMutation({
+		mutationKey: [projectId, "branchRemove"],
 		mutationFn: window.lite.branchRemove,
 		onSuccess: (response, input, _context, mutation) => {
 			syncCoreCaches(mutation.client, dispatch, input.projectId, response);
@@ -1229,9 +1279,10 @@ export const useUnapplyStack = () =>
 		meta: { failureTitle: "Failed to unapply stack" },
 	});
 
-export const useBranchRename = () => {
+export const useBranchRename = (projectId: string) => {
 	const dispatch = useAppDispatch();
 	return useMutation({
+		mutationKey: [projectId, "branchRename"],
 		mutationFn: window.lite.branchRename,
 		onSuccess: async (response, input, _context, mutation) => {
 			syncCoreCaches(mutation.client, dispatch, input.projectId, response);
