@@ -3,6 +3,26 @@ use snapbox::str;
 use crate::utils::{CommandExt as _, Sandbox};
 
 #[test]
+fn rejects_unnamed_segment_as_source_or_target() {
+    let env =
+        Sandbox::init_scenario_with_target_and_default_settings("one-stack-anonymous-segment");
+    env.setup_metadata(&["A"]);
+
+    for command in ["pick g0 -A tpm", "pick tpm -A g0", "pick tpm -B g0"] {
+        env.but(command)
+            .assert()
+            .failure()
+            .stdout_eq(str![])
+            .stderr_eq(str![[r#"
+Error: Cannot operate on anonymous branch 'g0'
+
+Hint: Name it with `but reword g0` first! Note that the short ID is likely to change when the branch is named.
+
+"#]]);
+    }
+}
+
+#[test]
 fn pick_commit_to_existing_branch_outputs_json() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
     env.setup_metadata(&["A", "B"]);
@@ -113,7 +133,7 @@ Picked d3e2ba3 onto branch 'A' to create 1
 "#]]);
 
     env.but("status -v").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ g0 [A]
 ┊● 1 author 2000-01-01 00:00:00 +0000 (sha b40d58b)
@@ -145,7 +165,7 @@ Picked 9477ae7 onto new branch 'new-branch' to create 1
 "#]]);
 
     env.but("status -v").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ ne [new-branch]
 ┊● 1 author 2000-01-01 00:00:00 +0000 (sha f033235)
@@ -175,7 +195,7 @@ Picked d3e2ba3 to create 1
 "#]]);
 
     env.but("status -v").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ g0 [A]
 ┊● 1 author 2000-01-01 00:00:00 +0000 (sha b40d58b)
@@ -207,7 +227,7 @@ Picked d3e2ba3 to create 1
 "#]]);
 
     env.but("status -v").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ g0 [A]
 ┊● tpm author 2000-01-01 00:00:00 +0000 (sha c341b3d)
@@ -239,7 +259,7 @@ Picked d3e2ba3 onto new branch 'a-branch-1' to create 1
 "#]]);
 
     env.but("status -v").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ br [a-branch-1]
 ┊● 1 author 2000-01-01 00:00:00 +0000 (sha b40d58b)
@@ -273,7 +293,7 @@ Picked d3e2ba3 onto new branch 'a-branch-1' to create 1
 "#]]);
 
     env.but("status -v").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ g0 [A]
 ┊● tpm author 2000-01-01 00:00:00 +0000 (sha c341b3d)

@@ -4,6 +4,31 @@ use super::util::{
 use crate::utils::{CommandExt as _, Sandbox};
 
 #[test]
+fn rejects_unnamed_segment_as_target() {
+    let env =
+        Sandbox::init_scenario_with_target_and_default_settings("one-stack-anonymous-segment");
+    env.setup_metadata(&["A"]);
+    env.file("new.txt", "content\n");
+
+    for command in [
+        "commit -b g0 -m test",
+        "commit -A g0 -m test",
+        "commit -B g0 -m test",
+    ] {
+        env.but(command)
+            .assert()
+            .failure()
+            .stdout_eq(snapbox::str![])
+            .stderr_eq(snapbox::str![[r#"
+Error: Cannot operate on anonymous branch 'g0'
+
+Hint: Name it with `but reword g0` first! Note that the short ID is likely to change when the branch is named.
+
+"#]]);
+    }
+}
+
+#[test]
 fn commits_a_dirty_file_on_a_new_branch_in_single_branch_mode() {
     let env = Sandbox::open_with_default_settings("one-fork");
     env.but("config feature single-branch enable")
@@ -16,7 +41,7 @@ fn commits_a_dirty_file_on_a_new_branch_in_single_branch_mode() {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted]
+╭┄ @ [uncommitted]
 ┊   xt A ad-hoc.txt
 ┊
 ┊╭┄ ma [main]
@@ -61,7 +86,7 @@ Created commit 1 on new branch 'feature'
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ at [feature]
 ┊●   1 add ad-hoc file
@@ -115,7 +140,7 @@ fn commits_on_the_checked_out_branch_in_single_branch_mode() {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted]
+╭┄ @ [uncommitted]
 ┊   pr A existing.txt
 ┊
 ┊╭┄ ma [main]
@@ -142,7 +167,7 @@ Created commit 1 on branch 'main'
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ ma [main]
 ┊●   1 commit on main
@@ -197,7 +222,7 @@ fn commits_at_each_branch_in_an_existing_single_branch_stack() {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted]
+╭┄ @ [uncommitted]
 ┊   tk A bottom.txt
 ┊
 ┊╭┄ to [top]
@@ -233,7 +258,7 @@ Hint: run `but diff` to see uncommitted changes and `but commit -b <branch> -m "
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ to [top]
 ┊●   1#0 top position
@@ -334,7 +359,7 @@ Created commit 1 on branch 'A'
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ g0 [A]
 ┊●   1 (no commit message) (no changes)
@@ -367,7 +392,7 @@ Created commit 1 on branch 'A'
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ g0 [A]
 ┊●   1 (no commit message)
@@ -396,7 +421,7 @@ fn agent_mutation_omits_status_unless_requested() {
 
     assert!(stdout.contains("Created commit"));
     assert!(
-        !stdout.contains("╭┄ zz"),
+        !stdout.contains("╭┄ @"),
         "agent mutations must omit workspace status by default"
     );
     assert!(
@@ -414,7 +439,7 @@ fn agent_mutation_omits_status_unless_requested() {
 
     assert!(stdout.contains("Created commit"));
     assert!(
-        stdout.contains("╭┄ zz"),
+        stdout.contains("╭┄ @"),
         "explicit status opt-in must append workspace status"
     );
 }
@@ -433,7 +458,7 @@ fn human_mutation_can_request_status_after() {
 
     assert!(stdout.contains("Created commit"));
     assert!(
-        stdout.contains("╭┄ zz"),
+        stdout.contains("╭┄ @"),
         "human callers should be able to opt into workspace status"
     );
 }
@@ -498,7 +523,7 @@ fn no_args_single_head_message_from_editor() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ g0 [A]
 ┊●   1 commit from editor
@@ -525,7 +550,7 @@ fn single_head_with_message() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ g0 [A]
 ┊●   1 add file.txt
@@ -554,7 +579,7 @@ fn can_repeat_message() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ g0 [A]
 ┊● 1 author 2000-01-01 00:00:00 +0000 (sha b141567)
@@ -611,7 +636,7 @@ fn editor_user_writes_no_message() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ g0 [A]
 ┊●   1 (no commit message)
@@ -660,7 +685,7 @@ fn create_commit_on_new_branch() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ br [a-branch-1]
 ┊●   1 (no commit message)
@@ -686,7 +711,7 @@ fn create_commit_on_user_provided_branch() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ fi [file]
 ┊●   1 add first
@@ -706,7 +731,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ fi [file]
 ┊●   1#0 add second
@@ -727,7 +752,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ ot [other]
 ┊●   1#0 add third
@@ -754,7 +779,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ ot [other]
 ┊●   1#0 add fourth
@@ -786,7 +811,7 @@ fn create_commit_on_new_branch_with_canned_name() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ br [a-branch-1]
 ┊●   1 add file.txt
@@ -885,7 +910,7 @@ fn empty_flag_to_force_empty_commit_when_changes_exist() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted]
+╭┄ @ [uncommitted]
 ┊   vq A changes
 ┊
 ┊╭┄ br [a-branch-1]
@@ -926,7 +951,7 @@ fn commit_empty_above_commit() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ g0 [A]
 ┊●   ywx add second
@@ -947,7 +972,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ g0 [A]
 ┊●   ywx add second
@@ -971,7 +996,7 @@ fn commit_empty_below_commit() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ g0 [A]
 ┊●   ywx add second
@@ -992,7 +1017,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ g0 [A]
 ┊●   ywx add second
@@ -1018,7 +1043,7 @@ fn commit_above_commit() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted]
+╭┄ @ [uncommitted]
 ┊   uv A file.txt
 ┊
 ┊╭┄ g0 [A]
@@ -1040,7 +1065,7 @@ Hint: run `but diff` to see uncommitted changes and `but commit -b <branch> -m "
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ g0 [A]
 ┊●   ywx add second
@@ -1066,7 +1091,7 @@ fn commit_above_branch() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted]
+╭┄ @ [uncommitted]
 ┊   uv A file.txt
 ┊
 ┊╭┄ g0 [A]
@@ -1087,7 +1112,7 @@ Hint: run `but diff` to see uncommitted changes and `but commit -b <branch> -m "
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ br [a-branch-1]
 ┊●   1 add file.txt
@@ -1114,7 +1139,7 @@ fn commit_below_commit() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted]
+╭┄ @ [uncommitted]
 ┊   uv A file.txt
 ┊
 ┊╭┄ g0 [A]
@@ -1136,7 +1161,7 @@ Hint: run `but diff` to see uncommitted changes and `but commit -b <branch> -m "
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ g0 [A]
 ┊●   ywx add second
@@ -1162,7 +1187,7 @@ fn commit_below_branch() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted]
+╭┄ @ [uncommitted]
 ┊   uv A file.txt
 ┊
 ┊╭┄ g0 [A]
@@ -1183,7 +1208,7 @@ Hint: run `but diff` to see uncommitted changes and `but commit -b <branch> -m "
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ g0 [A]
 ┊●   tpm add A
@@ -1210,7 +1235,7 @@ fn commit_below_branch_with_multiple_commits_treats_branch_as_bucket() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted]
+╭┄ @ [uncommitted]
 ┊   uv A file.txt
 ┊
 ┊╭┄ g0 [A]
@@ -1232,7 +1257,7 @@ Hint: run `but diff` to see uncommitted changes and `but commit -b <branch> -m "
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ g0 [A]
 ┊●   ywx add second
@@ -1258,7 +1283,7 @@ fn commit_above_refuses_on_conflicts() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ g0 [A]
 ┊●   ywx add second
@@ -1293,7 +1318,7 @@ fn commit_below_refuses_on_conflicts() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ g0 [A]
 ┊●   ywx add second
@@ -1415,7 +1440,7 @@ fn above_commit_not_in_workspace_returns_bad_input() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ g0 [A]
 ┊●   tpm add A
@@ -1450,7 +1475,7 @@ fn above_non_branch_non_commit_target_returns_bad_input() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
     env.setup_metadata(&[]);
 
-    env.but("commit --above zz")
+    env.but("commit --above @")
         .assert()
         .failure()
         .stderr_eq(snapbox::str![[r#"
@@ -1473,7 +1498,7 @@ fn committing_specific_cli_ids() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted]
+╭┄ @ [uncommitted]
 ┊   kl   A one
 ┊   twop A two
 ┊
@@ -1493,7 +1518,7 @@ Hint: run `but diff` to see uncommitted changes and `but commit -b <branch> -m "
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted]
+╭┄ @ [uncommitted]
 ┊   twop A two
 ┊
 ┊╭┄ g0 [A]
@@ -1557,7 +1582,7 @@ fn hunks_within_file_are_not_order_dependent() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ g0 [A]
 ┊●   1#0 (no commit message)
@@ -1582,7 +1607,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ g0 [A]
 ┊●   1#0 (no commit message)
@@ -1649,7 +1674,7 @@ fn overlapping_changes_to_modified_file_are_deduplicated() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ g0 [A]
 ┊●   1#0 (no commit message)
@@ -1674,7 +1699,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ g0 [A]
 ┊●   1#0 (no commit message)
@@ -1733,7 +1758,7 @@ fn can_commit_with_path_prefix() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted]
+╭┄ @ [uncommitted]
 ┊   om A path/other/to/third.txt
 ┊   ms A path/to/first.txt
 ┊   rr A path/to/second.txt
@@ -1754,7 +1779,7 @@ Hint: run `but diff` to see uncommitted changes and `but commit -b <branch> -m "
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted]
+╭┄ @ [uncommitted]
 ┊   om A path/other/to/third.txt
 ┊
 ┊╭┄ g0 [A]
@@ -1794,7 +1819,7 @@ fn path_prefix_with_mix_of_modifications() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted]
+╭┄ @ [uncommitted]
 ┊   lm D dir/to_delete.txt
 ┊   no M dir/to_empty.txt
 ┊   xv M dir/to_modify.txt
@@ -1820,7 +1845,7 @@ Hint: run `but diff` to see uncommitted changes and `but commit -b <branch> -m "
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ g0 [A]
 ┊●   1#0 (no commit message)
@@ -1905,7 +1930,7 @@ fn committing_above_an_empty_branch() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ br [a-branch-1]
 ┊●   1 add one
@@ -1937,7 +1962,7 @@ fn committing_below_empty_branch_with_empty_branch_below() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ to [top] (no commits)
 ┊│
@@ -1977,7 +2002,7 @@ fn committing_below_non_top_empty_branch() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ to [top] (no commits)
 ┊│
@@ -2011,7 +2036,7 @@ fn committing_below_an_empty_branch() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted]
+╭┄ @ [uncommitted]
 ┊   kl   A one
 ┊   twop A two
 ┊
@@ -2032,7 +2057,7 @@ Hint: run `but diff` to see uncommitted changes and `but commit -b <branch> -m "
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted]
+╭┄ @ [uncommitted]
 ┊   twop A two
 ┊
 ┊╭┄ to [top] (no commits)
@@ -2057,7 +2082,7 @@ Hint: run `but diff` to see uncommitted changes and `but commit -b <branch> -m "
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ to [top] (no commits)
 ┊│
@@ -2100,7 +2125,7 @@ fn commit_to_existing_branch_via_short_code() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ g0 [A]
 ┊●   1 new commit (no changes)
@@ -2127,7 +2152,7 @@ fn commit_to_new_branch_with_same_name_as_file() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ fi [file]
 ┊●   1 add file
@@ -2168,7 +2193,7 @@ fn can_overspecify_hunk_id() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ br [a-branch-1]
 ┊●   1 Add file
@@ -2308,7 +2333,7 @@ fn new_branches_are_created_on_top() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ br [a-branch-1]
 ┊●   1 (no commit message) (no changes)
@@ -2339,7 +2364,7 @@ fn committing_modified_and_renamed_file() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ br [a-branch-1]
 ┊●   1 add files
@@ -2360,7 +2385,7 @@ Hint: run `but help` for all commands
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted]
+╭┄ @ [uncommitted]
 ┊   qs M file
 ┊   kw D file-2
 ┊
@@ -2382,7 +2407,7 @@ Hint: run `but diff` to see uncommitted changes and `but commit -b <branch> -m "
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ br [a-branch-1]
 ┊●   1#0 change file
@@ -2600,7 +2625,7 @@ See `but commit --help` for details.
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted]
+╭┄ @ [uncommitted]
 ┊   or A three
 ┊
 ┊╭┄ my [my-branch]
@@ -2670,7 +2695,7 @@ Examples:
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted]
+╭┄ @ [uncommitted]
 ┊   kl A one
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -2726,7 +2751,7 @@ fn commit_a_file_from_a_linked_worktree() {
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ g0 [A]
 ┊┊
@@ -2761,7 +2786,7 @@ Created commit 1 on branch 'A'
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ g0 [A]
 ┊●   1 note from worktree
@@ -2809,7 +2834,7 @@ Created commit 1 on branch 'B'
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ g0 [A]
 ┊┊
@@ -2856,7 +2881,7 @@ Hint: An operation can only take changes from one checkout at a time
 "#]]);
 }
 
-/// `zz` names the main checkout's whole uncommitted area, so committing it means the same
+/// `@` names the main checkout's whole uncommitted area, so committing it means the same
 /// as a bare `but commit`, and an empty area is refused rather than committed.
 #[test]
 fn commit_the_uncommitted_area_by_id() {
@@ -2865,7 +2890,7 @@ fn commit_the_uncommitted_area_by_id() {
     env.file("one.txt", "first\n");
     env.file("two.txt", "second\n");
 
-    env.but("commit zz -m 'everything at once'")
+    env.but("commit @ -m 'everything at once'")
         .assert()
         .success()
         .stderr_eq(snapbox::str![])
@@ -2880,7 +2905,7 @@ Created commit 1 on branch 'A'
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ g0 [A]
 ┊●   1 everything at once
@@ -2897,7 +2922,7 @@ Hint: run `but help` for all commands
 "#]]);
 
     // An empty area has nothing to commit.
-    env.but("commit zz -m 'nothing'")
+    env.but("commit @ -m 'nothing'")
         .assert()
         .failure()
         .stdout_eq(snapbox::str![])
@@ -3069,7 +3094,7 @@ Created commit 1 on branch 'wt-feature'
         .success()
         .stderr_eq(snapbox::str![])
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ g0 [A]
 ┊┊
@@ -3210,21 +3235,21 @@ Hint: Most likely you want `but pull`, which updates the workspace and removes l
 "#]]);
 }
 
-/// A dirty file literally named `zz` competes with the uncommitted area instead of silently
+/// A dirty file literally named `@` competes with the uncommitted area instead of silently
 /// shadowing it, the same way a file sharing a worktree's name does.
 #[test]
-fn commit_zz_with_a_file_named_zz_is_ambiguous() {
+fn commit_uncommitted_area_with_a_file_named_at_is_ambiguous() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
     env.setup_metadata(&["A"]);
-    env.file("zz", "contents\n");
+    env.file("@", "contents\n");
     env.file("other.txt", "more\n");
 
-    env.but("commit zz -m 'which one'")
+    env.but("commit @ -m 'which one'")
         .assert()
         .failure()
         .stdout_eq(snapbox::str![])
         .stderr_eq(snapbox::str![[r#"
-Error: Ambiguous uncommitted change 'zz', matches multiple items
+Error: Ambiguous uncommitted change '@', matches multiple items
 
 Hint: Use a longer ID to disambiguate
 

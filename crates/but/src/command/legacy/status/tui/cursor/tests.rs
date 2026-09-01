@@ -145,7 +145,8 @@ fn uncommitted_source(cli_ids: &[Arc<CliId>]) -> CommitSource {
             CliId::UncommittedHunkOrFile(uncommitted) => {
                 CommitSource::UncommittedHunk(uncommitted.clone())
             }
-            CliId::Uncommitted { .. }
+            CliId::AnonymousSegment(..)
+            | CliId::Uncommitted { .. }
             | CliId::PathPrefix { .. }
             | CliId::CommittedFile { .. }
             | CliId::CommittedHunk { .. }
@@ -2147,7 +2148,7 @@ fn status_lines(status: &str) -> Vec<StatusOutputLineData> {
 
 fn status_line(rendered: &str) -> StatusOutputLineData {
     match rendered {
-        "╭┄ zz [uncommitted] (no changes)" => StatusOutputLineData::UncommittedChanges {
+        "╭┄ @ [uncommitted] (no changes)" => StatusOutputLineData::UncommittedChanges {
             cli_id: random_cli_id(),
         },
         "┊" | "├╯" | "┊│" | "┊-" | "┊┊" | "┊├╯" | "┊┊┊" | "┊┊├╯" | "┊┊┊┊" => {
@@ -2212,7 +2213,7 @@ fn random_cli_id() -> Arc<CliId> {
 fn lines_part_of_current_branch_with_branches_and_commits() {
     let lines = status_lines(
         r#"
-        ╭┄ zz [uncommitted] (no changes)
+        ╭┄ @ [uncommitted] (no changes)
         ┊
         ┊╭┄ br [branch]
         ┊●   abc (no commit message)
@@ -2230,7 +2231,7 @@ fn lines_part_of_current_branch_with_branches_and_commits() {
 
     assert_eq!(
         Vec::from([
-            false, // ╭┄ zz [uncommitted] (no changes)
+            false, // ╭┄ @ [uncommitted] (no changes)
             false, // ┊
             true,  // ┊╭┄ br [branch]
             true,  // ┊●   abc (no commit message)
@@ -2249,7 +2250,7 @@ fn lines_part_of_current_branch_with_branches_and_commits() {
 
     assert_eq!(
         Vec::from([
-            false, // ╭┄ zz [uncommitted] (no changes)
+            false, // ╭┄ @ [uncommitted] (no changes)
             false, // ┊
             false, // ┊╭┄ br [branch]
             false, // ┊●   abc (no commit message)
@@ -2268,7 +2269,7 @@ fn lines_part_of_current_branch_with_branches_and_commits() {
 
     assert_eq!(
         Vec::from([
-            false, // ╭┄ zz [uncommitted] (no changes)
+            false, // ╭┄ @ [uncommitted] (no changes)
             false, // ┊
             false, // ┊╭┄ br [branch]
             false, // ┊●   abc (no commit message)
@@ -2290,7 +2291,7 @@ fn lines_part_of_current_branch_with_branches_and_commits() {
 fn lines_part_of_current_branch_with_stacked_branches() {
     let lines = status_lines(
         r#"
-        ╭┄ zz [uncommitted] (no changes)
+        ╭┄ @ [uncommitted] (no changes)
         ┊
         ┊╭┄ br [branch]
         ┊●   abc (no commit message)
@@ -2307,7 +2308,7 @@ fn lines_part_of_current_branch_with_stacked_branches() {
 
     assert_eq!(
         Vec::from([
-            false, // ╭┄ zz [uncommitted] (no changes)
+            false, // ╭┄ @ [uncommitted] (no changes)
             false, // ┊
             true,  // ┊╭┄ br [branch]
             true,  // ┊●   abc (no commit message)
@@ -2325,7 +2326,7 @@ fn lines_part_of_current_branch_with_stacked_branches() {
 
     assert_eq!(
         Vec::from([
-            false, // ╭┄ zz [uncommitted] (no changes)
+            false, // ╭┄ @ [uncommitted] (no changes)
             false, // ┊
             false, // ┊╭┄ br [branch]
             false, // ┊●   abc (no commit message)
@@ -2346,7 +2347,7 @@ fn lines_part_of_current_branch_with_stacked_branches() {
 fn lines_part_of_current_branch_with_empty_branch() {
     let lines = status_lines(
         r#"
-        ╭┄ zz [uncommitted] (no changes)
+        ╭┄ @ [uncommitted] (no changes)
         ┊
         ┊╭┄ br [branch]
         ├╯
@@ -2359,7 +2360,7 @@ fn lines_part_of_current_branch_with_empty_branch() {
 
     assert_eq!(
         Vec::from([
-            false, // ╭┄ zz [uncommitted] (no changes)
+            false, // ╭┄ @ [uncommitted] (no changes)
             false, // ┊
             true,  // ┊╭┄ br [branch]
             false, // ├╯
@@ -2376,7 +2377,7 @@ fn lines_part_of_current_branch_with_empty_branch() {
 fn lines_part_of_current_branch_with_upstream_commits() {
     let lines = status_lines(
         r#"
-        ╭┄ zz [uncommitted] (no changes)
+        ╭┄ @ [uncommitted] (no changes)
         ┊
         ┊╭┄ br [branch]
         ┊┊
@@ -2394,7 +2395,7 @@ fn lines_part_of_current_branch_with_upstream_commits() {
 
     assert_eq!(
         Vec::from([
-            false, // ╭┄ zz [uncommitted] (no changes)
+            false, // ╭┄ @ [uncommitted] (no changes)
             false, // ┊
             true,  // ┊╭┄ br [branch]
             true,  // ┊┊
@@ -2416,7 +2417,7 @@ fn lines_part_of_current_branch_with_upstream_commits() {
 fn lines_part_of_current_branch_with_upstream_commits_and_files() {
     let lines = status_lines(
         r#"
-        ╭┄ zz [uncommitted] (no changes)
+        ╭┄ @ [uncommitted] (no changes)
         ┊
         ┊╭┄ br [branch]
         ┊┊
@@ -2435,7 +2436,7 @@ fn lines_part_of_current_branch_with_upstream_commits_and_files() {
 
     assert_eq!(
         Vec::from([
-            false, // ╭┄ zz [uncommitted] (no changes)
+            false, // ╭┄ @ [uncommitted] (no changes)
             false, // ┊
             true,  // ┊╭┄ br [branch]
             true,  // ┊┊
@@ -2458,7 +2459,7 @@ fn lines_part_of_current_branch_with_upstream_commits_and_files() {
 fn lines_part_of_current_branch_with_stacked_worktrees() {
     let lines = status_lines(
         r#"
-        ╭┄ zz [uncommitted] (no changes)
+        ╭┄ @ [uncommitted] (no changes)
         ┊
         ┊╭┄ br [branch]
         ┊┊
@@ -2479,7 +2480,7 @@ fn lines_part_of_current_branch_with_stacked_worktrees() {
 
     assert_eq!(
         Vec::from([
-            false, // ╭┄ zz [uncommitted] (no changes)
+            false, // ╭┄ @ [uncommitted] (no changes)
             false, // ┊
             true,  // ┊╭┄ br [branch]
             true,  // ┊┊
@@ -2501,7 +2502,7 @@ fn lines_part_of_current_branch_with_stacked_worktrees() {
 
     assert_eq!(
         Vec::from([
-            false, // ╭┄ zz [uncommitted] (no changes)
+            false, // ╭┄ @ [uncommitted] (no changes)
             false, // ┊
             false, // ┊╭┄ br [branch]
             false, // ┊┊
@@ -2523,7 +2524,7 @@ fn lines_part_of_current_branch_with_stacked_worktrees() {
 
     assert_eq!(
         Vec::from([
-            false, // ╭┄ zz [uncommitted] (no changes)
+            false, // ╭┄ @ [uncommitted] (no changes)
             false, // ┊
             false, // ┊╭┄ br [branch]
             false, // ┊┊
@@ -2548,7 +2549,7 @@ fn lines_part_of_current_branch_with_stacked_worktrees() {
 fn lines_part_of_current_branch_with_stacked_worktrees_with_commits_above() {
     let lines = status_lines(
         r#"
-        ╭┄ zz [uncommitted] (no changes)
+        ╭┄ @ [uncommitted] (no changes)
         ┊
         ┊╭┄ br [branch]
         ┊●   abc (no commit message)
@@ -2567,7 +2568,7 @@ fn lines_part_of_current_branch_with_stacked_worktrees_with_commits_above() {
 
     assert_eq!(
         Vec::from([
-            false, // ╭┄ zz [uncommitted] (no changes)
+            false, // ╭┄ @ [uncommitted] (no changes)
             false, // ┊
             true,  // ┊╭┄ br [branch]
             true,  // ┊●   abc (no commit message)
@@ -2590,7 +2591,7 @@ fn lines_part_of_current_branch_with_stacked_worktrees_with_commits_above() {
 fn lines_part_of_current_branch_with_independent_worktrees() {
     let lines = status_lines(
         r#"
-        ╭┄ zz [uncommitted] (no changes)
+        ╭┄ @ [uncommitted] (no changes)
         ┊
         ┊╭┄ wt {worktree} (no changes)
         ┊●   abc (no commit message)
@@ -2604,7 +2605,7 @@ fn lines_part_of_current_branch_with_independent_worktrees() {
 
     assert_eq!(
         Vec::from([
-            false, // ╭┄ zz [uncommitted] (no changes)
+            false, // ╭┄ @ [uncommitted] (no changes)
             false, // ┊
             true,  // ┊╭┄ wt {worktree} (no changes)
             true,  // ┊●   abc (no commit message)
@@ -2622,7 +2623,7 @@ fn lines_part_of_current_branch_with_independent_worktrees() {
 fn lines_part_of_current_branch_with_independent_dirty_worktrees() {
     let lines = status_lines(
         r#"
-        ╭┄ zz [uncommitted] (no changes)
+        ╭┄ @ [uncommitted] (no changes)
         ┊
         ┊╭┄ wt {worktree} (no changes)
         ┊┊   ab M file.rs
@@ -2638,7 +2639,7 @@ fn lines_part_of_current_branch_with_independent_dirty_worktrees() {
 
     assert_eq!(
         Vec::from([
-            false, // ╭┄ zz [uncommitted] (no changes)
+            false, // ╭┄ @ [uncommitted] (no changes)
             false, // ┊
             true,  // ┊╭┄ wt {worktree} (no changes)
             true,  // ┊┊   ab M file.rs
@@ -2658,7 +2659,7 @@ fn lines_part_of_current_branch_with_independent_dirty_worktrees() {
 fn lines_part_of_current_branch_with_independent_dirty_worktrees_without_commits() {
     let lines = status_lines(
         r#"
-        ╭┄ zz [uncommitted] (no changes)
+        ╭┄ @ [uncommitted] (no changes)
         ┊
         ┊╭┄ wt {worktree} (no changes)
         ┊┊   ab M file.rs
@@ -2672,7 +2673,7 @@ fn lines_part_of_current_branch_with_independent_dirty_worktrees_without_commits
 
     assert_eq!(
         Vec::from([
-            false, // ╭┄ zz [uncommitted] (no changes)
+            false, // ╭┄ @ [uncommitted] (no changes)
             false, // ┊
             true,  // ┊╭┄ wt {worktree} (no changes)
             true,  // ┊┊   ab M file.rs
@@ -2690,7 +2691,7 @@ fn lines_part_of_current_branch_with_independent_dirty_worktrees_without_commits
 fn lines_part_of_current_branch_with_dirty_stacked_worktrees() {
     let lines = status_lines(
         r#"
-        ╭┄ zz [uncommitted] (no changes)
+        ╭┄ @ [uncommitted] (no changes)
         ┊
         ┊╭┄ br [branch]
         ┊●   abc (no commit message)
@@ -2709,7 +2710,7 @@ fn lines_part_of_current_branch_with_dirty_stacked_worktrees() {
 
     assert_eq!(
         Vec::from([
-            false, // ╭┄ zz [uncommitted] (no changes)
+            false, // ╭┄ @ [uncommitted] (no changes)
             false, // ┊
             true,  // ┊╭┄ br [branch]
             true,  // ┊●   abc (no commit message)
@@ -2732,7 +2733,7 @@ fn lines_part_of_current_branch_with_dirty_stacked_worktrees() {
 fn lines_part_of_current_branch_with_dirty_stacked_worktrees_with_commits() {
     let lines = status_lines(
         r#"
-        ╭┄ zz [uncommitted] (no changes)
+        ╭┄ @ [uncommitted] (no changes)
         ┊
         ┊╭┄ br [branch]
         ┊●   abc (no commit message)
@@ -2753,7 +2754,7 @@ fn lines_part_of_current_branch_with_dirty_stacked_worktrees_with_commits() {
 
     assert_eq!(
         Vec::from([
-            false, // ╭┄ zz [uncommitted] (no changes)
+            false, // ╭┄ @ [uncommitted] (no changes)
             false, // ┊
             true,  // ┊╭┄ br [branch]
             true,  // ┊●   abc (no commit message)
@@ -2778,7 +2779,7 @@ fn lines_part_of_current_branch_with_dirty_stacked_worktrees_with_commits() {
 fn lines_part_of_current_worktree_with_nested_worktree() {
     let lines = status_lines(
         r#"
-        ╭┄ zz [uncommitted] (no changes)
+        ╭┄ @ [uncommitted] (no changes)
         ┊
         ┊╭┄ br [branch]
         ┊┊
@@ -2800,7 +2801,7 @@ fn lines_part_of_current_worktree_with_nested_worktree() {
 
     assert_eq!(
         Vec::from([
-            false, // ╭┄ zz [uncommitted] (no changes)
+            false, // ╭┄ @ [uncommitted] (no changes)
             false, // ┊
             false, // ┊╭┄ br [branch]
             false, // ┊┊
@@ -2827,7 +2828,7 @@ fn lines_part_of_current_worktree_with_nested_worktree() {
 fn lines_part_of_current_branch_with_dirty_worktree_commit_files() {
     let lines = status_lines(
         r#"
-        ╭┄ zz [uncommitted] (no changes)
+        ╭┄ @ [uncommitted] (no changes)
         ┊
         ┊╭┄ br [branch]
         ┊┊
@@ -2848,7 +2849,7 @@ fn lines_part_of_current_branch_with_dirty_worktree_commit_files() {
 
     assert_eq!(
         Vec::from([
-            false, // ╭┄ zz [uncommitted] (no changes)
+            false, // ╭┄ @ [uncommitted] (no changes)
             false, // ┊
             true,  // ┊╭┄ br [branch]
             true,  // ┊┊
@@ -2874,7 +2875,7 @@ fn lines_part_of_current_branch_with_dirty_worktree_commit_files() {
 fn lines_part_of_current_branch_with_nested_worktree_between_dirty_worktree_commits() {
     let lines = status_lines(
         r#"
-        ╭┄ zz [uncommitted] (no changes)
+        ╭┄ @ [uncommitted] (no changes)
         ┊
         ┊╭┄ br [branch]
         ┊┊
@@ -2899,7 +2900,7 @@ fn lines_part_of_current_branch_with_nested_worktree_between_dirty_worktree_comm
 
     assert_eq!(
         Vec::from([
-            false, // ╭┄ zz [uncommitted] (no changes)
+            false, // ╭┄ @ [uncommitted] (no changes)
             false, // ┊
             true,  // ┊╭┄ br [branch]
             true,  // ┊┊
@@ -2930,7 +2931,7 @@ fn lines_part_of_current_branch_with_nested_worktree_between_dirty_worktree_comm
 fn lines_part_of_current_branch_with_dirty_nested_worktree_between_dirty_worktree_commits() {
     let lines = status_lines(
         r#"
-        ╭┄ zz [uncommitted] (no changes)
+        ╭┄ @ [uncommitted] (no changes)
         ┊
         ┊╭┄ br [branch]
         ┊┊
@@ -2957,7 +2958,7 @@ fn lines_part_of_current_branch_with_dirty_nested_worktree_between_dirty_worktre
 
     assert_eq!(
         Vec::from([
-            false, // ╭┄ zz [uncommitted] (no changes)
+            false, // ╭┄ @ [uncommitted] (no changes)
             false, // ┊
             true,  // ┊╭┄ br [branch]
             true,  // ┊┊
@@ -2989,7 +2990,7 @@ fn lines_part_of_current_branch_with_dirty_nested_worktree_between_dirty_worktre
 fn lines_part_of_current_branch_with_dirty_nested_worktrees_with_commits() {
     let lines = status_lines(
         r#"
-        ╭┄ zz [uncommitted] (no changes)
+        ╭┄ @ [uncommitted] (no changes)
         ┊
         ┊╭┄ br [branch]
         ┊●   abc (no commit message)
@@ -3013,7 +3014,7 @@ fn lines_part_of_current_branch_with_dirty_nested_worktrees_with_commits() {
 
     assert_eq!(
         Vec::from([
-            false, // ╭┄ zz [uncommitted] (no changes)
+            false, // ╭┄ @ [uncommitted] (no changes)
             false, // ┊
             true,  // ┊╭┄ br [branch]
             true,  // ┊●   abc (no commit message)

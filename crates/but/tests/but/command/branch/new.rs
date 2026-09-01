@@ -3,6 +3,26 @@ use snapbox::str;
 use crate::utils::{CommandExt, Sandbox};
 
 #[test]
+fn rejects_unnamed_segment_as_anchor() {
+    let env =
+        Sandbox::init_scenario_with_target_and_default_settings("one-stack-anonymous-segment");
+    env.setup_metadata(&["A"]);
+
+    for command in ["branch new recovered -A g0", "branch new recovered -B g0"] {
+        env.but(command)
+            .assert()
+            .failure()
+            .stdout_eq(str![])
+            .stderr_eq(str![[r#"
+Error: Cannot operate on anonymous branch 'g0'
+
+Hint: Name it with `but reword g0` first! Note that the short ID is likely to change when the branch is named.
+
+"#]]);
+    }
+}
+
+#[test]
 fn outputs_branch_name() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
     snapbox::assert_data_eq!(
@@ -183,7 +203,7 @@ fn in_single_branch_mode_creating_stacked_branches() {
         .success()
         .stderr_eq(str![])
         .stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ ma [main] (no commits)
 ├╯
@@ -210,7 +230,7 @@ Created branch 'middle'
         .success()
         .stderr_eq(str![])
         .stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ mi [middle] (no commits)
 ├╯
@@ -235,7 +255,7 @@ Created branch 'bottom' below branch 'middle'
         .success()
         .stderr_eq(str![])
         .stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ mi [middle] (no commits)
 ┊│
@@ -262,7 +282,7 @@ Created branch 'top' above branch 'middle'
         .success()
         .stderr_eq(str![])
         .stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ to [top] (no commits)
 ┊│
@@ -291,7 +311,7 @@ Created branch 'between-middle-and-top' above branch 'middle'
         .success()
         .stderr_eq(str![])
         .stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ to [top] (no commits)
 ┊│
@@ -327,7 +347,7 @@ fn in_single_branch_mode_create_new_branches_with_commits() {
         .success()
         .stderr_eq(str![])
         .stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ ma [main] (no commits)
 ├╯
@@ -355,7 +375,7 @@ Created branch 'middle'
         .success()
         .stderr_eq(str![])
         .stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ mi [middle]
 ┊●   1 on middle (no changes)
@@ -384,7 +404,7 @@ Created branch 'top' above branch 'middle'
         .success()
         .stderr_eq(str![])
         .stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ to [top]
 ┊●   1#0 on top (no changes)
@@ -423,7 +443,7 @@ Created branch 'bottom' below branch 'middle'
         .success()
         .stderr_eq(str![])
         .stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ to [top]
 ┊●   1#0 on top (no changes)
@@ -449,7 +469,7 @@ Hint: run `but help` for all commands
         .success()
         .stderr_eq(str![])
         .stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ to [top]
 ┊●   1#0 on top (no changes)
@@ -484,7 +504,7 @@ Created branch 'between-middle-and-top' above branch 'middle'
         .success()
         .stderr_eq(str![])
         .stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ to [top]
 ┊●   1#0 on top (no changes)
@@ -545,7 +565,7 @@ Created branch 'a-branch-1'
 "#]]);
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ br [a-branch-1] (no commits)
 ├╯
@@ -565,7 +585,7 @@ Created branch 'one'
 "#]]);
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ on [one] (no commits)
 ├╯
@@ -588,7 +608,7 @@ fn create_branch_above_empty_branch() {
     env.but("branch new bottom").assert().success();
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ bo [bottom] (no commits)
 ├╯
@@ -608,7 +628,7 @@ Created branch 'top' above branch 'bottom'
 "#]]);
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ to [top] (no commits)
 ┊│
@@ -630,7 +650,7 @@ Created branch 'middle' above branch 'bottom'
 "#]]);
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ to [top] (no commits)
 ┊│
@@ -654,7 +674,7 @@ fn create_branch_above_non_empty_branch() {
     env.but("commit -b bottom --no-message").assert().success();
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ bo [bottom]
 ┊●   1 (no commit message) (no changes)
@@ -675,7 +695,7 @@ Created branch 'top' above branch 'bottom'
 "#]]);
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ to [top] (no commits)
 ┊│
@@ -698,7 +718,7 @@ fn create_branch_below_empty_branch() {
     env.but("branch new top").assert().success();
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ to [top] (no commits)
 ├╯
@@ -718,7 +738,7 @@ Created branch 'bottom' below branch 'top'
 "#]]);
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ to [top] (no commits)
 ┊│
@@ -740,7 +760,7 @@ Created branch 'middle' below branch 'top'
 "#]]);
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ to [top] (no commits)
 ┊│
@@ -764,7 +784,7 @@ fn create_branch_below_non_empty_branch() {
     env.but("commit -b top --no-message").assert().success();
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ to [top]
 ┊●   1 (no commit message) (no changes)
@@ -785,7 +805,7 @@ Created branch 'bottom' below branch 'top'
 "#]]);
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ to [top]
 ┊●   1 (no commit message) (no changes)
@@ -810,7 +830,7 @@ fn create_branch_above_commit() {
     env.but("commit -b my-branch -m top").assert().success();
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ my [my-branch]
 ┊●   1#0 top (no changes)
@@ -833,7 +853,7 @@ Created branch 'a-branch-1' above commit 1
 "#]]);
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ my [my-branch]
 ┊●   1#0 top (no changes)
@@ -858,7 +878,7 @@ Created branch 'a-branch-2' above commit 1
 "#]]);
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ my [my-branch] (no commits)
 ┊│
@@ -887,7 +907,7 @@ fn create_branch_below_commit() {
     env.but("commit -b my-branch -m top").assert().success();
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ my [my-branch]
 ┊●   1#0 top (no changes)
@@ -910,7 +930,7 @@ Created branch 'a-branch-1' below commit 1
 "#]]);
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ my [my-branch]
 ┊●   1#0 top (no changes)
@@ -935,7 +955,7 @@ Created branch 'a-branch-2' below commit 1
 "#]]);
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ my [my-branch]
 ┊●   1#0 top (no changes)
@@ -969,7 +989,7 @@ fn can_create_new_branches_above_merged_branches_but_not_below() {
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ do [document-but-pr-skill] (merged upstream) (no commits)
 ├╯
@@ -996,7 +1016,7 @@ Created branch 'a-branch-1' above branch 'document-but-pr-skill'
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ br [a-branch-1] (no commits)
 ┊│
@@ -1034,7 +1054,7 @@ fn cannot_create_branches_below_branches_merged_upstream() {
         .assert()
         .success()
         .stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ g0 [A] (merged upstream)
 ┊●   nyq A-change
@@ -1066,7 +1086,7 @@ fn create_branch_using_old_anchor_flag() {
     env.setup_metadata(&[]);
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
 
@@ -1081,7 +1101,7 @@ Hint: run `but branch new` to create a new branch to work on
     env.but("branch new top -a middle").assert().success();
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ to [top] (no commits)
 ┊│
@@ -1112,7 +1132,7 @@ fn in_single_branch_mode_creating_new_independent_branch_takes_you_to_workspace_
     );
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ ma [main] (no commits)
 ├╯
@@ -1142,7 +1162,7 @@ Created branch 'one'
     );
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ on [one] (no commits)
 ├╯
@@ -1175,7 +1195,7 @@ Created branch 'two'
     );
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ tw [two] (no commits)
 ├╯
@@ -1204,7 +1224,7 @@ Hint: run `but help` for all commands
     );
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ on [one] (no commits)
 ├╯
@@ -1237,7 +1257,7 @@ Created branch 'three'
     );
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ th [three] (no commits)
 ├╯
@@ -1263,7 +1283,7 @@ fn in_single_branch_mode_switching_to_stacked_branches_works() {
         .success();
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ mi [middle] (no commits)
 ┊│
@@ -1288,7 +1308,7 @@ Hint: run `but help` for all commands
     env.but("switch bottom").assert().success();
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ bo [bottom] (no commits)
 ├╯
@@ -1311,7 +1331,7 @@ Hint: run `but help` for all commands
     env.but("branch new new-branch").assert().success();
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ ne [new-branch] (no commits)
 ├╯
@@ -1356,7 +1376,7 @@ fn in_single_branch_mode_switching_to_stacked_branches_with_commits_works() {
         .success();
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ mi [middle]
 ┊●   1#0 on middle (no changes)
@@ -1385,7 +1405,7 @@ Hint: run `but help` for all commands
     env.but("switch bottom").assert().success();
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ bo [bottom]
 ┊●   1 on bottom (no changes)
@@ -1415,7 +1435,7 @@ Hint: run `but help` for all commands
         .success();
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ ne [new-branch]
 ┊●   1#0 on new-branch (no changes)
@@ -1455,7 +1475,7 @@ fn in_single_branch_mode_creating_and_switching_to_new_branches() {
     env.but("branch new one").assert().success();
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ on [one] (no commits)
 ├╯
@@ -1478,7 +1498,7 @@ Hint: run `but help` for all commands
     env.but("branch new two --switch").assert().success();
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ tw [two] (no commits)
 ├╯
@@ -1507,7 +1527,7 @@ fn in_single_branch_mode_creating_and_switching_to_new_branches_with_commits() {
     env.but("commit -b one -m 'on one'").assert().success();
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ on [one]
 ┊●   1 on one (no changes)
@@ -1532,7 +1552,7 @@ Hint: run `but help` for all commands
     env.but("branch new two --switch").assert().success();
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ tw [two] (no commits)
 ├╯
@@ -1561,7 +1581,7 @@ fn in_workspace_mode_creating_and_switching_to_new_branches() {
     env.but("branch new --switch").assert().success();
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ br [a-branch-1] (no commits)
 ├╯
@@ -1589,7 +1609,7 @@ Hint: run `but help` for all commands
     env.but("branch new --switch").assert().success();
 
     env.but("status").assert().success().stdout_eq(str![[r#"
-╭┄ zz [uncommitted] (no changes)
+╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ br [a-branch-2] (no commits)
 ├╯

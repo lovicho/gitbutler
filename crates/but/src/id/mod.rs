@@ -42,7 +42,7 @@ pub(crate) enum SourceScope {
     /// Match commits, branches, stacks, and uncommitted files alike.
     Any,
     /// Match only uncommitted files and hunks (plus their explicit containers
-    /// `zz`, `dir/`, and `@{stack}`), so commit and branch IDs minted after a
+    /// `@`, `dir/`, and `@{stack}`), so commit and branch IDs minted after a
     /// file ID was printed cannot shadow it.
     UncommittedOnly,
 }
@@ -50,7 +50,14 @@ pub(crate) enum SourceScope {
 /// A helper to indicate that this is a short-id as a user would see.
 pub(crate) type ShortId = String;
 
-pub(crate) const UNCOMMITTED: &str = "zz";
+pub(crate) const UNCOMMITTED: &str = "@";
+
+/// As zz has been the uncommitted area for so long, there's a non-zero chance there are scripts out
+/// there that would try to run e.g. `but discard zz` to discard uncommitted, and then accidentally
+/// discard something else instead without noticing. Therefore, for some time to come we reserve the
+/// old uncommitted identifier for some time to come before releasing it for use by other
+/// resources.
+pub(crate) const OLD_UNCOMMITTED: &str = "zz";
 
 const INDEX_SEPARATOR: char = '#';
 
@@ -661,11 +668,21 @@ impl<'a> Node<'a> for &'a SegmentWithId {
         _short_id: &str,
         _id_map: &IdMap,
     ) -> anyhow::Result<Option<CliId>> {
-        Ok(Some(CliId::Branch(BranchId {
-            name: self.branch_name().unwrap_or_default().to_string(),
-            id: self.short_id.clone(),
-            stack_id: self.stack_id,
-        })))
+        Ok(Some(match self.branch_name() {
+            Some(name) => CliId::Branch(BranchId {
+                name: name.to_string(),
+                id: self.short_id.clone(),
+                stack_id: self.stack_id,
+            }),
+            None => CliId::AnonymousSegment(AnonymousSegmentId {
+                id: self.short_id.clone(),
+                stack_id: self.stack_id,
+                anchor_commit_id: self
+                    .workspace_commits
+                    .first()
+                    .map(WorkspaceCommitWithId::commit_id),
+            }),
+        }))
     }
 }
 
@@ -745,7 +762,7 @@ pub struct IdMap {
 }
 
 /// A linked worktree with its short ID, naming that checkout's uncommitted area
-/// the way `zz` names the main worktree's.
+/// the way `@` names the main worktree's.
 #[derive(Debug, Clone)]
 pub struct WorktreeWithId {
     /// The name-derived short CLI ID for this worktree (at least 2 characters).
@@ -1226,7 +1243,7 @@ impl IdMap {
 
     /// The main worktree's uncommitted hunks under the path prefix `element`.
     ///
-    /// Deliberately restricted to [`ChangeSourceId::Head`], mirroring `zz`: a
+    /// Deliberately restricted to [`ChangeSourceId::Head`], mirroring `@`: a
     /// prefix spanning several checkouts could never be committed in one go, as
     /// an operation only ever reads changes from a single source.
     fn parse_uncommitted_path_prefix<'a>(&'a self, element: &str) -> Vec<Box<dyn Node<'a> + 'a>> {
@@ -1318,6 +1335,14 @@ impl IdMap {
             return Ok(vec![]);
         }
 
+        if element == OLD_UNCOMMITTED {
+            // this should be a bad_input but it's just too much of a hassle to convert the entire
+            // call chain to use CliResult. This is fine for a temporary error message.
+            anyhow::bail!(
+                "The uncommitted area has been renamed from '{OLD_UNCOMMITTED}' to '{UNCOMMITTED}'. Repeat the command with '{UNCOMMITTED}' instead to proceed."
+            )
+        }
+
         // Parse known suffixes.
         if let Some(prefix) = element.strip_suffix("@{stack}") {
             let mut matches = Vec::<Box<dyn Node<'a> + 'a>>::new();
@@ -1356,11 +1381,11 @@ impl IdMap {
         // Unscoped: a path dirty in several checkouts matches all of them, and the
         // caller reports the ambiguity so it can be resolved with a file ID.
         matches.extend(self.parse_uncommitted_filename(element, None));
-        // A worktree names its own uncommitted area, so like `zz` it resolves in
+        // A worktree names its own uncommitted area, so like `@` it resolves in
         // both scopes rather than only the full one.
         matches.extend(self.parse_worktree_name(element));
-        // `zz` competes here for the same reason a worktree name does: a dirty file
-        // called `zz` must surface as an ambiguity, not silently shadow the area.
+        // `@` competes here for the same reason a worktree name does: a dirty file
+        // called `@` must surface as an ambiguity, not silently shadow the area.
         if element == UNCOMMITTED {
             matches.push(Box::new(Unstaged {}));
         }
@@ -1503,7 +1528,7 @@ impl<'a> Node<'a> for &'a WorktreeWithId {
         _changes_in_commit: &dyn ChangesInCommit,
     ) -> anyhow::Result<Vec<Box<dyn Node<'a> + 'a>>> {
         // `<worktree>:<path>` is how a path that is dirty in several checkouts is
-        // narrowed down to one, mirroring `zz:<path>` for the main worktree.
+        // narrowed down to one, mirroring `@:<path>` for the main worktree.
         Ok(id_map.parse_uncommitted_filename(element, Some(&self.source())))
     }
 
@@ -1519,7 +1544,7 @@ impl<'a> Node<'a> for &'a WorktreeWithId {
     }
 }
 
-/// The `zz` uncommitted-area sentinel as a parse node: children are unstaged
+/// The `@` uncommitted-area sentinel as a parse node: children are unstaged
 /// filenames, and by itself it resolves to [`CliId::Uncommitted`]. Shared by
 /// the full and the uncommitted-scoped element parsers so the sentinel cannot
 /// drift between them.
@@ -1533,7 +1558,7 @@ impl<'a> Node<'a> for Unstaged {
         id_map: &'a IdMap,
         _changes_in_commit: &dyn ChangesInCommit,
     ) -> anyhow::Result<Vec<Box<dyn Node<'a> + 'a>>> {
-        // `zz` means the main worktree, so `zz:<path>` must never reach into a
+        // `@` means the main worktree, so `@:<path>` must never reach into a
         // linked worktree that happens to have the same path dirty.
         Ok(id_map.parse_uncommitted_filename(element, Some(&ChangeSourceId::Head)))
     }
@@ -1568,7 +1593,7 @@ impl IdMap {
     /// uncommitted changes, so a file ID handed out by an earlier command cannot
     /// be invalidated by a commit minted in between.
     ///
-    /// Container selectors still surface their containers: bare `zz` yields
+    /// Container selectors still surface their containers: bare `@` yields
     /// [`CliId::Uncommitted`], `dir/` yields [`CliId::PathPrefix`], and
     /// `X@{stack}` resolves its stack (and can yield
     /// [`CliId::Stack`]); callers validate the kinds they accept.
@@ -1781,6 +1806,7 @@ fn cli_ids_refer_to_same_entity(lhs: &CliId, rhs: &CliId) -> bool {
         ) => l == r,
         (CliId::CommittedHunk(l), CliId::CommittedHunk(r)) => l == r,
         (CliId::Branch(l), CliId::Branch(r)) => l == r,
+        (CliId::AnonymousSegment(l), CliId::AnonymousSegment(r)) => l == r,
         (
             CliId::Stack {
                 stack_id: lhs_stack_id,
@@ -1917,6 +1943,8 @@ pub enum CliId {
     CommittedHunk(CommittedHunk),
     /// A branch.
     Branch(BranchId),
+    /// A segment in workspace metadata without a corresponding branch reference.
+    AnonymousSegment(AnonymousSegmentId),
     /// A commit in the workspace identified by its SHA.
     Commit {
         /// The commit identifier.
@@ -1965,6 +1993,7 @@ impl PartialEq for CliId {
             ) => l == r,
             (CliId::CommittedHunk(l), CliId::CommittedHunk(r)) => l == r,
             (Self::Branch(l), Self::Branch(r)) => l == r,
+            (Self::AnonymousSegment(l), Self::AnonymousSegment(r)) => l == r,
             (Self::Commit { commit: l, id: _ }, Self::Commit { commit: r, id: _ }) => l == r,
             (Self::Stack { id: l_id, .. }, Self::Stack { id: r_id, .. }) => l_id == r_id,
             (Self::Uncommitted { .. }, Self::Uncommitted { .. }) => true,
@@ -1986,6 +2015,7 @@ impl CliId {
             CliId::CommittedFile { .. } => "a committed file",
             CliId::CommittedHunk { .. } => "a committed file or hunk",
             CliId::Branch(..) => "a branch",
+            CliId::AnonymousSegment(..) => "an anonymous branch",
             CliId::Commit { .. } => "a commit",
             CliId::Uncommitted { .. } => "the uncommitted area",
             CliId::Worktree { .. } => "a worktree",
@@ -2001,6 +2031,7 @@ impl CliId {
             | CliId::CommittedFile { id, .. }
             | CliId::CommittedHunk(CommittedHunk { id, .. })
             | CliId::Branch(BranchId { id, .. })
+            | CliId::AnonymousSegment(AnonymousSegmentId { id, .. })
             | CliId::Commit { id, .. }
             | CliId::Stack { id, .. }
             | CliId::Worktree { id, .. }
@@ -2011,7 +2042,8 @@ impl CliId {
     /// Get the stack id, if any.
     pub fn stack_id(&self) -> Option<StackId> {
         match self {
-            CliId::Branch(BranchId { stack_id, .. }) => *stack_id,
+            CliId::Branch(BranchId { stack_id, .. })
+            | CliId::AnonymousSegment(AnonymousSegmentId { stack_id, .. }) => *stack_id,
             CliId::Stack { stack_id, .. } => Some(*stack_id),
             CliId::PathPrefix { .. }
             | CliId::UncommittedHunkOrFile(..)
@@ -2224,6 +2256,28 @@ impl PartialEq for CommittedFileIdRef<'_> {
             change_id: _,
         } = self;
         *commit_id == other.commit_id && path == &other.path
+    }
+}
+
+/// CLI identity and naming anchor for a segment without a branch reference.
+#[derive(Debug, Clone, Eq)]
+pub struct AnonymousSegmentId {
+    /// Short CLI ID displayed by status.
+    pub id: ShortId,
+    /// Stack containing this segment, when backed by workspace metadata.
+    pub stack_id: Option<StackId>,
+    /// Top commit where a branch can be created to name this segment.
+    pub anchor_commit_id: Option<gix::ObjectId>,
+}
+
+impl PartialEq for AnonymousSegmentId {
+    fn eq(&self, other: &Self) -> bool {
+        self.stack_id == other.stack_id
+            && match (self.anchor_commit_id, other.anchor_commit_id) {
+                (Some(lhs), Some(rhs)) => lhs == rhs,
+                (None, None) => self.id == other.id,
+                (Some(_), None) | (None, Some(_)) => false,
+            }
     }
 }
 

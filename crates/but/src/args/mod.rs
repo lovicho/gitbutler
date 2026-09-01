@@ -136,7 +136,7 @@ pub enum HelpTopic {
     /// * **Uncommitted file:** A path-derived ID that is typically 1-3 characters
     /// * **Uncommitted hunk:** `<uncommitted_file_cli_id>:<hunk_cli_id>`
     ///     - Run `but diff` to show all current uncommitted hunks and their IDs
-    /// * **Uncommitted area:** Always `zz`
+    /// * **Uncommitted area:** Always `@`
     /// * **Committed file:** `<commit_cli_id>:<file_cli_id>`
     ///     - Run `but status -f` to show committed files
     /// * **Committed hunk:** `<commit_cli_id>:<file_cli_id>:<hunk_cli_id>`
@@ -526,12 +526,13 @@ pub enum Subcommands {
     /// This will recreate the commit with the new message and then rebase any
     /// dependent commits on top of it.
     ///
-    /// You can also use `but reword <branch-id>` to rename the branch.
+    /// You can also use `but reword <branch-id>` to rename the branch, or
+    /// `but reword <anonymous-branch-id>` to give an anonymous branch a name.
     ///
     #[cfg(feature = "legacy")]
     #[cfg_attr(feature = "raw-clap-docs", clap(verbatim_doc_comment))]
     Reword {
-        /// Commit ID to edit the message for, or branch ID to rename
+        /// Commit ID to edit, branch ID to rename, or anonymous branch ID to name
         target: CliIdArg,
         /// The new commit message or branch name. If not provided, opens an editor.
         #[clap(short = 'm', long = "message", conflicts_with = "fix_formatting")]
