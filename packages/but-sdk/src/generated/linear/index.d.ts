@@ -136,7 +136,7 @@ export declare function apply(projectId: string, existingBranch: string): Promis
  * `dry_run` is enabled, the returned workspace previews the integration
  * result and no oplog entry is persisted.
  *
- * {@link ../../../../../crates/but-api/src/branch.rs:1788}
+ * {@link ../../../../../crates/but-api/src/branch.rs:1822}
  */
 export declare function applyBranchIntegration(projectId: string, branch: string, integration: InteractiveIntegration, dryRun: boolean): Promise<IntegrateBranchResult>
 
@@ -216,7 +216,7 @@ export declare function branchDetails(projectId: string, branchName: string, rem
  * diff is computed against the current workspace state. For lower-level
  * implementation details, see [`but_workspace::ui::diff::changes_in_branch()`].
  *
- * {@link ../../../../../crates/but-api/src/branch.rs:1685}
+ * {@link ../../../../../crates/but-api/src/branch.rs:1719}
  */
 export declare function branchDiff(projectId: string, branch: string): Promise<TreeChanges>
 
@@ -249,7 +249,7 @@ export declare function branchLand(projectId: string, branch: string, noFf: bool
  * workspace-related ones. Ahead-counts are relative to the
  * project's configured target branch, which clients know from the project APIs.
  *
- * {@link ../../../../../crates/but-api/src/branch.rs:1702}
+ * {@link ../../../../../crates/but-api/src/branch.rs:1736}
  */
 export declare function branchList(projectId: string): Promise<Array<ListedStack>>
 
@@ -818,7 +818,7 @@ export declare function getGlUser(account: GitlabAccountIdentifier): Promise<Git
 /**
  * Get the initial upstream integration script for `branch`.
  *
- * {@link ../../../../../crates/but-api/src/branch.rs:1764}
+ * {@link ../../../../../crates/but-api/src/branch.rs:1798}
  */
 export declare function getInitialBranchIntegration(projectId: string, branch: string, strategy: BranchIntegrationStrategy | null): Promise<InitialBranchIntegration>
 
@@ -955,7 +955,7 @@ export declare function initGithubDeviceOauth(): Promise<Verification>
 export declare function listAvailableReviewTemplates(projectId: string): Promise<Array<string>>
 
 /**
- * {@link ../../../../../crates/but-api/src/legacy/virtual_branches.rs:681}
+ * {@link ../../../../../crates/but-api/src/legacy/virtual_branches.rs:682}
  */
 export declare function listBranches(projectId: string, filter: BranchListingFilter | null): Promise<Array<BranchListing>>
 
@@ -1132,7 +1132,7 @@ export declare function mergeReview(projectId: string, reviewId: number, mergeMe
  * `dry_run` is enabled, the returned workspace previews the move and no oplog
  * entry is persisted.
  *
- * {@link ../../../../../crates/but-api/src/branch.rs:1845}
+ * {@link ../../../../../crates/but-api/src/branch.rs:1879}
  */
 export declare function moveBranch(projectId: string, subjectBranch: string, targetBranch: string, dryRun: boolean): Promise<MoveBranchResult>
 
@@ -1400,10 +1400,10 @@ export declare function setReviewTemplate(projectId: string, templatePath: strin
  * managed workspace mode.
  *
  * This acquires exclusive worktree access from `ctx` before updating project metadata.
- * See [`but_workspace::init::set_target_ref_and_init_project()`] for details; notably the
- * target commit id is only computed when it wasn't set before, and an omitted
- * `push_remote` keeps the currently configured one. It deliberately records no oplog
- * snapshot - only project metadata changes, no repository state.
+ * See [`but_workspace::init::set_target_ref_and_init_project()`] for details. The target is always
+ * validated against `HEAD`; an unreachable stored target commit is replaced by their merge-base.
+ * An omitted `push_remote` preserves its current value. It deliberately records no oplog snapshot
+ * because only project metadata changes, not repository state.
  *
  * {@link ../../../../../crates/but-api/src/workspace.rs:273}
  */
@@ -1476,7 +1476,7 @@ export declare function storeGitlabPat(accessToken: string): Promise<GitlabAuthS
  * `dry_run` is enabled, the returned workspace previews the tear-off and no
  * oplog entry is persisted.
  *
- * {@link ../../../../../crates/but-api/src/branch.rs:1932}
+ * {@link ../../../../../crates/but-api/src/branch.rs:1966}
  */
 export declare function tearOffBranch(projectId: string, subjectBranch: string, dryRun: boolean): Promise<MoveBranchResult>
 
@@ -2388,7 +2388,7 @@ export type Claude = {
  *
  * In practice, it should match its [frontend counterpart](https://github.com/gitbutlerapp/gitbutler/blob/fa973fd8f1ae8807621f47601803d98b8a9cf348/app/src/lib/backend/ipc.ts#L5).
  */
-export type Code = "Validation" | "RepoOwnership" | "ProjectGitAuth" | "DefaultTargetNotFound" | "CommitSigningFailed" | "CommitMergeConflictFailure" | "ProjectMissing" | "AuthorMissing" | "BranchNotFound" | "SecretKeychainNotFound" | "MissingLoginKeychain" | "GitForcePushProtection" | "NetworkError" | "ProjectDatabaseIncompatible" | "DefaultTerminalNotFound" | "Unknown" | "GitNonFastForward" | "CliInstallCancelled" | "GitHubTokenExpired" | "GitLabUnauthorized" | "GitLabForbidden" | "GitHubOrgOAuthRestricted" | "GitHubInsufficientPermissions" | "ForgeNotAuthenticated" | "PreconditionFailed" | "EditorExitedWithNonZeroStatus";
+export type Code = "Validation" | "RepoOwnership" | "ProjectGitAuth" | "DefaultTargetNotFound" | "CommitSigningFailed" | "CommitMergeConflictFailure" | "ProjectMissing" | "AuthorMissing" | "BranchNotFound" | "SecretKeychainNotFound" | "MissingLoginKeychain" | "GitForcePushProtection" | "NetworkError" | "ProjectDatabaseIncompatible" | "DefaultTerminalNotFound" | "Unknown" | "GitNonFastForward" | "CliInstallCancelled" | "GitHubTokenExpired" | "GitLabUnauthorized" | "GitLabForbidden" | "GitHubOrgOAuthRestricted" | "GitHubOrgSamlRestricted" | "GitHubInsufficientPermissions" | "ForgeNotAuthenticated" | "PreconditionFailed" | "EditorExitedWithNonZeroStatus";
 
 /** Commit that is part of a legacy stack branch and contains state derived in relation to it. */
 export type Commit = {
@@ -2799,8 +2799,6 @@ export type ExtraCsp = {
 };
 
 export type FeatureFlags = {
-  /** Use the V3 unapply compatibility mode that keeps workspace commits unless deleting the workspace ref. */
-  unapplyV3Pgm: boolean;
   /** Enable single branch mode. */
   singleBranch: boolean;
   /**
@@ -2821,7 +2819,6 @@ export type FeatureFlags = {
 
 /** Update request for [`crate::app_settings::FeatureFlags`]. */
 export type FeatureFlagsUpdate = {
-  unapplyV3Pgm?: boolean | null;
   singleBranch?: boolean | null;
   worktreeManipulation?: boolean | null;
 };
