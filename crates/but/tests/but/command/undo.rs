@@ -389,6 +389,39 @@ Redid [..] (2000-01-02 00:00:00): [..]
 }
 
 #[test]
+fn can_undo_and_redo_commit_with_ordinary_branch_checked_out() {
+    let env = Sandbox::open_with_default_settings("single-branch-mode");
+    env.but("branch new my-branch").assert().success();
+
+    env.but("commit -m 'make a commit' -b my-branch")
+        .assert()
+        .success();
+    let committed = snapbox::str![[r#"
+* 1e62c18 (HEAD -> my-branch) make a commit
+* b1540e5 (origin/main, origin/HEAD, main, gitbutler/target) M
+* e31e6ca add init
+
+"#]];
+    // The commit lands on the checked-out branch; no workspace branch is involved.
+    snapbox::assert_data_eq!(env.git_log(), committed.clone());
+
+    env.but("undo").assert().success();
+    // Undo drops the commit while HEAD stays on the branch instead of moving to a workspace.
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* b1540e5 (HEAD -> my-branch, origin/main, origin/HEAD, main, gitbutler/target) M
+* e31e6ca add init
+
+"#]]
+    );
+
+    env.but("redo").assert().success();
+    // Redo restores the commit, again with HEAD on the branch.
+    snapbox::assert_data_eq!(env.git_log(), committed);
+}
+
+#[test]
 fn can_undo_but_branch_delete() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack-two-commits");
     env.setup_metadata(&["A"]);
@@ -804,4 +837,133 @@ Hint: run `but help` for all commands
 
 "#]]
     );
+}
+
+#[test]
+fn can_undo_single_branch_mode_but_branch_new_switch_from_workspace() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    run_mutate_undo_roundtrip_test(&env, |env| {
+        env.but("branch new --switch").assert().success();
+    });
+}
+
+#[test]
+fn can_undo_single_branch_mode_but_branch_new_without_workspace_on_target() {
+    let env = Sandbox::open_with_default_settings("single-branch-mode");
+
+    run_mutate_undo_roundtrip_test(&env, |env| {
+        env.but("branch new").assert().success();
+    });
+}
+
+#[test]
+fn can_undo_single_branch_mode_but_branch_new_creating_workspace() {
+    let env = Sandbox::open_with_default_settings("single-branch-mode");
+
+    env.but("branch new one").assert().success();
+
+    run_mutate_undo_roundtrip_test(&env, |env| {
+        env.but("branch new two").assert().success();
+    });
+
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* b1540e5 (HEAD -> one, origin/main, origin/HEAD, two, main, gitbutler/target) M
+* e31e6ca add init
+
+"#]]
+    );
+}
+
+#[test]
+fn can_undo_single_branch_mode_but_branch_new_switching_to_existing_workspace() {
+    let env = Sandbox::open_with_default_settings("single-branch-mode");
+
+    env.but("branch new one").assert().success();
+    env.but("branch new two").assert().success();
+    env.but("switch two").assert().success();
+
+    run_mutate_undo_roundtrip_test(&env, |env| {
+        env.but("branch new three").assert().success();
+    });
+
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* 8ad759d (gitbutler/workspace) GitButler Workspace Commit
+|/
+* b1540e5 (HEAD -> two, origin/main, origin/HEAD, three, one, main, gitbutler/target) M
+* e31e6ca add init
+
+"#]]
+    );
+}
+
+#[test]
+fn can_undo_single_branch_mode_but_branch_new_switching_to_single_branch_from_workspace() {
+    let env = Sandbox::open_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    run_mutate_undo_roundtrip_test(&env, |env| {
+        env.but("branch new --switch").assert().success();
+    });
+
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* edd3eb7 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 9477ae7 (A) add A
+* 0dc3733 (origin/main, origin/HEAD, main, gitbutler/target, a-branch-1) add M
+
+"#]]
+    );
+}
+
+#[test]
+fn can_undo_single_branch_mode_but_branch_new_switching_to_single_branch_from_branch() {
+    let env = Sandbox::open_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    env.but("switch A").assert().success();
+
+    run_mutate_undo_roundtrip_test(&env, |env| {
+        env.but("branch new --switch").assert().success();
+    });
+
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* edd3eb7 (gitbutler/workspace) GitButler Workspace Commit
+* 9477ae7 (HEAD -> A) add A
+* 0dc3733 (origin/main, origin/HEAD, main, gitbutler/target, a-branch-1) add M
+
+"#]]
+    );
+}
+
+#[test]
+fn can_undo_single_branch_mode_but_branch_new_above() {
+    let env = Sandbox::open_with_default_settings("single-branch-mode");
+
+    env.but("branch new middle").assert().success();
+
+    run_mutate_undo_roundtrip_test(&env, |env| {
+        env.but("branch new top --above middle").assert().success();
+    });
+}
+
+#[test]
+fn can_undo_single_branch_mode_but_branch_new_below() {
+    let env = Sandbox::open_with_default_settings("single-branch-mode");
+
+    env.but("branch new middle").assert().success();
+
+    run_mutate_undo_roundtrip_test(&env, |env| {
+        env.but("branch new bottom --below middle")
+            .assert()
+            .success();
+    });
 }
