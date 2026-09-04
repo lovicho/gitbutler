@@ -74,7 +74,7 @@ fn amend_rejects_dependency_changes() {
         .stderr_eq(str![[r#"
 Error: Cannot amend: 1 change could not be applied:
   first
-    line 1 depends on foo (1)
+    line 1 depends on foo (xsz)
 
 Hint: to apply these changes, stack bar on top of foo and try again — commits already on the branch move with it:
   but move bar --above foo
@@ -378,7 +378,8 @@ Amended tpm
 ┊
 ┊╭┄ g0 [A]
 ┊┊
-┊┊╭┄ wt {wt-feature} (no changes)
+┊┊╭┄ wt:@ {worktree uncommitted} (no changes)
+┊┊├┄ wt {wt-feature}
 ┊├╯
 ┊●   tpm add A
 ┊│     tpm:t A A
@@ -407,7 +408,7 @@ fn amend_a_worktrees_whole_uncommitted_area() {
     env.but("status").assert().success();
     add_dirty_worktree(&env, "wt-feature", "A");
 
-    env.but("amend wt --target lrm")
+    env.but("amend wt:@ --target lrm")
         .assert()
         .success()
         .stderr_eq(str![])
@@ -425,7 +426,8 @@ Amended lrm
 ┊
 ┊╭┄ g0 [A]
 ┊┊
-┊┊╭┄ wt {wt-feature} (no changes)
+┊┊╭┄ wt:@ {worktree uncommitted} (no changes)
+┊┊├┄ wt {wt-feature}
 ┊├╯
 ┊●   tpm add A
 ┊│     tpm:t A A
@@ -493,7 +495,8 @@ fn amend_a_clean_worktree_has_nothing_to_amend() {
 ┊
 ┊╭┄ g0 [A]
 ┊┊
-┊┊╭┄ wt {wt-clean} (no changes)
+┊┊╭┄ wt:@ {worktree uncommitted} (no changes)
+┊┊├┄ wt {wt-clean}
 ┊├╯
 ┊●   tpm add A
 ├╯
@@ -508,7 +511,7 @@ Hint: run `but help` for all commands
 
 "#]]);
 
-    env.but("amend wt --target tpm")
+    env.but("amend wt:@ --target tpm")
         .assert()
         .failure()
         .stdout_eq(str![])

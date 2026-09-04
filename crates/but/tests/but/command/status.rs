@@ -405,12 +405,12 @@ fn uncommitted_and_committed_file_cli_ids() {
 ...
               "changes": [
                 {
-                  "cliId": "1#0:n",
+                  "cliId": "w:n",
                   "filePath": "a.txt",
                   "changeType": "modified"
                 },
                 {
-                  "cliId": "1#0:p",
+                  "cliId": "w:p",
                   "filePath": "b.txt",
                   "changeType": "modified"
                 }
@@ -420,12 +420,12 @@ fn uncommitted_and_committed_file_cli_ids() {
 ...
               "changes": [
                 {
-                  "cliId": "1#1:n",
+                  "cliId": "u:n",
                   "filePath": "a.txt",
                   "changeType": "added"
                 },
                 {
-                  "cliId": "1#1:p",
+                  "cliId": "u:p",
                   "filePath": "b.txt",
                   "changeType": "added"
                 }
@@ -1472,17 +1472,17 @@ Hint: run `but branch new` to create a new branch to work on
 ╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ br [a-branch-1]
-┊●   1 add files
-┊│     1:r  A file-0.txt
-┊│     1:k  A file-1.txt
-┊│     1:t  A file-2.txt
-┊│     1:v  A file-3.txt
-┊│     1:wx A file-4.txt
-┊│     1:wv A file-5.txt
-┊│     1:wk A file-6.txt
-┊│     1:x  A file-7.txt
-┊│     1:m  A file-8.txt
-┊│     1:z  A file-9.txt
+┊●   rlo add files
+┊│     rlo:r  A file-0.txt
+┊│     rlo:k  A file-1.txt
+┊│     rlo:t  A file-2.txt
+┊│     rlo:v  A file-3.txt
+┊│     rlo:wx A file-4.txt
+┊│     rlo:wv A file-5.txt
+┊│     rlo:wk A file-6.txt
+┊│     rlo:x  A file-7.txt
+┊│     rlo:m  A file-8.txt
+┊│     rlo:z  A file-9.txt
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1499,18 +1499,18 @@ Hint: run `but help` for all commands
 ╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ br [a-branch-1]
-┊● 1 author 2000-01-01 00:00:00 +0000 (sha 5877ef4)
+┊● rlo author 2000-01-01 00:00:00 +0000 (sha 2309e7c)
 ┊│     add files
-┊│     1:r  A file-0.txt
-┊│     1:k  A file-1.txt
-┊│     1:t  A file-2.txt
-┊│     1:v  A file-3.txt
-┊│     1:wx A file-4.txt
-┊│     1:wv A file-5.txt
-┊│     1:wk A file-6.txt
-┊│     1:x  A file-7.txt
-┊│     1:m  A file-8.txt
-┊│     1:z  A file-9.txt
+┊│     rlo:r  A file-0.txt
+┊│     rlo:k  A file-1.txt
+┊│     rlo:t  A file-2.txt
+┊│     rlo:v  A file-3.txt
+┊│     rlo:wx A file-4.txt
+┊│     rlo:wv A file-5.txt
+┊│     rlo:wk A file-6.txt
+┊│     rlo:x  A file-7.txt
+┊│     rlo:m  A file-8.txt
+┊│     rlo:z  A file-9.txt
 ├╯
 ┊
 ┴ 0dc3733 (common base) 2000-01-02 add M
@@ -1557,9 +1557,9 @@ fn worktree_lanes() {
 ┊
 ┊╭┄ g0 [A]
 ┊┊
-┊┊╭┄ in {wt-inside}
+┊┊╭┄ in:@ {worktree uncommitted}
 ┊┊┊   wx A note.txt
-┊┊┊
+┊┊├┄ in {wt-inside}
 ┊┊●   pwn worktree work (no changes)
 ┊├╯
 ┊●   tpm add A
@@ -1567,12 +1567,14 @@ fn worktree_lanes() {
 ┊
 ┊╭┄ h0 [B]
 ┊┊
-┊┊╭┄ wt {wt-at} (no changes)
+┊┊╭┄ wt:@ {worktree uncommitted} (no changes)
+┊┊├┄ wt {wt-at}
 ┊├╯
 ┊●   lrm add B
 ├╯
 ┊
-┊╭┄ ou {wt-outside} (no changes)
+┊╭┄ ou:@ {worktree uncommitted} (no changes)
+┊├┄ ou {wt-outside}
 ┊●   zum off the target (no changes)
 ├╯
 ┊
@@ -1622,9 +1624,9 @@ off the target
 "#]]
         .raw(),
     );
-    // The worktree ID names that checkout's whole uncommitted area, and a filename
-    // scoped by worktree name reaches into that checkout only.
-    env.but("diff in").assert().success().stdout_eq(
+    // `<worktree>:@` names that worktree's whole uncommitted area, and a filename
+    // scoped by worktree name reaches into that worktree only.
+    env.but("diff in:@").assert().success().stdout_eq(
         snapbox::str![[r#"
 ───────────────╮
  wx:a note.txt │
@@ -1767,9 +1769,11 @@ fn stacked_worktree_lanes() {
 ┊
 ┊╭┄ g0 [A]
 ┊┊
-┊┊╭┄ wt {wt-first} (no changes)
+┊┊╭┄ wt:@ {worktree uncommitted} (no changes)
+┊┊├┄ wt {wt-first}
 ┊┊┊
-┊┊┊╭┄ se {wt-second} (no changes)
+┊┊┊╭┄ se:@ {worktree uncommitted} (no changes)
+┊┊┊├┄ se {wt-second}
 ┊┊┊●   zzk second work (no changes)
 ┊┊├╯
 ┊┊●   tlr first work (no changes)
@@ -1803,12 +1807,10 @@ second work
 "#]]);
 }
 
-/// `but status` refuses to run from inside a linked worktree. This gate is what keeps the
-/// lane rendering sound: IDs are minted from the main checkout only, so a status that ran
-/// here would list worktrees without IDs and have to skip their lanes. Whoever lifts this
-/// restriction must revisit how [`worktree_lanes`] get their IDs.
+/// Running from inside a linked worktree resolves to the main worktree, so the workspace and
+/// its IDs are the same as they are from the main worktree.
 #[test]
-fn status_from_inside_a_linked_worktree_is_refused() {
+fn status_from_inside_a_linked_worktree_shows_the_main_workspace() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
     env.setup_metadata(&["A", "B"]);
     enable_worktree_manipulation(&env);
@@ -1832,10 +1834,40 @@ fn status_from_inside_a_linked_worktree_is_refused() {
     env.but("status")
         .current_dir(wt.join("wt-inside"))
         .assert()
+        .success()
+        .stderr_eq(snapbox::str![])
+        .stdout_eq(snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ g0 [A]
+┊┊
+┊┊╭┄ wt:@ {worktree uncommitted} (no changes)
+┊┊├┄ wt {wt-inside}
+┊├╯
+┊●   tpm add A
+├╯
+┊
+┊╭┄ h0 [B]
+┊●   lrm add B
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    // Setup registers the worktree it runs in, so it is refused here.
+    env.but("setup")
+        .current_dir(wt.join("wt-inside"))
+        .assert()
         .failure()
         .stdout_eq(snapbox::str![])
         .stderr_eq(snapbox::str![[r#"
-Error: non-main worktrees are not supported
+Error: Failed to set up GitButler project.
+
+Caused by:
+    `but setup` cannot run from a linked worktree; run it from the main worktree at [..]
 
 "#]]);
 }
