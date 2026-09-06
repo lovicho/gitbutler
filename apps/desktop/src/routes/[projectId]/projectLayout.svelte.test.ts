@@ -74,6 +74,15 @@ const terminalError = {
 		code: "GitHubInsufficientPermissions" as const,
 	},
 };
+// What `list_reviews` returns when GitHub answers 401.
+const expiredTokenError = {
+	error: {
+		origin: "ipc" as const,
+		name: "API error: (list_reviews)",
+		message: "GitHub authentication failed.",
+		code: "GitHubTokenExpired" as const,
+	},
+};
 const nonterminalError = {
 	error: {
 		origin: "ipc" as const,
@@ -115,6 +124,7 @@ function query(response?: unknown) {
 type Response =
 	| typeof success
 	| typeof terminalError
+	| typeof expiredTokenError
 	| typeof nonterminalError
 	| typeof unrecognizedForgeError;
 
@@ -226,42 +236,48 @@ afterEach(() => {
 });
 
 describe("project review-list polling", () => {
-	test("keeps cached reviews, stops terminal polling, and recovers through explicit retries", async () => {
-		vi.useFakeTimers();
-		const harness = setup([success, terminalError, terminalError, success, success]);
-		await settle();
-		expect(harness.calls).toBe(1);
+	test.each([
+		["GitHubInsufficientPermissions", terminalError],
+		["GitHubTokenExpired", expiredTokenError],
+	])(
+		"keeps cached reviews, stops terminal polling, and recovers through explicit retries (%s)",
+		async (_code, terminal) => {
+			vi.useFakeTimers();
+			const harness = setup([success, terminal, terminal, success, success]);
+			await settle();
+			expect(harness.calls).toBe(1);
 
-		await vi.advanceTimersByTimeAsync(POLL_INTERVAL);
-		const failed = (harness.api.endpoints as any).listPrs.select(PROJECT_ID)(
-			harness.store.getState(),
-		);
-		expect(failed.data.ids).toEqual(["topic"]);
-		expect(failed.isError).toBe(true);
+			await vi.advanceTimersByTimeAsync(POLL_INTERVAL);
+			const failed = (harness.api.endpoints as any).listPrs.select(PROJECT_ID)(
+				harness.store.getState(),
+			);
+			expect(failed.data.ids).toEqual(["topic"]);
+			expect(failed.isError).toBe(true);
 
-		await vi.advanceTimersByTimeAsync(POLL_INTERVAL);
-		expect(harness.calls, "terminal failure scheduled another interval request").toBe(2);
+			await vi.advanceTimersByTimeAsync(POLL_INTERVAL);
+			expect(harness.calls, "terminal failure scheduled another interval request").toBe(2);
 
-		harness.store.dispatch(harness.api.internalActions.onFocusLost());
-		harness.store.dispatch(harness.api.internalActions.onFocus());
-		await settle();
-		expect(harness.calls).toBe(3);
-		await vi.advanceTimersByTimeAsync(POLL_INTERVAL);
-		expect(harness.calls).toBe(3);
+			harness.store.dispatch(harness.api.internalActions.onFocusLost());
+			harness.store.dispatch(harness.api.internalActions.onFocus());
+			await settle();
+			expect(harness.calls).toBe(3);
+			await vi.advanceTimersByTimeAsync(POLL_INTERVAL);
+			expect(harness.calls).toBe(3);
 
-		harness.store.dispatch(harness.api.internalActions.onFocusLost());
-		harness.store.dispatch(harness.api.internalActions.onFocus());
-		await settle();
-		expect(harness.calls).toBe(4);
+			harness.store.dispatch(harness.api.internalActions.onFocusLost());
+			harness.store.dispatch(harness.api.internalActions.onFocus());
+			await settle();
+			expect(harness.calls).toBe(4);
 
-		await vi.advanceTimersByTimeAsync(POLL_INTERVAL - 1);
-		expect(harness.calls).toBe(4);
-		await vi.advanceTimersByTimeAsync(1);
-		expect(harness.calls).toBe(5);
+			await vi.advanceTimersByTimeAsync(POLL_INTERVAL - 1);
+			expect(harness.calls).toBe(4);
+			await vi.advanceTimersByTimeAsync(1);
+			expect(harness.calls).toBe(5);
 
-		harness.rendered.unmount();
-		harness.storeState.unsubscribe();
-	});
+			harness.rendered.unmount();
+			harness.storeState.unsubscribe();
+		},
+	);
 
 	test("keeps terminal polling stopped after a nonterminal failed retry", async () => {
 		vi.useFakeTimers();

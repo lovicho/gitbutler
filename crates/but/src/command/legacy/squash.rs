@@ -1281,8 +1281,7 @@ pub fn run(
             target,
             reword,
         }) => {
-            sources.sort();
-            sources.dedup();
+            sources = sources.into_iter().unique_by(|c| c.commit_id).collect();
 
             branches_to_remove.sort();
             branches_to_remove.dedup();

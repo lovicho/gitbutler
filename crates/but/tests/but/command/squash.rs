@@ -591,6 +591,7 @@ Squashed branch 'a-branch-1' into unl
 
 "#]]);
 
+    // Keep the target message first, followed by sources in newest-first branch order.
     env.but("status -fv")
         .assert()
         .success()
@@ -598,8 +599,8 @@ Squashed branch 'a-branch-1' into unl
 ╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ br [a-branch-1]
-┊● unl author 2000-01-01 00:00:00 +0000 (sha 9269bbf)
-┊│     add one  add two  add three
+┊● unl author 2000-01-01 00:00:00 +0000 (sha 615f4cb)
+┊│     add one  add three  add two
 ┊│     unl:k A one
 ┊│     unl:o A three
 ┊│     unl:t A two
@@ -921,7 +922,7 @@ Hint: run `but help` for all commands
 fn squash_with_duplicate_branch_sources() {
     let env = two_branches();
 
-    env.but("squash one one -t uqr -u")
+    env.but("squash one one -t uqr --use-source-message")
         .assert()
         .success()
         .stdout_eq(snapbox::str![[r#"
@@ -936,7 +937,7 @@ Squashed branch 'one' into uqr
 ╭┄ @ [uncommitted] (no changes)
 ┊
 ┊╭┄ se [second]
-┊●   uqr add four
+┊●   uqr add two
 ┊│     uqr:q A four
 ┊│     uqr:k A one
 ┊│     uqr:t A two
@@ -949,6 +950,11 @@ Squashed branch 'one' into uqr
 Hint: run `but help` for all commands
 
 "#]]);
+    // Repeated branch arguments must preserve source order without repeating messages.
+    snapbox::assert_data_eq!(
+        env.invoke_git("log -1 --format=%B second"),
+        str!["add two\n\nadd one"]
+    );
 }
 
 #[test]

@@ -200,6 +200,7 @@ With \`seahorse\` or equivalent, create a \`Login\` password store, right click 
 	},
 	GitHubTokenExpired: {
 		severity: "error",
+		terminal: true,
 		userMessage: `
 Your GitHub token appears expired. Please log out and back in to refresh it. (Settings -> Integrations -> Forget)
 	`,

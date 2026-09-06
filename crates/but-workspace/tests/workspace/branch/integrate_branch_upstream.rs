@@ -294,6 +294,50 @@ fn errors_when_branch_has_no_tracking_branch() -> Result<()> {
 }
 
 #[test]
+fn unrelated_tracking_history_is_an_actionable_precondition_failure() -> Result<()> {
+    // A writable copy: the unrelated root and the retargeted remote ref are written to disk
+    // and must not leak into the shared read-only fixture.
+    let tmp = but_testsupport::gix_testtools::scripted_fixture_writable(
+        "scenario/with-remotes-no-workspace.sh",
+    )
+    .map_err(anyhow::Error::from_boxed)?;
+    let mut repo = but_testsupport::open_repo(&tmp.path().join("remote-diverged"))?;
+    configure_tracking_for_branch_a(&mut repo)?;
+    let unrelated = repo.commit(
+        "refs/heads/unrelated",
+        "unrelated root",
+        repo.object_hash().empty_tree(),
+        std::iter::empty::<gix::ObjectId>(),
+    )?;
+    repo.reference(
+        "refs/remotes/origin/A",
+        unrelated,
+        gix::refs::transaction::PreviousValue::Any,
+        "test",
+    )?;
+
+    let err = initial_integration_for_branch(
+        r("refs/heads/A"),
+        &repo,
+        Some(r("refs/remotes/origin/main")),
+    )
+    .expect_err("unrelated tracking history must fail before integration");
+
+    assert_eq!(
+        err.custom_context().map(|context| context.code),
+        Some(Code::PreconditionFailed),
+        "the caller needs a typed, recoverable precondition failure: {err:#}"
+    );
+    assert!(
+        err.to_string().contains(
+            "Fetch the missing history or choose a branch with shared first-parent history"
+        ),
+        "the error must name the missing first-parent boundary and how to recover: {err:#}"
+    );
+    Ok(())
+}
+
+#[test]
 fn partitions_diverged_branch_into_application_order() -> Result<()> {
     let mut repo =
         read_only_in_memory_scenario_named("with-remotes-no-workspace", "remote-diverged")?;

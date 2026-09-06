@@ -253,6 +253,9 @@ committed-change sources reuse the target's message and need no flag:
 --use-source-message      # Keep the sources' message, drop the target's
 ```
 
+With branch sources, `--use-source-message` combines messages newest first within each
+branch and includes each source commit only once.
+
 None of the message flags may be used when the target is `@`.
 
 For multiple independent squash groups, prefer newer/top groups first; change-ID refs from
