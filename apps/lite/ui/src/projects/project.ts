@@ -46,12 +46,6 @@ import {
 import { decodeBytes } from "#ui/api/bytes.ts";
 import type { FocusScope } from "#ui/focus-scopes.ts";
 import {
-	createInitialUpstreamState,
-	getUpstreamSelectors,
-	upstreamReducers,
-	type UpstreamState,
-} from "./upstream.ts";
-import {
 	createInitialGraphState,
 	getGraphSelectors,
 	graphReducers,
@@ -89,6 +83,11 @@ type WorkspaceState = {
 	 * hiding them that is the exception worth recording.
 	 */
 	foldedSegments: Record<string, true>;
+	/**
+	 * Remote legs shown, by the local branch's full ref. Expanded rather than
+	 * folded, unlike `foldedSegments`: a leg starts collapsed.
+	 */
+	expandedIncoming: Record<string, true>;
 	dependencyCommitIds: Array<string>;
 	pendingOperation: PendingOperation;
 	/**
@@ -134,6 +133,7 @@ const createInitialWorkspaceState = (): WorkspaceState => ({
 	checkedAddresses: {},
 	checkedConflicts: {},
 	foldedSegments: {},
+	expandedIncoming: {},
 	dependencyCommitIds: [],
 	pendingOperation: noPendingOperation,
 	notice: null,
@@ -146,7 +146,7 @@ const createInitialWorkspaceState = (): WorkspaceState => ({
 	filesCollapsedDirectories: {},
 });
 
-export type PageId = "workspace" | "upstream" | "branches";
+export type PageId = "workspace" | "branches";
 
 /** One of the two stacked lists the workspace sidebar is split into. */
 export type SidebarPanel = "uncommitted" | "stacks";
@@ -168,7 +168,6 @@ export type ProjectState = {
 	 */
 	sidebarPanelFocus: SidebarPanel | "both";
 	branches: BranchesState;
-	upstream: UpstreamState;
 	graph: GraphState;
 	workspace: WorkspaceState;
 };
@@ -177,7 +176,6 @@ export const createInitialProjectState = (): ProjectState => ({
 	filesVisible: true,
 	sidebarPanelFocus: "both",
 	branches: createInitialBranchesState(),
-	upstream: createInitialUpstreamState(),
 	graph: createInitialGraphState(),
 	workspace: createInitialWorkspaceState(),
 });
@@ -196,9 +194,6 @@ export const projectReducers = {
 			return;
 
 		state.workspace.diffCursor = selection;
-	},
-	toggleUpstreamSegment: (state: ProjectState, { segmentId }: { segmentId: string }) => {
-		upstreamReducers.toggleSegment(state.upstream, { segmentId });
 	},
 	toggleGraphIncoming: (state: ProjectState) => {
 		graphReducers.toggleIncoming(state.graph);
@@ -521,6 +516,11 @@ export const projectReducers = {
 		if (state.workspace.foldedSegments[branchRef]) delete state.workspace.foldedSegments[branchRef];
 		else state.workspace.foldedSegments[branchRef] = true;
 	},
+	toggleIncomingExpanded: (state: ProjectState, { branchRef }: { branchRef: string }) => {
+		if (state.workspace.expandedIncoming[branchRef])
+			delete state.workspace.expandedIncoming[branchRef];
+		else state.workspace.expandedIncoming[branchRef] = true;
+	},
 	/**
 	 * Folds or unfolds several segments at once, for acting on a whole stack.
 	 * Toggling each of them instead would invert a partly folded stack rather
@@ -707,6 +707,8 @@ export const projectSelectors = {
 	selectFoldedSegments: (state: ProjectState) => state.workspace.foldedSegments,
 	selectSegmentFolded: (state: ProjectState, branchRef: string) =>
 		state.workspace.foldedSegments[branchRef] === true,
+	selectIncomingExpanded: (state: ProjectState, branchRef: string) =>
+		state.workspace.expandedIncoming[branchRef] === true,
 	selectDependencyCommitIds,
 	selectAddressChecked: (state: ProjectState, address: CheckableAddress) =>
 		state.workspace.checkedAddresses[addressIdentityKey(address)] !== undefined,
@@ -756,6 +758,5 @@ export const projectSelectors = {
 		);
 	},
 	...getBranchesSelectors((state: ProjectState) => state.branches),
-	...getUpstreamSelectors((state: ProjectState) => state.upstream),
 	...getGraphSelectors((state: ProjectState) => state.graph),
 };

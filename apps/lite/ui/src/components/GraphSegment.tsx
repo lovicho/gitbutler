@@ -5,11 +5,6 @@ import type { CommitState } from "@gitbutler/but-sdk";
 
 const glyphPaths = {
 	parent: "M8 0V28",
-	/* The parent line with its overhead dropped, for a row that starts a rail
-	   rather than continuing one. It begins where the group glyph's rings do, so
-	   a fold toggle heading a rail starts its line in the same place whether the
-	   run it holds is folded away or on screen. */
-	parentHead: "M8 3V28",
 	horizontal: "M-9.53674e-07 14L16 14",
 	space: "",
 	// Forks
@@ -24,6 +19,10 @@ const glyphPaths = {
 	joinLeft: "M8 14H0M8 14V0M8 14V28",
 	joinRight: "M16 14H8M8 14V0M8 14V28",
 	joinBoth: "M16 14L8 14M0 14H8M8 0V14M8 28V14",
+	// The rail around a disclosure control on the row: into it, and out of it.
+	control: "M8 0V4M8 24V28",
+	/** Out of the control only, for a row that starts a rail under it. */
+	controlHead: "M8 24V28",
 };
 
 /** A stretch of the rail in another status's colour, or the glyph's own when none is given. */
@@ -55,14 +54,6 @@ const groupGlyph = (
 	</>
 );
 
-/** The rings without the tail above them, for a row that starts a rail. */
-const groupHeadGlyph = (
-	<>
-		<path className={styles.line} d="M8 17.0038V26" strokeWidth="1.5" />
-		<path d={groupRingsPath} stroke="currentColor" strokeWidth="1.5" />
-	</>
-);
-
 /** The commit node without the tail below it, for the row a rail ends on. */
 const commitFootGlyph = (
 	<>
@@ -74,6 +65,9 @@ const commitFootGlyph = (
 		/>
 	</>
 );
+
+/** The rail into the control, for the row a rail ends on. */
+const controlFootGlyph = <path className={styles.line} d="M8 0V4" strokeWidth="1.5" />;
 
 /** A branch's tick on a rail that continues above: the stretch above and below it in others' colours. */
 const joinRightGlyph = (
@@ -116,18 +110,9 @@ const groupCenteredFootGlyph = (
 );
 
 /** @public */
-export type GraphSegmentGlyph = keyof typeof glyphPaths | "commit" | "group" | "groupHead";
+export type GraphSegmentGlyph = keyof typeof glyphPaths | "commit" | "group";
 
-/** Both are drawn on the group glyph's shorter canvas. */
-const isGroupGlyph = (glyph: GraphSegmentGlyph): boolean =>
-	glyph === "group" || glyph === "groupHead";
-
-/**
- * Glyphs whose rail carries on past the drawing, so a taller row goes on
- * drawing it. The head glyphs are left out: what they start is the rail below
- * them, and the band would draw over the very space they exist to leave empty
- * in a column that stacks upwards.
- */
+/** Glyphs whose rail carries on past the drawing, so a taller row goes on drawing it. */
 const stretchableGlyphs = new Set<GraphSegmentGlyph>([
 	"parent",
 	"commit",
@@ -138,6 +123,7 @@ const stretchableGlyphs = new Set<GraphSegmentGlyph>([
 	"joinLeft",
 	"joinRight",
 	"joinBoth",
+	"control",
 ]);
 
 /**
@@ -147,7 +133,7 @@ const stretchableGlyphs = new Set<GraphSegmentGlyph>([
  */
 export type GraphSegmentStatus = "Diverged" | "Upstream" | CommitState["type"];
 
-interface GraphSegmentProps extends ComponentProps<"div"> {
+interface GraphSegmentProps extends ComponentProps<"span"> {
 	glyph: GraphSegmentGlyph;
 	status: GraphSegmentStatus;
 	/** The rail ends on this row: no tail below the icon, nothing stretched under a taller row. */
@@ -157,6 +143,8 @@ interface GraphSegmentProps extends ComponentProps<"div"> {
 	/** The rail above or below the icon in another status's colour; a stretch between two icons is the lower one's. */
 	above?: GraphSegmentStatus;
 	below?: GraphSegmentStatus;
+	/** How many columns of the main line run behind the row, left of the glyph. */
+	behind?: number;
 }
 
 export const GraphSegment: FC<GraphSegmentProps> = ({
@@ -167,55 +155,104 @@ export const GraphSegment: FC<GraphSegmentProps> = ({
 	centered = false,
 	above,
 	below,
+	behind = 0,
 	...props
 }) => (
-	<div {...props} className={classes(className, styles.container)} data-status={status}>
-		<svg
-			className={classes(
-				styles.mainSegment,
-				isGroupGlyph(glyph) && !centered && styles.groupSegment,
+	// Spans throughout: the segment sits in buttons and spans, which take phrasing content only.
+	<span {...props} className={classes(className, styles.container)} data-status={status}>
+		{Array.from({ length: behind }, (_, column) => (
+			<span key={column} className={styles.pass} aria-hidden />
+		))}
+		<span className={styles.glyph}>
+			<svg
+				className={classes(
+					styles.mainSegment,
+					glyph === "group" && !centered && styles.groupSegment,
+				)}
+				viewBox={glyph === "group" && !centered ? "0 0 16 26" : "0 0 16 28"}
+				fill="none"
+				xmlns="http://www.w3.org/2000/svg"
+				aria-hidden="true"
+				focusable="false"
+			>
+				{railEnds && glyph === "commit" ? (
+					commitFootGlyph
+				) : railEnds && glyph === "group" && centered ? (
+					groupCenteredFootGlyph
+				) : railEnds && glyph === "control" ? (
+					controlFootGlyph
+				) : glyph === "commit" ? (
+					commitGlyph(below)
+				) : glyph === "joinRight" ? (
+					joinRightGlyph(above, below)
+				) : glyph === "forkRight" ? (
+					forkRightGlyph(below)
+				) : glyph === "group" ? (
+					centered ? (
+						groupCenteredGlyph
+					) : (
+						groupGlyph
+					)
+				) : (
+					<path className={styles.line} d={glyphPaths[glyph]} strokeWidth="1.5" />
+				)}
+			</svg>
+
+			{stretchableGlyphs.has(glyph) && !railEnds && (
+				<svg
+					viewBox="0 0 16 28"
+					preserveAspectRatio="none"
+					fill="none"
+					xmlns="http://www.w3.org/2000/svg"
+					className={styles.stretchSegment}
+					aria-hidden="true"
+					focusable="false"
+				>
+					<Tone status={below} d={glyphPaths.parent} />
+				</svg>
 			)}
-			viewBox={isGroupGlyph(glyph) && !centered ? "0 0 16 26" : "0 0 16 28"}
+		</span>
+	</span>
+);
+
+const ARC_K = 0.5523;
+const n = (value: number): string => String(Math.round(value * 100) / 100);
+
+/**
+ * The bend from the column right of the main line onto it, through a gap of
+ * this height: two quarter turns of radius 4 joined by a straight, meeting the
+ * line at the gap's foot.
+ */
+const bendPath = (height: number): string => {
+	const r = 4;
+	const k = ARC_K * r;
+	const my = height / 2;
+	return [
+		`M20 0 V${n(my - r)}`,
+		`C20 ${n(my - r + k)} ${n(20 - (r - k))} ${n(my)} 16 ${n(my)}`,
+		`L12 ${n(my)}`,
+		`C${n(8 + (r - k))} ${n(my)} 8 ${n(my + r - k)} 8 ${n(my + r)}`,
+		`V${n(height)}`,
+	].join(" ");
+};
+
+/**
+ * The gutter of the gap under a card: the main line runs through it, and the
+ * card's own line, a column to the right, may bend onto it.
+ */
+export const GraphGap: FC<{ height: number; bend?: GraphSegmentStatus }> = ({ height, bend }) => (
+	<div className={styles.gap} style={{ height }} aria-hidden>
+		<svg
+			viewBox={`0 0 28 ${height}`}
+			width="28"
+			height={height}
 			fill="none"
 			xmlns="http://www.w3.org/2000/svg"
 			aria-hidden="true"
 			focusable="false"
 		>
-			{railEnds && glyph === "commit" ? (
-				commitFootGlyph
-			) : railEnds && glyph === "group" && centered ? (
-				groupCenteredFootGlyph
-			) : glyph === "commit" ? (
-				commitGlyph(below)
-			) : glyph === "joinRight" ? (
-				joinRightGlyph(above, below)
-			) : glyph === "forkRight" ? (
-				forkRightGlyph(below)
-			) : glyph === "group" ? (
-				centered ? (
-					groupCenteredGlyph
-				) : (
-					groupGlyph
-				)
-			) : glyph === "groupHead" ? (
-				groupHeadGlyph
-			) : (
-				<path className={styles.line} d={glyphPaths[glyph]} strokeWidth="1.5" />
-			)}
+			<Tone status="LocalOnly" d={`M8 0V${height}`} />
+			{bend !== undefined && <Tone status={bend} d={bendPath(height)} />}
 		</svg>
-
-		{stretchableGlyphs.has(glyph) && !railEnds && (
-			<svg
-				viewBox="0 0 16 28"
-				preserveAspectRatio="none"
-				fill="none"
-				xmlns="http://www.w3.org/2000/svg"
-				className={styles.stretchSegment}
-				aria-hidden="true"
-				focusable="false"
-			>
-				<Tone status={below} d={glyphPaths.parent} />
-			</svg>
-		)}
 	</div>
 );

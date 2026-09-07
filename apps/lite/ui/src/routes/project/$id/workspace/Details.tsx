@@ -3,6 +3,7 @@ import { startAbsorb, setCursor, useCanShowFiles, useSelection } from "#ui/use-c
 import uiStyles from "#ui/components/ui.module.css";
 import { SuspenseQuery } from "@suspensive/react-query";
 import {
+	type PushBeforePublish,
 	useAddReviewLabels,
 	useCommitUncommitChanges,
 	useOpenInProgram,
@@ -10,6 +11,7 @@ import {
 	useResolveCommitConflictHunks,
 	useSaveGUISettings,
 } from "#ui/api/mutations.ts";
+import { downstackPushStatusFromSegments } from "#ui/segment.ts";
 import {
 	type DraftPRExtras,
 	draftPRQueryOptions,
@@ -64,8 +66,7 @@ import {
 	weakFileIdentityKey,
 	weakFileParentIdentityKey,
 } from "#ui/addresses.ts";
-import type { DiffLineSelection } from "#ui/cursors.ts";
-import { checkedRange, addressSpaceRange } from "#ui/checking.ts";
+import { checkedRange, addressSpaceRange, selectionAfterChecking } from "#ui/checking.ts";
 import type { BranchTab, CheckableAddress } from "#ui/projects/project.ts";
 import { projectSlice } from "#ui/projects/state.ts";
 import { interfaceSlice } from "#ui/interface/state.ts";
@@ -174,7 +175,6 @@ import {
 	hunkSelectionForLineNavigation,
 	lineSelectionsForRange,
 	moveSelectedLineRange,
-	rangeFromLineGroups,
 	selectedLineRangeContainsPoint,
 	singleLineSelectionByLine,
 	type HunkLineSelection,
@@ -224,6 +224,7 @@ import {
 	getDiffView,
 	hunkAddressIdentityKey,
 	prepareDiffFiles,
+	resolveDiffSelection,
 	withoutFoldedHunks,
 } from "./diff-view.ts";
 import { DiffMinimap } from "./DiffMinimap.tsx";
@@ -404,14 +405,43 @@ const lineSelectionsEqual = (a: CodeViewLineSelection, b: CodeViewLineSelection)
 	(a.range.endSide ?? a.range.side ?? "additions") ===
 		(b.range.endSide ?? b.range.side ?? "additions");
 
-const DadJokeFooter: FC = () => {
+const DiffFooter: FC = () => {
+	const dispatch = useAppDispatch();
+	const view = useAppSelector(interfaceSlice.selectors.selectDiffFooterView);
 	const [{ setup, punchline }] = useState(getRandomDadJoke);
 
 	return (
-		<p className={styles.dadJoke}>
-			<span>{setup}</span>
-			<span>{punchline}</span>
-		</p>
+		<div className={styles.diffFooter}>
+			{view === "dadJokes" ? (
+				<>
+					<span>{setup}</span>
+					<span>{punchline}</span>
+				</>
+			) : (
+				<>
+					<span>Thanks for testing GitButler Nightly! ❤️</span>
+					<span>
+						We’d love to hear what you think.{" "}
+						<a
+							href="https://discord.gg/MmFkmaJ42D"
+							onClick={(event) => {
+								event.preventDefault();
+								void window.lite.openInWebBrowser(event.currentTarget.href);
+							}}
+						>
+							Share feedback on Discord
+						</a>
+					</span>
+				</>
+			)}
+			<button
+				type="button"
+				className={styles.diffFooterToggle}
+				onClick={() => dispatch(interfaceSlice.actions.toggleDiffFooterView())}
+			>
+				{view === "dadJokes" ? "Give feedback" : "Less feedback, more dad jokes"}
+			</button>
+		</div>
 	);
 };
 
@@ -435,7 +465,7 @@ const DiffContents: FC<{
 	manualCollapseByItem: Map<string, boolean>;
 	setManualCollapse: (itemId: string, collapsed: boolean | undefined) => void;
 	setFilesReviewed: (input: SetFilesReviewedInput) => void;
-	viewerRef: RefObject<CodeViewHandle<Annotation> | null>;
+	viewerRef: RefObject<DiffViewerHandle | null>;
 	didScrollToViaFileRef: RefObject<boolean>;
 	minimapFiles: Array<MinimapFile> | null;
 	canUncommit: boolean;
@@ -514,14 +544,20 @@ const DiffContents: FC<{
 	);
 	const visibleAddressSpace = withoutFoldedHunks(addressSpace, hunkByKey, collapsedItems);
 
+	const effectiveDiffStyle = diffStyle ?? defaultSettings.diffStyle;
+
 	const storedDiffSelection = useAppSelector((state) =>
 		projectSlice.selectors.selectDiffCursor(state, projectId),
 	);
-	const storedSelectedLines = useMemo((): CodeViewLineSelection | null => {
-		if (!storedDiffSelection) return null;
-		const file = fileByItemId.get(weakFileIdentityKey(storedDiffSelection.file));
-		return file ? { id: file.item.id, range: storedDiffSelection.range } : null;
-	}, [storedDiffSelection, fileByItemId]);
+	const storedSelectedLines = useMemo(
+		() =>
+			resolveDiffSelection({
+				selection: storedDiffSelection,
+				fileByItemId,
+				diffStyle: effectiveDiffStyle,
+			}),
+		[storedDiffSelection, fileByItemId, effectiveDiffStyle],
+	);
 	const storedSelectionHunk = useMemo(
 		() =>
 			navigationHunkForSelectedLines({
@@ -532,7 +568,6 @@ const DiffContents: FC<{
 		[storedSelectedLines, fileByItemId, hunkByKey],
 	);
 	const diffSelection = storedSelectionHunk ?? visibleAddressSpace.items[0] ?? null;
-	const hasStoredDiffSelection = storedDiffSelection !== null;
 	const canCheckHunks = useAppSelector((state) =>
 		projectSlice.selectors.selectCanCheckHunks(state, projectId, fileParent),
 	);
@@ -541,16 +576,14 @@ const DiffContents: FC<{
 	);
 	const diffSelectionHunk =
 		diffSelection !== null ? hunkByKey.get(hunkAddressIdentityKey(diffSelection)) : null;
-	const cursorSelectedHunk = diffSelection
-		? (hunkByKey.get(hunkAddressIdentityKey(diffSelection))?.selectedLines ?? null)
-		: null;
-	const cursorSelectedRange: CodeViewLineSelection | null = cursorSelectedHunk
+	const firstChangedGroup = diffSelectionHunk?.address.lineGroups[0];
+	const cursorSelectedRange: CodeViewLineSelection | null = firstChangedGroup
 		? {
-				id: cursorSelectedHunk.id,
+				id: diffSelectionHunk.file.item.id,
 				range: {
-					start: cursorSelectedHunk.range.start,
-					side: cursorSelectedHunk.range.side,
-					end: cursorSelectedHunk.range.start,
+					start: firstChangedGroup.start,
+					side: firstChangedGroup.side,
+					end: firstChangedGroup.start,
 				},
 			}
 		: null;
@@ -569,7 +602,6 @@ const DiffContents: FC<{
 		};
 	}, [selectedLines]);
 	const selectedLinesHunk = storedSelectionHunk ?? diffSelection;
-	const effectiveDiffStyle = diffStyle ?? defaultSettings.diffStyle;
 	// Primitives, so the item list and header closures below only pick up new
 	// identities when the selection crosses into another file — not on every
 	// j/k move within one.
@@ -595,8 +627,14 @@ const DiffContents: FC<{
 		// oxlint-disable-next-line react-hooks/exhaustive-deps react-hooks-js/exhaustive-deps -- Sync scroll only on mount, otherwise use events.
 	}, []);
 
+	function selectedLinesForHunk(address: HunkAddress): CodeViewLineSelection | null {
+		const hunk = hunkByKey.get(hunkAddressIdentityKey(address));
+		if (!hunk) return null;
+		return { id: hunk.file.item.id, range: hunk.ranges[effectiveDiffStyle] };
+	}
+
 	const selectDiff = (selection: HunkAddress) => {
-		const nextSelectedLines = hunkByKey.get(hunkAddressIdentityKey(selection))?.selectedLines;
+		const nextSelectedLines = selectedLinesForHunk(selection);
 		if (!nextSelectedLines) return;
 		setCursor("diff", { file: selection.parent, range: nextSelectedLines.range });
 
@@ -612,20 +650,19 @@ const DiffContents: FC<{
 		if (selectedLines) {
 			const file = fileByItemId.get(selectedLines.id);
 			if (file?.patch?.type === "Patch") {
-				const fileHunks = file.hunks.map(({ address }) => address);
 				const lineHunk = hunkSelectionForLineNavigation({
 					hunks: file.item.fileDiff.hunks,
-					selections: fileHunks,
+					selections: file.hunks,
 					range: selectedLines.range,
 					diffStyle: effectiveDiffStyle,
 					offset,
 				});
-				selection = lineHunk ?? fileHunks.at(offset === 1 ? -1 : 0) ?? null;
+				selection = lineHunk?.address ?? file.hunks.at(offset === 1 ? -1 : 0)?.address ?? null;
 
 				if (lineHunk) {
-					const hunkLines = hunkByKey.get(hunkAddressIdentityKey(lineHunk))?.selectedLines;
+					const hunkLines = selectedLinesForHunk(lineHunk.address);
 					if (hunkLines && !lineSelectionsEqual(selectedLines, hunkLines)) {
-						selectDiff(lineHunk);
+						selectDiff(lineHunk.address);
 						return;
 					}
 				}
@@ -713,6 +750,16 @@ const DiffContents: FC<{
 		directionalNavigation: false,
 	});
 
+	const selectAndRevealLines = (selection: CodeViewLineSelection): void => {
+		applySelectedLines(selection);
+		viewerRef.current?.scrollTo({
+			type: "range",
+			id: selection.id,
+			range: selection.range,
+			align: "nearest",
+		});
+	};
+
 	const moveSelectedLines = (offset: -1 | 1, extend: boolean): void => {
 		if (!selectedLines) return;
 		const file = fileByItemId.get(selectedLines.id);
@@ -727,28 +774,79 @@ const DiffContents: FC<{
 		});
 		if (!range) return;
 
-		const selection = { id: selectedLines.id, range };
-		applySelectedLines(selection);
-		viewerRef.current?.scrollTo({
-			type: "range",
-			id: selection.id,
-			range,
-			align: "nearest",
-		});
+		selectAndRevealLines({ id: selectedLines.id, range });
 	};
 
-	function toggleSelectedLinesChecked(event: KeyboardEvent): void {
-		if (event.composedPath().some(isInteractiveElement)) return;
-		const addresses = addressesForSelectedLines(selectedLines, "line");
-		if (addresses.length === 0) return;
+	// Repeats must follow the pending cursor before React renders it. Null ends the held-key run
+	// so it cannot reverse and undo the checks; a fresh keypress starts from the selected lines.
+	const nextCheckedLine = useRef<CodeViewLineSelection>(null);
 
+	function toggleSelectedLinesChecked(event: KeyboardEvent): void {
+		if (event.composedPath().some(isInteractiveElement) || !selectedLines) return;
 		event.preventDefault();
 		event.stopPropagation();
+		if (event.shiftKey) {
+			nextCheckedLine.current = null;
+			checkSelectedLines(selectedLines, true);
+			return;
+		}
+		const item = event.repeat ? nextCheckedLine.current : selectedLines;
+		if (item !== null) nextCheckedLine.current = checkSelectedLines(item, false);
+	}
+
+	function checkSelectedLines(
+		selection: CodeViewLineSelection,
+		shiftKey: boolean,
+	): CodeViewLineSelection | null {
+		const addresses = addressesForSelectedLines(selection, "line");
+		if (addresses.length === 0) return null;
 		const state = store.getState();
 		const checked = !addresses.every((address) =>
 			projectSlice.selectors.selectAddressChecked(state, projectId, address),
 		);
 		dispatch(projectSlice.actions.checkAddresses({ projectId, addresses, checked }));
+
+		if (shiftKey) return null;
+		const { range, id } = selection;
+		if (
+			range.start !== range.end ||
+			(range.endSide ?? range.side ?? "additions") !== (range.side ?? "additions")
+		)
+			return null;
+		const currentAddress = addresses[0];
+		const file = fileByItemId.get(id);
+		if (!currentAddress || file?.patch?.type !== "Patch") return null;
+		const nextState = store.getState();
+		const next = selectionAfterChecking({
+			selection,
+			getAdjacent: (offset) => {
+				const nextRange = moveSelectedLineRange({
+					hunks: file.item.fileDiff.hunks,
+					range,
+					diffStyle: effectiveDiffStyle,
+					offset,
+					extend: false,
+				});
+				return nextRange ? { id, range: nextRange } : null;
+			},
+			getChecked: (selection) => {
+				const addresses = addressesForSelectedLines(selection, "line");
+				if (
+					addresses.length === 0 ||
+					addresses.some(
+						(address) =>
+							address.hunkHeader.oldStart !== currentAddress.hunkHeader.oldStart ||
+							address.hunkHeader.newStart !== currentAddress.hunkHeader.newStart,
+					)
+				)
+					return null;
+				return addresses.every((address) =>
+					projectSlice.selectors.selectAddressChecked(nextState, projectId, address),
+				);
+			},
+		});
+		if (next) selectAndRevealLines(next);
+		return next;
 	}
 
 	const handleCreateComment = (
@@ -771,6 +869,20 @@ const DiffContents: FC<{
 				payload: "",
 			},
 		});
+	};
+
+	const getContiguousHunkAddressAtLine = ({
+		itemId,
+		lineNumber,
+		side,
+	}: Pick<DiffLineTarget, "itemId" | "lineNumber" | "side">): HunkAddress | null => {
+		const file = fileByItemId.get(itemId);
+		if (file?.patch?.type !== "Patch") return null;
+
+		return addressForLineSelection(
+			itemId,
+			contiguousSelectionByLine({ hunks: file.item.fileDiff.hunks, line: lineNumber, side }),
+		);
 	};
 
 	useHotkeys([
@@ -923,7 +1035,6 @@ const DiffContents: FC<{
 					itemId: diffSelectionHunk.file.item.id,
 					lineNumber: firstLine.start,
 					side: firstLine.side,
-					lineType: "change",
 				});
 				if (!hunk) return;
 
@@ -974,6 +1085,41 @@ const DiffContents: FC<{
 			},
 		},
 		{
+			hotkey: diffHotkeys.checkAll.hotkey,
+			callback: () => {
+				if (!selectedLines) return;
+
+				const address = getContiguousHunkAddressAtLine({
+					itemId: selectedLines.id,
+					lineNumber: selectedLines.range.end,
+					side: selectedLines.range.endSide ?? selectedLines.range.side ?? "additions",
+				});
+				if (!address) return;
+
+				dispatch(
+					projectSlice.actions.checkAddresses({
+						projectId,
+						addresses: address.lineGroups.flatMap((group) =>
+							Array.from({ length: group.lines }, (_, index) =>
+								hunkAddress({
+									...address,
+									lineGroups: [{ side: group.side, start: group.start + index, lines: 1 }],
+								}),
+							),
+						),
+						checked: true,
+					}),
+				);
+			},
+			options: {
+				conflictBehavior: "allow",
+				enabled: selectedLinesHunk !== null && canCheckHunks && noOperationPending,
+				ignoreInputs: true,
+				target: focusScopeRef,
+				meta: diffHotkeys.checkAll.meta,
+			},
+		},
+		{
 			hotkey: diffHotkeys.checkHunk.hotkey,
 			callback: toggleSelectedLinesChecked,
 			options: {
@@ -1006,10 +1152,8 @@ const DiffContents: FC<{
 				);
 			},
 			options: {
-				// A stored selection, not the resolver's first-hunk fallback: after
-				// scrolling with nothing selected, folding the fallback would fold a
-				// file far off-screen. j/k (which stores a selection) is the way in.
-				enabled: hasStoredDiffSelection && !!diffSelectionHunk,
+				// An unresolved cursor (e.g. an image) must not act on another file's fallback hunk.
+				enabled: storedSelectionHunk !== null,
 				conflictBehavior: "allow",
 				target: focusScopeRef,
 				meta: diffHotkeys.toggleFoldFile.meta,
@@ -1027,7 +1171,7 @@ const DiffContents: FC<{
 				handleSetReviewed(id, path, version)(!reviewedFiles.get(path)?.has(version));
 			},
 			options: {
-				enabled: hasStoredDiffSelection && !!diffSelectionHunk,
+				enabled: storedSelectionHunk !== null,
 				conflictBehavior: "allow",
 				target: focusScopeRef,
 			},
@@ -1156,7 +1300,7 @@ const DiffContents: FC<{
 		itemId,
 		lineNumber,
 		side,
-	}: DiffLineTarget): HunkAddress | null => {
+	}: Pick<DiffLineTarget, "itemId" | "lineNumber" | "side">): HunkAddress | null => {
 		const file = fileByItemId.get(itemId);
 		if (file?.patch?.type !== "Patch") return null;
 
@@ -1177,27 +1321,10 @@ const DiffContents: FC<{
 				itemId: context.item.id,
 			});
 			if (!target) return;
-			const address = getHunkAddressAtLine(target);
+			const address = getContiguousHunkAddressAtLine(target);
 			if (!address) return;
-			const range = rangeFromLineGroups(address.lineGroups);
-			if (!range) return;
-
-			applySelectedLines({ id: target.itemId, range });
+			applySelectedLines(selectedLinesForHunk(address));
 		});
-
-	const getContiguousHunkAddressAtLine = ({
-		itemId,
-		lineNumber,
-		side,
-	}: DiffLineTarget): HunkAddress | null => {
-		const file = fileByItemId.get(itemId);
-		if (file?.patch?.type !== "Patch") return null;
-
-		return addressForLineSelection(
-			itemId,
-			contiguousSelectionByLine({ hunks: file.item.fileDiff.hunks, line: lineNumber, side }),
-		);
-	};
 
 	const getContextMenuAddressAtLine = ({
 		itemId,
@@ -1290,7 +1417,7 @@ const DiffContents: FC<{
 		visibleAddressSpace.items
 			.values()
 			.map((address) => {
-				const selection = hunkByKey.get(hunkAddressIdentityKey(address))?.selectedLines;
+				const selection = selectedLinesForHunk(address);
 				const lineAddresses = selection ? addressesForSelectedLines(selection, "line") : null;
 				return lineAddresses && lineAddresses.length > 0 ? { address, lineAddresses } : null;
 			})
@@ -1429,7 +1556,7 @@ const DiffContents: FC<{
 	const handleHunkPostRender = useDiffHunkDrag<Annotation>({
 		projectId,
 		fileParent,
-		getHunkAddress: getHunkAddressAtLine,
+		getHunkAddress: getContiguousHunkAddressAtLine,
 		getLineAddress: getLineAddressAtLine,
 		getSelectedAddresses: () => addressesForSelectedLines(selectedLines, "compact"),
 	});
@@ -1459,7 +1586,8 @@ const DiffContents: FC<{
 		const storedFile = stored && fileByItemId.get(weakFileIdentityKey(stored.file));
 		if (storedFile?.item.id !== itemId) return;
 
-		selectDiff(assert(storedFile.hunks[0]).address);
+		const firstHunk = storedFile.hunks[0];
+		if (firstHunk) selectDiff(firstHunk.address);
 		viewerRef.current?.scrollTo({ type: "item", id: itemId, align: "nearest" });
 	};
 
@@ -1591,7 +1719,7 @@ const DiffContents: FC<{
 		<>
 			<CodeView
 				ref={viewerRef}
-				renderCodeViewFooter={() => <DadJokeFooter key={diffContextKey} />}
+				renderCodeViewFooter={() => <DiffFooter key={diffContextKey} />}
 				renderCustomHeader={(item) => {
 					const file = fileByItemId.get(item.id);
 					// CodeView may briefly hold onto stale snapshots of our data.
@@ -2151,7 +2279,7 @@ const Diff: FC<{
 	manualConflicts?: Array<ManualConflict>;
 	/** True while `conflicts` still shows the replaced commit's hunks. */
 	conflictsStale?: boolean;
-	onActiveFileSelection: (itemId: string, firstSelection: DiffLineSelection | null) => void;
+	onActiveFileSelection: (file: FileAddress) => void;
 	onPassiveFileSelection: (selection: string) => void;
 	selection: Address;
 	projectId: string;
@@ -2427,38 +2555,6 @@ const Diff: FC<{
 		});
 	};
 
-	const activateRow = (selection: string) => {
-		onPassiveFileSelection(selection);
-
-		const path = selectedFilePath(filesRows, selection);
-		const file = path === null ? undefined : diffViewSansAnno.fileByPath.get(path);
-		if (!file) return;
-
-		const firstHunk = file.hunks[0];
-		onActiveFileSelection(
-			file.item.id,
-			firstHunk ? { file: file.address, range: firstHunk.selectedLines.range } : null,
-		);
-	};
-
-	const filesPanelRef = useRef<HTMLDivElement>(null);
-	const filesTreeRef = useRef<HTMLDivElement>(null);
-	const fileFilter = useListFilter({
-		filter: filesFilter,
-		setFilter: (filter) => dispatch(projectSlice.actions.setFilesFilter({ projectId, filter })),
-		inputId: "files-filter-input",
-		subject: "files",
-		scope: "files",
-		selectionKey: filesSelection,
-		firstKey: filesRows[0]?.path,
-		onEnterList: () => {
-			if (filesSelection !== null) activateRow(filesSelection);
-		},
-		panelRef: filesPanelRef,
-		listRef: filesTreeRef,
-		enabled: filesVisible && changes.length > 0,
-	});
-
 	const { data: diffSettings } = useQuery({
 		...guiSettingsQueryOptions,
 		select: (cfg) => ({
@@ -2485,6 +2581,31 @@ const Diff: FC<{
 	const diffStyle = canUseSplitDiff
 		? (diffSettings?.diffStyle ?? defaultSettings.diffStyle)
 		: "unified";
+
+	const activateRow = (selection: string) => {
+		onPassiveFileSelection(selection);
+
+		const path = selectedFilePath(filesRows, selection);
+		if (path !== null) onActiveFileSelection({ parent: fileParent, path });
+	};
+
+	const filesPanelRef = useRef<HTMLDivElement>(null);
+	const filesTreeRef = useRef<HTMLDivElement>(null);
+	const fileFilter = useListFilter({
+		filter: filesFilter,
+		setFilter: (filter) => dispatch(projectSlice.actions.setFilesFilter({ projectId, filter })),
+		inputId: "files-filter-input",
+		subject: "files",
+		scope: "files",
+		selectionKey: filesSelection,
+		firstKey: filesRows[0]?.path,
+		onEnterList: () => {
+			if (filesSelection !== null) activateRow(filesSelection);
+		},
+		panelRef: filesPanelRef,
+		listRef: filesTreeRef,
+		enabled: filesVisible && changes.length > 0,
+	});
 
 	const tabSize = diffSettings?.diffTabSize ?? defaultSettings.diffTabSize;
 
@@ -2820,7 +2941,7 @@ const CommitDetails: FC<{
 	projectId: string;
 	/** The merged review the commit landed, when known: adds a Pull Request tab. */
 	review?: TargetCommitReview | null;
-	onActiveFileSelection: (itemId: string, firstSelection: DiffLineSelection | null) => void;
+	onActiveFileSelection: (file: FileAddress) => void;
 	viewerRef: RefObject<DiffViewerHandle | null>;
 	didScrollToViaFileRef: RefObject<boolean>;
 }> = ({
@@ -3107,8 +3228,8 @@ const BranchTitleRow: FC<{ branchName: string }> = ({ branchName }) => {
  * The Diff / Pull Request toggle. A branch with no review keeps the toggle —
  * the tab goes disabled and says so, where dropping the toggle would instead
  * read as the control having gone missing. The reason rides in the label
- * because a disabled button takes no pointer events, so a tooltip on it would
- * never open.
+ * rather than a tooltip: it is the whole story of this tab, so it has to be
+ * readable without hover (DESIGN.md → Empty states).
  */
 const BranchTabToggle: FC<{
 	branchTab: BranchTab;
@@ -3251,7 +3372,8 @@ const NewPullRequestView: FC<{
 	branchName: string;
 	targetBranch: string | undefined;
 	canSubmit: boolean;
-}> = ({ projectId, branchName, targetBranch, canSubmit }) => {
+	pushFirst: PushBeforePublish | null;
+}> = ({ projectId, branchName, targetBranch, canSubmit, pushFirst }) => {
 	// Same record the form persists its title and body to, read here for the
 	// fields the panel owns. Both writers merge, so neither wipes the other.
 	const { data: draft } = useSuspenseQuery(draftPRQueryOptions({ projectId, branchName }));
@@ -3291,6 +3413,7 @@ const NewPullRequestView: FC<{
 					sourceBranch={branchName}
 					title={null}
 					canSubmit={canSubmit}
+					pushFirst={pushFirst}
 					afterPublish={applyExtras}
 				/>
 			</div>
@@ -3309,7 +3432,7 @@ const NewPullRequestView: FC<{
 /** What every details view threads through to its Diff. */
 type DetailsViewProps = {
 	projectId: string;
-	onActiveFileSelection: (itemId: string, firstSelection: DiffLineSelection | null) => void;
+	onActiveFileSelection: (file: FileAddress) => void;
 	viewerRef: RefObject<DiffViewerHandle | null>;
 	didScrollToViaFileRef: RefObject<boolean>;
 };
@@ -3482,9 +3605,17 @@ const AppliedBranchDetails: FC<BranchDetailsProps> = ({
 	const targetBranch =
 		!parentSegment || parentSegment.pushStatus === "integrated"
 			? headInfo?.target?.remoteTrackingRef.displayName
-			: parentSegment.pushStatus === "completelyUnpushed"
-				? undefined
-				: parentSegment.refName?.displayName;
+			: parentSegment.refName?.displayName;
+	// A forge only opens a review on a branch it has, so a new PR pushes the
+	// branch and its ancestors first when any of them still has something to
+	// push. Conflicted commits cannot be pushed, and so cannot be reviewed yet.
+	const downstack = branchCtx
+		? downstackPushStatusFromSegments(branchCtx.stack.segments.slice(branchCtx.segmentIndex))
+		: null;
+	const pushFirst: PushBeforePublish | null = downstack?.anyRequiresPush
+		? { branch: branchRef, withForce: downstack.anyPushRequiresForce }
+		: null;
+	const canSubmit = pushFirst === null || !downstack?.anyHasConflicts;
 
 	// The open listing already carries everything an open review needs, so the
 	// verification fetch is spent only when the listing has nothing for this
@@ -3564,6 +3695,7 @@ const AppliedBranchDetails: FC<BranchDetailsProps> = ({
 									branchName={branchName}
 									targetBranch={targetBranch}
 									canSubmit={false}
+									pushFirst={null}
 								/>
 							) : (
 								<SuspenseQuery
@@ -3574,19 +3706,17 @@ const AppliedBranchDetails: FC<BranchDetailsProps> = ({
 								>
 									{({ data }) => {
 										const review = data.reviewsBySourceBranch.get(branchName);
-										const canSubmit =
-											targetBranch !== undefined &&
-											branchCtx?.segment.pushStatus !== "completelyUnpushed";
 
 										if (!review && landedReviewId !== null)
 											return <LandedReviewView projectId={projectId} reviewId={landedReviewId} />;
 
-										return !review || !canSubmit ? (
+										return !review ? (
 											<NewPullRequestView
 												projectId={projectId}
 												branchName={branchName}
 												targetBranch={targetBranch}
 												canSubmit={canSubmit}
+												pushFirst={pushFirst}
 											/>
 										) : (
 											<ReviewView
@@ -3640,7 +3770,7 @@ const FileDetailsSkeleton: FC = () => {
 const FileDetails: FC<{
 	path: string;
 	projectId: string;
-	onActiveFileSelection: (itemId: string, firstSelection: DiffLineSelection | null) => void;
+	onActiveFileSelection: (file: FileAddress) => void;
 	viewerRef: RefObject<DiffViewerHandle | null>;
 	didScrollToViaFileRef: RefObject<boolean>;
 }> = ({ path, projectId, onActiveFileSelection, viewerRef, didScrollToViaFileRef }) => {

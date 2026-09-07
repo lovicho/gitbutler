@@ -188,6 +188,17 @@ export const useApply = () => {
 	});
 };
 
+export const useApplyBranchIntegration = () => {
+	const dispatch = useAppDispatch();
+	return useMutation({
+		mutationFn: window.lite.applyBranchIntegration,
+		onSuccess: async (response, input, _context, mutation) => {
+			syncCoreCaches(mutation.client, dispatch, input.projectId, response);
+		},
+		meta: { failureTitle: "Failed to update the branch" },
+	});
+};
+
 export const useBranchCreate = () => {
 	const dispatch = useAppDispatch();
 	return useMutation({
@@ -214,6 +225,9 @@ export const useBranchCheckoutNew = () => {
 		meta: { failureTitle: "Failed to create and switch to branch" },
 	});
 };
+
+/** The push a new pull request has to wait for: the branch, and whether it needs force. */
+export type PushBeforePublish = { branch: string; withForce: boolean };
 
 export const usePublishReview = (projectId: string) =>
 	useMutation({
