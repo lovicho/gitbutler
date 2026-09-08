@@ -6,10 +6,11 @@ import type { RefInfo, Stack, TargetCommit, TargetCommitPage } from "@gitbutler/
 /*
  * The stacks section as a graph: card order and which section rows show. Pure.
  *
- * One main line runs up the left into the top card. Every other card, and a
- * moved-on target's, sits a column to its right and bends onto the line in
- * the gap under it. Rows draw their own gutters, a column each for the lines
- * behind them and the glyph (GraphSegment); a card draws the gap under it.
+ * One main line, the trunk, runs up the left from the merge base to the
+ * uncommitted files. Every stack card, and a moved-on target's, sits a column
+ * to its right and bends onto it in the gap under it. Rows draw their own
+ * gutters, a column each for the lines behind them and the glyph
+ * (GraphSegment); a card draws the gap under it.
  */
 
 /** The rows' inset in the graph: the first column's line, 8px in, at x = 18. */
@@ -20,6 +21,8 @@ export const CARD_GAP = 20;
 export const LEG_GAP = 12;
 /** The stuck merge base row's height, hairline and air included, which a row scrolled into view clears. Keep in sync with Section.module.css. */
 export const DOCKED_HEIGHT = 1 + 4 + 28 + 4;
+/** The stuck uncommitted files row's height: the card's head room, a row and a hairline. Keep in sync with WorkspaceLists.module.css. */
+export const HEAD_DOCKED_HEIGHT = 6 + 28 + 1;
 /** A long list, a run or the older history, shows this much at first, and this much more with each ask. */
 export const FIRST = 10;
 export const MORE = 20;
