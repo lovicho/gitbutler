@@ -18,7 +18,6 @@ import {
 	askpassInit,
 	askpassSubmitPromptResponse,
 	initApplicationNamespace,
-	interactiveLoginShellEnvironment,
 } from "@gitbutler/but-sdk";
 import {
 	app,
@@ -48,8 +47,6 @@ import { initLogging } from "./logging.js";
 import { type GUISettings, readSettings, writeSettings } from "./settings.js";
 import { initMetrics, metricsOnLogin, shutdownMetrics, withApiCommandCapture } from "./metrics.js";
 import { apiParamNames } from "@gitbutler/but-sdk/api-param-names";
-
-Object.assign(process.env, interactiveLoginShellEnvironment());
 
 const isHeadless = process.env.GITBUTLER_LITE_HEADLESS === "true";
 if (isHeadless && process.platform === "darwin") app.setActivationPolicy("accessory");
@@ -126,6 +123,8 @@ protocol.registerSchemesAsPrivileged([
 			standard: true,
 			secure: true,
 			supportFetchAPI: true,
+			// Lets Chromium keep the renderer bundle's compiled bytecode between launches.
+			codeCache: true,
 		},
 	},
 ]);
@@ -519,6 +518,8 @@ const createMainWindow = async (initialUrl?: string): Promise<void> => {
 		width: 1024,
 		height: 768,
 		show: !isHeadless,
+		// Visible before the renderer loads. Keep in sync with --bg-1.
+		backgroundColor: nativeTheme.shouldUseDarkColors ? "#292929" : "#ffffff",
 		minWidth: 545,
 		minHeight: 400,
 		icon,
@@ -528,6 +529,8 @@ const createMainWindow = async (initialUrl?: string): Promise<void> => {
 			contextIsolation: true,
 			nodeIntegration: false,
 			preload: path.join(currentDirPath, "preload.cjs"),
+			// Cache every script's bytecode, not only what Chromium's heuristics deem hot.
+			v8CacheOptions: "bypassHeatCheck",
 		},
 	});
 	registerEditingContextMenu(mainWindow);
@@ -588,8 +591,10 @@ if (!app.requestSingleInstanceLock()) {
 	});
 }
 
-void app.whenReady().then(async () => {
+export const start = async (shellEnvironment: Promise<Record<string, string>>): Promise<void> => {
+	await app.whenReady();
 	initLogging();
+	Object.assign(process.env, await shellEnvironment);
 	applyGUISettings(await readSettings());
 	await initApplicationNamespace(null);
 	configureAskpass();
@@ -706,7 +711,7 @@ void app.whenReady().then(async () => {
 		if (existing) showAndFocusWindow(existing);
 		else void createMainWindow();
 	});
-});
+};
 
 app.on("before-quit", (event) => {
 	WatcherManager.destroyInstance();

@@ -974,19 +974,25 @@ pub mod utils {
             commits_limit_hint: None,
             commits_limit_recharge_location: vec![],
             hard_limit: None,
-            extra_target_commit_id: None,
             dangerously_skip_postprocessing_for_debugging: false,
             worktrees: false,
         }
     }
 
-    pub fn target_meta() -> but_core::ref_metadata::ProjectMeta {
+    /// The target is `origin/main` with its tip as the stored target commit, like a project set
+    /// up by GitButler.
+    pub fn target_meta(repo: &gix::Repository) -> but_core::ref_metadata::ProjectMeta {
+        let target_ref: gix::refs::FullName = "refs/remotes/origin/main"
+            .try_into()
+            .expect("valid target ref");
         but_core::ref_metadata::ProjectMeta {
-            target_ref: Some(
-                "refs/remotes/origin/main"
-                    .try_into()
-                    .expect("valid target ref"),
-            ),
+            target_commit_id: repo
+                .try_find_reference(target_ref.as_ref())
+                .ok()
+                .flatten()
+                .and_then(|mut r| r.peel_to_id().ok())
+                .map(|id| id.detach()),
+            target_ref: Some(target_ref),
             ..Default::default()
         }
     }

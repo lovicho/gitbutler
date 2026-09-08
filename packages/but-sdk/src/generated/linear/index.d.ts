@@ -135,7 +135,7 @@ export declare function apply(projectId: string, existingBranch: string): Promis
  * `dry_run` is enabled, the returned workspace previews the integration
  * result and no oplog entry is persisted.
  *
- * {@link ../../../../../crates/but-api/src/branch.rs:1814}
+ * {@link ../../../../../crates/but-api/src/branch.rs:1822}
  */
 export declare function applyBranchIntegration(projectId: string, branch: string, integration: InteractiveIntegration, dryRun: boolean): Promise<IntegrateBranchResult>
 
@@ -167,14 +167,16 @@ export declare function assignHunk(projectId: string, assignments: Array<HunkAss
 export declare function branchCannedName(projectId: string): Promise<string>
 
 /**
- * Checks out an existing local branch and returns the resulting workspace state.
+ * Checks out a branch and returns the resulting workspace state.
  *
  * This acquires exclusive worktree access from `ctx`, updates the worktree and
  * index through [`but_core::worktree::safe_checkout_from_head()`], then points `HEAD`
- * symbolically at `branch`. The branch must be an existing full local branch
- * name under `refs/heads/`.
+ * symbolically at `branch`. The branch is either an existing full local branch
+ * name under `refs/heads/`, or a remote-tracking branch under `refs/remotes/`,
+ * in which case its local tracking branch is checked out, created at the
+ * remote-tracking commit first if it doesn't exist yet.
  *
- * {@link ../../../../../crates/but-api/src/branch.rs:1515}
+ * {@link ../../../../../crates/but-api/src/branch.rs:1517}
  */
 export declare function branchCheckout(projectId: string, branch: FullNameBytes): Promise<BranchCheckoutResult>
 
@@ -186,7 +188,7 @@ export declare function branchCheckout(projectId: string, branch: FullNameBytes)
  * before creating `refs/heads/<name>`. If omitted, a unique canned branch name
  * is generated. The resulting branch must not already exist.
  *
- * {@link ../../../../../crates/but-api/src/branch.rs:1531}
+ * {@link ../../../../../crates/but-api/src/branch.rs:1533}
  */
 export declare function branchCheckoutNew(projectId: string, name: string | null): Promise<BranchCheckoutResult>
 
@@ -204,7 +206,7 @@ export declare function branchCheckoutNew(projectId: string, name: string | null
 export declare function branchCreate(projectId: string, newRef: MaybeLossyFullNameRef, placement: BranchCreatePlacement): Promise<BranchCreateResult>
 
 /**
- * {@link ../../../../../crates/but-api/src/legacy/workspace.rs:153}
+ * {@link ../../../../../crates/but-api/src/legacy/workspace.rs:152}
  */
 export declare function branchDetails(projectId: string, branchName: string, remote: string | null): Promise<BranchDetails>
 
@@ -215,7 +217,7 @@ export declare function branchDetails(projectId: string, branchName: string, rem
  * diff is computed against the current workspace state. For lower-level
  * implementation details, see [`but_workspace::ui::diff::changes_in_branch()`].
  *
- * {@link ../../../../../crates/but-api/src/branch.rs:1711}
+ * {@link ../../../../../crates/but-api/src/branch.rs:1719}
  */
 export declare function branchDiff(projectId: string, branch: string): Promise<TreeChanges>
 
@@ -248,7 +250,7 @@ export declare function branchLand(projectId: string, branch: string, noFf: bool
  * workspace-related ones. Ahead-counts are relative to the
  * project's configured target branch, which clients know from the project APIs.
  *
- * {@link ../../../../../crates/but-api/src/branch.rs:1728}
+ * {@link ../../../../../crates/but-api/src/branch.rs:1736}
  */
 export declare function branchList(projectId: string): Promise<Array<ListedStack>>
 
@@ -614,7 +616,7 @@ export declare function deleteProject(projectId: ProjectHandleOrLegacyProjectId)
 export declare function deleteReviewComment(projectId: string, commentId: number): Promise<void>
 
 /**
- * {@link ../../../../../crates/but-api/src/legacy/users.rs:226}
+ * {@link ../../../../../crates/but-api/src/legacy/users.rs:229}
  */
 export declare function deleteUser(): Promise<void>
 
@@ -625,7 +627,7 @@ export declare function deleteUser(): Promise<void>
  *
  * Returns the `worktree_changes` that couldn't be applied,
  *
- * {@link ../../../../../crates/but-api/src/legacy/workspace.rs:220}
+ * {@link ../../../../../crates/but-api/src/legacy/workspace.rs:219}
  */
 export declare function discardWorktreeChanges(projectId: string, worktreeChanges: Array<DiffSpec>): Promise<Array<DiffSpec>>
 
@@ -817,12 +819,12 @@ export declare function getGlUser(account: GitlabAccountIdentifier): Promise<Git
 /**
  * Get the initial upstream integration script for `branch`.
  *
- * {@link ../../../../../crates/but-api/src/branch.rs:1790}
+ * {@link ../../../../../crates/but-api/src/branch.rs:1798}
  */
 export declare function getInitialBranchIntegration(projectId: string, branch: string, strategy: BranchIntegrationStrategy | null): Promise<InitialBranchIntegration>
 
 /**
- * {@link ../../../../../crates/but-api/src/legacy/users.rs:232}
+ * {@link ../../../../../crates/but-api/src/legacy/users.rs:235}
  */
 export declare function getLoginToken(): Promise<LoginToken>
 
@@ -882,7 +884,10 @@ export declare function getUndoTargetSnapshot(projectId: string): Promise<Snapsh
 /**
  * The signed-in account, or `None`. Credentials stay in this process.
  *
- * {@link ../../../../../crates/but-api/src/legacy/users.rs:117}
+ * Only the stored profile is read: the keychain, which may prompt on macOS, is left to the
+ * first call that needs the token.
+ *
+ * {@link ../../../../../crates/but-api/src/legacy/users.rs:120}
  */
 export declare function getUserProfileLocal(): Promise<UserProfile | null>
 
@@ -1112,7 +1117,7 @@ export declare function listSnapshots(projectId: string, limit: number, sha: str
 /**
  * Complete a login and persist the account, so the token never leaves this process.
  *
- * {@link ../../../../../crates/but-api/src/legacy/users.rs:192}
+ * {@link ../../../../../crates/but-api/src/legacy/users.rs:195}
  */
 export declare function loginAndPersist(token: string): Promise<UserProfile>
 
@@ -1131,7 +1136,7 @@ export declare function mergeReview(projectId: string, reviewId: number, mergeMe
  * `dry_run` is enabled, the returned workspace previews the move and no oplog
  * entry is persisted.
  *
- * {@link ../../../../../crates/but-api/src/branch.rs:1871}
+ * {@link ../../../../../crates/but-api/src/branch.rs:1879}
  */
 export declare function moveBranch(projectId: string, subjectBranch: string, targetBranch: string, dryRun: boolean): Promise<MoveBranchResult>
 
@@ -1475,7 +1480,7 @@ export declare function storeGitlabPat(accessToken: string): Promise<GitlabAuthS
  * `dry_run` is enabled, the returned workspace previews the tear-off and no
  * oplog entry is persisted.
  *
- * {@link ../../../../../crates/but-api/src/branch.rs:1958}
+ * {@link ../../../../../crates/but-api/src/branch.rs:1966}
  */
 export declare function tearOffBranch(projectId: string, subjectBranch: string, dryRun: boolean): Promise<MoveBranchResult>
 
@@ -1515,7 +1520,7 @@ export declare function updateAiConfiguration(update: AiConfigurationUpdate): Pr
  * The API call alone would leave the local copy stale, so the name shown next to the
  * picture would still be the old one until the next sign-in.
  *
- * {@link ../../../../../crates/but-api/src/legacy/users.rs:127}
+ * {@link ../../../../../crates/but-api/src/legacy/users.rs:130}
  */
 export declare function updateProfileAndPersist(params: UpdateUserParams): Promise<UserProfile>
 
@@ -1555,7 +1560,7 @@ export declare function updateReviewFooters(projectId: string, reviews: Array<Fo
  * here rather than in the frontend because the account token never leaves this
  * process, so a renderer cannot make the authenticated call itself.
  *
- * {@link ../../../../../crates/but-api/src/legacy/users.rs:183}
+ * {@link ../../../../../crates/but-api/src/legacy/users.rs:186}
  */
 export declare function uploadFile(params: UploadFileParams): Promise<Upload>
 
@@ -1580,14 +1585,14 @@ export declare function withdrawReviewRequest(projectId: string, reviewId: numbe
 /**
  * Push a branch and any parent references that lie within the current workspace projection.
  *
- * {@link ../../../../../crates/but-api/src/legacy/workspace.rs:336}
+ * {@link ../../../../../crates/but-api/src/legacy/workspace.rs:335}
  */
 export declare function workspaceBranchAndAncestorsPush(projectId: string, withForce: boolean, skipForcePushProtection: boolean, branch: string, runHooks: boolean, pushOpts: Array<PushFlag>): Promise<PushResult>
 
 /**
  * Switch to the workspace reference
  *
- * {@link ../../../../../crates/but-api/src/branch.rs:1577}
+ * {@link ../../../../../crates/but-api/src/branch.rs:1579}
  */
 export declare function workspaceCheckout(projectId: string): Promise<BranchCheckoutResult>
 
@@ -1762,8 +1767,9 @@ export declare function initTracing(identifier: string, alsoToStderr: boolean): 
  * Return the interactive login shell environment for GUI launches.
  *
  * Returns an empty map when launched from a terminal or on Windows, where shell startup may block.
+ * Async so the shell can start while Electron boots instead of before it.
  */
-export declare function interactiveLoginShellEnvironment(): Record<string, string>
+export declare function interactiveLoginShellEnvironment(): Promise<Record<string, string>>
 
 /** Any left fork link line. */
 export const LEFT_FORK: number
@@ -2136,14 +2142,7 @@ export type BranchDetails = {
   authors: Array<Author>;
   /** Whether the branch is conflicted. */
   isConflicted: boolean;
-  /**
-   * The commits contained in the branch, excluding the upstream commits.
-   *
-   * Note that legacy stack details currently do not expose
-   * [`crate::ref_info::Segment::commits_outside`], so commits that only appear there are
-   * omitted from this list rather than represented separately.
-   * It's also unclear how to recover from there.
-   */
+  /** The commits contained in the branch, excluding the upstream commits. */
   commits: Array<Commit>;
   /** The commits that are only at the remote. */
   upstreamCommits: Array<UpstreamCommit>;
@@ -3943,11 +3942,6 @@ export type PushStatus = "nothingToPush" | "unpushedCommits" | "unpushedCommitsR
  */
 export type RefInfo = {
   /**
-   * The name of the ref that points to a workspace commit,
-   * *or* the name of the first stack segment.
-   */
-  workspaceRef: BranchReference | null;
-  /**
    * The stacks visible in the current workspace.
    *
    * This is an empty array if the `HEAD` is unborn.
@@ -3961,22 +3955,6 @@ export type RefInfo = {
    * This happens when there is a local branch checked out without a remote tracking branch.
    */
   target: Target | null;
-  /**
-   * The `workspace_ref_name` is `Some(_)` and belongs to GitButler, because it had metadata attached.
-   * This will be `false` when in single-branch mode.
-   */
-  isManagedRef: boolean;
-  /**
-   * The `workspace_ref_name` points to a commit that was specifically created by us.
-   * If the user advanced the workspace head by hand, this would be `false`.
-   * See if `ancestor_workspace_commit` is `Some()` to understand if anything could be fixed here.
-   * If there is no managed commits, we have to be extra careful as to what we allow, but setting
-   * up stacks and dependent branches is usually fine, and limited commit creation. Play it safe though,
-   * this is mainly for graceful handling of special cases.
-   */
-  isManagedCommit: boolean;
-  /** The workspace represents what `HEAD` is pointing to. */
-  isEntrypoint: boolean;
   /**
    * The active linked worktrees along with the commits they own, or empty if the
    * traversal wasn't seeded with worktree tips (the `worktreeManipulation` flag is off).
@@ -4200,24 +4178,10 @@ export type Segment = {
    */
   commitsOnRemote: Array<UpstreamCommit>;
   /**
-   * All commits *that are not workspace commits* reachable by (and including commits in) this segment.
-   * The list was created by walking all parents, not only the first parent.
-   * This means the segment needs fixing.
-   */
-  commitsOutside: Array<Commit> | null;
-  /**
    * Read-only metadata with additional information about the branch naming the segment,
    * or `None` if nothing was present.
    */
   metadata: Branch | null;
-  /**
-   * This is `true` a segment in a workspace if the entrypoint of [the traversal](but_graph::Graph::from_commit_traversal)
-   * is this segment, and the surrounding workspace is provided for context.
-   *
-   * This means one will see the entire workspace, while knowing the focus is on one specific segment.
-   * *Note* that this segment can be listed in *multiple stacks* as it's reachable from multiple 'ahead' segments.
-   */
-  isEntrypoint: boolean;
   /** A derived value to help the UI decide which functions to make available. */
   pushStatus: PushStatus;
   /**
