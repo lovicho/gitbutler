@@ -98,7 +98,7 @@ export const General: FC = () => {
 				<Row
 					label="Pull request activity"
 					htmlFor="pr-notifications"
-					hint="Loud collects notifications in the bell; quiet keeps just the unread dots."
+					hint="Loud collects notifications in the bell; quiet and off keep it hidden."
 				>
 					<select
 						id="pr-notifications"
@@ -118,7 +118,7 @@ export const General: FC = () => {
 				<Row
 					label="Desktop notifications"
 					labelId="desktop-notifications"
-					hint="Loud activity that arrives while Lite is in the background is also shown by the system."
+					hint="Loud activity that arrives while GitButler is in the background is also shown by the system."
 				>
 					<Switch
 						aria-labelledby="desktop-notifications"

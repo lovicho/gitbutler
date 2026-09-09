@@ -80,6 +80,7 @@ export declare const apiParamNames: {
 	readonly getUserProfileLocal: readonly [];
 	readonly getWorkspace: readonly ["projectId"];
 	readonly getWorkspaceFile: readonly ["projectId", "relativePath"];
+	readonly getWorkspaceFileFromSource: readonly ["projectId", "changesSource", "relativePath"];
 	readonly gitTestFetch: readonly ["projectId", "remoteName", "action"];
 	readonly gitTestPush: readonly ["projectId", "remoteName", "branchName"];
 	readonly headInfo: readonly ["projectId"];
@@ -153,6 +154,7 @@ export declare const apiParamNames: {
 	readonly workspaceFetchFromRemotes: readonly ["projectId", "action"];
 	readonly workspaceFetchStatus: readonly ["projectId"];
 	readonly workspaceIntegrateUpstream: readonly ["projectId", "updates", "dryRun"];
+	readonly workspaceRecreate: readonly ["projectId"];
 	readonly workspaceTargetCommits: readonly ["projectId", "from", "limit"];
 	readonly worktreeRemove: readonly ["projectId", "name", "force"];
 	readonly worktreeSetArchived: readonly ["projectId", "name", "archived"];

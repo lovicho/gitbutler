@@ -44,7 +44,6 @@ import { Kbd } from "#ui/components/Kbd.tsx";
 import type { IconName } from "#ui/components/iconNames.ts";
 import { Markdown } from "#ui/components/Markdown.tsx";
 import { MarkdownAttachments } from "#ui/components/MarkdownAttachments.tsx";
-import { MarkdownToolbar } from "#ui/components/MarkdownToolbar.tsx";
 import { useMentionSuggestions } from "#ui/components/MentionSuggestions.tsx";
 import { RelativeTime } from "#ui/components/RelativeTime.tsx";
 import {
@@ -65,6 +64,7 @@ import { ReviewThreadReply } from "#ui/routes/project/$id/workspace/ReviewThread
 import { encodeBytes } from "#ui/api/bytes.ts";
 import { getHeadInfoIndex } from "#ui/api/ref-info.ts";
 import { forgeHunkPatch, threadStillAnchoredInFile } from "#ui/review-threads.ts";
+import { isAgent } from "#ui/review-users.ts";
 import { defaultSettings } from "#ui/settings.ts";
 import { pullRequestHotkeys } from "#ui/hotkeys.ts";
 import { FreshBadge, RegisterFreshItems } from "#ui/review-arrival.tsx";
@@ -92,22 +92,15 @@ const commentAnchorId = (commentId: number): string => `review-comment-${comment
 type Quotable = { body: string | null; author: ForgeReviewUser | null };
 
 /**
- * Whether the author is an agent of any kind — Copilot, CI, a review bot.
- * The forge's own flag when it survives the trip, else the `[bot]` login
- * suffix every GitHub App carries.
- */
-const isAgent = (user: ForgeReviewUser): boolean => user.isBot || user.login.endsWith("[bot]");
-
-/**
  * The card header's identity: round avatar plus the login, as designed. An
  * agent author carries a chip so automated feedback reads apart from human
  * conversation.
  */
-const Author: FC<{ user: ForgeReviewUser }> = ({ user }) => (
+const Author: FC<{ user: ForgeReviewUser; compact?: boolean }> = ({ user, compact = false }) => (
 	<>
 		<Avatar src={user.avatarUrl} />
 		<span className={classes("text-13", "text-semibold", styles.authorLogin)}>{user.login}</span>
-		{isAgent(user) && <Badge variant="purple">Agent</Badge>}
+		{isAgent(user) && <Badge variant={compact ? "lightGray" : "purple"}>Agent</Badge>}
 	</>
 );
 
@@ -401,16 +394,19 @@ const ThreadAnchor: FC<{ thread: ForgeReviewThread }> = ({ thread }) => {
 	);
 };
 
-export const ThreadComment: FC<{ comment: ForgeReviewThreadComment }> = ({ comment }) => {
+export const ThreadComment: FC<{ comment: ForgeReviewThreadComment; compact?: boolean }> = ({
+	comment,
+	compact = false,
+}) => {
 	const createdAtMs = comment.createdAt === null ? null : Date.parse(comment.createdAt);
 
 	return (
 		<div
-			className={styles.threadComment}
+			className={classes(styles.threadComment, compact && styles.compactComment)}
 			id={comment.id > 0 ? commentAnchorId(comment.id) : undefined}
 		>
 			<div className={styles.cardIdentity}>
-				{comment.author !== null && <Author user={comment.author} />}
+				{comment.author !== null && <Author user={comment.author} compact={compact} />}
 				{createdAtMs !== null && (
 					<RelativeTime timestamp={createdAtMs} className={classes("text-12", styles.cardTime)} />
 				)}
@@ -1017,12 +1013,14 @@ const ForgeInserts: FC<{
 				label="Mention someone"
 				icon="user"
 				items={() =>
-					(candidates ?? []).map((candidate) =>
-						nativeMenuItem({
-							label: candidate.login,
-							onSelect: () => insert(`@${candidate.login} `),
-						}),
-					)
+					(candidates ?? [])
+						.filter((candidate) => !isAgent(candidate))
+						.map((candidate) =>
+							nativeMenuItem({
+								label: candidate.login,
+								onSelect: () => insert(`@${candidate.login} `),
+							}),
+						)
 				}
 				notice="No one to mention"
 			/>
@@ -1043,7 +1041,7 @@ const ForgeInserts: FC<{
 	);
 };
 
-/** The bottom composer: toolbar, avatar + source, then the action footer. */
+/** The bottom composer: avatar + source, then the action footer. */
 const Composer: FC<{
 	draft: string;
 	setDraft: (update: string | ((current: string) => string)) => void;
@@ -1052,7 +1050,6 @@ const Composer: FC<{
 	avatarUrl: string | null | undefined;
 	projectId: string;
 }> = ({ draft, setDraft, onSubmit, textareaRef, avatarUrl, projectId }) => {
-	const [scrolled, setScrolled] = useState(false);
 	// Folded to one quiet row until engaged; a draft arriving from outside —
 	// a reply quote, a failed submit restoring its text — unfolds it too.
 	const [engaged, setEngaged] = useState(false);
@@ -1114,19 +1111,12 @@ const Composer: FC<{
 	return (
 		<div
 			className={styles.composer}
-			data-body-scrolled={scrolled || undefined}
 			// Leaving the whole composer with nothing written folds it back.
 			onBlur={(evt) => {
 				if (empty && !evt.currentTarget.contains(evt.relatedTarget)) setEngaged(false);
 			}}
 			ref={composerRef}
 		>
-			<MarkdownToolbar
-				className={styles.composerToolbar}
-				onInput={setDraft}
-				targetRef={textareaRef}
-			/>
-
 			<div className={styles.composerBody}>
 				<Avatar src={avatarUrl} />
 				<textarea
@@ -1140,8 +1130,6 @@ const Composer: FC<{
 							setEngaged(false);
 						}
 					}}
-					// Only the flip re-renders: React bails out of an unchanged state.
-					onScroll={(evt) => setScrolled(evt.currentTarget.scrollTop > 0)}
 					placeholder="Write a comment…"
 					ref={attachInput}
 					value={draft}

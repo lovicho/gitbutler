@@ -22,6 +22,7 @@ export const apiProvides = {
 	getReview: ["Reviews"],
 	getReviewMergeStatus: ["MergeStatus"],
 	getWorkspaceFile: [],
+	getWorkspaceFileFromSource: [],
 	headInfo: ["Workspace"],
 	listCiChecks: ["Checks"],
 	listCommentReactions: ["CommentReactions"],
@@ -87,6 +88,7 @@ export const apiInvalidates = {
 };
 
 export const watcherInvalidates = {
+	externalInvalidation: [],
 	gitActivity: ["Branches", "TargetCommits", "Workspace", "Commits", "Diffs", "WorktreeChanges", "Worktrees", "AbsorptionPlan", "Comments"],
 	gitFetch: ["Branches", "TargetCommits", "FetchStatus", "Reviews"],
 	gitHead: ["OperatingMode"],

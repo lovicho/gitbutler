@@ -244,8 +244,8 @@
 
 /* ---- Composer ---------------------------------------------------------- */
 
-/* Toolbar, source, and action footer share one card surface, so the focus
-   ring belongs to the card. */
+/* Source and action footer share one card surface, so the focus ring
+   belongs to the card. */
 .composer {
 	display: flex;
 	flex-direction: column;
@@ -290,17 +290,6 @@
 
 .composerPrompt {
 	color: var(--text-3);
-}
-
-.composerToolbar {
-	padding: 8px 8px 2px;
-	/* Transparent until the body scrolls, so revealing it shifts no layout. */
-	border-bottom: 1px solid transparent;
-	transition: border-color var(--transition-fast);
-
-	[data-body-scrolled] > & {
-		border-bottom-color: var(--border-3);
-	}
 }
 
 .composerBody {
@@ -473,6 +462,21 @@
 	color: var(--text-1);
 }
 
+.compactComment {
+	gap: 4px;
+
+	& .authorLogin {
+		color: var(--text-2);
+		font-weight: normal;
+		font-size: 12px;
+	}
+
+	& .avatar {
+		width: 14px;
+		height: 14px;
+	}
+}
+
 /* A card by an agent (any bot author): tinted so automated feedback reads
    apart from human conversation at a glance. */
 .cardAgent {
@@ -490,5 +494,4 @@
 	color: var(--text-2);
 	text-decoration: underline dotted;
 	text-underline-position: from-font;
-	cursor: pointer;
 }

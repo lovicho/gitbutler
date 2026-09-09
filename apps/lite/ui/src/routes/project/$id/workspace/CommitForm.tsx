@@ -335,7 +335,7 @@ export const CommitForm: FC<{
 		if (!worktreeChanges) return;
 
 		branchCreate(
-			{ projectId, newRef: null, placement: { type: "independent" } },
+			{ projectId, newRef: null, placement: { type: "independent", subject: { order: 0 } } },
 			{
 				onSuccess: (response) => {
 					// The new branch is the target from here on, also for the retry
@@ -627,6 +627,7 @@ export const CommitForm: FC<{
 					<div className={styles.commitActions}>
 						<Tooltip.Root>
 							<Tooltip.Trigger
+								aria-label="Cancel"
 								className={getButtonClassName({ variant: "outline" })}
 								onClick={() => {
 									// Persist the draft before the textarea unmounts.
@@ -646,7 +647,8 @@ export const CommitForm: FC<{
 									/>
 								}
 							>
-								Cancel
+								<span className={styles.cancelLabel}>Cancel</span>
+								<Icon name="cross" className={styles.cancelIcon} />
 							</Tooltip.Trigger>
 							<Tooltip.Portal>
 								<Tooltip.Positioner sideOffset={4}>

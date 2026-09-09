@@ -16,8 +16,11 @@ import {
 	type FileParent,
 } from "#ui/addresses.ts";
 import { useWorktreeRemove, useWorktreeSetArchived } from "#ui/api/mutations.ts";
+import { decodeBytes } from "#ui/api/bytes.ts";
 import {
+	forgeInfoOptions,
 	guiSettingsQueryOptions,
+	listReviewsQueryOptions,
 	treeChangesDiffsQueryOptions,
 	worktreeChangesQueryOptions,
 	worktreesListQueryOptions,
@@ -35,6 +38,7 @@ import {
 	showNativeMenuFromTrigger,
 	type NativeMenuItem,
 } from "#ui/native-menu.ts";
+import { prForgeUrl } from "#ui/pr.ts";
 import { defaultSettings } from "#ui/settings.ts";
 import { setCursor, useIsCursorAt } from "#ui/use-cursor.ts";
 import { addressSpaceIncludes } from "#ui/workspace/address-space.ts";
@@ -189,21 +193,8 @@ const WorktreeUncommitted: FC<{
 	);
 };
 
-/**
- * The branch a worktree has checked out, as a row of the applied tree: a
- * value that selects and takes commits, with the worktree's own actions on
- * its menu. It is outside the workspace, so the branch actions that rewrite
- * the workspace are not offered.
- */
-const WorktreeBranchRow: FC<
-	{
-		projectId: string;
-		worktree: string;
-		refName: BranchReference;
-		behind: number;
-	} & ComponentProps<typeof Row>
-> = ({ projectId, worktree, refName, behind, ...props }) => {
-	const address = branchAddress({ branchRef: refName.fullNameBytes });
+/** The worktree's own actions: where it is on disk, and its place in the workspace. */
+const useWorktreeMenuItems = (projectId: string, worktree: string): Array<NativeMenuItem> => {
 	const { data: worktreePath } = useQuery({
 		...worktreesListQueryOptions(projectId),
 		select: (listing) => listing.active.find((entry) => entry.name === worktree)?.path,
@@ -214,18 +205,12 @@ const WorktreeBranchRow: FC<
 	});
 	const { mutate: setArchived, isPending: isArchiving } = useWorktreeSetArchived(projectId);
 	const { mutate: remove, isPending: isRemoving } = useWorktreeRemove(projectId);
-
-	const menuItems: Array<NativeMenuItem> = [
-		nativeMenuItem({
-			label: "Copy Branch Name",
-			onSelect: () => window.lite.clipboardWriteText(refName.displayName),
-		}),
+	return [
 		nativeMenuItem({
 			label: "Copy Worktree Path",
 			enabled: worktreePath !== undefined,
 			onSelect: () => window.lite.clipboardWriteText(worktreePath ?? ""),
 		}),
-		nativeMenuSeparator,
 		nativeMenuItem({
 			label: "Open in Terminal",
 			enabled: worktreePath !== undefined && terminalId !== undefined,
@@ -251,6 +236,82 @@ const WorktreeBranchRow: FC<
 			label: "Remove Worktree",
 			enabled: !isRemoving,
 			onSelect: () => remove({ projectId, name: worktree, force: false }),
+		}),
+	];
+};
+
+/** The worktree's name over its lane, with the worktree's own actions on its menu. */
+const WorktreeHeaderRow: FC<{ projectId: string; worktree: string; behind: number }> = ({
+	projectId,
+	worktree,
+	behind,
+}) => {
+	const menuItems = useWorktreeMenuItems(projectId, worktree);
+	return (
+		<Row
+			interactive={false}
+			onContextMenu={(event) => {
+				void showNativeContextMenu(event, menuItems);
+			}}
+		>
+			<GraphSegment glyph="space" status="LocalOnly" behind={behind} />
+			<RowLabelContainer>
+				<RowLabel singleLine className={rowStyles.fadedText}>
+					{worktree}
+					<span className={sectionStyles.caption}>worktree</span>
+				</RowLabel>
+			</RowLabelContainer>
+			<Toolbar.Root aria-label="Worktree actions" render={<RowToolbar />}>
+				<Toolbar.Button
+					aria-label="Worktree menu"
+					onClick={(event) => {
+						void showNativeMenuFromTrigger(event.currentTarget, menuItems);
+					}}
+					className={getRowButtonClassName({ iconOnly: true })}
+				>
+					<Icon name="kebab" />
+				</Toolbar.Button>
+			</Toolbar.Root>
+		</Row>
+	);
+};
+
+/**
+ * A branch of a worktree's stack, the checked-out one or one stacked under
+ * it, as a row of the applied tree: a value that selects and takes commits.
+ * Its menu holds what applies to a branch outside the workspace; the
+ * worktree's own actions are on the lane's header.
+ */
+const WorktreeBranchRow: FC<
+	{
+		projectId: string;
+		refName: BranchReference;
+		behind: number;
+	} & ComponentProps<typeof Row>
+> = ({ projectId, refName, behind, ...props }) => {
+	const address = branchAddress({ branchRef: refName.fullNameBytes });
+	const { data: forgeInfo } = useQuery(forgeInfoOptions(projectId));
+	// Only this branch's number: the listing refetches on a timer, and a row
+	// should re-render only when its own pull request changes.
+	const { data: pullRequest = null } = useQuery({
+		...listReviewsQueryOptions({ projectId, cacheConfig: "noCache" }),
+		enabled: !!forgeInfo?.capabilities.prService,
+		select: (reviews) =>
+			reviews.find((review) => review.sourceBranch === refName.displayName)?.number ?? null,
+	});
+	const forgeUrl = pullRequest !== null && forgeInfo ? prForgeUrl(pullRequest, forgeInfo) : null;
+
+	const menuItems: Array<NativeMenuItem> = [
+		nativeMenuItem({
+			label: "Copy Branch Name",
+			onSelect: () => window.lite.clipboardWriteText(refName.displayName),
+		}),
+		nativeMenuItem({
+			label: "Open Pull Request In Browser",
+			enabled: forgeUrl != null,
+			onSelect: () => {
+				if (forgeUrl != null) void window.lite.openInWebBrowser(forgeUrl);
+			},
 		}),
 	];
 
@@ -287,7 +348,7 @@ const WorktreeBranchRow: FC<
 /**
  * A linked worktree's rows, laid out like the sidebar itself: the worktree's
  * name labels the whole, then its uncommitted files head a rail that runs
- * down through its branch and the commits only it has, with any worktree
+ * down through its branches and the commits only it has, with any worktree
  * resting on one of them nested above it. The rows are the sidebar's own;
  * the address space decides which of them operations may take.
  */
@@ -300,86 +361,96 @@ const WorktreeRows: FC<{
 	/** The lane's rail starts at its uncommitted files; on the trunk, the trunk runs on through. */
 	startsRail: boolean;
 }> = ({ projectId, worktree, worktrees, behind, startsRail }) => {
-	const branch =
-		worktree.refName === null ? null : branchAddress({ branchRef: worktree.refName.fullNameBytes });
+	// The rail under a commit takes the colour of the next commit, across segments.
+	const commits = worktree.segments.flatMap((segment) => segment.commits);
+	const below = new Map(
+		commits.map((commit, index) => [commit.id, commits[index + 1]?.state.type ?? "LocalOnly"]),
+	);
 	return (
 		<>
-			<Row interactive={false}>
-				<GraphSegment glyph="space" status="LocalOnly" behind={behind} />
-				<RowLabelContainer>
-					<RowLabel singleLine className={rowStyles.fadedText}>
-						{worktree.name}
-						<span className={sectionStyles.caption}>worktree</span>
-					</RowLabel>
-				</RowLabelContainer>
-			</Row>
+			<WorktreeHeaderRow projectId={projectId} worktree={worktree.name} behind={behind} />
 			<WorktreeUncommitted
 				projectId={projectId}
 				worktree={worktree.name}
 				behind={behind}
 				startsRail={startsRail}
 			/>
-			{worktree.refName !== null && branch !== null && (
-				<TreeItem
-					address={branch}
-					aria-label={worktree.refName.displayName}
-					render={
-						<AddressC
-							projectId={projectId}
-							address={branch}
-							outline="outside"
-							render={
-								<WorktreeBranchRow
-									projectId={projectId}
-									worktree={worktree.name}
-									refName={worktree.refName}
-									behind={behind}
-								/>
-							}
-						/>
-					}
-				/>
-			)}
-			{worktree.commits.map((commit, index) => {
-				const address = commitAddress({ commitId: commit.id, changeId: commit.changeId });
-				const next = worktree.commits[index + 1];
+			{worktree.segments.map((segment) => {
+				// A detached HEAD's first segment has no branch to show a row for.
+				const branch =
+					segment.refName === null
+						? null
+						: branchAddress({ branchRef: segment.refName.fullNameBytes });
 				return (
-					<Fragment key={commit.id}>
-						{worktrees.on.get(commit.id)?.map((nested) => (
-							<WorktreeLane
-								key={nested.name}
-								projectId={projectId}
-								worktree={nested}
-								worktrees={worktrees}
-								behind={behind + 1}
+					<Fragment
+						key={
+							segment.refName
+								? decodeBytes(segment.refName.fullNameBytes)
+								: (segment.commits[0]?.id ?? "detached")
+						}
+					>
+						{segment.refName !== null && branch !== null && (
+							<TreeItem
+								address={branch}
+								aria-label={segment.refName.displayName}
+								render={
+									<AddressC
+										projectId={projectId}
+										address={branch}
+										outline="outside"
+										render={
+											<WorktreeBranchRow
+												projectId={projectId}
+												refName={segment.refName}
+												behind={behind}
+											/>
+										}
+									/>
+								}
 							/>
-						))}
-						<TreeItem
-							address={address}
-							aria-label={commitTitle(commit.message) ?? "(no message)"}
-							render={
-								<AddressC
-									projectId={projectId}
-									address={address}
-									outline="outside"
-									render={
-										<CommitRow
-											commit={commit}
+						)}
+						{segment.commits.map((commit) => {
+							const address = commitAddress({ commitId: commit.id, changeId: commit.changeId });
+							return (
+								<Fragment key={commit.id}>
+									{worktrees.on.get(commit.id)?.map((nested) => (
+										<WorktreeLane
+											key={nested.name}
 											projectId={projectId}
-											stackId={null}
-											dryRunCommit={null}
-											checkCommit={noop}
-											amendCommit={noop}
-											canAmendCommit={false}
-											below={next === undefined ? "LocalOnly" : next.state.type}
-											behind={behind}
-											worktree={worktree.name}
-											scrollSelectedIntoView={false}
+											worktree={nested}
+											worktrees={worktrees}
+											behind={behind + 1}
 										/>
-									}
-								/>
-							}
-						/>
+									))}
+									<TreeItem
+										address={address}
+										aria-label={commitTitle(commit.message) ?? "(no message)"}
+										render={
+											<AddressC
+												projectId={projectId}
+												address={address}
+												outline="outside"
+												render={
+													<CommitRow
+														commit={commit}
+														projectId={projectId}
+														stackId={null}
+														dryRunCommit={null}
+														checkCommit={noop}
+														amendCommit={noop}
+														canAmendCommit={false}
+														below={below.get(commit.id) ?? "LocalOnly"}
+														behind={behind}
+														worktree={worktree.name}
+														scrollSelectedIntoView={false}
+													/>
+												}
+											/>
+										}
+									/>
+								</Fragment>
+							);
+						})}
 					</Fragment>
 				);
 			})}
@@ -422,16 +493,14 @@ export const WorktreeOnTip: FC<{
 	worktree: Worktree;
 	worktrees: WorktreePlacement;
 	behind: number;
-	/** The card is the main line itself, so the trunk runs into the lane from above. */
-	onTrunk: boolean;
-}> = ({ projectId, worktree, worktrees, behind, onTrunk }) => (
+}> = ({ projectId, worktree, worktrees, behind }) => (
 	<>
 		<WorktreeRows
 			projectId={projectId}
 			worktree={worktree}
 			worktrees={worktrees}
 			behind={behind}
-			startsRail={!onTrunk}
+			startsRail
 		/>
 		<GraphGap height={TIP_GAP} behind={behind} />
 	</>

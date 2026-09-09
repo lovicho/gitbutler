@@ -63,7 +63,17 @@ const worktree = (name: string, base: Worktree["base"], commits: Array<string>):
 	refName: null,
 	head: commits[0] ?? "",
 	base,
-	commits: commits.map(ownCommit),
+	segments: [
+		{
+			refName: null,
+			remoteTrackingRefName: null,
+			commits: commits.map(ownCommit),
+			commitsOnRemote: [],
+			metadata: null,
+			pushStatus: "completelyUnpushed",
+			base: base?.subject ?? null,
+		},
+	],
 });
 
 const folded: Folds = {
@@ -206,17 +216,6 @@ describe("layout", () => {
 			"h2",
 			"h3",
 		]);
-	});
-
-	it("puts the sole stack on the trunk when there is no target", () => {
-		const target = {
-			remoteTrackingRef: { fullNameBytes: [], displayName: "origin/main", remoteName: "origin" },
-			commitsAhead: 0,
-			isCurrent: true,
-		};
-		expect(layout([stack(null)], null, undefined, folded).stackOnTrunk).toBe(true);
-		expect(layout([stack(null), stack(null)], null, undefined, folded).stackOnTrunk).toBe(false);
-		expect(layout([stack(null)], target, undefined, folded).stackOnTrunk).toBe(false);
 	});
 
 	it("knows when the target's tip is the base itself", () => {

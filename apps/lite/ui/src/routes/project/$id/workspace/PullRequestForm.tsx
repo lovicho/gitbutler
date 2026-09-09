@@ -642,7 +642,6 @@ export const PullRequestDescription: FC<{
 					reactors={reviewReactions.reactors}
 					myLogin={currentLogin}
 					onToggle={toggleReaction}
-					suggest
 				/>
 			)}
 		</div>
@@ -664,6 +663,7 @@ const mergeBlockedReason = (mergeStatus: ReviewMergeStatus | undefined): string 
 		case "draft":
 			return "Draft pull requests cannot be merged";
 		case "unknown":
+		case "checking":
 		case null:
 			return "Mergeability not yet determined by the forge";
 		default:

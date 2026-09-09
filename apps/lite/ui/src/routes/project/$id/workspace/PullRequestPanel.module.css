@@ -98,9 +98,17 @@
 	color: var(--text-1);
 }
 
+/* Only in a reviewer row does the user fill the line, so the verdict icon and
+   remove button sit at the end and the login truncates before them. The
+   description's meta line reuses this component and must flow inline. */
+.reviewerRow > .user {
+	flex: 1;
+}
+
 /* A long login truncates rather than wrapping the row to two lines; the row's
    title carries the full name. */
 .userLogin {
+	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -109,12 +117,22 @@
 .reviewerRow {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
 	padding-inline-end: 3px;
 	gap: 8px;
 
 	& > svg {
 		flex-shrink: 0;
+	}
+}
+
+.reviewerRemove {
+	flex-shrink: 0;
+	opacity: 0;
+	transition: opacity var(--transition-fast);
+
+	.reviewerRow:hover &,
+	&:focus-visible {
+		opacity: 1;
 	}
 }
 

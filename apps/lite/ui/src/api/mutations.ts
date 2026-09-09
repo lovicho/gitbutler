@@ -1,3 +1,4 @@
+import { forgeAuthTags } from "#ui/forge.ts";
 import { decodeBytes, encodeBytes } from "#ui/api/bytes.ts";
 import { remapSearchBranch, remapSearchCommits, setCursor } from "#ui/use-cursor.ts";
 import { getHeadInfoIndex } from "#ui/api/ref-info.ts";
@@ -13,8 +14,10 @@ import {
 	listReviewSubmissionsQueryOptions,
 	listReviewThreadsQueryOptions,
 	listReviewReactionsQueryOptions,
+	reviewerCandidatesQueryOptions,
 	treeChangeDiffsQueryOptions,
 	workspaceFetchQueryOptions,
+	workspaceTargetCommitsQueryOptions,
 } from "#ui/api/queries.ts";
 import { shortCommitId } from "#ui/commit.ts";
 import {
@@ -60,6 +63,7 @@ import type { GUISettings } from "#electron/settings.ts";
 import { moveDraftPR } from "#ui/pr.ts";
 import { invalidateTags } from "#ui/api/tags.ts";
 import { presentableOperation } from "#ui/snapshot.ts";
+import { sameLogin } from "#ui/review-users.ts";
 
 declare module "@tanstack/react-query" {
 	interface Register {
@@ -632,11 +636,44 @@ export const useRemoveSubmissionReaction = (projectId: string) =>
 		},
 	});
 
+/**
+ * The requested reviewer joins the single-review cache the panel renders
+ * from. The candidate listing the picker was built from supplies the full
+ * user, so the row carries the real id and avatar before the forge answers.
+ */
 export const useRequestReview = (projectId: string) =>
 	useMutation({
 		mutationKey: [projectId, "requestReview"],
 		mutationFn: window.lite.requestReview,
 		meta: { failureTitle: "Failed to request review" },
+		onMutate: async (input, ctx) => {
+			const key = getReviewQueryOptions(input).queryKey;
+			await ctx.client.cancelQueries({ queryKey: key });
+
+			const prev = ctx.client.getQueryData(key);
+			const candidates =
+				ctx.client.getQueryData(reviewerCandidatesQueryOptions(input.projectId).queryKey) ?? [];
+			ctx.client.setQueryData(key, (review) => {
+				if (review === undefined) return undefined;
+				const added = [...new Set(input.logins)]
+					.filter((login) => !review.reviewers.some((reviewer) => sameLogin(reviewer.login, login)))
+					.map(
+						(login) =>
+							candidates.find((candidate) => sameLogin(candidate.login, login)) ??
+							ghostForgeUser(login),
+					);
+				return { ...review, reviewers: review.reviewers.concat(added) };
+			});
+
+			return prev;
+		},
+		onError: (error, input, prev, ctx) => {
+			// Roll the optimistic write back, then refetch: the rollback snapshot
+			// may itself be stale by now.
+			const key = getReviewQueryOptions(input).queryKey;
+			if (prev) ctx.client.setQueryData(key, prev);
+			void ctx.client.invalidateQueries({ queryKey: key });
+		},
 	});
 
 export const useWithdrawReviewRequest = (projectId: string) =>
@@ -644,6 +681,31 @@ export const useWithdrawReviewRequest = (projectId: string) =>
 		mutationKey: [projectId, "withdrawReviewRequest"],
 		mutationFn: window.lite.withdrawReviewRequest,
 		meta: { failureTitle: "Failed to withdraw review request" },
+		onMutate: async (input, ctx) => {
+			const key = getReviewQueryOptions(input).queryKey;
+			await ctx.client.cancelQueries({ queryKey: key });
+
+			const prev = ctx.client.getQueryData(key);
+			ctx.client.setQueryData(key, (review) =>
+				review === undefined
+					? undefined
+					: {
+							...review,
+							reviewers: review.reviewers.filter(
+								(reviewer) => !input.logins.includes(reviewer.login),
+							),
+						},
+			);
+
+			return prev;
+		},
+		onError: (error, input, prev, ctx) => {
+			// Roll the optimistic write back, then refetch: the rollback snapshot
+			// may itself be stale by now.
+			const key = getReviewQueryOptions(input).queryKey;
+			if (prev) ctx.client.setQueryData(key, prev);
+			void ctx.client.invalidateQueries({ queryKey: key });
+		},
 	});
 
 export const useCreateReviewComment = (projectId: string) =>
@@ -862,6 +924,7 @@ export const useForgetGithubAccount = () =>
 		mutationKey: ["forgetGithubAccount"],
 		mutationFn: window.lite.forgetGithubAccount,
 		meta: { failureTitle: "Failed to forget account" },
+		onSuccess: (_data, _variables, _context, { client }) => invalidateTags(client, forgeAuthTags),
 	});
 
 export const useForgetGitlabAccount = () =>
@@ -869,6 +932,7 @@ export const useForgetGitlabAccount = () =>
 		mutationKey: ["forgetGitlabAccount"],
 		mutationFn: window.lite.forgetGitlabAccount,
 		meta: { failureTitle: "Failed to forget account" },
+		onSuccess: (_data, _variables, _context, { client }) => invalidateTags(client, forgeAuthTags),
 	});
 
 export const useForgetBitbucketAccount = () =>
@@ -876,6 +940,7 @@ export const useForgetBitbucketAccount = () =>
 		mutationKey: ["forgetBitbucketAccount"],
 		mutationFn: window.lite.forgetBitbucketAccount,
 		meta: { failureTitle: "Failed to forget account" },
+		onSuccess: (_data, _variables, _context, { client }) => invalidateTags(client, forgeAuthTags),
 	});
 
 export const useStoreGithubPat = () =>
@@ -883,6 +948,7 @@ export const useStoreGithubPat = () =>
 		mutationKey: ["storeGithubPat"],
 		mutationFn: window.lite.storeGithubPat,
 		meta: { failureTitle: "Failed to add GitHub account" },
+		onSuccess: (_data, _variables, _context, { client }) => invalidateTags(client, forgeAuthTags),
 	});
 
 export const useStoreGitlabPat = () =>
@@ -890,6 +956,7 @@ export const useStoreGitlabPat = () =>
 		mutationKey: ["storeGitlabPat"],
 		mutationFn: window.lite.storeGitlabPat,
 		meta: { failureTitle: "Failed to add GitLab account" },
+		onSuccess: (_data, _variables, _context, { client }) => invalidateTags(client, forgeAuthTags),
 	});
 
 export const useStoreBitbucketApiToken = () =>
@@ -897,6 +964,7 @@ export const useStoreBitbucketApiToken = () =>
 		mutationKey: ["storeBitbucketApiToken"],
 		mutationFn: window.lite.storeBitbucketApiToken,
 		meta: { failureTitle: "Failed to add Bitbucket account" },
+		onSuccess: (_data, _variables, _context, { client }) => invalidateTags(client, forgeAuthTags),
 	});
 
 export const useDeleteProject = (projectId: string) =>
@@ -1275,7 +1343,17 @@ export const useWorkspaceIntegrateUpstream = () => {
 	return useMutation({
 		mutationFn: window.lite.workspaceIntegrateUpstream,
 		onSuccess: (response, input, _context, mutation) => {
+			if (input.dryRun) return;
 			syncCoreCaches(mutation.client, dispatch, input.projectId, response);
+			const queryKey = workspaceTargetCommitsQueryOptions(input.projectId).queryKey;
+			if (response.targetCommits != null)
+				mutation.client.setQueryData(queryKey, response.targetCommits);
+
+			void mutation.client.invalidateQueries({
+				queryKey,
+				predicate: (query) =>
+					response.targetCommits == null || query.queryKey.length > queryKey.length,
+			});
 		},
 		onError: (error, input) => {
 			toastManager.add({

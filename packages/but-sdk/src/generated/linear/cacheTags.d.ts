@@ -24,6 +24,7 @@ export declare const apiProvides: {
 	readonly getReview: readonly ["Reviews"];
 	readonly getReviewMergeStatus: readonly ["MergeStatus"];
 	readonly getWorkspaceFile: readonly [];
+	readonly getWorkspaceFileFromSource: readonly [];
 	readonly headInfo: readonly ["Workspace"];
 	readonly listCiChecks: readonly ["Checks"];
 	readonly listCommentReactions: readonly ["CommentReactions"];
@@ -89,6 +90,7 @@ export declare const apiInvalidates: {
 };
 
 export declare const watcherInvalidates: {
+	readonly externalInvalidation: readonly [];
 	readonly gitActivity: readonly ["Branches", "TargetCommits", "Workspace", "Commits", "Diffs", "WorktreeChanges", "Worktrees", "AbsorptionPlan", "Comments"];
 	readonly gitFetch: readonly ["Branches", "TargetCommits", "FetchStatus", "Reviews"];
 	readonly gitHead: readonly ["OperatingMode"];

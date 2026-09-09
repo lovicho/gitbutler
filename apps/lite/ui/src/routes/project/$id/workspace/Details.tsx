@@ -1,3 +1,5 @@
+import { forgeAuthFailure, forgeDestination, isCloudForge } from "#ui/forge.ts";
+import { ForgeAuthPrompt } from "./ForgeAuthPrompt.tsx";
 import { ResizeHandle } from "#ui/components/ResizeHandle.tsx";
 import { startAbsorb, setCursor, useCanShowFiles, useSelection } from "#ui/use-cursor.ts";
 import uiStyles from "#ui/components/ui.module.css";
@@ -26,6 +28,7 @@ import {
 	commentsQueryOptions,
 	commitConflictsQueryOptions,
 	commitDetailsWithLineStatsQueryOptions,
+	forgeAccountsQueryOptions,
 	forgeInfoOptions,
 	getReviewQueryOptions,
 	guiSettingsQueryOptions,
@@ -41,10 +44,8 @@ import {
 	SeenOnArrivalContext,
 	useMarkReviewSeenOnView,
 	usePrNotificationsLevel,
-	useReviewUnread,
 	useSeenOnArrival,
 } from "#ui/review-seen.ts";
-import rowStyles from "./Row.module.css";
 import { decodeBytes } from "#ui/api/bytes.ts";
 import type { ForgeReview, TargetCommitReview, UnifiedPatch } from "@gitbutler/but-sdk";
 import { branchDetailsParams } from "#ui/branch.ts";
@@ -135,6 +136,7 @@ import {
 } from "react";
 import { Group, Panel, useDefaultLayout } from "react-resizable-panels";
 import styles from "./Details.module.css";
+import rowStyles from "./Row.module.css";
 import { diffHotkeys, workspaceHotkeys } from "#ui/hotkeys.ts";
 import { useHotkeys } from "@tanstack/react-hotkeys";
 import {
@@ -423,7 +425,7 @@ const DiffFooter: FC = () => {
 				</>
 			) : (
 				<>
-					<span>Thanks for testing GitButler Nightly! ❤️</span>
+					<span>Thanks for testing GitButler Next Nightly! ❤️</span>
 					<span>
 						We’d love to hear what you think.{" "}
 						<a
@@ -1686,16 +1688,18 @@ const DiffContents: FC<{
 			};
 
 			const loadWorkspaceFile = async (path: string): Promise<FileContents> => {
+				const worktree = fileParent._tag === "UncommittedChanges" ? fileParent.worktree : undefined;
 				const res = await queryClient.fetchQuery(
-					workspaceFileQueryOptions({ projectId, relativePath: path, version }),
+					workspaceFileQueryOptions({ projectId, relativePath: path, version, worktree }),
 				);
 				if (res.content === null || res.mimeType !== null)
 					throw new Error("Could not load file contents from workspace");
 
+				// The key names the checkout too: a path can be read from more than one.
 				return {
 					name: path,
 					contents: res.content,
-					cacheKey: `workspace:${path}:${version}`,
+					cacheKey: `workspace:${worktree ?? ""}:${path}:${version}`,
 				};
 			};
 
@@ -3157,7 +3161,27 @@ const CommitDetails: FC<{
  * an integrated applied branch's stored identity.
  */
 const LandedReviewView: FC<{ projectId: string; reviewId: number }> = ({ projectId, reviewId }) => {
-	const { data: review, isError } = useQuery(getReviewQueryOptions({ projectId, reviewId }));
+	const { data: review, isError, error } = useQuery(getReviewQueryOptions({ projectId, reviewId }));
+	const { data: forgeInfo } = useQuery(forgeInfoOptions(projectId));
+	const destination = forgeDestination(forgeInfo, review?.htmlUrl);
+	const {
+		data: hasAccount,
+		isError: accountsError,
+		isPending: accountsPending,
+	} = useQuery({
+		...forgeAccountsQueryOptions(destination?.name),
+		select: (accounts) => destination !== null && isCloudForge(destination) && accounts.length > 0,
+	});
+	if (destination && accountsError) {
+		return (
+			<div className={classes(styles.loadingTab, "text-13")}>Could not load the pull request.</div>
+		);
+	}
+	if (destination && accountsPending)
+		return <div className={classes(styles.loadingTab, "text-13")}>Loading…</div>;
+	const authFailure = hasAccount === false ? "missing" : forgeAuthFailure(error);
+	if (authFailure !== null)
+		return <ForgeAuthPrompt destination={destination} hasAccount={hasAccount === true} />;
 	if (isError) {
 		return (
 			<div className={classes(styles.loadingTab, "text-13")}>Could not load the pull request.</div>
@@ -3248,10 +3272,8 @@ const BranchTabToggle: FC<{
 	branchTab: BranchTab;
 	setBranchTab: (tab: BranchTab) => void;
 	prDisabled?: boolean;
-	/** Marks the Pull Request tab with an unread-activity dot. */
-	prUnread?: boolean;
 	className?: string;
-}> = ({ branchTab, setBranchTab, prDisabled = false, prUnread = false, className }) => (
+}> = ({ branchTab, setBranchTab, prDisabled = false, className }) => (
 	<ToggleGroup
 		render={<ToggleGroupStyles className={className} />}
 		value={[branchTab]}
@@ -3267,11 +3289,6 @@ const BranchTabToggle: FC<{
 		</Toggle>
 		<Toggle render={<ToggleStyles />} value={"pr" satisfies BranchTab} disabled={prDisabled}>
 			{prDisabled ? "No pull request" : "Pull Request"}
-			{!prDisabled && prUnread && (
-				<span className={rowStyles.unreadDot}>
-					<span className={rowStyles.unreadLabel}>New activity</span>
-				</span>
-			)}
 		</Toggle>
 	</ToggleGroup>
 );
@@ -3473,7 +3490,7 @@ const UnappliedBranchDetails: FC<BranchDetailsProps> = ({
 	// Same query key as the applied branch's, so the two share one listing
 	// rather than polling the forge twice. Reviews are keyed by branch name,
 	// which says nothing about whether the branch is applied.
-	const { data: review } = useQuery({
+	const { data: review, error: reviewError } = useQuery({
 		...listReviewsQueryOptions({ projectId, cacheConfig: "noCache" }),
 		enabled: forgeInfo?.capabilities.prService === true,
 		select: (reviews) => reviews.find((review) => review.sourceBranch === branchName) ?? null,
@@ -3493,8 +3510,26 @@ const UnappliedBranchDetails: FC<BranchDetailsProps> = ({
 				?.review?.number ?? null,
 	});
 	const landedReviewId = listedLandedNumber ?? null;
+	const destination = forgeDestination(forgeInfo, review?.htmlUrl);
+	const {
+		data: hasAccount,
+		isError: accountsError,
+		isPending: accountsPending,
+	} = useQuery({
+		...forgeAccountsQueryOptions(destination?.name),
+		select: (accounts) => destination !== null && isCloudForge(destination) && accounts.length > 0,
+	});
 
-	const reviewTab = review ? (
+	const authFailure = hasAccount === false ? "missing" : forgeAuthFailure(reviewError);
+
+	const needsAuth = forgeInfo?.capabilities.prService && authFailure !== null;
+	const reviewTab = needsAuth ? (
+		<ForgeAuthPrompt destination={destination} hasAccount={hasAccount === true} />
+	) : review && destination && accountsError ? (
+		<div className={classes(styles.loadingTab, "text-13")}>Could not load the pull request.</div>
+	) : review && destination && accountsPending ? (
+		<p className="text-13">Loading…</p>
+	) : review ? (
 		<ReviewView
 			key={review.number}
 			projectId={projectId}
@@ -3505,19 +3540,12 @@ const UnappliedBranchDetails: FC<BranchDetailsProps> = ({
 		<LandedReviewView projectId={projectId} reviewId={landedReviewId} />
 	) : null;
 
-	const notificationsLevel = usePrNotificationsLevel();
-	const prUnread = useReviewUnread(
-		projectId,
-		{ number: review?.number ?? 0, modifiedAt: review?.modifiedAt ?? null },
-		review != null && forgeInfo?.capabilities.prService === true && notificationsLevel !== "off",
-	);
-
 	const chosenTab = useAppSelector((state) =>
 		projectSlice.selectors.selectBranchTab(state, projectId, branchName),
 	);
 	// The review is what the branch is judged by, so a branch that has one —
 	// open or landed — opens on it; without one only the diff is on offer.
-	const branchTab = chosenTab ?? (reviewTab !== null ? "pr" : "diff");
+	const branchTab = chosenTab ?? (review || landedReviewId !== null ? "pr" : "diff");
 	const setBranchTab = (tab: BranchTab) => {
 		dispatch(projectSlice.actions.setSelectedBranchTab({ projectId, branchName, tab }));
 	};
@@ -3550,7 +3578,6 @@ const UnappliedBranchDetails: FC<BranchDetailsProps> = ({
 						branchTab={branchTab}
 						setBranchTab={setBranchTab}
 						prDisabled={reviewTab === null}
-						prUnread={prUnread}
 					/>
 
 					<div className={styles.tabsRowRight}>
@@ -3606,6 +3633,24 @@ const AppliedBranchDetails: FC<BranchDetailsProps> = ({
 	const dispatch = useAppDispatch();
 	const branchRef = decodeBytes(branch.branchRef);
 	const branchName = branchDetailsParams(branchRef).branchName;
+	const { data: reviews, error: reviewError } = useQuery({
+		...listReviewsQueryOptions({ projectId, cacheConfig: "noCache" }),
+		enabled: !!forgeInfo?.capabilities.prService,
+	});
+	const review = reviews?.reviewsBySourceBranch.get(branchName);
+	const destination = forgeDestination(forgeInfo, review?.htmlUrl);
+	const {
+		data: hasAccount,
+		isError: accountsError,
+		isPending: accountsPending,
+		isSuccess: accountsSuccess,
+	} = useQuery({
+		...forgeAccountsQueryOptions(destination?.name),
+		select: (accounts) => destination !== null && isCloudForge(destination) && accounts.length > 0,
+	});
+	const authFailure = hasAccount === false ? "missing" : forgeAuthFailure(reviewError);
+	const canUseForge = accountsSuccess && hasAccount && authFailure === null;
+
 	const chosenTab = useAppSelector((state) =>
 		projectSlice.selectors.selectBranchTab(state, projectId, branchName),
 	);
@@ -3663,21 +3708,7 @@ const AppliedBranchDetails: FC<BranchDetailsProps> = ({
 	const landedReviewId = useLandedReviewId(
 		projectId,
 		branchCtx ? recordedPullRequest(branchCtx.segment) : null,
-		branchTab === "pr" && hasOpenReview === false,
-	);
-
-	// Subscribed regardless of the chosen tab: the dot on the toggle is what
-	// tells a reader parked on the diff that the review moved.
-	const notificationsLevel = usePrNotificationsLevel();
-	const { data: openReview } = useQuery({
-		...listReviewsQueryOptions({ projectId, cacheConfig: "noCache" }),
-		enabled: !!forgeInfo?.capabilities.prService && notificationsLevel !== "off",
-		select: (reviews) => reviews.find((review) => review.sourceBranch === branchName) ?? null,
-	});
-	const prUnread = useReviewUnread(
-		projectId,
-		{ number: openReview?.number ?? 0, modifiedAt: openReview?.modifiedAt ?? null },
-		!!openReview && !!forgeInfo?.capabilities.prService && notificationsLevel !== "off",
+		branchTab === "pr" && hasOpenReview === false && canUseForge,
 	);
 
 	return (
@@ -3686,9 +3717,9 @@ const AppliedBranchDetails: FC<BranchDetailsProps> = ({
 				<BranchTitleRow branchName={branchName} />
 
 				<div className={styles.tabsRow}>
-					<BranchTabToggle branchTab={branchTab} setBranchTab={setBranchTab} prUnread={prUnread} />
+					<BranchTabToggle branchTab={branchTab} setBranchTab={setBranchTab} />
 
-					{branchTab === "pr" && !!forgeInfo?.capabilities.prService && (
+					{branchTab === "pr" && !!forgeInfo?.capabilities.prService && canUseForge && (
 						<Suspense>
 							<SuspenseQuery
 								{...listReviewsQueryOptions({
@@ -3721,7 +3752,13 @@ const AppliedBranchDetails: FC<BranchDetailsProps> = ({
 				{branchTab === "pr" ? (
 					<div className={styles.prTabScroll}>
 						<div className={styles.prTab}>
-							{!forgeInfo?.capabilities.prService ? (
+							{destination && accountsError ? (
+								<div className={classes(styles.loadingTab, "text-13")}>
+									Could not load the pull request.
+								</div>
+							) : destination && accountsPending ? (
+								<p className="text-13">Loading…</p>
+							) : !forgeInfo?.capabilities.prService ? (
 								<NewPullRequestView
 									projectId={projectId}
 									branchName={branchName}
@@ -3729,6 +3766,8 @@ const AppliedBranchDetails: FC<BranchDetailsProps> = ({
 									canSubmit={false}
 									pushFirst={null}
 								/>
+							) : authFailure !== null ? (
+								<ForgeAuthPrompt destination={destination} hasAccount={hasAccount === true} />
 							) : (
 								<SuspenseQuery
 									{...listReviewsQueryOptions({

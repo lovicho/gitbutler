@@ -13,10 +13,11 @@ use tracing::instrument;
 
 use crate::{
     CommitFlags, Graph, Segment, SegmentIndex, SegmentMetadata, Workspace,
+    init::WorktreeTip,
     utils::SegmentTable,
     workspace::{
         Stack, StackCommit, StackCommitFlags, StackSegment, TargetCommit, TargetRef, WorkspaceKind,
-        workspace::{WorkspaceReconciliationInput, WorkspaceState},
+        WorktreeBase, WorktreeStack, workspace::WorkspaceState,
     },
 };
 
@@ -99,36 +100,33 @@ impl Graph {
         err(Debug)
     )]
     pub fn into_workspace(self) -> anyhow::Result<Workspace> {
-        let state = self.to_workspace_state()?;
-        Ok(Workspace::from_state(self, state))
+        let WorkspaceState {
+            id,
+            kind,
+            stacks,
+            lower_bound,
+            lower_bound_segment_id,
+            target_ref,
+            target_commit,
+            metadata,
+            worktrees,
+        } = self.to_workspace_state()?;
+        Ok(Workspace {
+            graph: self,
+            id,
+            kind,
+            stacks,
+            lower_bound,
+            lower_bound_segment_id,
+            target_ref,
+            target_commit,
+            metadata,
+            worktrees,
+        })
     }
 
     pub(crate) fn to_workspace_state(&self) -> anyhow::Result<WorkspaceState> {
         Ok(self.project(self.frame(self.entrypoint()?.segment.id)?))
-    }
-
-    /// The workspace as reconciliation needs it, if the entrypoint is a managed workspace.
-    pub(crate) fn workspace_reconciliation_input(
-        &self,
-    ) -> anyhow::Result<Option<WorkspaceReconciliationInput>> {
-        let WorkspaceState {
-            id,
-            kind: _,
-            stacks,
-            lower_bound: _,
-            lower_bound_segment_id,
-            target_ref,
-            target_commit,
-            metadata,
-        } = self.to_workspace_state()?;
-        Ok(metadata.map(|metadata| WorkspaceReconciliationInput {
-            id,
-            stacks,
-            lower_bound_segment_id,
-            target_ref,
-            target_commit,
-            metadata,
-        }))
     }
 
     fn frame(&self, ws: SegmentIndex) -> anyhow::Result<Frame<'_>> {
@@ -200,6 +198,7 @@ impl Graph {
         let tips = self.stack_tips(&frame);
         let stop = self.stop_set(&frame);
         let lanes = tips.iter().map(|&tip| self.lane(tip, &stop)).collect_vec();
+        let worktree_lanes = self.worktree_lanes(&frame, &lanes);
         let ids = self.stack_ids(&frame, &lanes);
         // The first commit below the target shared by all lanes.
         let (lower_bound, lower_bound_segment_id) = lanes
@@ -209,11 +208,20 @@ impl Graph {
             .and_then(|sidx| self.resolve_to_unambiguously_pointed_to_commit(sidx))
             .map(|(commit, sidx)| (commit.id, sidx))
             .unzip();
-        let remotes = self.remote_reachability(lanes.iter().flat_map(|lane| lane.groups.iter()));
+        let remotes = self.remote_reachability(
+            lanes
+                .iter()
+                .chain(worktree_lanes.iter().map(|(_, lane)| lane))
+                .flat_map(|lane| lane.groups.iter()),
+        );
         let stacks = lanes
             .into_iter()
             .zip(ids)
             .filter_map(|(lane, id)| self.stack(lane, id, &frame, &remotes))
+            .collect();
+        let worktrees = worktree_lanes
+            .into_iter()
+            .map(|(tip, lane)| self.worktree_stack(tip, lane, &stop, &frame, &remotes))
             .collect();
         let target_ref = frame.target_ref.map(|target| TargetRef {
             commits_ahead: TargetRef::commits_ahead(
@@ -232,6 +240,88 @@ impl Graph {
             target_ref,
             target_commit: frame.target_commit,
             metadata: frame.metadata.cloned(),
+            worktrees,
+        }
+    }
+
+    /// One lane per [worktree tip](Graph::worktree_tips), in tip order, each owning what
+    /// neither the workspace lanes, the target, nor an earlier worktree lane does.
+    fn worktree_lanes<'a>(
+        &'a self,
+        frame: &Frame<'_>,
+        stack_lanes: &[Lane],
+    ) -> Vec<(&'a WorktreeTip, Lane)> {
+        fn claim(stop: &mut SegmentTable<bool>, lane: &Lane) {
+            for &sidx in lane.groups.iter().flat_map(|group| group.members.iter()) {
+                stop.set(sidx, true);
+            }
+        }
+        let mut stop = self.stop_set(frame);
+        stop.set(frame.ws, true);
+        for lane in stack_lanes {
+            claim(&mut stop, lane);
+        }
+        let mut lanes = Vec::new();
+        for tip in &self.worktree_tips {
+            let Some(sidx) = self.worktree_tip_segment(tip) else {
+                tracing::warn!(
+                    worktree = %tip.name,
+                    head = %tip.id,
+                    "Worktree tip is not part of the graph, skipping it"
+                );
+                continue;
+            };
+            let lane = self.lane(sidx, &stop);
+            claim(&mut stop, &lane);
+            lanes.push((tip, lane));
+        }
+        lanes
+    }
+
+    /// The segment named by the checked-out branch, or the one owning a detached `HEAD`.
+    fn worktree_tip_segment(&self, tip: &WorktreeTip) -> Option<SegmentIndex> {
+        match &tip.ref_name {
+            Some(name) => self.segment_by_ref_name(name.as_ref()).map(|s| s.id),
+            None => self.segment_id_by_commit_id(tip.id).ok(),
+        }
+    }
+
+    /// A detached `HEAD` names no segment: the first segment is anonymous and the name it sits
+    /// on moves onto its first commit, as it does for a detached entrypoint.
+    fn worktree_stack(
+        &self,
+        tip: &WorktreeTip,
+        lane: Lane,
+        target_stop: &SegmentTable<bool>,
+        frame: &Frame<'_>,
+        remotes: &RemoteReach,
+    ) -> WorktreeStack {
+        let head = lane
+            .groups
+            .first()
+            .and_then(|group| self.tip_skip_empty(group.head))
+            .map_or(tip.id, |commit| commit.id);
+        let base = lane.base.map(|(id, sidx)| {
+            if target_stop.get(sidx) {
+                WorktreeBase::Outside(id)
+            } else {
+                WorktreeBase::InWorkspace(id)
+            }
+        });
+        let mut segments = self.lane_segments(lane, None, true, frame, remotes);
+        if tip.ref_name.is_none()
+            && let Some(first) = segments.first_mut()
+            && let Some(ref_info) = first.ref_info.take()
+            && let Some(commit) = first.commits.first_mut()
+        {
+            commit.refs.push(ref_info);
+        }
+        WorktreeStack {
+            name: tip.name.clone(),
+            ref_name: tip.ref_name.clone(),
+            head,
+            base,
+            segments,
         }
     }
 
@@ -316,20 +406,6 @@ impl Graph {
             })
     }
 
-    fn has_commits(&self, group: &Group) -> bool {
-        group
-            .members
-            .iter()
-            .any(|&sidx| !self[sidx].commits.is_empty())
-    }
-
-    fn commit_ids<'a>(&'a self, group: &'a Group) -> impl Iterator<Item = ObjectId> + 'a {
-        group
-            .members
-            .iter()
-            .flat_map(|&sidx| self[sidx].commits.iter().map(|c| c.id))
-    }
-
     /// The id of the first metadata stack naming one of the segments of each lane, preferring
     /// segment names over refs on commits and applied stacks over unapplied ones. Ids are handed
     /// out once, in lane order.
@@ -406,14 +482,28 @@ impl Graph {
         frame: &Frame<'_>,
         remotes: &RemoteReach,
     ) -> Option<Stack> {
-        let groups = self.retained_groups(lane.groups, frame, id);
-        let segments = groups
+        let keep_first = !frame.kind.has_managed_ref();
+        let segments = self.lane_segments(lane, id, keep_first, frame, remotes);
+        (!segments.is_empty()).then_some(Stack { id, segments })
+    }
+
+    fn lane_segments(
+        &self,
+        lane: Lane,
+        id: Option<StackId>,
+        keep_first: bool,
+        frame: &Frame<'_>,
+        remotes: &RemoteReach,
+    ) -> Vec<StackSegment> {
+        let groups = self.retained_groups(lane.groups, frame, id, keep_first);
+        groups
             .iter()
             .enumerate()
             .map(|(idx, group)| {
                 let above = groups[..idx]
                     .iter()
-                    .flat_map(|g| self.commit_ids(g))
+                    .flat_map(|g| g.members.iter())
+                    .flat_map(|&sidx| self[sidx].commits.iter().map(|c| c.id))
                     .collect();
                 let base = match groups.get(idx + 1) {
                     Some(next) => (
@@ -428,16 +518,16 @@ impl Graph {
                 let early_end = lane.early_end && idx + 1 == groups.len();
                 self.stack_segment(group, base, early_end, frame, remotes, &above)
             })
-            .collect_vec();
-        (!segments.is_empty()).then_some(Stack { id, segments })
+            .collect_vec()
     }
 
-    /// Empty segments are shown only if metadata asks for them, or in a plain branch's own view.
+    /// Empty segments are shown only if metadata asks for them, or as the first if `keep_first`.
     fn retained_groups(
         &self,
         groups: Vec<Group>,
         frame: &Frame<'_>,
         id: Option<StackId>,
+        keep_first: bool,
     ) -> Vec<Group> {
         let own_metadata = id.and_then(|id| {
             frame
@@ -467,8 +557,11 @@ impl Graph {
             .into_iter()
             .enumerate()
             .filter(|(idx, group)| {
-                self.has_commits(group)
-                    || (*idx == 0 && !frame.kind.has_managed_ref())
+                group
+                    .members
+                    .iter()
+                    .any(|&sidx| !self[sidx].commits.is_empty())
+                    || (*idx == 0 && keep_first)
                     || self[group.head].ref_name().is_some_and(wanted_by_metadata)
             })
             .map(|(_, group)| group)
@@ -487,27 +580,18 @@ impl Graph {
         let head = &self[group.head];
         let remote = head.remote_tracking_ref_name.as_ref();
         let keep_any_name = !frame.kind.has_managed_ref();
-        let num_commits: usize = group
-            .members
-            .iter()
-            .map(|&sidx| self[sidx].commits.len())
-            .sum();
-        let commits = group
+        let mut commits: Vec<_> = group
             .members
             .iter()
             .flat_map(|&sidx| self[sidx].commits.iter().map(move |c| (sidx, c)))
-            .enumerate()
-            .map(|(idx, (sidx, commit))| StackCommit {
-                flags: StackCommitFlags::from(commit.flags)
-                    | remotes.flags(sidx, remote)
-                    | if early_end && idx + 1 == num_commits {
-                        StackCommitFlags::EarlyEnd
-                    } else {
-                        StackCommitFlags::empty()
-                    },
+            .map(|(sidx, commit)| StackCommit {
+                flags: StackCommitFlags::from(commit.flags) | remotes.flags(sidx, remote),
                 ..StackCommit::from_graph_commit(commit)
             })
             .collect();
+        if let Some(last) = commits.last_mut().filter(|_| early_end) {
+            last.flags |= StackCommitFlags::EarlyEnd;
+        }
         StackSegment {
             ref_info: head
                 .ref_info
