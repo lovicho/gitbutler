@@ -1348,12 +1348,7 @@ export const useWorkspaceIntegrateUpstream = () => {
 			const queryKey = workspaceTargetCommitsQueryOptions(input.projectId).queryKey;
 			if (response.targetCommits != null)
 				mutation.client.setQueryData(queryKey, response.targetCommits);
-
-			void mutation.client.invalidateQueries({
-				queryKey,
-				predicate: (query) =>
-					response.targetCommits == null || query.queryKey.length > queryKey.length,
-			});
+			else void mutation.client.invalidateQueries({ queryKey });
 		},
 		onError: (error, input) => {
 			toastManager.add({
@@ -1547,4 +1542,11 @@ export const useSaveGUISettings = () =>
 			return await window.lite.writeGUISettings(next);
 		},
 		meta: { failureTitle: "Failed to save settings" },
+	});
+
+export const useSetReviewThreadResolved = (projectId: string) =>
+	useMutation({
+		mutationKey: [projectId, "setReviewThreadResolved"],
+		mutationFn: window.lite.setReviewThreadResolved,
+		meta: { failureTitle: "Failed to change conversation resolution" },
 	});
