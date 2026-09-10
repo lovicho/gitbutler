@@ -97,4 +97,45 @@ test("keeps unread PR activity off the Workspace tab", async ({ appWindow, elect
 	await expect(pages.getByRole("button", { name: "Workspace", exact: true })).toHaveText(
 		"Workspace",
 	);
+	await appWindow.evaluate(() => {
+		const projectId = location.pathname.split("/")[2];
+		if (projectId === undefined) throw new Error("No project in the URL");
+		const key = `pr_activity_inbox:v1:${projectId}`;
+		const entries = JSON.parse(localStorage.getItem(key) ?? "[]") as Array<{
+			id: string;
+			author: string | null;
+			snippet: string | null;
+		}>;
+		const first = entries[0];
+		if (first === undefined) throw new Error("No seeded notification");
+		entries.push({
+			...first,
+			id: "bot-1",
+			author: "copilot-pull-request-reviewer",
+			snippet: "Bot review",
+		});
+		localStorage.setItem(key, JSON.stringify(entries));
+	});
+	await appWindow.reload();
+	await appWindow.getByRole("button", { name: "Notifications, 2 unread" }).click();
+	const switcher = appWindow.getByRole("group", { name: "Notification type" });
+	const humanToggle = switcher.getByRole("button", { name: "Humans (1)", exact: true });
+	const agentToggle = switcher.getByRole("button", { name: "Agents (1)", exact: true });
+	const panel = appWindow.getByRole("dialog").filter({ has: switcher });
+	await expect(humanToggle).toHaveAttribute("aria-pressed", "true");
+	await expect(panel).toContainText("Please take a look");
+	await expect(panel).not.toContainText("Bot review");
+	await humanToggle.focus();
+	await appWindow.keyboard.press("ArrowRight");
+	await expect(agentToggle).toBeFocused();
+	await agentToggle.click();
+	await expect(agentToggle).toHaveAttribute("aria-pressed", "true");
+	await expect(panel).toContainText("Bot review");
+	await expect(panel).not.toContainText("Please take a look");
+	await appWindow.getByRole("button", { name: "Mark all read", exact: true }).click();
+	await expect(switcher.getByRole("button", { name: "Agents", exact: true })).toBeVisible();
+	await expect(humanToggle).toBeVisible();
+	await expect(appWindow.getByRole("button", { name: "Notifications, 1 unread" })).toBeVisible();
+	await humanToggle.click();
+	await expect(panel).toContainText("Please take a look");
 });

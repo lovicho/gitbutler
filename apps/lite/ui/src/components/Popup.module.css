@@ -147,6 +147,17 @@
 	}
 }
 
+/* Holds the list's height where the rows would have been, so the popup does not collapse to the
+   search row with a line under it. The block centres in that height on its own geometry: the two
+   measures the block sizes for a panel are its custom properties, set here for a list. */
+.empty {
+	--empty-state-gap: 18px;
+	--empty-state-counterweight: 0px;
+
+	justify-content: center;
+	min-height: 200px;
+}
+
 .section {
 	display: flex;
 	flex: none;
@@ -206,7 +217,6 @@
 	background: none;
 	color: var(--text-1);
 	text-align: start;
-	cursor: var(--control-cursor);
 
 	/* `data-highlighted` is what Base UI's list primitives set as the keyboard walks them, so
 	   pointer and keyboard land on the same tint. */
@@ -217,7 +227,6 @@
 
 	&:disabled,
 	&[data-disabled] {
-		cursor: not-allowed;
 		opacity: var(--opacity-disabled);
 	}
 }

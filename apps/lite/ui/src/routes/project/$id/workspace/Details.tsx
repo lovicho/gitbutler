@@ -80,10 +80,7 @@ import { TooltipPopup } from "#ui/components/Tooltip.tsx";
 import { useCopied } from "#ui/routes/project/$id/workspace/useCopied.ts";
 import { ToggleGroupStyles, ToggleStyles } from "#ui/components/ToggleGroup.tsx";
 import { OperationSourceC } from "#ui/routes/project/$id/workspace/OperationSourceC.tsx";
-import {
-	PullRequestComments,
-	ReviewTimeline,
-} from "#ui/routes/project/$id/workspace/PullRequestComments.tsx";
+import { PullRequestComments } from "#ui/routes/project/$id/workspace/PullRequestComments.tsx";
 import {
 	NewPullRequestPanel,
 	PullRequestPanel,
@@ -1879,7 +1876,7 @@ const DiffContents: FC<{
             --mix-selection-light: 0%;
             --mix-selection-dark: 0%;
 
-            cursor: default;
+            cursor: var(--control-cursor);
           }
 
           [data-column-number][data-selected-line]:is(
@@ -2764,9 +2761,6 @@ const Diff: FC<{
 						reviewedPaths={reviewedFilePaths}
 						canUncommit={!isCommitUncommitChangesPending}
 						uncommit={uncommit}
-						emptyLabel={
-							filesFilter !== null && filesItems.length > 0 ? "No matching files." : undefined
-						}
 						ref={filesTreeRef}
 					/>
 				</div>
@@ -3371,13 +3365,7 @@ const ReviewLayout: FC<{
 				{hasConversation && <PullRequestComments projectId={projectId} review={review} />}
 			</div>
 
-			<PullRequestPanel
-				projectId={projectId}
-				review={review}
-				activity={
-					hasConversation ? <ReviewTimeline projectId={projectId} review={review} /> : undefined
-				}
-			/>
+			<PullRequestPanel projectId={projectId} review={review} />
 		</div>
 	);
 };

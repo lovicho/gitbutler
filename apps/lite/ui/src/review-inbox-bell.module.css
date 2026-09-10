@@ -27,9 +27,6 @@
 }
 
 .panelHeader {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
 	padding: 10px 12px;
 	border-bottom: 1px solid var(--border-3);
 }
@@ -49,7 +46,17 @@
 	text-align: center;
 }
 
+.switcher {
+	display: flex;
+	flex-shrink: 0;
+	align-items: center;
+	justify-content: space-between;
+	padding: 8px 12px;
+	border-bottom: 1px solid var(--border-3);
+}
+
 .list {
+	min-height: 0;
 	overflow-y: auto;
 }
 

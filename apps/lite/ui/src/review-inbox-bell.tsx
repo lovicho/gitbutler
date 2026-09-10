@@ -9,6 +9,8 @@
 
 import { forgeInfoOptions, headInfoQueryOptions } from "#ui/api/queries.ts";
 import { Icon } from "#ui/components/Icon.tsx";
+import { ToggleGroupStyles, ToggleStyles } from "#ui/components/ToggleGroup.tsx";
+import { Toggle, ToggleGroup } from "@base-ui/react";
 import type { IconName } from "#ui/components/iconNames.ts";
 import { RelativeTime } from "#ui/components/RelativeTime.tsx";
 import { classes } from "#ui/components/classes.ts";
@@ -19,7 +21,7 @@ import {
 	inboxKindAttention,
 	markInboxSeen,
 	useInboxEntries,
-	useInboxUnseenCount,
+	isBotEntry,
 	type InboxEntry,
 	type InboxKind,
 } from "#ui/review-inbox.ts";
@@ -28,6 +30,8 @@ import { Dropdown } from "#ui/components/Popup.tsx";
 import { useQuery } from "@tanstack/react-query";
 import { useState, type FC } from "react";
 import styles from "./review-inbox-bell.module.css";
+
+type NotificationType = "humans" | "agents";
 
 const kindIcon: Record<InboxKind, IconName> = {
 	comment: "text-block",
@@ -105,12 +109,19 @@ const Entry: FC<{
  */
 export const NotificationBell: FC<{ projectId: string }> = ({ projectId }) => {
 	const [open, setOpen] = useState(false);
+	const [tab, setTab] = useState<NotificationType>("humans");
 	const { data: forgeInfo } = useQuery(forgeInfoOptions(projectId));
 	// Unconditional: behind `&&` the hook count would change mid-mount.
 	const level = usePrNotificationsLevel();
 	const shown = level === "loud" && !!forgeInfo?.capabilities.prService;
-	const entries = useInboxEntries(projectId, shown);
-	const unseen = useInboxUnseenCount(projectId, shown);
+	const allEntries = useInboxEntries(projectId, shown);
+	const humanEntries = allEntries.filter((entry) => !isBotEntry(entry));
+	const agentEntries = allEntries.filter(isBotEntry);
+	const humanUnseen = humanEntries.filter((entry) => !entry.seen).length;
+	const agentUnseen = agentEntries.filter((entry) => !entry.seen).length;
+	const unseen = humanUnseen + agentUnseen;
+	const entries = tab === "agents" ? agentEntries : humanEntries;
+	const tabUnseen = tab === "agents" ? agentUnseen : humanUnseen;
 	const { data: appliedRefs } = useQuery({
 		...headInfoQueryOptions(projectId),
 		select: appliedRefsByName,
@@ -138,21 +149,51 @@ export const NotificationBell: FC<{ projectId: string }> = ({ projectId }) => {
 		>
 			<div className={styles.panelHeader}>
 				<span className={classes("text-12", "text-semibold")}>Notifications</span>
-				{unseen > 0 && (
+			</div>
+			<div className={styles.switcher}>
+				<ToggleGroup
+					render={<ToggleGroupStyles />}
+					aria-label="Notification type"
+					value={[tab]}
+					onValueChange={([next]) => {
+						if (next !== undefined) setTab(next);
+					}}
+				>
+					<Toggle
+						render={<ToggleStyles size="small" />}
+						value={"humans" satisfies NotificationType}
+					>
+						Humans{humanUnseen > 0 && ` (${humanUnseen})`}
+					</Toggle>
+					<Toggle
+						render={<ToggleStyles size="small" />}
+						value={"agents" satisfies NotificationType}
+					>
+						Agents{agentUnseen > 0 && ` (${agentUnseen})`}
+					</Toggle>
+				</ToggleGroup>
+				{tabUnseen > 0 && (
 					<button
 						className={classes("text-12", styles.markAll)}
-						onClick={() => markInboxSeen(projectId)}
+						onClick={() =>
+							markInboxSeen(
+								projectId,
+								entries.map((entry) => entry.id),
+							)
+						}
 						type="button"
 					>
 						Mark all read
 					</button>
 				)}
 			</div>
-			{entries.length === 0 ? (
-				<div className={classes("text-12", styles.empty)}>Nothing yet</div>
-			) : (
-				<div className={styles.list}>
-					{entries.map((entry) => (
+			<div className={styles.list}>
+				{entries.length === 0 ? (
+					<div className={classes("text-12", styles.empty)}>
+						{tab === "agents" ? "No agent notifications yet" : "No human notifications yet"}
+					</div>
+				) : (
+					entries.map((entry) => (
 						<Entry
 							key={entry.id}
 							projectId={projectId}
@@ -160,9 +201,9 @@ export const NotificationBell: FC<{ projectId: string }> = ({ projectId }) => {
 							appliedRefs={appliedRefs}
 							onNavigate={() => setOpen(false)}
 						/>
-					))}
-				</div>
-			)}
+					))
+				)}
+			</div>
 		</Dropdown>
 	);
 };

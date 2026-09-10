@@ -5,6 +5,32 @@ an on-brand choice without opening Figma. Rules here are about how the UI
 should look and read. The tooling that enforces them — scripts, generated
 files, commands — lives in `apps/lite/AGENTS.md`.
 
+## Components
+
+**Build from the library.** Every control users touch — a button, a switch, a
+segmented toggle, a popup — already has a component in `ui/src/components/`,
+with a spec in the ⚛️ Lite Core Figma library or a Storybook story. Reach for
+those first, even when hand-styling a primitive in the feature's own CSS module
+would be quicker. The point of a library is that the app reads as one thing;
+each control styled locally is one that will drift, and one more that has to
+be found and reconciled when the design moves.
+
+**If the library lacks it, think twice, then ask.** A missing component is a
+design question before it is an engineering one. Check whether an existing one
+fits with a variant or a prop — a small size, an icon-only mode — and if
+nothing does, ask the designer before building. The answer may be a new
+library component with a spec, or it may be that the surface should use
+something we already have.
+
+**A custom control needs a reason.** Sometimes a one-off is right. When it is,
+the code should say why: what the library could not do, and why that mattered
+here. A custom control with no motivation in the commit or a comment is a bug
+waiting for a redesign, not a decision.
+
+**New components are documented.** Anything that graduates into
+`ui/src/components/` gets a story and, once the designer has drawn it, a
+Figma spec. A component that lives only in code is half a component.
+
 ## Emphasis
 
 **Gray highlights, pop points.** Gray is the workhorse: when a control needs to
@@ -61,15 +87,19 @@ over buttons, menus and rows; the hand is a web convention for links out to a
 page. Whoever wants the hand anyway turns it on in Appearance, and the harness
 panel takes it always, being part of a web page. Both go through one property:
 the host sets `--control-cursor` on its root, and `control-cursor.css` puts it
-on buttons, links, `summary` and the button, menu-item and option roles. Don't
-set `cursor: pointer` on a control, and don't pin `cursor: default` on one
-either — both defeat the setting. Don't reintroduce the hand by resetting a
-`<button>`: the browser default for buttons is already the arrow. A clickable
-that is none of those elements (a folded card, a minimap badge) takes
-`cursor: var(--control-cursor)` itself. Interactivity is shown by the hover
-state, not the cursor. The cursors that do change are the ones that describe a
-gesture: `text` over editable text, `grab` and `grabbing` while dragging, the
-resize cursors on a splitter, and `not-allowed` on a disabled control.
+on every control in one rule — buttons, links, `summary`, `select`, a `label`
+that owns a control, and the roles Base UI renders when it draws a control as a
+span or a div: button, checkbox, switch, radio, tab, option and the menu items.
+The same stylesheet gives a disabled control `not-allowed`, so no component
+does. Don't set `cursor: pointer` on a control, and don't pin `cursor: default`
+on one either — both defeat the setting. Don't reintroduce the hand by
+resetting a `<button>`: the browser default for buttons is already the arrow.
+A clickable that is none of those elements (a list row, a folded card, a
+minimap badge, a diff line number) takes `cursor: var(--control-cursor)`
+itself. Interactivity is shown by the hover state, not the cursor. The cursors
+that do change are the ones that describe a gesture: `text` over editable
+text, `grab` and `grabbing` while dragging, and the resize cursors on a
+splitter.
 
 ## Motion
 
@@ -193,11 +223,25 @@ same wording as the menu item or button elsewhere that does the same thing.
 title, a body line, and an actions slot. Its description in Figma carries the
 same rules as this section; change one and change the other.
 
-**It is for a surface that is genuinely empty, at rest.** Not a loading state —
-"not loaded" is not the same as "nothing to report", and a panel that claims an
-emptiness it hasn't checked yet will flash the wrong words on every open. Not a
-filter that matched nothing either: that belongs in a line where the list would
-be, next to the filter that caused it.
+**It is for a surface that is empty, once the app knows it is.** Not a loading
+state — "not loaded" is not the same as "nothing to report", and a panel that
+claims an emptiness it hasn't checked yet will flash the wrong words on every
+open.
+
+**A filter that matched nothing is empty too, and says so.** In a panel with
+room for it — the branches tab — it takes the block, with the title naming the
+miss and the body quoting what missed: the search, the filters, or both. The
+one action shows everything again, because the filters live in a native menu
+the block cannot point at. A short strip keeps the line where its rows would
+be, next to the filter that caused it. A picker's list takes a smaller block,
+`PopupEmpty`: the shrugging character over the one line that reports the miss,
+with no title above it, the line closer under the illustration, and no
+counterweight, because a line has no weight to lift. The same rule as the
+branches tab picks the drawing and the line: a list with nothing in it before
+anything was typed gets the cactus and says what that means — "Nothing left to
+apply" — since nothing was searched for and "found" would be the wrong word. A
+dropdown no wider than its trigger keeps the plain line: the commit target
+combobox is too narrow for the drawing.
 
 **Never a stand-in that looks like content.** Gray avatar circles and text
 bars where the reviewers would go are what every app draws while it is still
