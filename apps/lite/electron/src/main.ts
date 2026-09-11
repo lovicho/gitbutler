@@ -1,3 +1,4 @@
+import { posthogHost } from "./telemetry.js";
 import { checkForUpdates, registerUpdater, setAutoUpdateEnabled } from "./updater.js";
 import WatcherManager from "./watcher.js";
 import * as sdk from "@gitbutler/but-sdk";
@@ -46,7 +47,13 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { initLogging } from "./logging.js";
 import { type GUISettings, readSettings, writeSettings } from "./settings.js";
-import { initMetrics, metricsOnLogin, shutdownMetrics, withApiCommandCapture } from "./metrics.js";
+import {
+	initMetrics,
+	metricsOnLogin,
+	reportError,
+	shutdownMetrics,
+	withApiCommandCapture,
+} from "./metrics.js";
 import { apiParamNames } from "@gitbutler/but-sdk/api-param-names";
 
 const isHeadless = process.env.GITBUTLER_LITE_HEADLESS === "true";
@@ -175,8 +182,7 @@ const configureAskpass = (): void => {
 	try {
 		askpassInit((err, event) => {
 			if (err) {
-				// oxlint-disable-next-line no-console
-				console.error(`Error encountered while initializing askpass:\n${err}`);
+				reportError(err, "Failed to initialize askpass");
 				return;
 			}
 
@@ -187,8 +193,7 @@ const configureAskpass = (): void => {
 				window.webContents.send("askpassPrompt", event);
 		});
 	} catch (err) {
-		// oxlint-disable-next-line no-console
-		console.error(`Error encountered while configuring askpass:\n${String(err)}`);
+		reportError(err, "Failed to configure askpass");
 	}
 };
 
@@ -302,6 +307,7 @@ const electronHandlerOverrides = {
 	clipboardWriteText: (text) => clipboard.writeText(text),
 	getAppSettings: () => sdk.getAppSettings(),
 	getVersion: () => app.getVersion(),
+	isPackaged: () => app.isPackaged,
 	openInWebBrowser: (url) => {
 		// shell.openExternal() is powerful and dangerous. For example, on macOS you can launch a
 		// program with shell.openExternal("file:///Applications/Numbers.app"). Similarly bad
@@ -475,8 +481,7 @@ const completeLogin = async (url: URL): Promise<boolean> => {
 		const profile = await sdk.loginAndPersist(accessToken);
 		void metricsOnLogin(profile);
 	} catch (error) {
-		// oxlint-disable-next-line no-console
-		console.error("Failed to sign in from a login link", error);
+		reportError(error, "Failed to sign in from a login link");
 	}
 	return true;
 };
@@ -614,17 +619,24 @@ if (!app.requestSingleInstanceLock()) {
 
 export const start = async (shellEnvironment: Promise<Record<string, string>>): Promise<void> => {
 	await app.whenReady();
+	// Creating the default session lets Electron prewarm the first renderer while startup continues.
+	void session.defaultSession;
 	initLogging();
 	Object.assign(process.env, await shellEnvironment);
-	applyGUISettings(await readSettings());
 	await initApplicationNamespace(null);
+	if (app.isPackaged) {
+		const channel = process.env.CHANNEL;
+		await initMetrics(
+			app.getVersion(),
+			"production",
+			channel === "nightly" || channel === "release" ? channel : "dev",
+		);
+	}
+
+	applyGUISettings(await readSettings());
 	configureAskpass();
 
 	if (app.isPackaged) {
-		// Packaged-only so dev builds send nothing, and awaited so the client
-		// exists before the IPC handlers and the launch-link login below run.
-		await initMetrics(app.getVersion());
-
 		registerLiteProtocolHandler();
 
 		// Basic non-Strict CSP based on https://cheatsheetseries.owasp.org/cheatsheets/Content_Security_Policy_Cheat_Sheet.html#basic-non-strict-csp-policy
@@ -633,7 +645,7 @@ export const start = async (shellEnvironment: Promise<Record<string, string>>): 
 			"script-src 'self' 'wasm-unsafe-eval';" +
 			"style-src 'self' 'unsafe-inline';" +
 			"font-src 'self';" +
-			"connect-src 'self';" +
+			`connect-src 'self' ${posthogHost};` +
 			"object-src 'none';" +
 			"base-uri 'none';" +
 			"frame-ancestors 'none';" +
@@ -669,7 +681,7 @@ export const start = async (shellEnvironment: Promise<Record<string, string>>): 
 			"style-src 'self' 'unsafe-inline';" +
 			"font-src 'self';" +
 			// ws source for HMR
-			"connect-src 'self' ws://127.0.0.1:5173;" +
+			`connect-src 'self' ws://127.0.0.1:5173 ${posthogHost};` +
 			"object-src 'none';" +
 			"base-uri 'none';" +
 			"frame-ancestors 'none';" +

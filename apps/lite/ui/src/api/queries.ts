@@ -716,3 +716,13 @@ export const appSettingsQueryOptions = queryOptions({
 	queryKey: ["appSettings"],
 	queryFn: () => window.lite.getAppSettings(),
 });
+
+export const versionQueryOptions = queryOptions({
+	queryKey: ["version"],
+	queryFn: () => window.lite.getVersion(),
+});
+
+export const isPackagedQueryOptions = queryOptions({
+	queryKey: ["isPackaged"],
+	queryFn: () => window.lite.isPackaged(),
+});
