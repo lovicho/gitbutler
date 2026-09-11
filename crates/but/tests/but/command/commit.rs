@@ -921,7 +921,7 @@ Error: Cannot commit: 1 change could not be applied:
     line 1 depends on foo (xsz)
 
 Hint: to apply these changes, create bar stacked on top of foo and try again:
-  but branch new bar --anchor foo
+  but branch new bar --above foo
 
 "#]]);
 }
@@ -1793,7 +1793,7 @@ Hint: 'A' is a branch. To commit onto it, run `but commit -b A -m "message" [<ch
         .stderr_eq(snapbox::str![[r#"
 Error: Could not find uncommitted change: 'notexist'
 
-Hint: Run `but status` for applicable targets.
+Hint: Run `but diff` for the current change IDs; a hunk ID is `<file>:<hunk>`.
 
 "#]]);
 }
