@@ -1,5 +1,6 @@
 use super::util::{
-    add_dirty_worktree, enable_worktree_manipulation, find_branch, status_json_with_files,
+    add_dirty_worktree, enable_worktree_manipulation, find_branch, status_json,
+    status_json_with_files,
 };
 use crate::utils::{CommandExt as _, Sandbox};
 
@@ -503,6 +504,40 @@ fn non_agent_commit_json_uses_native_result() {
 }
 
 #[test]
+fn commit_json_status_after_includes_committed_files() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+    env.file("status-after.txt", "Some text");
+
+    let output = env
+        .but("commit --no-message --json --status-after")
+        .allow_json()
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let output: serde_json::Value =
+        serde_json::from_slice(&output).expect("commit output should be valid JSON");
+
+    let result = output["result"]
+        .as_object()
+        .expect("status-after result should be an object");
+    assert_eq!(result.len(), 2, "status-after must preserve result shape");
+    assert!(result["commitId"].is_string());
+    assert!(result["changeId"].is_string());
+    assert_eq!(
+        find_branch(&output["status"], "A")["commits"][0]["changes"][0]["filePath"],
+        "status-after.txt",
+        "status-after must include files from the new commit"
+    );
+    assert!(
+        find_branch(&status_json(&env), "A")["commits"][0]["changes"].is_null(),
+        "ordinary JSON status must omit commit files unless requested"
+    );
+}
+
+#[test]
 fn no_args_single_head_message_from_editor() {
     let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
     env.setup_metadata(&["A"]);
@@ -913,6 +948,30 @@ fn bails_on_rejected_specs() {
     env.file("first", "changes");
 
     env.but("commit -m 'add first' -b bar")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: Cannot commit: 1 change could not be applied:
+  first
+    line 1 depends on foo (xsz)
+
+Hint: to apply these changes, create bar stacked on top of foo and try again:
+  but branch new bar --above foo
+
+"#]]);
+}
+
+#[test]
+fn rejected_commit_below_branch_preserves_requested_branch_name() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.file("first", "Some text");
+    env.but("commit -m 'add first' -b foo").assert().success();
+    env.file("first", "changes");
+
+    // The rejected insertion must retain the explicit name in the recovery hint.
+    env.but("commit -m 'change first' --below foo --branch bar")
         .assert()
         .failure()
         .stderr_eq(snapbox::str![[r#"
@@ -1409,52 +1468,6 @@ fn refuses_above_and_below() {
 error: the argument '--above <BRANCH_OR_COMMIT>' cannot be used with '--below <BRANCH_OR_COMMIT>'
 
 Usage: but commit --above <BRANCH_OR_COMMIT> [CHANGES]...
-
-For more information, try '--help'.
-
-Examples:
-  but commit -b <branch> -m "message"                    # commit onto a branch (created if needed)
-  but commit -b <branch> -m "message" <file-or-hunk>...  # commit only the given changes
-  but commit -m "message"                                # commit when only one stack is applied
-
-"#]]);
-}
-
-#[test]
-fn refuses_above_and_branch() {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
-    env.setup_metadata(&["A"]);
-
-    env.but("commit --above dontcare -b")
-        .assert()
-        .failure()
-        .stderr_eq(snapbox::str![[r#"
-error: the argument '--above <BRANCH_OR_COMMIT>' cannot be used with '--branch [<BRANCH>]'
-
-Usage: but commit --above <BRANCH_OR_COMMIT> [CHANGES]...
-
-For more information, try '--help'.
-
-Examples:
-  but commit -b <branch> -m "message"                    # commit onto a branch (created if needed)
-  but commit -b <branch> -m "message" <file-or-hunk>...  # commit only the given changes
-  but commit -m "message"                                # commit when only one stack is applied
-
-"#]]);
-}
-
-#[test]
-fn refuses_below_and_branch() {
-    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
-    env.setup_metadata(&["A"]);
-
-    env.but("commit --below dontcare -b")
-        .assert()
-        .failure()
-        .stderr_eq(snapbox::str![[r#"
-error: the argument '--below <BRANCH_OR_COMMIT>' cannot be used with '--branch [<BRANCH>]'
-
-Usage: but commit --below <BRANCH_OR_COMMIT> [CHANGES]...
 
 For more information, try '--help'.
 
@@ -3360,6 +3373,176 @@ Hint: run `but help` for all commands
 ┴ 0dc3733 (common base) 2000-01-02 add M
 
 Hint: run `but help` for all commands
+
+"#]]);
+}
+
+#[test]
+fn committing_above_another_branch_and_naming_the_new_branch() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+
+    env.but("commit --above A --no-message -b top")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+Created commit orn on new branch 'top'
+
+"#]]);
+
+    env.but("status")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ to [top]
+┊●   orn (no commit message) (no changes)
+┊│
+┊├┄ g0 [A]
+┊●   tpm add A
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    env.but("commit --below A --no-message -b bottom")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+Created commit tqv on new branch 'bottom'
+
+"#]]);
+
+    env.but("status")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ to [top]
+┊●   orn (no commit message) (no changes)
+┊│
+┊├┄ g0 [A]
+┊●   tpm add A
+┊│
+┊├┄ bo [bottom]
+┊●   tqv (no commit message) (no changes)
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}
+
+#[test]
+fn committing_above_another_branch_and_naming_the_new_branch_with_invalid_name() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+    env.setup_metadata(&["A", "B"]);
+
+    env.but("commit --above A --no-message -b B")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: A branch named 'B' is already applied
+
+"#]]);
+
+    env.but("unapply B").assert().success();
+
+    env.but("commit --above A --no-message -b B")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: A branch named 'B' exists but is not applied
+
+"#]]);
+}
+
+#[test]
+fn cannot_split_stack_by_committing_above_on_new_branch() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+
+    env.but("commit -m 'one'").assert().success();
+    env.but("commit -m 'two'").assert().success();
+
+    env.but("status")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ br [a-branch-1]
+┊●   nxy two (no changes)
+┊●   tqv one (no changes)
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    env.but("commit --no-message --above tqv -b new-branch")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: Cannot use `-b/--branch` when committing relative to commits
+
+"#]]);
+
+    env.but("commit --no-message --above tqv -b")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: Cannot use `-b/--branch` when committing relative to commits
+
+"#]]);
+}
+
+#[test]
+fn cannot_split_worktree_by_committing_above_on_new_branch() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("zero-stacks");
+    env.setup_metadata(&[]);
+    enable_worktree_manipulation(&env);
+
+    env.but("wt new").assert().success();
+
+    env.but("status")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ br:@ {worktree uncommitted} (no changes)
+┊├┄ br {a-branch-1}
+├╯
+┊
+┴ 0dc3733 (common base) 2000-01-02 add M
+
+Hint: run `but branch new` to create a new branch to work on
+
+"#]]);
+
+    env.but("commit --no-message --below br -b new-branch")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: Cannot use `-b/--branch` when committing relative to worktrees
+
+"#]]);
+
+    env.but("commit --no-message --below br -b")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: Cannot use `-b/--branch` when committing relative to worktrees
 
 "#]]);
 }

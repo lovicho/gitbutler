@@ -1,10 +1,10 @@
 import { guiSettingsQueryOptions } from "#ui/api/queries.ts";
 import { reportError } from "#ui/error-reporting.ts";
-import { getButtonClassName } from "#ui/components/Button.tsx";
-import { classes } from "#ui/components/classes.ts";
-import { Icon } from "#ui/components/Icon.tsx";
-import { TextLink } from "#ui/components/TextLink.tsx";
-import { TooltipPopup } from "#ui/components/Tooltip.tsx";
+import { getButtonClassName } from "@gitbutler/ui-react/Button.tsx";
+import { classes } from "@gitbutler/ui-react/classes.ts";
+import { Icon } from "@gitbutler/ui-react/Icon.tsx";
+import { TextLink } from "@gitbutler/ui-react/TextLink.tsx";
+import { TooltipPopup } from "@gitbutler/ui-react/Tooltip.tsx";
 import { useCopied } from "#ui/components/useCopied.ts";
 import { defaultSettings } from "#ui/settings.ts";
 import { openLinkExternally } from "#ui/external-link.ts";
@@ -250,6 +250,7 @@ const remarkLiteralTags = () => {
  * - Images inline only from GitHub-operated hosts (which don't expose
  *   request logs to authors, so they can't track viewers); any other host
  *   renders as a link and is never fetched. See {@link isGitHubHostedImage}.
+ * @import import { Markdown } from "#ui/components/Markdown.tsx";
  */
 export const Markdown: FC<{ children: string }> = ({ children }) => (
 	<div className={classes("text-13", "text-body", styles.markdown)}>

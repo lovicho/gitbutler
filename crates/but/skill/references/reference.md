@@ -165,11 +165,16 @@ Cherry-pick commits from unapplied branches into applied branches.
 ```bash
 but pick <commit-sha> --branch <branch>       # Pick specific commit into branch
 but pick <cli-id> --branch <branch>           # Pick using CLI ID (e.g., "nn")
+but pick <commit-sha> --above <branch> -b <new-name>  # Pick onto a new named branch above it
 ```
 
 Name both the source commit and the target branch. Omitting the target prompts
 for one when several branches exist. The source can be a commit SHA (full or
 short) or a CLI ID from `but status`.
+
+`--above` and `--below` are mutually exclusive. With a branch target, either creates a new branch;
+add `-b <new-name>` to name it, or omit the name for a generated one. The name must not already
+exist. `-b` (even without a name) is rejected with commit/worktree targets.
 
 ## Committing
 
@@ -183,13 +188,14 @@ but commit -b <branch> -m "message" <id> <id>  # Commit specific files or hunks 
 but commit -b <branch> -m "msg" -m "body"    # Repeat -m; parts joined by a blank line
 but commit --above <target> -m "message" <id>  # Place the commit above a commit or branch
 but commit --below <target> -m "message" <id>  # Place the commit below a commit or branch
+but commit --above <branch> -b <new-name> -m "message"  # Commit on a new named branch above it
 but commit -b <branch> --no-message <id>     # Commit without a message
 but commit --empty -b <branch> -m "message"  # Insert an empty commit
 ```
 
-**Where the commit goes:** `-b`/`--branch`, `-A`/`--above`, and `-B`/`--below` are mutually exclusive.
+**Where the commit goes:** `-A`/`--above` and `-B`/`--below` are mutually exclusive. With a branch target, combine either with `-b <new-name>` to name the new branch. The name must not already exist; omit it for a generated name. `-b` (even without a name) is rejected with commit/worktree targets.
 
-- `-b <branch>` places the commit at the tip of `<branch>`, creating it as an unstacked branch if it does not exist. `-b` with no value creates a branch with a generated name. Targeting a branch that exists but is not applied is an error — except a branch checked out in a worktree (experimental worktree flag), which is targeted at its tip, as is a worktree named directly.
+- Without `--above`/`--below`, `-b <branch>` places the commit at the tip of `<branch>`, creating it as an unstacked branch if it does not exist. `-b` with no value creates a branch with a generated name. Targeting a branch that exists but is not applied is an error — except a branch checked out in a worktree (experimental worktree flag), which is targeted at its tip, as is a worktree named directly.
 - `--above <commit>` / `--below <commit>` insert relative to a commit on that commit's branch. Against a branch, they create a new branch above/below it. Against a worktree (experimental worktree flag), `--below` targets the tip of its checked-out branch and `--above` is refused.
 - With no branches applied, a new branch is created. With one applied stack, the commit goes to its top branch's tip. With more than one stack, a targeting flag is **required** — otherwise the command fails with "Unclear where to commit. Found more than one stack". The gate is stacks, not branches: several branches stacked together take an untargeted commit on the stack's top branch.
 
@@ -286,11 +292,12 @@ but move <commit> --above <target-commit>          # Place above target (newer)
 but move <commit> <commit> --below <target-commit> # Move an adjacent block in one command
 but move <commit> <commit> --above <target-commit> # Same block move, anchored from the other side
 but move <commit> -b <branch>                      # Move commit to the tip of a branch (created if missing)
-but move <commit> --unstack                        # Move commit onto a new unstacked branch
+but move <commit> --above <branch> -b <new-name>   # Move onto a new named branch above it (--below also works)
+but move <commit> --unstack -b <new-name>          # Move onto a new named unstacked branch
 but move <branch> --above <target-branch>          # Stack branch on top of target branch
 but move <branch> --unstack                        # Tear off (unstack) a branch
-but move <commit-id>:<file-id> --above <commit>    # Move a committed file into a new commit
-but move <commit-id>:<file-id>:<hunk-id> --above <commit> # Move a committed hunk into a new commit
+but move <commit-id>:<file-id> --above <commit> -m "<msg>" # Move a committed file into a new commit
+but move <commit-id>:<file-id>:<hunk-id> --above <commit> -m "<msg>" # Move a committed hunk into a new commit
 ```
 
 Sources may not mix categories, all committed changes must come from the same commit, and only one
@@ -300,16 +307,26 @@ with no value is equivalent to `--unstack`. With the experimental worktree flag 
 accepts a worktree or the branch checked out in it, moving commit or committed-change
 sources onto that branch's tip (nothing is created); a branch source is refused there.
 
+For commits or committed changes, add `-b <new-name>` to `--above <branch>`, `--below <branch>`,
+or `--unstack` to name the new branch; omit it for a generated name. This does not rename an
+existing branch: naming is not supported when stacking or unstacking a branch source.
+
+For committed-change sources, `-m/--message` sets the new commit's message; repeat `-m` to
+join paragraphs with blank lines. Without it, the new commit has an empty message and no editor
+opens. `-m` is rejected when moving whole commits or branches.
+
 ### `but split <SOURCES>...`
 
 Move selected committed files/hunks into a new commit immediately above their source.
-Files and hunks may be mixed, but must come from one commit. The new commit has no message;
-unselected changes stay in the source.
+Files and hunks may be mixed, but must come from one commit. Unselected changes and the original
+message stay in the source. Use `-m/--message` to set the new commit's message directly rather
+than rewording afterward. Repeated `-m` values are joined with blank lines; omitting it creates
+an empty-message commit without opening an editor.
 
 ```bash
 but diff <commit-id>                              # Read committed file/hunk IDs
-but split <commit-id>:<file-id>                    # Split a file
-but split <commit-id>:<file-id>:<hunk-id>           # Split a hunk
+but split <commit-id>:<file-id> -m "Extract file"   # Split a file
+but split <commit-id>:<file-id>:<hunk-id> -m "Extract hunk" # Split a hunk
 ```
 
 ### `but uncommit <SOURCES>...`

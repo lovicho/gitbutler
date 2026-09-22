@@ -1,11 +1,11 @@
-import { getButtonClassName } from "#ui/components/Button.tsx";
-import { Icon } from "#ui/components/Icon.tsx";
-import { TooltipPopup } from "#ui/components/Tooltip.tsx";
-import { Modal } from "#ui/components/Popup.tsx";
+import { getButtonClassName } from "@gitbutler/ui-react/Button.tsx";
+import { Icon } from "@gitbutler/ui-react/Icon.tsx";
+import { TooltipPopup } from "@gitbutler/ui-react/Tooltip.tsx";
+import { Modal } from "@gitbutler/ui-react/Popup.tsx";
 import { useUploadFiles } from "#ui/api/mutations.ts";
 import { userProfileQueryOptions } from "#ui/api/queries.ts";
-import * as md from "#ui/markdown-editing.ts";
-import { applyToTextarea } from "#ui/markdown-textarea.ts";
+import * as md from "@gitbutler/ui-react/markdown-editing.ts";
+import { applyToTextarea } from "@gitbutler/ui-react/markdown-textarea.ts";
 import { ACCEPTED_FILE_TYPES, filesFromTransfer, uploadsToMarkdown } from "#ui/uploads.ts";
 import { Dialog, Tooltip } from "@base-ui/react";
 import { useQuery } from "@tanstack/react-query";

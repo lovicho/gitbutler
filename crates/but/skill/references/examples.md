@@ -139,7 +139,10 @@ but diff nn                  # Read the committed hunk ID
 but squash nn:a2:5 -t mm     # Target message is reused
 
 # Or put that committed hunk in a new commit at a chosen position
-but move nn:a2:5 --above mm
+but move nn:a2:5 --above mm -m "Extract utility change"
+
+# Or split it into a named commit immediately above its source
+but split nn:a2:5 -m "Extract utility change"
 
 # Or move that committed hunk back to uncommitted
 but squash nn:a2:5 -t @
@@ -163,6 +166,12 @@ but branch new feature-b    # Creates branch bv
 
 # 3. Move the commit
 but move nn -b feature-b    # Move nn to top of feature-b
+
+# Alternatively, move onto a new named branch above feature-a
+but move nn --above feature-a -b extracted-work  # --below also works
+
+# Or move onto a new named independent branch
+but move nn --unstack -b independent-work
 ```
 
 ## Example 5: Stacking Existing Branches
