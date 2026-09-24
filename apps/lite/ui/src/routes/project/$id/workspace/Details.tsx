@@ -1,3 +1,4 @@
+import { Avatar } from "@gitbutler/ui-react/Avatar.tsx";
 import { forgeAuthFailure, forgeDestination, isCloudForge } from "#ui/forge.ts";
 import { ForgeAuthPrompt } from "./ForgeAuthPrompt.tsx";
 import { ResizeHandle } from "@gitbutler/ui-react/ResizeHandle.tsx";
@@ -8,7 +9,6 @@ import { SuspenseQuery } from "@suspensive/react-query";
 import {
 	type PushBeforePublish,
 	useAddReviewLabels,
-	useCommitUncommitChanges,
 	useOpenInProgram,
 	useRequestReview,
 	useResolveCommitConflictHunks,
@@ -60,7 +60,6 @@ import {
 	type FileAddress,
 	fileAddress,
 	hunkAddress,
-	addressEquals,
 	type FileParent,
 	type HunkAddress,
 	type Address,
@@ -75,9 +74,9 @@ import type { BranchTab, CheckableAddress } from "#ui/projects/project.ts";
 import { projectSlice } from "#ui/projects/state.ts";
 import { interfaceSlice } from "#ui/interface/state.ts";
 import { Badge } from "@gitbutler/ui-react/Badge.tsx";
-import { getButtonClassName } from "@gitbutler/ui-react/Button.tsx";
+import { Button, getButtonClassName } from "@gitbutler/ui-react/Button.tsx";
 import { Icon } from "@gitbutler/ui-react/Icon.tsx";
-import { TooltipPopup } from "@gitbutler/ui-react/Tooltip.tsx";
+import { Tooltip } from "@gitbutler/ui-react/Tooltip.tsx";
 import { useCopied } from "#ui/components/useCopied.ts";
 import { ToggleGroupStyles, ToggleStyles } from "@gitbutler/ui-react/ToggleGroup.tsx";
 import { OperationSourceC } from "#ui/routes/project/$id/workspace/OperationSourceC.tsx";
@@ -95,7 +94,7 @@ import {
 import { useAppDispatch, useAppSelector, useAppStore } from "#ui/store.ts";
 import { classes } from "@gitbutler/ui-react/classes.ts";
 import { EmptyState } from "@gitbutler/ui-react/EmptyState.tsx";
-import { Toggle, ToggleGroup, Toolbar, Tooltip } from "@base-ui/react";
+import { Toggle, ToggleGroup, Toolbar } from "@base-ui/react";
 import type {
 	CommitDetails as CommitDetailsData,
 	ConflictedFile,
@@ -155,7 +154,6 @@ import {
 	type LineStats,
 } from "#ui/routes/project/$id/workspace/lineStats.ts";
 import { FilesTree } from "#ui/routes/project/$id/workspace/FilesTree.tsx";
-import { createDiffSpec } from "#ui/operations/diff-specs.ts";
 import { TopLeftControls } from "#ui/routes/project/$id/workspace/TopLeftControls.tsx";
 import {
 	changeFileRowItem,
@@ -402,14 +400,6 @@ const navigationHunkForSelectedLines = ({
 	return hunkByKey.get(hunkAddressIdentityKey(address))?.address ?? null;
 };
 
-const lineSelectionsEqual = (a: CodeViewLineSelection, b: CodeViewLineSelection): boolean =>
-	a.id === b.id &&
-	a.range.start === b.range.start &&
-	(a.range.side ?? "additions") === (b.range.side ?? "additions") &&
-	a.range.end === b.range.end &&
-	(a.range.endSide ?? a.range.side ?? "additions") ===
-		(b.range.endSide ?? b.range.side ?? "additions");
-
 const DiffFooter: FC = () => {
 	const dispatch = useAppDispatch();
 	const view = useAppSelector(interfaceSlice.selectors.selectDiffFooterView);
@@ -469,8 +459,6 @@ const DiffContents: FC<{
 	pendingFileRef: RefObject<FileAddress | null>;
 	renderAllFiles: boolean;
 	minimapFiles: Array<MinimapFile> | null;
-	canUncommit: boolean;
-	uncommit: (change: TreeChange, extendToCheckedFiles: boolean) => void;
 }> = ({
 	activeFileItemId,
 	diffContextKey,
@@ -495,8 +483,6 @@ const DiffContents: FC<{
 	pendingFileRef,
 	renderAllFiles,
 	minimapFiles,
-	canUncommit,
-	uncommit,
 }) => {
 	const dispatch = useAppDispatch();
 	const newFocusableAnnotationIdRef = useRef<string | null>(null);
@@ -654,7 +640,8 @@ const DiffContents: FC<{
 		const nextSelectedLines = selectedLinesForHunk(selection);
 		if (!nextSelectedLines) return;
 		pendingFileRef.current = null;
-		setCursor("diff", { file: selection.parent, range: nextSelectedLines.range });
+		const { start, side } = nextSelectedLines.range;
+		setCursor("diff", { file: selection.parent, range: { start, side, end: start } });
 
 		viewerRef.current?.scrollTo({
 			type: "range",
@@ -679,7 +666,11 @@ const DiffContents: FC<{
 
 				if (lineHunk) {
 					const hunkLines = selectedLinesForHunk(lineHunk.address);
-					if (hunkLines && !lineSelectionsEqual(selectedLines, hunkLines)) {
+					if (
+						hunkLines &&
+						(selectedLines.range.start !== hunkLines.range.start ||
+							selectedLines.range.side !== hunkLines.range.side)
+					) {
 						selectDiff(lineHunk.address);
 						return;
 					}
@@ -778,7 +769,7 @@ const DiffContents: FC<{
 		});
 	};
 
-	const moveSelectedLines = (offset: -1 | 1, extend: boolean): void => {
+	const moveSelectedLines = (offset: -1 | 1): void => {
 		if (!selectedLines) return;
 		const file = fileByItemId.get(selectedLines.id);
 		if (!file || file.patch?.type !== "Patch") return;
@@ -788,7 +779,6 @@ const DiffContents: FC<{
 			range: selectedLines.range,
 			diffStyle: effectiveDiffStyle,
 			offset,
-			extend,
 		});
 		if (!range) return;
 
@@ -818,22 +808,28 @@ const DiffContents: FC<{
 	): CodeViewLineSelection | null {
 		const addresses = addressesForSelectedLines(selection, "line");
 		if (addresses.length === 0) return null;
-		const state = store.getState();
-		const checked = !addresses.every((address) =>
-			projectSlice.selectors.selectAddressChecked(state, projectId, address),
-		);
-		dispatch(projectSlice.actions.checkAddresses({ projectId, addresses, checked }));
-
-		if (shiftKey) return null;
 		const { range, id } = selection;
 		if (
 			range.start !== range.end ||
 			(range.endSide ?? range.side ?? "additions") !== (range.side ?? "additions")
-		)
+		) {
+			const state = store.getState();
+			const checked = !addresses.every((address) =>
+				projectSlice.selectors.selectAddressChecked(state, projectId, address),
+			);
+			dispatch(projectSlice.actions.checkAddresses({ projectId, addresses, checked }));
 			return null;
-		const currentAddress = addresses[0];
+		}
+		const currentAddress = getLineAddressAtLine({
+			itemId: id,
+			lineNumber: range.start,
+			side: range.side ?? "additions",
+			lineType: "change",
+		});
 		const file = fileByItemId.get(id);
 		if (!currentAddress || file?.patch?.type !== "Patch") return null;
+		checkLine(currentAddress, shiftKey);
+		if (shiftKey) return null;
 		const nextState = store.getState();
 		const next = selectionAfterChecking({
 			selection,
@@ -843,23 +839,26 @@ const DiffContents: FC<{
 					range,
 					diffStyle: effectiveDiffStyle,
 					offset,
-					extend: false,
 				});
 				return nextRange ? { id, range: nextRange } : null;
 			},
 			getChecked: (selection) => {
-				const addresses = addressesForSelectedLines(selection, "line");
+				const address = getLineAddressAtLine({
+					itemId: selection.id,
+					lineNumber: selection.range.start,
+					side: selection.range.side ?? "additions",
+					lineType: "change",
+				});
 				if (
-					addresses.length === 0 ||
-					addresses.some(
-						(address) =>
-							address.hunkHeader.oldStart !== currentAddress.hunkHeader.oldStart ||
-							address.hunkHeader.newStart !== currentAddress.hunkHeader.newStart,
-					)
+					!address ||
+					address.hunkHeader.oldStart !== currentAddress.hunkHeader.oldStart ||
+					address.hunkHeader.newStart !== currentAddress.hunkHeader.newStart
 				)
 					return null;
-				return addresses.every((address) =>
-					projectSlice.selectors.selectAddressChecked(nextState, projectId, address),
+				return projectSlice.selectors.selectAddressChecked(
+					nextState,
+					projectId,
+					hunkAddress(address),
 				);
 			},
 		});
@@ -906,7 +905,7 @@ const DiffContents: FC<{
 	useHotkeys([
 		{
 			hotkey: "ArrowUp",
-			callback: () => moveSelectedLines(-1, false),
+			callback: () => moveSelectedLines(-1),
 			options: {
 				conflictBehavior: "allow",
 				enabled: selectedLines !== null,
@@ -915,7 +914,7 @@ const DiffContents: FC<{
 		},
 		{
 			hotkey: "K",
-			callback: () => moveSelectedLines(-1, false),
+			callback: () => moveSelectedLines(-1),
 			options: {
 				conflictBehavior: "allow",
 				enabled: selectedLines !== null,
@@ -924,7 +923,7 @@ const DiffContents: FC<{
 		},
 		{
 			hotkey: "ArrowDown",
-			callback: () => moveSelectedLines(1, false),
+			callback: () => moveSelectedLines(1),
 			options: {
 				conflictBehavior: "allow",
 				enabled: selectedLines !== null,
@@ -933,43 +932,7 @@ const DiffContents: FC<{
 		},
 		{
 			hotkey: "J",
-			callback: () => moveSelectedLines(1, false),
-			options: {
-				conflictBehavior: "allow",
-				enabled: selectedLines !== null,
-				target: focusScopeRef,
-			},
-		},
-		{
-			hotkey: "Shift+ArrowUp",
-			callback: () => moveSelectedLines(-1, true),
-			options: {
-				conflictBehavior: "allow",
-				enabled: selectedLines !== null,
-				target: focusScopeRef,
-			},
-		},
-		{
-			hotkey: "Shift+K",
-			callback: () => moveSelectedLines(-1, true),
-			options: {
-				conflictBehavior: "allow",
-				enabled: selectedLines !== null,
-				target: focusScopeRef,
-			},
-		},
-		{
-			hotkey: "Shift+ArrowDown",
-			callback: () => moveSelectedLines(1, true),
-			options: {
-				conflictBehavior: "allow",
-				enabled: selectedLines !== null,
-				target: focusScopeRef,
-			},
-		},
-		{
-			hotkey: "Shift+J",
-			callback: () => moveSelectedLines(1, true),
+			callback: () => moveSelectedLines(1),
 			options: {
 				conflictBehavior: "allow",
 				enabled: selectedLines !== null,
@@ -1294,14 +1257,6 @@ const DiffContents: FC<{
 		setCursor("diff", { file: file.address, range: selection.range });
 	}
 
-	const handleLinesSelected = (selection: CodeViewLineSelection | null): void => {
-		// Keep the active line selected when it is clicked again: Lite treats line selection as a
-		// persistent operation target, not a toggle. Still clear it when its item leaves the view.
-		if (selection === null && selectedLines !== null && fileByItemId.has(selectedLines.id)) return;
-
-		applySelectedLines(selection);
-	};
-
 	const getLineAddressAtLine = ({
 		itemId,
 		lineNumber,
@@ -1334,16 +1289,16 @@ const DiffContents: FC<{
 	// useCallback with the render-local helpers as dependencies) invalidates the compiler's cached
 	// CodeView on focus, causing Pierre to rebuild its DOM during native text selection.
 	const handleLineNumberClick: NonNullable<CodeViewOptions<Annotation>["onLineNumberClick"]> =
-		useStableCallback(({ event, numberElement }, context) => {
-			if (event.detail !== 2) return;
+		useStableCallback(({ numberElement }, context) => {
 			const target = diffLineTargetFromElement({
 				element: numberElement,
 				itemId: context.item.id,
 			});
 			if (!target) return;
-			const address = getContiguousHunkAddressAtLine(target);
-			if (!address) return;
-			applySelectedLines(selectedLinesForHunk(address));
+			applySelectedLines({
+				id: target.itemId,
+				range: { start: target.lineNumber, end: target.lineNumber, side: target.side },
+			});
 		});
 
 	const getContextMenuAddressAtLine = ({
@@ -1443,8 +1398,6 @@ const DiffContents: FC<{
 			})
 			.filter((x) => x != null);
 
-	// Checkbox Shift-click extends persistent checked ranges. Shift-clicking the surrounding gutter
-	// remains Pierre's active line-range gesture, unlike the whole-row shortcut on file/commit rows.
 	function checkLine(address: HunkAddress, shiftKey: boolean): void {
 		const key = hunkAddressIdentityKey(address);
 		const previous = shiftKey && lineCheckRangeAnchor.current !== null ? checkedHunkKeys() : null;
@@ -1771,8 +1724,6 @@ const DiffContents: FC<{
 							selected={item.id === selectedFileItemId}
 							setCollapsed={handleSetCollapsed(item.id)}
 							setReviewed={handleSetReviewed(item.id, file.change.path, version)}
-							canUncommit={canUncommit}
-							uncommit={uncommit}
 						/>
 					);
 				}}
@@ -1836,7 +1787,6 @@ const DiffContents: FC<{
 				className={styles.diffContents}
 				items={displayItems}
 				selectedLines={selectedLines}
-				onSelectedLinesChange={handleLinesSelected}
 				options={{
 					diffStyle: effectiveDiffStyle,
 					loadDiffFiles,
@@ -1845,7 +1795,6 @@ const DiffContents: FC<{
 					overflow: diffOverflow ?? defaultSettings.diffOverflow,
 					themeType: settings?.theme ?? defaultSettings.theme,
 					stickyHeaders: true,
-					enableLineSelection: true,
 					onLineNumberClick: handleLineNumberClick,
 					layout: codeViewLayout,
 					// This appears to validate before our custom header has been slotted, in which case - if
@@ -1969,8 +1918,6 @@ type DiffFileHeaderProps = {
 	selected: boolean;
 	setCollapsed: (collapsed: boolean) => void;
 	setReviewed: (reviewed: boolean) => void;
-	canUncommit: boolean;
-	uncommit: (change: TreeChange, extendToCheckedFiles: boolean) => void;
 };
 
 const DiffFileHeader: FC<DiffFileHeaderProps> = (p) => {
@@ -1979,8 +1926,6 @@ const DiffFileHeader: FC<DiffFileHeaderProps> = (p) => {
 		address: p.address,
 		path: p.change.path,
 		change: p.change,
-		canUncommit: p.canUncommit,
-		uncommit: p.uncommit,
 	});
 
 	const lastSepIdx = p.change.path.lastIndexOf("/");
@@ -2024,25 +1969,18 @@ const DiffFileHeader: FC<DiffFileHeaderProps> = (p) => {
 					p.selected && styles.fileHeaderSelected,
 				)}
 			>
-				<Tooltip.Root>
-					<Tooltip.Trigger
+				<Tooltip content={collapseLabel} kbd={diffHotkeys.toggleFoldFile.hotkey} kbdScope="diff">
+					<Button
+						size="small"
+						variant="ghost"
+						iconOnly
 						aria-label={collapseLabel}
 						aria-expanded={!p.collapsed}
-						className={getButtonClassName({ size: "small", variant: "ghost", iconOnly: true })}
 						onClick={() => p.setCollapsed(!p.collapsed)}
 					>
 						<Icon name={p.collapsed ? "chevron-right" : "chevron-down"} />
-					</Tooltip.Trigger>
-					<Tooltip.Portal>
-						<Tooltip.Positioner sideOffset={4}>
-							<Tooltip.Popup
-								render={<TooltipPopup kbd={diffHotkeys.toggleFoldFile.hotkey} kbdScope="diff" />}
-							>
-								{collapseLabel}
-							</Tooltip.Popup>
-						</Tooltip.Positioner>
-					</Tooltip.Portal>
-				</Tooltip.Root>
+					</Button>
+				</Tooltip>
 				<h4 className={classes("text-13", styles.filePath)}>
 					<FileIcon fileName={fileName} className={styles.icon} />
 					{fileName}
@@ -2050,28 +1988,16 @@ const DiffFileHeader: FC<DiffFileHeaderProps> = (p) => {
 				</h4>
 				<div className={styles.fileHeaderEnd}>
 					{p.lineStats && lineStatsLabel !== null && (
-						<Tooltip.Root>
-							<Tooltip.Trigger
-								render={
-									<div aria-label={lineStatsLabel} className={styles.fileMeta}>
-										<DiffStats
-											added={p.lineStats.linesAdded}
-											removed={p.lineStats.linesRemoved}
-											className="text-12"
-										/>
-										<ChangeScale
-											added={p.lineStats.linesAdded}
-											removed={p.lineStats.linesRemoved}
-										/>
-									</div>
-								}
-							/>
-							<Tooltip.Portal>
-								<Tooltip.Positioner sideOffset={4}>
-									<Tooltip.Popup render={<TooltipPopup />}>{lineStatsLabel}</Tooltip.Popup>
-								</Tooltip.Positioner>
-							</Tooltip.Portal>
-						</Tooltip.Root>
+						<Tooltip content={lineStatsLabel}>
+							<div aria-label={lineStatsLabel} className={styles.fileMeta}>
+								<DiffStats
+									added={p.lineStats.linesAdded}
+									removed={p.lineStats.linesRemoved}
+									className="text-12"
+								/>
+								<ChangeScale added={p.lineStats.linesAdded} removed={p.lineStats.linesRemoved} />
+							</div>
+						</Tooltip>
 					)}
 
 					<Toolbar.Root aria-label="File actions" className={styles.fileHeaderActions}>
@@ -2081,34 +2007,23 @@ const DiffFileHeader: FC<DiffFileHeaderProps> = (p) => {
 						    those leave two controls where the design has one, and Base UI's
 						    checkbox renders unfocusable inside a label. "Changed since you
 						    reviewed it" is the mixed state; the tooltip spells that out. */}
-						<Tooltip.Root>
-							<Tooltip.Trigger
-								render={
-									<Toolbar.Button
-										aria-pressed={
-											p.reviewState === "changed" ? "mixed" : p.reviewState === "reviewed"
-										}
-										className={classes(
-											getButtonClassName({ size: "small", variant: "ghost" }),
-											styles.fileReview,
-										)}
-										onClick={() => p.setReviewed(p.reviewState !== "reviewed")}
-									>
-										<span className={styles.fileReviewBox} aria-hidden="true">
-											{p.reviewState !== null && (
-												<Icon size={10} name={p.reviewState === "reviewed" ? "tick" : "minus"} />
-											)}
-										</span>
-										Reviewed
-									</Toolbar.Button>
-								}
-							/>
-							<Tooltip.Portal>
-								<Tooltip.Positioner sideOffset={4}>
-									<Tooltip.Popup render={<TooltipPopup />}>{reviewLabel}</Tooltip.Popup>
-								</Tooltip.Positioner>
-							</Tooltip.Portal>
-						</Tooltip.Root>
+						<Tooltip content={reviewLabel}>
+							<Toolbar.Button
+								aria-pressed={p.reviewState === "changed" ? "mixed" : p.reviewState === "reviewed"}
+								className={classes(
+									getButtonClassName({ size: "small", variant: "ghost" }),
+									styles.fileReview,
+								)}
+								onClick={() => p.setReviewed(p.reviewState !== "reviewed")}
+							>
+								<span className={styles.fileReviewBox} aria-hidden="true">
+									{p.reviewState !== null && (
+										<Icon size={10} name={p.reviewState === "reviewed" ? "tick" : "minus"} />
+									)}
+								</span>
+								Reviewed
+							</Toolbar.Button>
+						</Tooltip>
 						<Toolbar.Button
 							aria-label="File menu"
 							onClick={(event) => {
@@ -2132,28 +2047,20 @@ const FilesToggle: FC<{ projectId: string }> = ({ projectId }) => {
 	);
 
 	return (
-		<Tooltip.Root>
-			<Tooltip.Trigger
-				render={
-					<button
-						type="button"
-						className={getButtonClassName({ iconOnly: true, variant: "ghost" })}
-						aria-label={workspaceHotkeys.toggleFiles.meta.name}
-						aria-pressed={filesVisible}
-						onClick={() => dispatch(projectSlice.actions.toggleFiles({ projectId }))}
-					>
-						{filesVisible ? <Icon name="files-sidebar" /> : <Icon name="sidebar-narrow" />}
-					</button>
-				}
-			/>
-			<Tooltip.Portal>
-				<Tooltip.Positioner sideOffset={4}>
-					<Tooltip.Popup render={<TooltipPopup kbd={workspaceHotkeys.toggleFiles.hotkey} />}>
-						{workspaceHotkeys.toggleFiles.meta.name}
-					</Tooltip.Popup>
-				</Tooltip.Positioner>
-			</Tooltip.Portal>
-		</Tooltip.Root>
+		<Tooltip
+			content={workspaceHotkeys.toggleFiles.meta.name}
+			kbd={workspaceHotkeys.toggleFiles.hotkey}
+		>
+			<Button
+				iconOnly
+				variant="ghost"
+				aria-label={workspaceHotkeys.toggleFiles.meta.name}
+				aria-pressed={filesVisible}
+				onClick={() => dispatch(projectSlice.actions.toggleFiles({ projectId }))}
+			>
+				{filesVisible ? <Icon name="files-sidebar" /> : <Icon name="sidebar-narrow" />}
+			</Button>
+		</Tooltip>
 	);
 };
 
@@ -2167,25 +2074,16 @@ const DiffOverflowToggle: FC<
 	const { mutate: saveGUISettings } = useSaveGUISettings();
 
 	return (
-		<Tooltip.Root>
-			<Tooltip.Trigger
-				render={
-					<Toggle
-						{...toggleProps}
-						aria-label="Toggle line wrapping"
-						pressed={(diffOverflow ?? defaultSettings.diffOverflow) === "wrap"}
-						onPressedChange={(pressed) =>
-							saveGUISettings({ diffOverflow: pressed ? "wrap" : "scroll" })
-						}
-					/>
+		<Tooltip content="Toggle line wrapping">
+			<Toggle
+				{...toggleProps}
+				aria-label="Toggle line wrapping"
+				pressed={(diffOverflow ?? defaultSettings.diffOverflow) === "wrap"}
+				onPressedChange={(pressed) =>
+					saveGUISettings({ diffOverflow: pressed ? "wrap" : "scroll" })
 				}
 			/>
-			<Tooltip.Portal>
-				<Tooltip.Positioner sideOffset={4}>
-					<Tooltip.Popup render={<TooltipPopup />}>Toggle line wrapping</Tooltip.Popup>
-				</Tooltip.Positioner>
-			</Tooltip.Portal>
-		</Tooltip.Root>
+		</Tooltip>
 	);
 };
 
@@ -2199,23 +2097,14 @@ const DiffBackgroundsToggle: FC<
 	const { mutate: saveGUISettings } = useSaveGUISettings();
 
 	return (
-		<Tooltip.Root>
-			<Tooltip.Trigger
-				render={
-					<Toggle
-						{...toggleProps}
-						aria-label="Toggle diff backgrounds"
-						pressed={diffBackgrounds ?? defaultSettings.diffBackground}
-						onPressedChange={(enabled) => saveGUISettings({ diffBackground: enabled })}
-					/>
-				}
+		<Tooltip content="Toggle diff backgrounds">
+			<Toggle
+				{...toggleProps}
+				aria-label="Toggle diff backgrounds"
+				pressed={diffBackgrounds ?? defaultSettings.diffBackground}
+				onPressedChange={(enabled) => saveGUISettings({ diffBackground: enabled })}
 			/>
-			<Tooltip.Portal>
-				<Tooltip.Positioner sideOffset={4}>
-					<Tooltip.Popup render={<TooltipPopup />}>Toggle diff backgrounds</Tooltip.Popup>
-				</Tooltip.Positioner>
-			</Tooltip.Portal>
-		</Tooltip.Root>
+		</Tooltip>
 	);
 };
 
@@ -2232,30 +2121,22 @@ const DiffStyleToggleGroup: FC<
 	const { mutate: saveGUISettings } = useSaveGUISettings();
 
 	return (
-		<Tooltip.Root>
-			<Tooltip.Trigger
-				render={
-					<ToggleGroup
-						{...toggleGroupProps}
-						aria-label={diffHotkeys.toggleDiffStyle.meta.name}
-						value={[diffStyle ?? defaultSettings.diffStyle]}
-						onValueChange={(value: Array<NonNullable<GUISettings["diffStyle"]>>) => {
-							const head = value[0];
-							if (head === undefined) return;
+		<Tooltip
+			content={diffHotkeys.toggleDiffStyle.meta.name}
+			kbd={diffHotkeys.toggleDiffStyle.hotkey}
+		>
+			<ToggleGroup
+				{...toggleGroupProps}
+				aria-label={diffHotkeys.toggleDiffStyle.meta.name}
+				value={[diffStyle ?? defaultSettings.diffStyle]}
+				onValueChange={(value: Array<NonNullable<GUISettings["diffStyle"]>>) => {
+					const head = value[0];
+					if (head === undefined) return;
 
-							saveGUISettings({ diffStyle: head });
-						}}
-					/>
-				}
+					saveGUISettings({ diffStyle: head });
+				}}
 			/>
-			<Tooltip.Portal>
-				<Tooltip.Positioner sideOffset={4}>
-					<Tooltip.Popup render={<TooltipPopup kbd={diffHotkeys.toggleDiffStyle.hotkey} />}>
-						{diffHotkeys.toggleDiffStyle.meta.name}
-					</Tooltip.Popup>
-				</Tooltip.Positioner>
-			</Tooltip.Portal>
-		</Tooltip.Root>
+		</Tooltip>
 	);
 };
 
@@ -2331,7 +2212,6 @@ const Diff: FC<{
 	headerSlot,
 }) => {
 	const focusScopeRef = useRef<HTMLDivElement>(null);
-	const store = useAppStore();
 	const dispatch = useAppDispatch();
 	const { mutate: setFilesReviewed } = useSetFilesReviewed();
 	const [manualCollapseByItem, setManualCollapseByItem] = useState<Map<string, boolean>>(new Map());
@@ -2409,42 +2289,6 @@ const Diff: FC<{
 		[selection],
 	);
 
-	const { isPending: isCommitUncommitChangesPending, mutate: commitUncommitChanges } =
-		useCommitUncommitChanges();
-
-	const uncommit = (change: TreeChange, extendToCheckedFiles: boolean): void => {
-		if (fileParent._tag !== "Commit") return;
-
-		const sources = projectSlice.selectors.selectCheckedAddresses(store.getState(), projectId);
-
-		let subjectChanges = [change];
-		if (
-			extendToCheckedFiles &&
-			sources.length > 0 &&
-			sources.every(
-				(address) => address._tag === "File" && addressEquals(address.parent, fileParent),
-			)
-		) {
-			const checkedChanges = sources
-				.values()
-				.map((source) =>
-					changes.find((candidate) => source._tag === "File" && candidate.path === source.path),
-				)
-				.filter((x) => x != null)
-				.toArray();
-			if (checkedChanges.length !== sources.length) return;
-
-			subjectChanges = checkedChanges;
-		}
-
-		commitUncommitChanges({
-			projectId,
-			commitId: fileParent.commitId,
-			assignTo: null,
-			changes: subjectChanges.map((change) => createDiffSpec(change, [])),
-			dryRun: false,
-		});
-	};
 	const reviewedFilesContextId = weakFileParentIdentityKey(fileParent);
 	const { data: reviewedFiles } = useSuspenseQuery(
 		reviewedFilesQueryOptions(projectId, reviewedFilesContextId),
@@ -2776,8 +2620,6 @@ const Diff: FC<{
 						addressSpace={filesAddressSpace}
 						fileParent={fileParent}
 						reviewedPaths={reviewedFilePaths}
-						canUncommit={!isCommitUncommitChangesPending}
-						uncommit={uncommit}
 						ref={filesTreeRef}
 					/>
 				</div>
@@ -2896,8 +2738,6 @@ const Diff: FC<{
 								manualCollapseByItem={manualCollapseByItem}
 								setManualCollapse={setManualCollapse}
 								setFilesReviewed={setFilesReviewed}
-								canUncommit={!isCommitUncommitChangesPending}
-								uncommit={uncommit}
 								focusScopeRef={focusScopeRef}
 								viewerRef={viewerRef}
 								didScrollToViaFileRef={didScrollToViaFileRef}
@@ -2929,21 +2769,17 @@ const CopyableId: FC<{
 	const { copied, copy } = useCopied(copyValue);
 
 	return (
-		<Tooltip.Root>
-			<Tooltip.Trigger
+		<Tooltip content={label}>
+			<button
+				type="button"
+				aria-label={label}
 				className={styles.commitDetailsMetaSha}
 				onClick={copy}
-				render={<button type="button" aria-label={label} />}
 			>
 				<Icon size={14} name={copied ? "tick" : icon} />
 				<span>{copied ? "Copied!" : displayValue}</span>
-			</Tooltip.Trigger>
-			<Tooltip.Portal>
-				<Tooltip.Positioner sideOffset={4}>
-					<Tooltip.Popup render={<TooltipPopup />}>{label}</Tooltip.Popup>
-				</Tooltip.Positioner>
-			</Tooltip.Portal>
-		</Tooltip.Root>
+			</button>
+		</Tooltip>
 	);
 };
 
@@ -3070,32 +2906,23 @@ const CommitDetails: FC<{
 							)}
 
 							{commitBody(commitDetails.commit.message) !== undefined && (
-								<Tooltip.Root>
-									<Tooltip.Trigger
+								<Tooltip
+									content={commitBodyCollapsed ? "Expand commit body" : "Collapse commit body"}
+								>
+									<Button
+										variant={commitBodyCollapsed ? "outline" : "gray"}
+										iconOnly
+										size="small"
 										aria-controls={commitBodyId}
 										aria-expanded={!commitBodyCollapsed}
 										aria-label={commitBodyCollapsed ? "Expand commit body" : "Collapse commit body"}
 										aria-pressed={!commitBodyCollapsed}
-										className={classes(
-											getButtonClassName({
-												variant: commitBodyCollapsed ? "outline" : "gray",
-												iconOnly: true,
-												size: "small",
-											}),
-											styles.commitBodyToggle,
-										)}
+										className={styles.commitBodyToggle}
 										onClick={() => setCommitBodyCollapsed(!commitBodyCollapsed)}
 									>
 										<Icon name="kebab" />
-									</Tooltip.Trigger>
-									<Tooltip.Portal>
-										<Tooltip.Positioner sideOffset={4}>
-											<Tooltip.Popup render={<TooltipPopup />}>
-												{commitBodyCollapsed ? "Expand commit body" : "Collapse commit body"}
-											</Tooltip.Popup>
-										</Tooltip.Positioner>
-									</Tooltip.Portal>
-								</Tooltip.Root>
+									</Button>
+								</Tooltip>
 							)}
 						</h3>
 					</div>
@@ -3117,9 +2944,9 @@ const CommitDetails: FC<{
 							className={styles.commitDetailsMetaTabs}
 						/>
 					)}
-					<img
+					<Avatar
 						src={commitDetails.commit.author.gravatarUrl}
-						className={styles.avatar}
+						seed={commitDetails.commit.author.email}
 						alt="Commit author avatar"
 					/>
 					<span>
@@ -3602,15 +3429,14 @@ const UnappliedBranchDetails: FC<BranchDetailsProps> = ({
 
 					<div className={styles.tabsRowRight}>
 						{worktreeName === undefined ? (
-							<button
-								type="button"
-								className={getButtonClassName({ variant: "gray" })}
+							<Button
+								variant="gray"
 								disabled={isApplyPending}
 								onClick={() => apply(decodeBytes(branch.branchRef))}
 							>
 								{isApplyPending && <Icon name="spinner" />}
 								Apply to workspace
-							</button>
+							</Button>
 						) : (
 							<span className={classes("text-12", rowStyles.fadedText)}>
 								Checked out in worktree {worktreeName}
@@ -3735,14 +3561,10 @@ const AppliedBranchDetails: FC<BranchDetailsProps> = ({
 
 					{showCreatePullRequest && (
 						<div className={styles.tabsRowRight}>
-							<button
-								type="button"
-								className={getButtonClassName({ variant: "gray" })}
-								onClick={() => setBranchTab("pr")}
-							>
+							<Button variant="gray" onClick={() => setBranchTab("pr")}>
 								<Icon name="pr" />
 								Create pull request
-							</button>
+							</Button>
 						</div>
 					)}
 

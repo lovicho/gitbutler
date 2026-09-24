@@ -44,7 +44,7 @@ Icons are SVGs in `src/icons/`, inlined into the bundle as raw strings; the
 filename is the icon name (`folder-lock.svg` → `<Icon name="folder-lock" />`).
 To add one:
 
-1. Export it from Figma at 16×16 (⚛️ Lite Core library) as SVG into `src/icons/`.
+1. Export it from Figma at 16×16 (⚛️ Core library) as SVG into `src/icons/`.
 2. Run `pnpm -F @gitbutler/ui-react optimize-icons`. It minifies the SVG,
    recolors it to `currentColor` and regenerates `src/iconNames.ts`.
 3. Commit both. `iconNames.ts` is generated; never hand-edit it.
@@ -54,7 +54,7 @@ colours and are deliberately not run through the script.
 
 `src/program-icons/` are the marks of editors and terminals, as PNGs at 2×.
 Their rounded corner is part of the image: export each from the "Programm"
-frame on ⚛️ Lite Core's Icons page, where the mark is a 14px rectangle with
+frame on ⚛️ Core's Icons page, where the mark is a 14px rectangle with
 the corner on it, as PNG at 2× with the layer named as the file is
 (`vscode` → `vscode@2x.png`). No CSS rounds them, so a square export shows
 square.
@@ -63,20 +63,20 @@ square.
 
 Two files, split the way the code is:
 
-- **⚛️ Lite Core** —
+- **⚛️ Core** —
   <https://www.figma.com/design/cqdnAotT8n9op8WGYLOHg4/%E2%9A%9B%EF%B8%8F-Lite-Core>,
   the published library: tokens (Tokens page), icons (Icons page) and this
   package's components (Components page), one section per component. It is
   the source of truth for tokens; for components, code is, and the drawing
   follows it.
-- **Lite**, the working file —
-  <https://www.figma.com/design/EBuHQGUcCaSw4Ln5uVpWkn/Lite>: Lite's own
+- **Client**, the working file —
+  <https://www.figma.com/design/EBuHQGUcCaSw4Ln5uVpWkn/Client>: Lite's own
   components on the ⚙️ Meta page, the full screens, and drafts on the
   🚧 Drafts page and the pages under it. A new mockup or an exploration goes
   here, never in the library.
 
-A component is drawn where its code lives: one in this package goes in Lite
-Core, one in `apps/lite` on ⚙️ Meta. When a component moves between the two
+A component is drawn where its code lives: one in this package goes in
+⚛️ Core, one in `apps/lite` on ⚙️ Meta. When a component moves between the two
 in code, its drawing moves with it in the same piece of work, and the
 mockups' instances are swapped to the new one.
 
@@ -84,8 +84,15 @@ The drawing mirrors the code's structure: the same component under the same
 name, variant properties named as the props and their values (`status`,
 `variant`, `glyph`), and no property the code lacks. Figma may add only what
 the code produces from data, such as a toggle for a side the code drops when
-its count is zero; two components the code keeps apart stay apart in Figma
-and are placed side by side where a surface shows both.
+its count is zero, and a `state` property (`default`, `hover`) for what CSS
+draws under the pointer, as Button has; two components the code keeps apart
+stay apart in Figma and are placed side by side where a surface shows both.
+
+A component's description in Figma says what its JSDoc and DESIGN.md say
+about it: what it is for, when to pick which variant, and a `Code:` line
+naming the component and its file. Change one and change the other in the
+same piece of work; a description that lags the code is what an agent reading
+Figma will build from.
 
 ## Verifying your work
 
@@ -149,15 +156,63 @@ reads it instead of guessing an API. Two things about it to know:
 
 - The import to write is the `@import` tag in each component's JSDoc, as
   `@import import { Badge } from "@gitbutler/ui-react/Badge.tsx";`. Give a
-  new component one. The entry's `reactDocgenTypescript.tags.import` carries
-  it; the top-level `import` field is Storybook's own guess, which names
-  the package without the file, and there is no such barrel.
+  new component one: without it the manifest falls back to the package
+  root, and there is no such barrel. Storybook reads the tag through
+  `experimentalReactComponentMeta` in Lite's `.storybook/main.ts`.
 - The link to the Figma component is the story's `design` parameter, not
   the manifest. `grep -l 'type: "figma"' src/*.stories.tsx` lists the stories
   that have one; a story without one has no drawn spec yet.
 
-A story whose subject is a function rather than a component, as `Button`'s
-`getButtonClassName` is, carries `tags: ["!manifest"]` and says why.
+A story with no component behind it, as Lite's `AppUpdater.stories.tsx`,
+carries `tags: ["!manifest"]` and says why. That is also why a styling
+helper is not how a control is offered: `getButtonClassName` is for making
+another component look like a button, and a button is `<Button>`, which the
+manifest documents.
+
+### The Storybook MCP server
+
+While Storybook runs, it serves an MCP server at `http://localhost:6007/mcp`
+(`@storybook/addon-mcp`). Add it to your agent once:
+
+```console
+$ claude mcp add --transport http gitbutler-storybook http://localhost:6007/mcp
+```
+
+`DesignNotes.mdx` beside DESIGN.md puts the design notes in Storybook as a
+docs page, so the published Storybook shows them and the MCP server's
+`docs-list` lists them; it renders the file itself, so edit DESIGN.md, never
+the page. An agent reading it through `docs-show` gets the page's source, which
+names the file and its raw URL.
+
+Before using a component, ask it rather than guessing: `docs-list` lists the
+components, `docs-show` gives one's props, its stories and the import to
+write, and `docs-show-story` a whole story. Use only props it documents; if
+one seems missing, ask instead of inventing it.
+`stories-find-by-component` finds the stories a file renders in, and
+`stories-preview` links to them. The published Storybook serves the same docs
+tools without a local one. The repository's `.mcp.json` connects Claude Code
+to it (it asks once); another agent, or one outside this repo, adds it:
+
+```console
+$ claude mcp add --transport http gitbutler-storybook-published https://master--6ab536f5f40e41db628ccf1b.chromatic.com/mcp
+```
+
+### Accessibility
+
+`@storybook/addon-a11y` runs axe on every story: the Accessibility tab under
+a story lists contrast failures, controls without a name and misused roles.
+Check it for a new or changed story. It catches the mechanical part of
+DESIGN.md's rules (an icon-only button's `aria-label`, a field's label,
+contrast), not whether a label makes sense.
+
+### Chromatic
+
+`.github/workflows/chromatic.yml` publishes the Storybook to Chromatic's
+public "GitButler UI" project: from master as the published Storybook, at
+<https://master--6ab536f5f40e41db628ccf1b.chromatic.com>, and for a pull request that touches the
+stories, as a preview with a UI Review check that compares every story's
+screenshot with master's. A visual change waits there to be accepted rather
+than failing the build; accept it when it is the change you meant.
 
 ### Linting & formatting
 

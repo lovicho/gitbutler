@@ -1,5 +1,5 @@
 import preview from "#storybook/preview";
-import { getButtonClassName } from "./Button.tsx";
+import { Button } from "./Button.tsx";
 import { EmptyState } from "./EmptyState.tsx";
 import { Icon } from "./Icon.tsx";
 import { illustrations, type IllustrationName } from "./illustrations.ts";
@@ -24,16 +24,12 @@ const meta = preview.meta({
 		description: "You have 5 branches to pick from",
 	},
 	decorators: [
-		// The component is built to be centred by its host, and the counterweight
-		// only reads as correct against a surface with room above and below it.
+		// A plain box with a height, as a pane gives it: the block centres itself
+		// in it, and the counterweight scales to it.
 		(Story) => (
 			<div
 				style={{
-					// As the app's host does: the counterweight scales to this box.
 					containerType: "size",
-					display: "flex",
-					flexDirection: "column",
-					justifyContent: "safe center",
 					width: 360,
 					height: 520,
 					backgroundColor: "var(--bg-2)",
@@ -52,14 +48,14 @@ export const TwoActions = meta.story({
 		description: "You have 5 branches to pick from",
 		children: (
 			<>
-				<button type="button" className={getButtonClassName({ variant: "gray" })}>
+				<Button variant="gray">
 					See all
 					<Icon name="list" />
-				</button>
-				<button type="button" className={getButtonClassName({ variant: "outline" })}>
+				</Button>
+				<Button variant="outline">
 					New branch
 					<Icon name="plus" />
-				</button>
+				</Button>
 			</>
 		),
 	},
@@ -71,10 +67,10 @@ export const OneAction = meta.story({
 		title: "No branches yet",
 		description: "Your first commit will start one",
 		children: (
-			<button type="button" className={getButtonClassName({ variant: "outline" })}>
+			<Button variant="outline">
 				New branch
 				<Icon name="plus" />
-			</button>
+			</Button>
 		),
 	},
 });
@@ -94,10 +90,10 @@ export const WithoutIllustration = meta.story({
 		description: "You have 5 branches to pick from",
 		illustration: undefined,
 		children: (
-			<button type="button" className={getButtonClassName({ variant: "outline" })}>
+			<Button variant="outline">
 				New branch
 				<Icon name="plus" />
-			</button>
+			</Button>
 		),
 	},
 });

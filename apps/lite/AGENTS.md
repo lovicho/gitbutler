@@ -1,6 +1,43 @@
 # Lite
 
-JavaScript dependencies are sourced from pnpm. Commands are surfaced via pnpm.
+## Before changing anything users see
+
+However small the change:
+
+1. Read `packages/ui-react/DESIGN.md` and `DESIGN.md` beside this file. They
+   are the rules; the code around your change may predate them.
+2. Look up every component before you use it, with the Storybook MCP
+   server's `docs-list` and `docs-show` (`.mcp.json` connects it), or in
+   <https://master--6ab536f5f40e41db628ccf1b.chromatic.com/manifests/components.json>.
+   Use only the props it documents.
+3. Build from `@gitbutler/ui-react` — `Button`, `Tooltip`, `EmptyState` and
+   the rest — not from controls styled in a feature's CSS module.
+
+## Preparing the checkout
+
+Before implementing or validating Lite changes, ensure this checkout has installed dependencies, generated SDK types/native bindings, and the `but` CLI needed to seed E2E fixtures. In an unprepared checkout, run from the repository root:
+
+```console
+$ pnpm install
+$ pnpm build:sdk
+$ cargo build -p but
+```
+
+Reuse completed setup in this checkout. If another agent is preparing the same checkout, coordinate rather than starting duplicate installs/builds. Isolated checkouts need their own setup if missing. Read-only investigation does not require setup.
+
+pnpm manages Node.js runtime and dependency installation, so always use pnpm scripts or `pnpm exec`.
+
+Rebuild the SDK after Rust changes, not for frontend-only edits.
+
+## Running the app
+
+After preparing the checkout, run from the repository root:
+
+```console
+$ pnpm dev:lite
+```
+
+Verify running apps and servers belong to this checkout before reusing them, including the Vite server reused by E2E tests. Ask about port conflicts rather than stopping another checkout's processes.
 
 ## Writing the code
 
@@ -29,8 +66,9 @@ Consider backwards compatibility for any persisted state.
 ## Design
 
 The visual language — how icons, color, and composition should look — is in
-`packages/ui-react/DESIGN.md`, with the component library it describes. Read
-it before changing anything users see. The library's own `AGENTS.md` covers
+`packages/ui-react/DESIGN.md`, with the component library it describes, and
+what Lite decides for itself is in `DESIGN.md` beside this file. Read both
+before changing anything users see. The library's own `AGENTS.md` covers
 its tooling: icons, stories, the checks to run. This section covers what is
 the app's own.
 
@@ -100,9 +138,9 @@ app component with a story one, or mark a story that has no component
 behind it with `tags: ["!manifest"]`, as `AppUpdater.stories.tsx` does.
 `packages/ui-react/AGENTS.md` has the rest about the manifest.
 
-Lite's own components are drawn on the ⚙️ Meta page of the Lite working file,
-<https://www.figma.com/design/EBuHQGUcCaSw4Ln5uVpWkn/Lite>, and drafts go on
-its 🚧 Drafts pages; the library's are in ⚛️ Lite Core.
+Lite's own components are drawn on the ⚙️ Meta page of the Client working file,
+<https://www.figma.com/design/EBuHQGUcCaSw4Ln5uVpWkn/Client>, and drafts go on
+its 🚧 Drafts pages; the library's are in ⚛️ Core.
 `packages/ui-react/AGENTS.md`, under Figma, has the rules for both.
 
 ## Verifying your work

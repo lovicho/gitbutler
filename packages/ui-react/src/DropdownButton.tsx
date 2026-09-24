@@ -1,8 +1,7 @@
-import { getButtonClassName, type ButtonSize } from "./Button.tsx";
+import { Button } from "./Button.tsx";
 import { classes } from "./classes.ts";
 import { Icon } from "./Icon.tsx";
-import { TooltipPopup } from "./Tooltip.tsx";
-import { Button, Tooltip } from "@base-ui/react";
+import { Tooltip } from "./Tooltip.tsx";
 import type { FC, ReactNode } from "react";
 import styles from "./DropdownButton.module.css";
 
@@ -31,7 +30,6 @@ type Props = {
 	 */
 	actionTooltip?: ReactNode;
 	variant?: DropdownButtonVariant;
-	size?: ButtonSize;
 	onClick?: () => void;
 	/** Disables the main action; the chevron trigger keeps its own flag. */
 	disabled?: boolean;
@@ -55,7 +53,6 @@ export const DropdownButton: FC<Props> = ({
 	onMenuTrigger,
 	actionTooltip,
 	variant = "outline",
-	size = "regular",
 	onClick,
 	disabled = false,
 	menuDisabled = false,
@@ -63,25 +60,24 @@ export const DropdownButton: FC<Props> = ({
 	className,
 }) => (
 	<div className={classes(styles.dropdownButton, styles[variant], className)}>
-		<Tooltip.Root disabled={actionTooltip === undefined}>
-			<Tooltip.Trigger
+		<Tooltip disabled={actionTooltip === undefined} content={actionTooltip}>
+			<Button
+				variant={variant}
+				focusableWhenDisabled
+				disabled={disabled}
 				id={id}
-				className={classes(getButtonClassName({ variant, size }), styles.action)}
+				className={styles.action}
 				onClick={onClick}
-				render={<Button focusableWhenDisabled disabled={disabled} />}
 			>
 				{children}
-			</Tooltip.Trigger>
-			<Tooltip.Portal>
-				<Tooltip.Positioner sideOffset={4}>
-					<Tooltip.Popup render={<TooltipPopup />}>{actionTooltip}</Tooltip.Popup>
-				</Tooltip.Positioner>
-			</Tooltip.Portal>
-		</Tooltip.Root>
+			</Button>
+		</Tooltip>
 		<div aria-hidden className={styles.separator} />
 		<Button
 			aria-label={menuLabel}
-			className={classes(getButtonClassName({ variant, size, iconOnly: true }), styles.trigger)}
+			variant={variant}
+			iconOnly
+			className={styles.trigger}
 			onClick={(event) => onMenuTrigger(event.currentTarget)}
 			focusableWhenDisabled
 			disabled={menuDisabled}

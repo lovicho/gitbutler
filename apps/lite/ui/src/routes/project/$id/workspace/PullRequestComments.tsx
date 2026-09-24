@@ -1,3 +1,4 @@
+import { Avatar } from "@gitbutler/ui-react/Avatar.tsx";
 import {
 	useSetReviewThreadResolved,
 	useAddCommentReaction,
@@ -34,10 +35,10 @@ import {
 } from "#ui/native-menu.ts";
 import * as md from "@gitbutler/ui-react/markdown-editing.ts";
 import { applyToTextarea } from "@gitbutler/ui-react/markdown-textarea.ts";
-import { TooltipPopup } from "@gitbutler/ui-react/Tooltip.tsx";
-import { Toggle, ToggleGroup, Tooltip } from "@base-ui/react";
+import { Tooltip } from "@gitbutler/ui-react/Tooltip.tsx";
+import { Toggle, ToggleGroup } from "@base-ui/react";
 import { Badge, type BadgeVariant } from "@gitbutler/ui-react/Badge.tsx";
-import { getButtonClassName } from "@gitbutler/ui-react/Button.tsx";
+import { Button } from "@gitbutler/ui-react/Button.tsx";
 import { Clamped } from "#ui/components/Clamped.tsx";
 import { classes } from "@gitbutler/ui-react/classes.ts";
 import { Icon } from "@gitbutler/ui-react/Icon.tsx";
@@ -119,18 +120,11 @@ const ReviewTag: FC<{ badge: ReviewBadge }> = ({ badge }) => (
  */
 const Author: FC<{ user: ForgeReviewUser }> = ({ user }) => (
 	<>
-		<Avatar src={user.avatarUrl} />
+		<Avatar src={user.avatarUrl} seed={user.login} size={18} className={styles.avatar} />
 		<span className={classes("text-13", "text-semibold", styles.authorLogin)}>{user.login}</span>
 		{isAgent(user) && <Badge variant="lightGray">Agent</Badge>}
 	</>
 );
-
-const Avatar: FC<{ src: string | null | undefined }> = ({ src }) =>
-	src != null ? (
-		<img src={src} className={styles.avatar} alt="" />
-	) : (
-		<span className={styles.avatar} />
-	);
 
 /**
  * The card shell shared by comments and review submissions: an identity row
@@ -224,23 +218,13 @@ const BodyEditor: FC<{
 			/>
 			{mentions.popup}
 			<div className={styles.editorActions}>
-				<button
-					className={getButtonClassName({})}
-					disabled={saving}
-					onClick={onCancel}
-					type="button"
-				>
+				<Button disabled={saving} onClick={onCancel}>
 					Cancel
-				</button>
-				<button
-					className={getButtonClassName({ variant: "gray" })}
-					disabled={saving || value.trim() === ""}
-					onClick={onSave}
-					type="button"
-				>
+				</Button>
+				<Button variant="gray" disabled={saving || value.trim() === ""} onClick={onSave}>
 					{saveLabel}
 					<Icon name={saving ? "spinner" : "tick"} />
-				</button>
+				</Button>
 			</div>
 		</div>
 	);
@@ -299,9 +283,11 @@ const Comment: FC<{
 	};
 
 	const actions = isOwn && !isSending && !editing && (
-		<button
+		<Button
 			aria-label="Comment actions"
-			className={classes(getButtonClassName({ variant: "ghost", iconOnly: true }), styles.kebab)}
+			variant="ghost"
+			iconOnly
+			className={styles.kebab}
 			disabled={isDeleting}
 			onClick={(evt) =>
 				void showNativeMenuFromTrigger(evt.currentTarget, [
@@ -322,10 +308,9 @@ const Comment: FC<{
 					}),
 				])
 			}
-			type="button"
 		>
 			<Icon name={isDeleting ? "spinner" : "kebab"} />
-		</button>
+		</Button>
 	);
 
 	return (
@@ -351,13 +336,9 @@ const Comment: FC<{
 							// double-add; display-only for that moment.
 							onToggle={hasReactions && reactors === undefined ? undefined : toggleReaction}
 						/>
-						<button
-							className={getButtonClassName({ variant: "ghost" })}
-							onClick={() => onReply(comment)}
-							type="button"
-						>
+						<Button variant="ghost" onClick={() => onReply(comment)}>
 							Reply
-						</button>
+						</Button>
 					</>
 				)
 			}
@@ -652,16 +633,15 @@ const Thread: FC<{
 					))}
 					<div className={styles.threadActions}>
 						<ReviewThreadReply projectId={projectId} reviewId={reviewId} threadId={thread.id} />
-						<button
-							className={getButtonClassName({ variant: "ghost" })}
-							type="button"
+						<Button
+							variant="ghost"
 							disabled={resolving}
 							onClick={() =>
 								setResolved({ projectId, threadId: thread.id, resolved: !thread.isResolved })
 							}
 						>
 							{resolving ? "Updating…" : thread.isResolved ? "Reopen conversation" : "Resolve"}
-						</button>
+						</Button>
 					</div>
 				</div>
 			)}
@@ -816,13 +796,9 @@ const Submission: FC<{
 						myLogin={currentLogin}
 						onToggle={toggleReaction}
 					/>
-					<button
-						className={getButtonClassName({ variant: "ghost" })}
-						onClick={() => onReply(submission)}
-						type="button"
-					>
+					<Button variant="ghost" onClick={() => onReply(submission)}>
 						Reply
-					</button>
+					</Button>
 				</>
 			}
 		>
@@ -999,10 +975,11 @@ const InsertButton: FC<{
 	items: () => Array<NativeMenuItem>;
 	notice: string;
 }> = ({ label, icon, items, notice }) => (
-	<Tooltip.Root>
-		<Tooltip.Trigger
-			className={getButtonClassName({ variant: "ghost", iconOnly: true })}
-			render={<button aria-label={label} type="button" />}
+	<Tooltip content={label}>
+		<Button
+			variant="ghost"
+			iconOnly
+			aria-label={label}
 			// Keeps the caret in the textarea: a plain click would blur it
 			// first, so the insert would have no position to act on.
 			onMouseDown={(evt) => evt.preventDefault()}
@@ -1011,13 +988,8 @@ const InsertButton: FC<{
 			}
 		>
 			<Icon name={icon} />
-		</Tooltip.Trigger>
-		<Tooltip.Portal>
-			<Tooltip.Positioner sideOffset={4}>
-				<Tooltip.Popup render={<TooltipPopup />}>{label}</Tooltip.Popup>
-			</Tooltip.Positioner>
-		</Tooltip.Portal>
-	</Tooltip.Root>
+		</Button>
+	</Tooltip>
 );
 
 /**
@@ -1084,8 +1056,10 @@ const Composer: FC<{
 	onSubmit: () => void;
 	textareaRef: RefObject<HTMLTextAreaElement | null>;
 	avatarUrl: string | null | undefined;
+	/** What the stand-in is generated from when there is no avatar: the author's login. */
+	avatarSeed: string;
 	projectId: string;
-}> = ({ draft, setDraft, onSubmit, textareaRef, avatarUrl, projectId }) => {
+}> = ({ draft, setDraft, onSubmit, textareaRef, avatarUrl, avatarSeed, projectId }) => {
 	// Folded to one quiet row until engaged; a draft arriving from outside —
 	// a reply quote, a failed submit restoring its text — unfolds it too.
 	const [engaged, setEngaged] = useState(false);
@@ -1138,7 +1112,7 @@ const Composer: FC<{
 				aria-label="Write a comment"
 				type="button"
 			>
-				<Avatar src={avatarUrl} />
+				<Avatar src={avatarUrl} seed={avatarSeed} size={18} />
 				<span className={styles.composerPrompt}>Write a comment…</span>
 			</button>
 		);
@@ -1154,7 +1128,7 @@ const Composer: FC<{
 			ref={composerRef}
 		>
 			<div className={styles.composerBody}>
-				<Avatar src={avatarUrl} />
+				<Avatar src={avatarUrl} seed={avatarSeed} size={18} />
 				<textarea
 					{...mentions.textareaProps}
 					aria-label="Write a comment"
@@ -1178,15 +1152,10 @@ const Composer: FC<{
 					<MarkdownAttachments onInput={setDraft} targetRef={textareaRef} />
 					<ForgeInserts onInput={setDraft} projectId={projectId} targetRef={textareaRef} />
 				</div>
-				<button
-					className={getButtonClassName({ variant: "gray" })}
-					disabled={empty}
-					onClick={submit}
-					type="button"
-				>
+				<Button variant="gray" disabled={empty} onClick={submit}>
 					Comment
 					<Kbd hotkey={pullRequestHotkeys.comment.hotkey} variant="button" />
-				</button>
+				</Button>
 			</div>
 		</div>
 	);
@@ -1396,6 +1365,7 @@ export const PullRequestComments: FC<{ projectId: string; review: ForgeReview }>
 			</div>
 			<Composer
 				avatarUrl={ownForgeAvatar(items, currentLogin) ?? profile?.picture}
+				avatarSeed={currentLogin ?? profile?.login ?? profile?.email ?? ""}
 				projectId={projectId}
 				draft={draft}
 				onSubmit={handleSubmit}
