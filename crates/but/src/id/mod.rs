@@ -16,7 +16,6 @@ use but_ctx::Context;
 use but_graph::workspace::{Stack, StackCommit, StackSegment, WorktreeStack};
 use gix::hash::hasher;
 use nonempty::NonEmpty;
-use self_cell::self_cell;
 
 use crate::id::{
     file_info::FileInfo, id_usage::UintId, stacks_info::StacksInfo,
@@ -785,24 +784,10 @@ impl<'a> Node<'a> for &'a LaneWithId {
     }
 }
 
-struct StacksIndexes<'a> {
-    // This is left here in case we need indexes in the future. (If we don't, we
-    // can delete this.)
-    _dummy: &'a Vec<LaneWithId>,
-}
-
-self_cell!(
-    struct IndexedStacks {
-        owner: Vec<LaneWithId>,
-        #[covariant]
-        dependent: StacksIndexes,
-    }
-);
-
 /// A mapping from user-friendly CLI IDs to GitButler entities.
 pub struct IdMap {
-    /// Stacks with indexes into various fields.
-    indexed_stacks: IndexedStacks,
+    /// Workspace stacks followed by linked-worktree lanes.
+    lanes: Vec<LaneWithId>,
     /// Mapping from stack IDs to their corresponding stack CLI IDs.
     stack_ids: BTreeMap<StackId, CliId>,
     /// The ID representing the uncommitted area, i.e. uncommitted files that aren't assigned to a stack.
@@ -857,8 +842,6 @@ impl IdMap {
             &uncommitted_short_filenames,
             &commit_id_to_change_id,
         )?;
-        let mut fallback_id_usage = id_usage.clone();
-
         let mut uncommitted_files: BTreeMap<ChangeId, UncommittedFile> = BTreeMap::new();
         for (source, change, hunks) in partitioned_changes_and_hunks {
             let path = &change.path_bytes;
@@ -866,11 +849,9 @@ impl IdMap {
             // Ensure that uncommitted files do not collide with CLI IDs generated after
             if let Some(uint_id) = UintId::from_name(&reverse_hex[..2]) {
                 id_usage.mark_used(uint_id);
-                fallback_id_usage.mark_used(uint_id);
             }
             if let Some(uint_id) = UintId::from_name(&reverse_hex[..3]) {
                 id_usage.mark_used(uint_id);
-                fallback_id_usage.mark_used(uint_id);
             }
             uncommitted_files.insert(
                 reverse_hex,
@@ -881,18 +862,6 @@ impl IdMap {
                     short_id_hunks: hunks.map(|hunk| (UnqualifiedHunkId::default(), hunk)),
                 },
             );
-            // Preserve generated IDs from before path-derived file IDs were introduced. If these
-            // synthetic skips exhaust the bounded space, fall back to the allocator containing
-            // only real allocations and path collision reservations.
-            id_usage.skip_available();
-        }
-        let mut compatibility_probe = id_usage.clone();
-        let compatibility_has_room_for_stacks = stacks
-            .iter()
-            .filter(|stack| stack.lane.stack_id().is_some())
-            .all(|_| compatibility_probe.next_available().is_ok());
-        if !compatibility_has_room_for_stacks {
-            id_usage = fallback_id_usage;
         }
 
         let mut reverse_hex_short_ids: Vec<(ChangeId, Option<&mut ShortId>)> = uncommitted_files
@@ -1001,10 +970,8 @@ impl IdMap {
             }
         }
 
-        let indexed_stacks = IndexedStacks::new(stacks, |stacks| StacksIndexes { _dummy: stacks });
-
         Ok(Self {
-            indexed_stacks,
+            lanes: stacks,
             stack_ids,
             uncommitted: CliId::Uncommitted {
                 id: UNCOMMITTED.to_string(),
@@ -1249,8 +1216,7 @@ impl IdMap {
     /// refers to that entity — never to a file that happens to share the
     /// prefix.
     fn is_displayed_branch_or_stack_id(&self, element: &str) -> bool {
-        self.indexed_stacks
-            .borrow_owner()
+        self.lanes
             .iter()
             .flat_map(|stack| stack.segments.iter())
             .any(|segment| segment.short_id == element)
@@ -1317,7 +1283,7 @@ impl IdMap {
         // Parse known suffixes.
         if let Some(prefix) = element.strip_suffix("@{stack}") {
             let mut matches = Vec::<Box<dyn Node<'a> + 'a>>::new();
-            for stack_with_id in self.indexed_stacks.borrow_owner().iter() {
+            for stack_with_id in self.lanes.iter() {
                 for segment_with_id in stack_with_id.segments.iter() {
                     if segment_with_id
                         .branch_name()
@@ -1338,7 +1304,7 @@ impl IdMap {
 
         // Branches match if they match exactly. Likewise for uncommitted, uncommitted files.
         if scope == SourceScope::Any {
-            for stack_with_id in self.indexed_stacks.borrow_owner().iter() {
+            for stack_with_id in self.lanes.iter() {
                 for segment_with_id in stack_with_id.segments.iter() {
                     if segment_with_id
                         .branch_name()
@@ -1402,7 +1368,7 @@ impl IdMap {
         // Branch short IDs are allowed to be prefixes of other IDs, so if we match any branch short
         // ID exactly we must return immediately to prevent ambiguity. This design prevents us from
         // needing some branch disambiguator.
-        for stack_with_id in self.indexed_stacks.borrow_owner().iter() {
+        for stack_with_id in self.lanes.iter() {
             for segment_with_id in stack_with_id.segments.iter() {
                 if segment_with_id.short_id == element {
                     matches.push(Box::new(segment_with_id));
@@ -1469,8 +1435,7 @@ impl IdMap {
             if let CliId::Stack { id, stack_id } = cli_id
                 && id == element
                 && let Some(stack_with_id) = self
-                    .indexed_stacks
-                    .borrow_owner()
+                    .lanes
                     .iter()
                     .find(|stack_with_id| stack_with_id.lane == LaneId::Stack(Some(*stack_id)))
             {
@@ -1662,14 +1627,13 @@ impl IdMap {
 
     /// Returns all known stacks.
     pub fn stacks(&self) -> &[LaneWithId] {
-        let lanes = self.indexed_stacks.borrow_owner();
+        let lanes = &self.lanes;
         &lanes[..lanes.partition_point(|lane| matches!(lane.lane, LaneId::Stack(_)))]
     }
 
     /// The lanes of the linked worktrees, in tip order.
     pub fn worktree_lanes(&self) -> impl Iterator<Item = &LaneWithId> {
-        self.indexed_stacks
-            .borrow_owner()
+        self.lanes
             .iter()
             .filter(|lane| matches!(lane.lane, LaneId::Worktree(_)))
     }
@@ -1699,7 +1663,7 @@ impl IdMap {
     }
 
     fn commits(&self) -> impl Iterator<Item = CommitWithId<'_>> {
-        self.indexed_stacks.borrow_owner().iter().flat_map(|stack| {
+        self.lanes.iter().flat_map(|stack| {
             stack.segments.iter().flat_map(|segment| {
                 segment
                     .workspace_commits
