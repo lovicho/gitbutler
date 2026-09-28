@@ -34,7 +34,7 @@ Named anonymous branch 'g0' as 'recovered'
 ┊●   tpm add A
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -435,6 +435,46 @@ Updated commit message for nsn
 "#]]
     );
     assert_eq!(env.git_status(), "", "the main checkout stayed clean");
+}
+
+#[test]
+fn reword_renames_branches_in_a_linked_worktree() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("one-stack");
+    env.setup_metadata(&["A"]);
+    super::util::enable_worktree_manipulation(&env);
+    env.but("status").assert().success();
+    let wt_dir = super::util::add_worktree_with_lower_branch(&env, "wt-feature", "A");
+
+    env.but("reword wt-lower -m wt-lower-renamed")
+        .assert()
+        .success()
+        .stderr_eq(str![])
+        .stdout_eq(str![[r#"
+Renamed branch 'wt-lower' to 'wt-lower-renamed'
+
+"#]]);
+    env.but("reword wt-feature -m wt-renamed")
+        .assert()
+        .success()
+        .stderr_eq(str![])
+        .stdout_eq(str![[r#"
+Renamed branch 'wt-feature' to 'wt-renamed'
+
+"#]]);
+
+    // The worktree's checkout followed its branch to the new name.
+    snapbox::assert_data_eq!(
+        but_testsupport::visualize_commit_graph_all_from_dir(&wt_dir).unwrap(),
+        snapbox::str![[r#"
+* edd3eb7 (gitbutler/workspace) GitButler Workspace Commit
+| * 3b0b265 (HEAD -> wt-renamed) add W2
+| * 580bef0 (wt-lower-renamed) add W
+|/  
+* 9477ae7 (A) add A
+* 0dc3733 (origin/main, origin/HEAD, main, gitbutler/target) add M
+
+"#]]
+    );
 }
 
 #[test]

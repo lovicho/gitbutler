@@ -13,7 +13,7 @@ use gix::refs::FullName;
 use ratatui::prelude::*;
 
 use crate::{
-    CliId, CliResult,
+    ChangeSourceId, CliId, CliResult,
     args::atoms::ResolvedCliIdArg,
     command::{
         legacy::status::{
@@ -440,6 +440,7 @@ pub enum Message {
     GotoBottom,
     PickAndGotoBranch,
     SelectBranch(FullName),
+    SelectWorktree(BString),
 
     // Features
     Commit(CommitMessage),
@@ -747,6 +748,7 @@ fn dedup_mutation_messages(messages: &mut Vec<Message>, other_messages: &mut Vec
             | Message::GotoBottom
             | Message::PickAndGotoBranch
             | Message::SelectBranch(..)
+            | Message::SelectWorktree(..)
             | Message::ToggleHelp
             | Message::Mark
             | Message::ClearMarks
@@ -821,7 +823,13 @@ impl PartialEq<CliId> for Selectable {
                 }
             }
             Selectable::Uncommitted => {
-                return matches!(other, CliId::Uncommitted { .. });
+                return matches!(
+                    other,
+                    CliId::UncommittedArea {
+                        source: ChangeSourceId::Head,
+                        ..
+                    }
+                );
             }
         }
         false

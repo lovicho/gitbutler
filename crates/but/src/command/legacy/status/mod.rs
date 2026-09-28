@@ -40,8 +40,7 @@ use crate::{
         workspace_target,
     },
     id::{
-        ChangeIdWithShortId, CommitId, CommittedFileId, LaneWithId, SegmentWithId, ShortId,
-        TreeChangeWithId,
+        ChangeIdWithShortId, CommittedFileId, LaneWithId, SegmentWithId, ShortId, TreeChangeWithId,
     },
     tui::text::truncate_text,
     utils::{
@@ -753,7 +752,7 @@ fn build_status_output(
     print_update_notice(ctx, status_ctx, output)?;
     let has_merged_upstream_branch = print_worktree_status(ctx, status_ctx, output)?;
     print_upstream_state(ctx, status_ctx, output)?;
-    print_common_merge_base_summary(status_ctx, output)?;
+    print_common_merge_base_summary(ctx, status_ctx, output)?;
     print_conflicted_files_warning(status_ctx, output)?;
     let warn_about_outside_workspace = matches!(
         status_ctx.mode,
@@ -1147,9 +1146,24 @@ fn print_upstream_state(
 
 /// Print the common merge-base summary line at the bottom of the status tree.
 fn print_common_merge_base_summary(
+    ctx: &Context,
     status_ctx: &StatusContext<'_>,
     output: &mut StatusOutput<'_>,
 ) -> anyhow::Result<()> {
+    let mut label = String::from("common base");
+    if let Some(base_branch) = &status_ctx.base_branch {
+        let repo = ctx.repo.get()?;
+        let local_ref = format!("refs/heads/{}", base_branch.short_name);
+        let remote_ref = target_remote_tracking_ref_name(base_branch);
+        for ref_name in std::iter::once(local_ref).chain(remote_ref) {
+            if let Some(mut reference) = repo.try_find_reference(ref_name.as_str())?
+                && reference.peel_to_id()?.detach() == status_ctx.common_merge_base_data.commit_id
+            {
+                label.push_str(", ");
+                label.push_str(&reference.name().shorten().to_string());
+            }
+        }
+    }
     let first_line = status_ctx
         .common_merge_base_data
         .message
@@ -1170,7 +1184,7 @@ fn print_common_merge_base_summary(
             t.hint,
         )]),
         Vec::from([
-            Span::raw(" (common base) "),
+            Span::raw(format!(" ({label}) ")),
             Span::styled(
                 status_ctx.common_merge_base_data.commit_date.clone(),
                 t.hint,
@@ -1197,9 +1211,7 @@ fn print_worktree_status(
                 .segments
                 .first()
                 .map_or(Some(BStr::new(b"")), SegmentWithId::branch_name);
-            let repo = ctx.repo.get()?;
             print_files(
-                &repo,
                 status_ctx,
                 *stack_id,
                 branch_name,
@@ -1354,7 +1366,6 @@ fn print_worktree_lane(
     let source = ChangeSourceId::Worktree(worktree.name.clone());
     let files = UncommittedFileWithId::in_source(&status_ctx.id_map, &source);
     print_uncommitted_group(
-        &repo,
         status_ctx,
         uncommitted_id,
         &files,
@@ -1395,7 +1406,6 @@ fn in_lane(depth: usize, prefix: impl IntoIterator<Item = Span<'static>>) -> Vec
 
 #[expect(clippy::too_many_arguments)]
 fn print_files(
-    repo: &gix::Repository,
     status_ctx: &StatusContext<'_>,
     stack: Option<StackId>,
     branch_name: Option<&BStr>,
@@ -1414,11 +1424,8 @@ fn print_files(
     if let Some(stack) = stack
         && (!unstaged && !files.is_empty())
     {
-        let assigned_changes_cli_id = status_ctx
-            .id_map
-            .resolve_stack(stack)
-            .cloned()
-            .with_context(|| {
+        let assigned_changes_cli_id =
+            status_ctx.id_map.resolve_stack(stack).with_context(|| {
                 format!("Could not resolve stack CLI id for assigned changes. stack_id={stack:?}")
             })?;
 
@@ -1451,7 +1458,7 @@ fn print_files(
 
     let max_id_width = files
         .iter()
-        .map(|file| file.short_id.len())
+        .map(|file| file.cli_id.short_string().len())
         .max()
         .unwrap_or(0);
 
@@ -1463,16 +1470,9 @@ fn print_files(
             .map(|status| status_letter_ui(status, t))
             .unwrap_or_else(|| Span::raw(char::default().to_string()));
 
-        let cli_id = &file.short_id;
+        let cli_id = file.cli_id.short_string();
         let id_padding = " ".repeat(max_id_width.saturating_sub(cli_id.len()) + 1);
-
-        let file_cli_id = lookup_cli_id_for_short_id(
-            &status_ctx.id_map,
-            repo,
-            cli_id,
-            |id| matches!(id, CliId::UncommittedHunkOrFile(uncommitted) if uncommitted.is_entire_file),
-            "uncommitted file",
-        )?;
+        let file_cli_id = file.cli_id.clone();
 
         let file_line = FileLineContent {
             id: Vec::from([
@@ -1528,9 +1528,8 @@ fn print_group(
         // Linked worktrees are drawn as lanes off the commit they rest on, so only the main
         // worktree's uncommitted area belongs here.
         print_uncommitted_group(
-            &repo,
             status_ctx,
-            status_ctx.id_map.uncommitted().clone(),
+            status_ctx.id_map.uncommitted(),
             files,
             &status_ctx.worktree_changes,
             &status_ctx.conflicted_paths,
@@ -1647,17 +1646,7 @@ fn print_lane_segments(
         };
 
         let branch = segment.branch_name().unwrap_or(BStr::new("")).to_string();
-        let is_anonymous = segment.branch_name().is_none();
-        let branch_cli_id = lookup_cli_id_for_short_id(
-            &status_ctx.id_map,
-            repo,
-            &segment.short_id,
-            |id| {
-                matches!(id, CliId::AnonymousSegment(..)) == is_anonymous
-                    && matches!(id, CliId::Branch(..) | CliId::AnonymousSegment(..))
-            },
-            "branch",
-        )?;
+        let branch_cli_id = segment.cli_id();
         let mut branch_suffix = Vec::new();
         branch_suffix.extend(ci_spans);
         if let Some(branch_status) = branch_status {
@@ -1729,7 +1718,7 @@ fn print_lane_segments(
                 repo,
                 status_ctx,
                 lane.lane.stack_id(),
-                commit.short_id.clone(),
+                commit.cli_id(),
                 None,
                 inner,
                 CommitChanges::Remote(&details.diff_with_first_parent),
@@ -1763,7 +1752,7 @@ fn print_lane_segments(
                 repo,
                 status_ctx,
                 lane.lane.stack_id(),
-                commit.short_id.clone(),
+                commit.cli_id(),
                 commit.change_id.as_ref(),
                 &inner.inner,
                 CommitChanges::Workspace(&commit.tree_changes_using_repo(repo)?),
@@ -1785,9 +1774,7 @@ fn print_lane_segments(
 /// `changes` supplies the tree status letters and must come from the same
 /// checkout as `files`, or every file renders without one. A linked worktree's area names
 /// the worktree after the label.
-#[expect(clippy::too_many_arguments)]
 fn print_uncommitted_group(
-    repo: &gix::Repository,
     status_ctx: &StatusContext<'_>,
     cli_id: CliId,
     files: &[UncommittedFileWithId],
@@ -1798,7 +1785,11 @@ fn print_uncommitted_group(
 ) -> anyhow::Result<()> {
     let t = crate::theme::get();
     let mut suffix = Vec::new();
-    if let CliId::WorktreeUncommitted { name, .. } = &cli_id {
+    if let CliId::UncommittedArea {
+        source: ChangeSourceId::Worktree(name),
+        ..
+    } = &cli_id
+    {
         suffix.push(Span::raw(" {"));
         suffix.push(Span::styled(name.to_string(), t.info));
         suffix.push(Span::raw("}"));
@@ -1814,15 +1805,19 @@ fn print_uncommitted_group(
         decoration_end: Vec::from([Span::raw("]")]),
         suffix,
     };
-    if matches!(cli_id, CliId::WorktreeUncommitted { .. }) {
+    if matches!(
+        cli_id,
+        CliId::UncommittedArea {
+            source: ChangeSourceId::Worktree(_),
+            ..
+        }
+    ) {
         output.worktree_uncommitted(in_lane(depth, [Span::raw("╭┄ ")]), line, cli_id)?;
     } else {
         output.uncommitted_changes(in_lane(depth, [Span::raw("╭┄ ")]), line, cli_id)?;
     }
     if !files.is_empty() {
-        print_files(
-            repo, status_ctx, None, None, files, changes, true, depth, output,
-        )?;
+        print_files(status_ctx, None, None, files, changes, true, depth, output)?;
     }
     for path in conflicted_paths {
         output.no_assignments_unstaged(
@@ -1836,27 +1831,6 @@ fn print_uncommitted_group(
         )?;
     }
     Ok(())
-}
-
-fn lookup_cli_id_for_short_id(
-    id_map: &IdMap,
-    repo: &gix::Repository,
-    short_id: &str,
-    predicate: impl Fn(&CliId) -> bool,
-    kind: &str,
-) -> anyhow::Result<CliId> {
-    let mut matches = id_map.parse_using_repo(short_id, repo)?;
-    matches.retain(|id| id.short_string() == short_id && predicate(id));
-
-    match matches.len() {
-        1 => Ok(matches.remove(0)),
-        0 => Err(anyhow::anyhow!(
-            "Could not find {kind} CLI id '{short_id}' in IdMap"
-        )),
-        _ => Err(anyhow::anyhow!(
-            "CLI id '{short_id}' is ambiguous for {kind} in IdMap"
-        )),
-    }
 }
 
 fn status_from_changes(changes: &[ui::TreeChange], path: BString) -> Option<ui::TreeStatus> {
@@ -1879,7 +1853,7 @@ fn print_commit(
     repo: &gix::Repository,
     status_ctx: &StatusContext<'_>,
     stack_id: Option<StackId>,
-    short_id: ShortId,
+    commit_cli_id: CliId,
     change_id: Option<&ChangeIdWithShortId>,
     commit: &but_workspace::ref_info::Commit,
     commit_changes: CommitChanges,
@@ -1908,7 +1882,7 @@ fn print_commit(
 
     let (details_line, _) = display_cli_commit_details(
         repo,
-        short_id.clone(),
+        commit_cli_id.to_short_string(),
         change_id,
         commit,
         match commit_changes {
@@ -1918,13 +1892,6 @@ fn print_commit(
         status_ctx.flags.verbose,
         status_ctx.is_paged,
     );
-    let commit_cli_id = lookup_cli_id_for_short_id(
-        &status_ctx.id_map,
-        repo,
-        &short_id,
-        |id| matches!(id, CliId::Commit { commit: CommitId { commit_id, .. }, id: _ } if *commit_id == commit.id),
-        "commit",
-    )?;
 
     let details_line = if upstream_commit {
         dim_commit_line_content(details_line)

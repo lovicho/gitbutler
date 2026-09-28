@@ -39,6 +39,70 @@ fn worktree_tui() -> (TestTui<App>, String) {
     (tui, editor_command)
 }
 
+#[test]
+fn branch_picker_jumps_to_worktree_by_branch() {
+    let (mut tui, _editor) = worktree_tui();
+
+    tui.input('t');
+    tui.input("wt-branch").assert_rendered_term_svg_eq(file![
+        "snapshots/branch_picker_jumps_to_worktree_by_branch_001.svg"
+    ]);
+    tui.input(KeyCode::Enter)
+        .assert_current_line_eq(str!["┊┊├┄ wt [wt-branch]"]);
+}
+
+#[test]
+fn branch_picker_jumps_to_detached_worktree() {
+    let env =
+        Sandbox::init_scenario_with_target_and_default_settings_slow("one-stack-with-worktree");
+    env.setup_metadata(&["A"]);
+    env.invoke_bash("git -C .git/gitbutler/test-worktrees/wt checkout -q --detach");
+    let mut tui = test_status_tui_with_options(
+        env,
+        TestTuiOptions {
+            worktree_manipulation: true,
+            ..Default::default()
+        },
+    );
+
+    tui.input('t');
+    tui.input("wt").assert_rendered_term_svg_eq(file![
+        "snapshots/branch_picker_jumps_to_detached_worktree_001.svg"
+    ]);
+    tui.input(KeyCode::Enter)
+        .assert_current_line_eq(str!["┊┊├┄ h0"]);
+}
+
+#[test]
+fn branch_picker_excludes_worktrees_when_disabled() {
+    let env =
+        Sandbox::init_scenario_with_target_and_default_settings_slow("one-stack-with-worktree");
+    env.setup_metadata(&["A"]);
+    let mut tui = test_status_tui_with_options(env, TestTuiOptions::default());
+
+    tui.input('t');
+    tui.input("wt-branch").assert_rendered_term_svg_eq(file![
+        "snapshots/branch_picker_excludes_worktrees_when_disabled_001.svg"
+    ]);
+    tui.input(KeyCode::Esc)
+        .assert_current_line_eq(str!["╭┄ @ [uncommitted] (no changes)"]);
+}
+
+#[test]
+fn branch_picker_excludes_worktrees_when_marking_files() {
+    let (mut tui, _editor) = worktree_tui();
+
+    tui.input([KeyCode::Down; 3])
+        .assert_current_line_eq(str!["┊┊┊   ok A wt-file.txt"]);
+    tui.input(' ');
+    // All branch rows are unselectable while marking files, so the picker stays closed.
+    tui.input('t')
+        .assert_rendered_term_svg_eq(file![
+            "snapshots/branch_picker_excludes_worktrees_when_marking_files_001.svg"
+        ])
+        .assert_current_line_eq(str!["┊✔︎┊   ok A wt-file.txt"]);
+}
+
 /// Sibling worktrees nested below a dirty worktree's first commit keep a blank lane between them.
 #[test]
 fn sibling_worktree_lanes_are_separated_after_uncommitted_files() {
@@ -64,24 +128,36 @@ fn sibling_worktree_lanes_are_separated_after_uncommitted_files() {
     ]);
 }
 
-/// `wt` is a strict prefix of its own area's `wt:@`, so typing it can never become the only
-/// match; the ID typed out in full still jumps to the reference, and one more character reaches
-/// the area.
+/// An ambiguous worktree ID needs Enter, leaving its uncommitted area reachable by typing ':'.
 #[test]
 fn jump_to_a_worktree_reference_despite_its_area_extending_the_id() {
     let (mut tui, _editor) = worktree_tui();
 
     tui.reload();
     tui.input('/');
-    // Typing t selects wt, not wt:@, even though both IDs have that prefix.
+    // Neither worktree heading is an immediate target while both share the prefix.
     tui.input('w').assert_rendered_term_svg_eq(file![
         "snapshots/jump_to_a_worktree_reference_despite_its_area_extending_the_id_001.svg"
     ]);
     tui.input('t')
+        .assert_current_line_eq(str!["╭┄ @ [uncommitted] (no changes)"]);
+    tui.input(KeyCode::Enter)
         .assert_current_line_eq(str!["┊┊├┄ wt [wt-branch]"]);
+}
 
+#[test]
+fn jump_to_a_worktree_uncommitted_area() {
+    let (mut tui, _editor) = worktree_tui();
+
+    tui.reload();
     tui.input('/');
     tui.input("wt:")
+        .assert_current_line_eq(str!["┊┊╭┄ wt:@ [uncommitted] {wt}"]);
+
+    // Confirming the exact branch ID must win even when the area is already selected.
+    tui.input('/');
+    tui.input("wt");
+    tui.input(KeyCode::Enter)
         .assert_current_line_eq(str!["┊┊├┄ wt [wt-branch]"]);
 }
 

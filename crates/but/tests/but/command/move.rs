@@ -9,6 +9,1080 @@ use crate::{
 };
 
 #[test]
+fn failed_implicit_move_checkout_restores_source_history() {
+    let env = Sandbox::open_with_default_settings("single-branch-mode");
+    env.file("file", "x\n");
+    env.but("commit -b source -m base").assert().success();
+    env.file("file", "y\n");
+    env.but("commit -m first").assert().success();
+    env.file("file", "x\n");
+    env.but("commit -m revert").assert().success();
+    env.file("file", "z\n");
+    env.but("commit -m last").assert().success();
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ so [source]
+┊●   nlu last
+┊│     nlu:q M file
+┊●   uwm revert
+┊│     uwm:q M file
+┊●   suw first
+┊│     suw:q M file
+┊●   vml base
+┊│     vml:q A file
+├╯
+┊
+┴ b1540e5 (common base, main, origin/main) 2000-01-02 M
+
+Hint: run `but help` for all commands
+
+"#]]);
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* baa8b36 (HEAD -> source) last
+* 5f3b211 revert
+* 10fc7e8 first
+* 491196b base
+* b1540e5 (origin/main, origin/HEAD, main, gitbutler/target) M
+* e31e6ca add init
+
+"#]]
+    );
+    env.but("move suw --above source -b moved").assert().failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: Could not safely check out 'refs/heads/moved' from ae5714b53ad5051b29a9dc69d1f18bd5c4b745f1 to cf2bcd3b5b19b9d7214efe41eba4bae642252d95
+
+Caused by:
+    Refusing to check out conflicted commit cf2bcd3b5b19b9d7214efe41eba4bae642252d95
+
+"#]]);
+    // A failed checkout must restore the original source refs and leave no destination branch.
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* baa8b36 (HEAD -> source) last
+* 5f3b211 revert
+* 10fc7e8 first
+* 491196b base
+* b1540e5 (origin/main, origin/HEAD, main, gitbutler/target) M
+* e31e6ca add init
+
+"#]]
+    );
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ so [source]
+┊●   nlu last
+┊│     nlu:q M file
+┊●   uwm revert
+┊│     uwm:q M file
+┊●   suw first
+┊│     suw:q M file
+┊●   vml base
+┊│     vml:q A file
+├╯
+┊
+┴ b1540e5 (common base, main, origin/main) 2000-01-02 M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}
+
+#[test]
+fn failed_implicit_branch_move_checkout_restores_source_history() {
+    let env = Sandbox::open_with_default_settings("single-branch-mode");
+    env.file("file", "x\n");
+    env.but("commit -b source -m base").assert().success();
+    env.but("branch new first --above source")
+        .assert()
+        .success();
+    env.file("file", "y\n");
+    env.but("commit -m first").assert().success();
+    env.but("branch new top --above first").assert().success();
+    env.file("file", "x\n");
+    env.but("commit -m revert").assert().success();
+    env.file("file", "z\n");
+    env.but("commit -m last").assert().success();
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ to [top]
+┊●   nlu last
+┊│     nlu:q M file
+┊●   uwm revert
+┊│     uwm:q M file
+┊│
+┊├┄ fi [first]
+┊●   suw first
+┊│     suw:q M file
+┊│
+┊├┄ so [source]
+┊●   vml base
+┊│     vml:q A file
+├╯
+┊
+┴ b1540e5 (common base, main, origin/main) 2000-01-02 M
+
+Hint: run `but help` for all commands
+
+"#]]);
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* baa8b36 (HEAD -> top) last
+* 5f3b211 revert
+* 10fc7e8 (first) first
+* 491196b (source) base
+* b1540e5 (origin/main, origin/HEAD, main, gitbutler/target) M
+* e31e6ca add init
+
+"#]]
+    );
+    env.but("move first --above top")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: Could not safely check out 'refs/heads/first' from [..] to [..]
+
+Caused by:
+    Refusing to check out conflicted commit [..]
+
+"#]]);
+    // Restacking existing branches must also roll back every rewritten ref and branch order.
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* baa8b36 (HEAD -> top) last
+* 5f3b211 revert
+* 10fc7e8 (first) first
+* 491196b (source) base
+* b1540e5 (origin/main, origin/HEAD, main, gitbutler/target) M
+* e31e6ca add init
+
+"#]]
+    );
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ to [top]
+┊●   nlu last
+┊│     nlu:q M file
+┊●   uwm revert
+┊│     uwm:q M file
+┊│
+┊├┄ fi [first]
+┊●   suw first
+┊│     suw:q M file
+┊│
+┊├┄ so [source]
+┊●   vml base
+┊│     vml:q A file
+├╯
+┊
+┴ b1540e5 (common base, main, origin/main) 2000-01-02 M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}
+
+#[test]
+fn single_branch_move_commit_to_independent_branch() {
+    let env = Sandbox::open_with_default_settings("single-branch-three-dependent-branches");
+    env.but("move myy -b independent").assert().success();
+    env.but("status")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ in [independent]
+┊●   myy add B
+├╯
+┊
+┊╭┄ g0 [C]
+┊●   vuw add C
+┊│
+┊├┄ h0 [B] (no commits)
+┊│
+┊├┄ i0 [A]
+┊●   nmq add A
+├╯
+┊
+┴ 3712f84 (common base, main, origin/main) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+*   b6449da (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|/  
+| * a3830b6 (C) add C
+| * 549c6bf (B, A) add A
+* | e76feb9 (independent) add B
+|/  
+* 3712f84 (origin/main, origin/HEAD, main, gitbutler/target) add M
+* e31e6ca add init
+
+"#]]
+    );
+}
+
+#[test]
+fn single_branch_move_commit_above_checkout() {
+    let env = Sandbox::open_with_default_settings("single-branch-three-dependent-branches");
+    env.but("move myy --above C -b moved").assert().success();
+    env.but("status")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ mo [moved]
+┊●   myy add B
+┊│
+┊├┄ g0 [C]
+┊●   vuw add C
+┊●   nmq add A
+├╯
+┊
+┴ 3712f84 (common base, main, origin/main) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* 68bafd4 (HEAD -> moved) add B
+* a3830b6 (C) add C
+* 549c6bf (B, A) add A
+* 3712f84 (origin/main, origin/HEAD, main, gitbutler/target) add M
+* e31e6ca add init
+
+"#]]
+    );
+}
+
+#[test]
+fn single_branch_move_commit_and_switch() {
+    let env = Sandbox::open_with_default_settings("single-branch-three-dependent-branches");
+    env.but("status")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ g0 [C]
+┊●   vuw add C
+┊│
+┊├┄ h0 [B]
+┊●   myy add B
+┊│
+┊├┄ i0 [A]
+┊●   nmq add A
+├╯
+┊
+┴ 3712f84 (common base, main, origin/main) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* 6233e7e (HEAD -> C) add C
+* e06c9f0 (B) add B
+* 549c6bf (A) add A
+* 3712f84 (origin/main, origin/HEAD, main) add M
+* e31e6ca add init
+
+"#]]
+    );
+    env.but("move myy -b independent --switch")
+        .assert()
+        .success();
+    env.but("status")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ in [independent]
+┊●   myy add B
+├╯
+┊
+┴ 3712f84 (common base, main, origin/main) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* a3830b6 (C) add C
+* 549c6bf (B, A) add A
+| * e76feb9 (HEAD -> independent) add B
+|/  
+* 3712f84 (origin/main, origin/HEAD, main, gitbutler/target) add M
+* e31e6ca add init
+
+"#]]
+    );
+}
+
+#[test]
+fn single_branch_move_changes_and_switch() {
+    let env = Sandbox::open_with_default_settings("single-branch-three-dependent-branches");
+    env.but("move myy:B -b independent --switch -m extracted")
+        .assert()
+        .success();
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ in [independent]
+┊●   qkw extracted
+┊│     qkw:p A B
+├╯
+┊
+┴ 3712f84 (common base, main, origin/main) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* c753d5e (C) add C
+* ff3d67f (B) add B
+* 549c6bf (A) add A
+| * ca8842d (HEAD -> independent) extracted
+|/  
+* 3712f84 (origin/main, origin/HEAD, main, gitbutler/target) add M
+* e31e6ca add init
+
+"#]]
+    );
+}
+
+#[test]
+fn single_branch_move_changes_above_checkout() {
+    let env = Sandbox::open_with_default_settings("single-branch-three-dependent-branches");
+    env.but("move myy:B --above C -b moved -m extracted")
+        .assert()
+        .success();
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ mo [moved]
+┊●   qkw extracted
+┊│     qkw:p A B
+┊│
+┊├┄ g0 [C]
+┊●   vuw add C
+┊│     vuw:w A C
+┊│
+┊├┄ h0 [B]
+┊●   myy add B (no changes)
+┊│
+┊├┄ i0 [A]
+┊●   nmq add A
+┊│     nmq:t A A
+├╯
+┊
+┴ 3712f84 (common base, main, origin/main) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* 86dab15 (HEAD -> moved) extracted
+* c753d5e (C) add C
+* ff3d67f (B) add B
+* 549c6bf (A) add A
+* 3712f84 (origin/main, origin/HEAD, main, gitbutler/target) add M
+* e31e6ca add init
+
+"#]]
+    );
+}
+
+#[test]
+fn single_branch_move_changes_to_independent_branch() {
+    let env = Sandbox::open_with_default_settings("single-branch-three-dependent-branches");
+    env.but("move myy:B --unstack -b moved -m extracted")
+        .assert()
+        .success();
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ mo [moved]
+┊●   qkw extracted
+┊│     qkw:p A B
+├╯
+┊
+┊╭┄ g0 [C]
+┊●   vuw add C
+┊│     vuw:w A C
+┊│
+┊├┄ h0 [B]
+┊●   myy add B (no changes)
+┊│
+┊├┄ i0 [A]
+┊●   nmq add A
+┊│     nmq:t A A
+├╯
+┊
+┴ 3712f84 (common base, main, origin/main) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+*   2d18278 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|/  
+| * c753d5e (C) add C
+| * ff3d67f (B) add B
+| * 549c6bf (A) add A
+* | ca8842d (moved) extracted
+|/  
+* 3712f84 (origin/main, origin/HEAD, main, gitbutler/target) add M
+* e31e6ca add init
+
+"#]]
+    );
+}
+
+#[test]
+fn single_branch_move_above_lower_branch_preserves_checkout() {
+    let env = Sandbox::open_with_default_settings("single-branch-three-dependent-branches");
+    env.but("move vuw --above A -b moved").assert().success();
+    env.but("status")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ g0 [C]
+┊●   myy add B
+┊│
+┊├┄ mo [moved]
+┊●   vuw add C
+┊│
+┊├┄ h0 [A]
+┊●   nmq add A
+├╯
+┊
+┴ 3712f84 (common base, main, origin/main) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* 68bafd4 (HEAD -> C, B) add B
+* a3830b6 (moved) add C
+* 549c6bf (A) add A
+* 3712f84 (origin/main, origin/HEAD, main, gitbutler/target) add M
+* e31e6ca add init
+
+"#]]
+    );
+}
+
+#[test]
+fn single_branch_move_below_branch_preserves_checkout() {
+    let env = Sandbox::open_with_default_settings("single-branch-three-dependent-branches");
+    env.but("move vuw --below B -b moved").assert().success();
+    env.but("status")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ g0 [C]
+┊●   myy add B
+┊│
+┊├┄ mo [moved]
+┊●   vuw add C
+┊│
+┊├┄ h0 [A]
+┊●   nmq add A
+├╯
+┊
+┴ 3712f84 (common base, main, origin/main) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* 68bafd4 (HEAD -> C, B) add B
+* a3830b6 (moved) add C
+* 549c6bf (A) add A
+* 3712f84 (origin/main, origin/HEAD, main, gitbutler/target) add M
+* e31e6ca add init
+
+"#]]
+    );
+}
+
+#[test]
+fn single_branch_unstack_branch_enters_workspace() {
+    let env = Sandbox::open_with_default_settings("single-branch-three-dependent-branches");
+    env.but("move B --unstack").assert().success();
+    env.but("status")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ g0 [C]
+┊●   vuw add C
+┊│
+┊├┄ h0 [A]
+┊●   nmq add A
+├╯
+┊
+┊╭┄ i0 [B]
+┊●   myy add B
+├╯
+┊
+┴ 3712f84 (common base, main, origin/main) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+*   3f3b2ac (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+|/  
+| * a3830b6 (C) add C
+| * 549c6bf (A) add A
+* | e76feb9 (B) add B
+|/  
+* 3712f84 (origin/main, origin/HEAD, main, gitbutler/target) add M
+* e31e6ca add init
+
+"#]]
+    );
+}
+
+#[test]
+fn single_branch_unstack_branch_and_switch() {
+    let env = Sandbox::open_with_default_settings("single-branch-three-dependent-branches");
+    env.but("move B --unstack --switch").assert().success();
+    env.but("status")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ g0 [B]
+┊●   myy add B
+├╯
+┊
+┴ 3712f84 (common base, main, origin/main) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* e76feb9 (HEAD -> B) add B
+| * a3830b6 (C) add C
+| * 549c6bf (A) add A
+|/  
+* 3712f84 (origin/main, origin/HEAD, main, gitbutler/target) add M
+* e31e6ca add init
+
+"#]]
+    );
+}
+
+#[test]
+fn single_branch_move_all_commits_retains_empty_source() {
+    let env = Sandbox::open_with_default_settings("single-branch-mode");
+    env.but("branch new source").assert().success();
+    env.file("first", "first\n");
+    env.but("commit -m first").assert().success();
+    env.file("second", "second\n");
+    env.but("commit -m second").assert().success();
+    env.but("status")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ so [source]
+┊●   ukz second
+┊●   zpr first
+├╯
+┊
+┴ b1540e5 (common base, main, origin/main) 2000-01-02 M
+
+Hint: run `but help` for all commands
+
+"#]]);
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* 8ff6b34 (HEAD -> source) second
+* ff24da1 first
+* b1540e5 (origin/main, origin/HEAD, main, gitbutler/target) M
+* e31e6ca add init
+
+"#]]
+    );
+    env.but("move ukz zpr --above source -b moved")
+        .assert()
+        .success();
+    env.but("status")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ mo [moved]
+┊●   ukz second
+┊●   zpr first
+┊│
+┊├┄ so [source] (no commits)
+├╯
+┊
+┴ b1540e5 (common base, main, origin/main) 2000-01-02 M
+
+Hint: run `but help` for all commands
+
+"#]]);
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* 8ff6b34 (HEAD -> moved) second
+* ff24da1 first
+* b1540e5 (origin/main, origin/HEAD, source, main, gitbutler/target) M
+* e31e6ca add init
+
+"#]]
+    );
+}
+
+#[test]
+fn single_branch_move_from_target_checks_out_new_branch() {
+    let env = Sandbox::open_with_default_settings("single-branch-mode");
+    env.file("first", "first\n");
+    env.invoke_git("add first");
+    env.invoke_git("commit -m first");
+    env.but("status")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ ma [main]
+┊●   nyl first
+├╯
+┊
+┴ b1540e5 (common base, origin/main) 2000-01-02 M
+
+Hint: run `but help` for all commands
+
+"#]]);
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* 7a6c10f (HEAD -> main) first
+* b1540e5 (origin/main, origin/HEAD) M
+* e31e6ca add init
+
+"#]]
+    );
+    env.but("move nyl -b moved").assert().success();
+    env.but("status")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ mo [moved]
+┊●   nyl first
+├╯
+┊
+┴ b1540e5 (common base, main, origin/main) 2000-01-02 M
+
+Hint: run `but help` for all commands
+
+"#]]);
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* 7a6c10f (HEAD -> moved) first
+* b1540e5 (origin/main, origin/HEAD, main, gitbutler/target) M
+* e31e6ca add init
+
+"#]]
+    );
+}
+
+#[test]
+fn single_branch_move_to_existing_branch_and_switch() {
+    let env = Sandbox::open_with_default_settings("single-branch-three-dependent-branches");
+    env.but("move myy -b A --switch").assert().success();
+    env.but("status")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ g0 [A]
+┊●   myy add B
+┊●   nmq add A
+├╯
+┊
+┴ 3712f84 (common base, main, origin/main) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* 6233e7e (C) add C
+* e06c9f0 (HEAD -> A, B) add B
+* 549c6bf add A
+* 3712f84 (origin/main, origin/HEAD, main, gitbutler/target) add M
+* e31e6ca add init
+
+"#]]
+    );
+}
+
+#[test]
+fn workspace_move_to_new_branch_and_switch() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+    env.setup_metadata(&["A", "B"]);
+    env.but("move d3e2ba3 -b moved --switch").assert().success();
+    env.but("status")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ mo [moved]
+┊●   lrm add B
+├╯
+┊
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+*   e1a91a3 (gitbutler/workspace) GitButler Workspace Commit
+|/  
+| * 9477ae7 (A) add A
+|/  
+| * d3e2ba3 (HEAD -> moved) add B
+|/  
+* 0dc3733 (origin/main, origin/HEAD, main, gitbutler/target, B) add M
+
+"#]]
+    );
+}
+
+#[test]
+fn single_branch_stack_branch_and_switch() {
+    let env = Sandbox::open_with_default_settings("single-branch-three-dependent-branches");
+    env.but("move C -b A --switch").assert().success();
+    env.but("status")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ g0 [C]
+┊●   vuw add C
+┊│
+┊├┄ h0 [A]
+┊●   nmq add A
+├╯
+┊
+┴ 3712f84 (common base, main, origin/main) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* 68bafd4 (B) add B
+* a3830b6 (HEAD -> C) add C
+* 549c6bf (A) add A
+* 3712f84 (origin/main, origin/HEAD, main, gitbutler/target) add M
+* e31e6ca add init
+
+"#]]
+    );
+}
+
+#[test]
+fn single_branch_unstack_checked_out_branch_and_switch() {
+    let env = Sandbox::open_with_default_settings("single-branch-three-dependent-branches");
+    env.but("move C --unstack --switch").assert().success();
+    env.but("status")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ g0 [C]
+┊●   vuw add C
+├╯
+┊
+┴ 3712f84 (common base, main, origin/main) 2000-01-02 add M
+
+Hint: run `but help` for all commands
+
+"#]]);
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* e06c9f0 (B) add B
+* 549c6bf (A) add A
+| * eea8652 (HEAD -> C) add C
+|/  
+* 3712f84 (origin/main, origin/HEAD, main, gitbutler/target) add M
+* e31e6ca add init
+
+"#]]
+    );
+}
+
+#[test]
+fn single_branch_unstack_empty_branch_and_switch() {
+    let env = Sandbox::open_with_default_settings("single-branch-mode");
+    env.but("branch new bottom").assert().success();
+    env.file("first", "first\n");
+    env.but("commit -m first").assert().success();
+    env.but("branch new empty --above bottom")
+        .assert()
+        .success();
+    env.but("branch new top --above empty").assert().success();
+    env.file("second", "second\n");
+    env.but("commit -m second").assert().success();
+    env.but("status")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ to [top]
+┊●   ukz second
+┊│
+┊├┄ em [empty] (no commits)
+┊│
+┊├┄ bo [bottom]
+┊●   zpr first
+├╯
+┊
+┴ b1540e5 (common base, main, origin/main) 2000-01-02 M
+
+Hint: run `but help` for all commands
+
+"#]]);
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* 8ff6b34 (HEAD -> top) second
+* ff24da1 (empty, bottom) first
+* b1540e5 (origin/main, origin/HEAD, main, gitbutler/target) M
+* e31e6ca add init
+
+"#]]
+    );
+    env.but("move empty --unstack --switch").assert().success();
+    env.but("status")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ em [empty] (no commits)
+├╯
+┊
+┴ b1540e5 (common base, main, origin/main) 2000-01-02 M
+
+Hint: run `but help` for all commands
+
+"#]]);
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* 8ff6b34 (top) second
+* ff24da1 (bottom) first
+* b1540e5 (HEAD -> empty, origin/main, origin/HEAD, main, gitbutler/target) M
+* e31e6ca add init
+
+"#]]
+    );
+    env.but("switch top").assert().success();
+    env.but("status")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ to [top]
+┊●   ukz second
+┊│
+┊├┄ bo [bottom]
+┊●   zpr first
+├╯
+┊
+┴ b1540e5 (common base, main, origin/main) 2000-01-02 M
+
+Hint: run `but help` for all commands
+
+"#]]);
+}
+
+#[test]
+fn single_branch_move_hunk_above_checkout() {
+    let env = Sandbox::open_with_default_settings("single-branch-mode");
+    let content = "one\ntwo\nthree\nfour\nfive\nsix\nseven\n";
+    env.file("file", content);
+    env.but("commit -b source -m 'Add file'").assert().success();
+    env.file("file", format!("beginning\n{content}end"));
+    env.but("commit -m 'Update file'").assert().success();
+    env.but("move wrz:file:3 --above source -b moved -m extracted")
+        .assert()
+        .success();
+    env.but("status -f")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ mo [moved]
+┊●   qkw extracted
+┊│     qkw:q M file
+┊│
+┊├┄ so [source]
+┊●   wrz Update file
+┊│     wrz:q M file
+┊●   yvn Add file
+┊│     yvn:q A file
+├╯
+┊
+┴ b1540e5 (common base, main, origin/main) 2000-01-02 M
+
+Hint: run `but help` for all commands
+
+"#]]);
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* 3d8bb31 (HEAD -> moved) extracted
+* f081cd6 (source) Update file
+* 372d68b Add file
+* b1540e5 (origin/main, origin/HEAD, main, gitbutler/target) M
+* e31e6ca add init
+
+"#]]
+    );
+    env.but("diff wrz")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::str![[r#"
+──────────────╮
+ w:q:8 M file │
+──────────────╯
+
+@@ -5,3 +5,4 @@
+───────────────
+5 ┊ 5 │  five
+6 ┊ 6 │  six
+7 ┊ 7 │  seven
+  ┊ 8 │ +end
+
+"#]]);
+}
+
+#[test]
+fn move_switch_requires_single_branch_feature() {
+    let env = Sandbox::init_scenario_with_target_and_default_settings("two-stacks");
+    env.setup_metadata(&["A", "B"]);
+    env.but("config feature single-branch disable")
+        .assert()
+        .success();
+    env.but("move d3e2ba3 -b moved --switch")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+Error: `--switch` requires the `single-branch` feature to be enabled
+
+Hint: Enable the feature with `but config feature single-branch enable`
+
+"#]]);
+}
+
+#[test]
+fn move_switch_conflicts_with_relative_targets() {
+    let env = Sandbox::open_with_default_settings("single-branch-three-dependent-branches");
+    env.but("move myy --above C --switch")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+error: the argument '--above <BRANCH_OR_COMMIT>' cannot be used with '--switch'
+...
+"#]]);
+    env.but("move myy --below C --switch")
+        .assert()
+        .failure()
+        .stderr_eq(snapbox::str![[r#"
+error: the argument '--below <BRANCH_OR_COMMIT>' cannot be used with '--switch'
+...
+"#]]);
+}
+
+#[test]
 fn rejects_unnamed_segment_as_source_or_target() {
     let env =
         Sandbox::init_scenario_with_target_and_default_settings("one-stack-anonymous-segment");
@@ -131,7 +1205,7 @@ fn move_commit_above_other_commit() {
 ┊●   zll add first
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -156,7 +1230,7 @@ Moved zll above commit ywx
 ┊●   ywx add second
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -179,7 +1253,7 @@ fn move_commit_below_other_commit() {
 ┊●   zll add first
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -204,7 +1278,7 @@ Moved ywx below commit zll
 ┊●   ywx add second
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -238,7 +1312,7 @@ fn move_multiple_consecutive_commits_relative_to_other_commit() {
 ┊●   zpl add A1
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -277,7 +1351,7 @@ Moved vvl, mzz [..] commit [..]
 ┊●   zpl add A1
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -314,7 +1388,7 @@ fn move_multiple_non_consecutive_commits_in_arbitrary_order_relative_to_other_co
 ┊●   zpl add A1
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -358,7 +1432,7 @@ Moved tpw, zpl, pyq [..] commit [..]
 ┊●   sxq add A2
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -384,7 +1458,7 @@ fn moving_commits_above_branch_creates_branch_above() {
 ┊●   zll add first
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -411,7 +1485,7 @@ Moved zll to new branch 'a-branch-1' above branch 'A'
 ┊●   ywx add second
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -434,7 +1508,7 @@ fn moving_commits_above_branch_without_changing_relative_order_only_creates_bran
 ┊●   zll add first
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -461,7 +1535,7 @@ Moved ywx to new branch 'a-branch-1' above branch 'A'
 ┊●   zll add first
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -484,7 +1558,7 @@ fn moving_commits_below_branch_creates_branch_below() {
 ┊●   zll add first
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -511,7 +1585,7 @@ Moved ywx to new branch 'a-branch-1' below branch 'A'
 ┊●   ywx add second
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -534,7 +1608,7 @@ fn moving_commits_below_branch_without_changing_relative_order_only_creates_bran
 ┊●   zll add first
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -561,7 +1635,7 @@ Moved zll to new branch 'a-branch-1' below branch 'A'
 ┊●   zll add first
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -584,7 +1658,7 @@ fn moving_all_commits_above_branch_retains_branch() {
 ┊●   zll add first
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -611,7 +1685,7 @@ Moved ywx, zll to new branch 'a-branch-1' above branch 'A'
 ┊├┄ g0 [A] (no commits)
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -634,7 +1708,7 @@ fn moving_all_commits_below_branch_retains_branch() {
 ┊●   zll add first
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -661,7 +1735,7 @@ Moved ywx, zll to new branch 'a-branch-1' below branch 'A'
 ┊●   zll add first
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -686,7 +1760,7 @@ fn move_commit_above_empty_branch() {
 ┊╭┄ h0 [B] (no commits)
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -715,7 +1789,7 @@ Moved tpm to new branch 'a-branch-1' above branch 'B'
 ┊├┄ h0 [B] (no commits)
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -740,7 +1814,7 @@ fn move_commit_below_empty_branch() {
 ┊╭┄ h0 [B] (no commits)
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -769,7 +1843,7 @@ Moved tpm to new branch 'a-branch-1' below branch 'B'
 ┊●   tpm add A
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -794,7 +1868,7 @@ fn above_or_below_unapplied_or_non_existing_branch_errors() {
 ┊╭┄ h0 [B] (no commits)
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -861,7 +1935,7 @@ fn move_to_tip_of_branch() {
 ┊●   lrm add B
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -889,7 +1963,7 @@ Moved tpm to the tip of branch 'B'
 ┊●   lrm add B
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -914,7 +1988,7 @@ fn move_to_tip_of_empty_branch() {
 ┊╭┄ h0 [B] (no commits)
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -941,7 +2015,7 @@ Moved tpm to the tip of branch 'B'
 ┊●   tpm add A
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -964,7 +2038,7 @@ fn move_to_tip_of_new_unstacked_branch() {
 ┊●   zll add first
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -992,7 +2066,7 @@ Moved ywx to new branch 'new-branch'
 ┊●   zll add first
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -1015,7 +2089,7 @@ fn move_to_tip_of_new_unstacked_branch_with_canned_name() {
 ┊●   zll add first
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -1043,7 +2117,7 @@ Moved ywx to new branch 'a-branch-1'
 ┊●   zll add first
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -1068,7 +2142,7 @@ fn move_file_below_commit_creates_commit() {
 ┊│     zll:l A first
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -1096,7 +2170,7 @@ Moved 1 change from ywx to new commit qkw below commit zll
 ┊│     qkw:w A second
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -1121,7 +2195,7 @@ fn move_file_above_commit_creates_commit() {
 ┊│     zll:l A first
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -1149,7 +2223,7 @@ Moved 1 change from zll to new commit qkw above commit ywx
 ┊●   zll add first (no changes)
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -1174,7 +2248,7 @@ fn move_file_below_branch_creates_branch_and_commit() {
 ┊│     zll:l A first
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -1204,7 +2278,7 @@ Moved 1 change from ywx to new commit qkw on new branch 'a-branch-1' below branc
 ┊│     qkw:w A second
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -1229,7 +2303,7 @@ fn move_file_above_branch_creates_branch_and_commit() {
 ┊│     zll:l A first
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -1259,7 +2333,7 @@ Moved 1 change from zll to new commit qkw on new branch 'a-branch-1' above branc
 ┊●   zll add first (no changes)
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -1287,7 +2361,7 @@ fn move_file_to_branch_tip_creates_commit() {
 ┊│     lrm:p A B
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -1318,7 +2392,7 @@ Moved 1 change from lrm to new commit qkw to the tip of branch 'A'
 ┊●   lrm add B (no changes)
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -1343,7 +2417,7 @@ fn move_file_to_non_existing_branch_tip_creates_unstacked_branch_and_commit() {
 ┊│     zll:l A first
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -1374,7 +2448,7 @@ Moved 1 change from ywx to new commit qkw on new branch 'new-branch'
 ┊│     zll:l A first
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -1399,7 +2473,7 @@ fn move_file_branch_without_argument_creates_unstacked_branch_with_canned_name_a
 ┊│     zll:l A first
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -1430,7 +2504,7 @@ Moved 1 change from ywx to new commit qkw on new branch 'a-branch-1'
 ┊│     zll:l A first
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -1507,7 +2581,7 @@ Moved 1 change from szk to new commit qkw above commit knw
 ┊│     knw:q A file
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -1668,7 +2742,7 @@ fn move_file_should_be_order_independent() {
 ┊│     zqr:n A new
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -1698,7 +2772,7 @@ Moved 2 changes from nlk to new commit qkw above commit nlk
 ┊│     zqr:n A new
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -1730,7 +2804,7 @@ Moved 2 changes from nlk to new commit qkw above commit nlk
 ┊│     zqr:n A new
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -1758,7 +2832,7 @@ fn move_file_from_multiple_source_commits_is_not_allowed() {
 ┊│     lrm:p A B
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -1798,7 +2872,7 @@ fn move_branch_above_within_same_stack() {
 ┊●   tpm add A
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -1828,7 +2902,7 @@ Stacked branch 'B' on top of branch 'C'
 ┊●   tpm add A
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -1915,7 +2989,7 @@ fn move_branch_above_to_other_stack() {
 ┊●   lrm add B
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -1942,7 +3016,7 @@ Stacked branch 'B' on top of branch 'A'
 ┊●   tpm add A
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -1967,7 +3041,7 @@ fn move_empty_branch_above_other_branch() {
 ┊╭┄ h0 [B] (no commits)
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -1993,7 +3067,7 @@ Stacked branch 'B' on top of branch 'A'
 ┊●   tpm add A
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -2027,7 +3101,7 @@ fn move_empty_branch_above_checked_out_branch_checks_it_out() {
 ┊├┄ mo [moved] (no commits)
 ├╯
 ┊
-┴ b1540e5 (common base) 2000-01-02 M
+┴ b1540e5 (common base, main, origin/main) 2000-01-02 M
 
 Hint: run `but help` for all commands
 
@@ -2046,7 +3120,7 @@ Hint: run `but help` for all commands
 ┊├┄ to [top] (no commits)
 ├╯
 ┊
-┴ b1540e5 (common base) 2000-01-02 M
+┴ b1540e5 (common base, main, origin/main) 2000-01-02 M
 
 Hint: run `but help` for all commands
 
@@ -2077,7 +3151,7 @@ fn move_empty_branch_below_the_tip_preserves_checkout() {
 ┊├┄ pt [empty-low] (no commits)
 ├╯
 ┊
-┴ b1540e5 (common base) 2000-01-02 M
+┴ b1540e5 (common base, main, origin/main) 2000-01-02 M
 
 Hint: run `but help` for all commands
 
@@ -2100,13 +3174,80 @@ Hint: run `but help` for all commands
 ┊├┄ pt [empty-mid] (no commits)
 ├╯
 ┊
-┴ b1540e5 (common base) 2000-01-02 M
+┴ b1540e5 (common base, main, origin/main) 2000-01-02 M
 
 Hint: run `but help` for all commands
 
 "#]],
     );
     assert_head(&env, "empty-top");
+}
+
+#[test]
+fn move_empty_branch_above_tip_then_switching_to_workspace() {
+    let env = Sandbox::open_with_default_settings("single-branch-mode");
+    env.but("branch new top").assert().success();
+    env.but("branch new moved --below top").assert().success();
+    env.but("move moved --above top").assert().success();
+    assert_head(&env, "moved");
+
+    let expected = snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ mo [moved] (no commits)
+┊│
+┊├┄ to [top] (no commits)
+├╯
+┊
+┴ b1540e5 (common base, main, origin/main) 2000-01-02 M
+
+Hint: run `but help` for all commands
+
+"#]];
+    assert_status(&env, expected.clone());
+
+    env.but("switch --workspace").assert().success();
+    assert_head(&env, "gitbutler/workspace");
+    // Switching modes must preserve an empty-only stack, including its moved tip.
+    assert_status(&env, expected);
+}
+
+#[test]
+fn move_empty_branch_below_tip_then_switching_to_workspace() {
+    let env = Sandbox::open_with_default_settings("single-branch-mode");
+    env.but("branch new empty-low").assert().success();
+    env.but("branch new empty-mid --above empty-low")
+        .assert()
+        .success();
+    env.but("branch new empty-top --above empty-mid")
+        .assert()
+        .success();
+    env.but("move empty-low --above empty-mid")
+        .assert()
+        .success();
+    assert_head(&env, "empty-top");
+
+    let expected = snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ em [empty-top] (no commits)
+┊│
+┊├┄ mp [empty-low] (no commits)
+┊│
+┊├┄ pt [empty-mid] (no commits)
+├╯
+┊
+┴ b1540e5 (common base, main, origin/main) 2000-01-02 M
+
+Hint: run `but help` for all commands
+
+"#]];
+    assert_status(&env, expected.clone());
+
+    env.but("switch --workspace").assert().success();
+    assert_head(&env, "gitbutler/workspace");
+    // Switching modes must preserve the reordered lower branches even without commits.
+    assert_status(&env, expected);
 }
 
 #[test]
@@ -2136,7 +3277,7 @@ fn move_commit_branch_above_empty_dependents_keeps_them_empty() {
 ┊●   nwz commit branch
 ├╯
 ┊
-┴ b1540e5 (common base) 2000-01-02 M
+┴ b1540e5 (common base, main, origin/main) 2000-01-02 M
 
 Hint: run `but help` for all commands
 
@@ -2160,7 +3301,7 @@ Hint: run `but help` for all commands
 ┊├┄ mp [empty-low] (no commits)
 ├╯
 ┊
-┴ b1540e5 (common base) 2000-01-02 M
+┴ b1540e5 (common base, main, origin/main) 2000-01-02 M
 
 Hint: run `but help` for all commands
 
@@ -2198,7 +3339,7 @@ fn move_middle_non_empty_branch_above_checked_out_branch() {
 ┊●   nmq add A
 ├╯
 ┊
-┴ 3712f84 (common base) 2000-01-02 add M
+┴ 3712f84 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -2222,7 +3363,7 @@ Hint: run `but help` for all commands
 ┊●   nmq add A
 ├╯
 ┊
-┴ 3712f84 (common base) 2000-01-02 add M
+┴ 3712f84 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -2254,7 +3395,7 @@ fn move_bottom_non_empty_branch_above_checked_out_branch() {
 ┊●   nmq add A
 ├╯
 ┊
-┴ 3712f84 (common base) 2000-01-02 add M
+┴ 3712f84 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -2278,7 +3419,7 @@ Hint: run `but help` for all commands
 ┊●   myy add B
 ├╯
 ┊
-┴ 3712f84 (common base) 2000-01-02 add M
+┴ 3712f84 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -2310,7 +3451,7 @@ fn move_checked_out_branch_down_checks_out_new_tip() {
 ┊●   nmq add A
 ├╯
 ┊
-┴ 3712f84 (common base) 2000-01-02 add M
+┴ 3712f84 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -2334,7 +3475,7 @@ Hint: run `but help` for all commands
 ┊●   nmq add A
 ├╯
 ┊
-┴ 3712f84 (common base) 2000-01-02 add M
+┴ 3712f84 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -2370,7 +3511,7 @@ fn move_empty_checked_out_branch_down_keeps_it_empty() {
 ┊●   nmq add A
 ├╯
 ┊
-┴ 3712f84 (common base) 2000-01-02 add M
+┴ 3712f84 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -2393,7 +3534,7 @@ Hint: run `but help` for all commands
 ┊●   nmq add A
 ├╯
 ┊
-┴ 3712f84 (common base) 2000-01-02 add M
+┴ 3712f84 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -2429,7 +3570,7 @@ fn move_bottom_branch_above_checked_out_middle_leaves_hidden_tip_unchanged() {
 ┊●   nmq add A
 ├╯
 ┊
-┴ 3712f84 (common base) 2000-01-02 add M
+┴ 3712f84 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -2450,7 +3591,7 @@ Hint: run `but help` for all commands
 ┊●   myy add B
 ├╯
 ┊
-┴ 3712f84 (common base) 2000-01-02 add M
+┴ 3712f84 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -2546,7 +3687,7 @@ fn unstack_tip_branch() {
 ┊●   tpm add A
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -2577,7 +3718,7 @@ Unstacked branch 'C'
 ┊●   wlx add C
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -2607,7 +3748,7 @@ fn unstack_middle_branch() {
 ┊●   tpm add A
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -2638,7 +3779,7 @@ Unstacked branch 'B'
 ┊●   tpm add A
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -2668,7 +3809,7 @@ fn unstack_bottom_branch() {
 ┊●   tpm add A
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -2699,7 +3840,7 @@ Unstacked branch 'A'
 ┊●   wwm add B
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -2725,7 +3866,7 @@ fn unstack_empty_branch() {
 ┊├┄ bo [bottom] (no commits)
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -2751,7 +3892,7 @@ Unstacked branch 'top'
 ┊╭┄ to [top] (no commits)
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -2781,7 +3922,7 @@ fn unstack_branch_using_branch_arg() {
 ┊●   tpm add A
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -2813,7 +3954,7 @@ Unstacked branch 'A'
 ┊●   wwm add B
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -2838,7 +3979,7 @@ fn unstack_file() {
 ┊│     zll:l A first
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -2871,7 +4012,7 @@ fn unstack_commit() {
 ┊│     zll:l A first
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -2929,7 +4070,7 @@ fn cannot_move_multiple_branches_at_once() {
 ┊●   tpm add A
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -2969,7 +4110,7 @@ fn cannot_move_branch_below() {
 ┊●   tpm add A
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -3009,7 +4150,7 @@ fn cannot_mix_sources() {
 ┊│     lrm:p A B
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -3070,7 +4211,7 @@ fn targeting_unapplied_branch_errors() {
 ┊╭┄ h0 [B] (no commits)
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -3102,7 +4243,7 @@ fn cannot_combine_targets() {
 ┊●   zll add first
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -3245,7 +4386,7 @@ fn cannot_move_from_uncommitted() {
 ┊●   tpm add A
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but diff` to see uncommitted changes and `but commit -b <branch> -m "message" <id>` to commit them
 
@@ -3290,7 +4431,7 @@ fn cannot_move_to_uncommitted() {
 ┊●   tpm add A
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -3492,7 +4633,7 @@ fn move_onto_branch_with_dash_dash_branch() {
 ┊│     lrm:p A B
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -3521,7 +4662,7 @@ Stacked branch 'B' on top of branch 'A'
 ┊│     tpm:t A A
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -3544,7 +4685,7 @@ fn cannot_move_onto_new_branch_with_dash_dash_branch() {
 ┊│     tpm:t A A
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -3773,7 +4914,7 @@ fn moving_changes_to_new_branch_with_message() {
 ┊●   tpm add A (no changes)
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -3801,7 +4942,7 @@ fn moving_changes_to_new_commit_with_message() {
 ┊●   tpm add A (no changes)
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -3829,7 +4970,7 @@ fn when_message_isnt_allowed() {
 ┊│     lrm:p A B
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -3868,7 +5009,7 @@ fn moving_commit_to_named_branch_above_or_below() {
 ┊●   zll add first
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -3895,7 +5036,7 @@ Moved ywx to new branch 'top' above branch 'A'
 ┊●   zll add first
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -3924,7 +5065,7 @@ Moved ywx to new branch 'bottom' below branch 'A'
 ┊●   ywx add second
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -3972,7 +5113,7 @@ Moved 1 change from ywx to new commit qkw on new branch 'top' above branch 'A'
 ┊●   zll add first
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -3998,7 +5139,7 @@ fn cannot_rename_branches_when_stacking() {
 ┊●   lrm add B
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -4034,7 +5175,7 @@ fn naming_branches_when_unstacking_commits() {
 ┊●   tpm add A
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -4057,7 +5198,7 @@ Hint: run `but help` for all commands
 ┊╭┄ g0 [A] (no commits)
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -4101,7 +5242,7 @@ fn naming_branches_when_unstacking_committed_changes() {
 ┊●   tpm add A (no changes)
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -4127,7 +5268,7 @@ fn cannot_name_branches_when_unstacking_branches() {
 ┊●   tpm add A
 ├╯
 ┊
-┴ 0dc3733 (common base) 2000-01-02 add M
+┴ 0dc3733 (common base, main, origin/main) 2000-01-02 add M
 
 Hint: run `but help` for all commands
 
@@ -4158,7 +5299,7 @@ fn cannot_name_branches_when_moving_commits_relative_to_commits() {
 ┊●   zll add first
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -4196,7 +5337,7 @@ fn cannot_name_branches_when_moving_commits_relative_to_worktree() {
 ┊├┄ br [a-branch-1] (no commits)
 ├╯
 ┊
-┴ 1bbc04b (common base) 2000-01-02 add Base
+┴ 1bbc04b (common base, main, origin/main) 2000-01-02 add Base
 
 Hint: run `but help` for all commands
 
@@ -4297,4 +5438,87 @@ Cannot stack a branch onto worktree branch 'wt-lower'
 
 "#]])
         .stdout_eq(snapbox::str![]);
+}
+
+#[test]
+fn moving_commit_to_branch_below_then_switching_to_workspace() {
+    let env = Sandbox::open_with_default_settings("single-branch-mode");
+
+    env.but("commit -b bottom -m 'on bottom'")
+        .assert()
+        .success();
+    env.but("commit -b top --above bottom -m 'on top'")
+        .assert()
+        .success();
+
+    env.but("status").assert().stdout_eq(snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ to [top]
+┊●   ylm on top (no changes)
+┊│
+┊├┄ bo [bottom]
+┊●   lsm on bottom (no changes)
+├╯
+┊
+┴ b1540e5 (common base, main, origin/main) 2000-01-02 M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    env.but("move ylm --above bottom -b middle")
+        .assert()
+        .success();
+
+    env.but("status").assert().stdout_eq(snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ to [top] (no commits)
+┊│
+┊├┄ mi [middle]
+┊●   ylm on top (no changes)
+┊│
+┊├┄ bo [bottom]
+┊●   lsm on bottom (no changes)
+├╯
+┊
+┴ b1540e5 (common base, main, origin/main) 2000-01-02 M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    env.but("switch --workspace").assert().success();
+
+    env.but("status").assert().stdout_eq(snapbox::str![[r#"
+╭┄ @ [uncommitted] (no changes)
+┊
+┊╭┄ to [top] (no commits)
+┊│
+┊├┄ mi [middle]
+┊●   ylm on top (no changes)
+┊│
+┊├┄ bo [bottom]
+┊●   lsm on bottom (no changes)
+├╯
+┊
+┴ b1540e5 (common base, main, origin/main) 2000-01-02 M
+
+Hint: run `but help` for all commands
+
+"#]]);
+
+    snapbox::assert_data_eq!(
+        env.git_log(),
+        snapbox::str![[r#"
+* e0dcfe0 (HEAD -> gitbutler/workspace) GitButler Workspace Commit
+* 41e32b0 (top, middle) on top
+* ff665ad (bottom) on bottom
+* b1540e5 (origin/main, origin/HEAD, main, gitbutler/target) M
+* e31e6ca add init
+
+"#]]
+        .raw()
+    );
 }
