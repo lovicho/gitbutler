@@ -44,6 +44,16 @@ impl Cursor {
         )
     }
 
+    /// Select an exact row, respecting the same restrictions as keyboard navigation.
+    pub fn select_at_index(
+        index: usize,
+        lines: &[StatusOutputLine],
+        mode: &Mode,
+        show_files: FilesStatusFlag,
+    ) -> Option<Cursor> {
+        is_cursor_selectable_at_index(index, lines, mode, show_files).then_some(Cursor(index))
+    }
+
     pub fn index(self) -> usize {
         self.0
     }
@@ -90,8 +100,7 @@ impl Cursor {
             ResolvedCliIdArg::AnonymousSegment(..)
             | ResolvedCliIdArg::Commit(..)
             | ResolvedCliIdArg::Branch(..)
-            | ResolvedCliIdArg::WorktreeUncommitted(..)
-            | ResolvedCliIdArg::Uncommitted
+            | ResolvedCliIdArg::Uncommitted(..)
             | ResolvedCliIdArg::UncommittedHunkOrFile(..)
             | ResolvedCliIdArg::CommittedFile(..) => {}
             ResolvedCliIdArg::CommittedHunk(..) => {
@@ -131,9 +140,8 @@ impl Cursor {
                 | ResolvedCliIdArg::Branch(..)
                 | ResolvedCliIdArg::UncommittedHunkOrFile(..)
                 | ResolvedCliIdArg::CommittedFile(..)
-                | ResolvedCliIdArg::Uncommitted
+                | ResolvedCliIdArg::Uncommitted(..)
                 | ResolvedCliIdArg::PathPrefix { .. }
-                | ResolvedCliIdArg::WorktreeUncommitted(..)
                 | ResolvedCliIdArg::Stack { .. }
                 | ResolvedCliIdArg::CommittedHunk(..) => target == **cli_id,
             })
