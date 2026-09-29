@@ -4,7 +4,7 @@ import { ForgeAuthPrompt } from "./ForgeAuthPrompt.tsx";
 import { ResizeHandle } from "@gitbutler/ui-react/ResizeHandle.tsx";
 import { TextLink } from "@gitbutler/ui-react/TextLink.tsx";
 import { startAbsorb, setCursor, useCanShowFiles, useSelection } from "#ui/use-cursor.ts";
-import uiStyles from "@gitbutler/ui-react/ui.module.css";
+import { FileList } from "@gitbutler/ui-react/FileList.tsx";
 import { SuspenseQuery } from "@suspensive/react-query";
 import {
 	type PushBeforePublish,
@@ -13,7 +13,6 @@ import {
 	useResolveCommitConflictHunks,
 	useSaveGUISettings,
 } from "#ui/api/mutations.ts";
-import { downstackPushStatusFromSegments } from "#ui/segment.ts";
 import {
 	type DraftPRExtras,
 	draftPRQueryOptions,
@@ -35,6 +34,7 @@ import {
 	headInfoQueryOptions,
 	listEditorsQueryOptions,
 	listReviewsQueryOptions,
+	newReviewTargetQueryOptions,
 	listReviewThreadsQueryOptions,
 	treeChangesDiffsQueryOptions,
 	workspaceFileQueryOptions,
@@ -74,6 +74,7 @@ import { projectSlice } from "#ui/projects/state.ts";
 import { interfaceSlice } from "#ui/interface/state.ts";
 import { Badge } from "@gitbutler/ui-react/Badge.tsx";
 import { Button, getButtonClassName } from "@gitbutler/ui-react/Button.tsx";
+import { Tab, Tabs } from "@gitbutler/ui-react/Tabs.tsx";
 import { Icon } from "@gitbutler/ui-react/Icon.tsx";
 import { Tooltip } from "@gitbutler/ui-react/Tooltip.tsx";
 import { useCopied } from "#ui/components/useCopied.ts";
@@ -145,7 +146,7 @@ import { buildIndexByKey, getAdjacent } from "#ui/workspace/address-space.ts";
 import { ChangeStats } from "#ui/routes/project/$id/workspace/ChangeStats.tsx";
 import { ChangeScale } from "@gitbutler/ui-react/ChangeScale.tsx";
 import { DiffStats } from "@gitbutler/ui-react/DiffStats.tsx";
-import { ChangesHeaderRow } from "#ui/routes/project/$id/workspace/ChangesHeaderRow.tsx";
+import { useChangesMenuItems } from "#ui/routes/project/$id/workspace/useChangesMenuItems.ts";
 import {
 	describeLineStats,
 	getLineStats,
@@ -169,7 +170,6 @@ import {
 	type FileTreeRow,
 } from "./file-tree.ts";
 import { useFileDisplayMode } from "./useFileDisplayMode.ts";
-import { ListFilterRow } from "./ListFilterRow.tsx";
 import { useListFilter } from "./useListFilter.ts";
 import {
 	contiguousSelectionByLine,
@@ -2475,6 +2475,7 @@ const Diff: FC<{
 		listRef: filesTreeRef,
 		enabled: filesVisible && changes.length > 0,
 	});
+	const changesMenuItems = useChangesMenuItems({ projectId, fileParent, changes });
 
 	const tabSize = diffSettings?.diffTabSize ?? defaultSettings.diffTabSize;
 
@@ -2591,19 +2592,37 @@ const Diff: FC<{
 			groupResizeBehavior="preserve-pixel-size"
 		>
 			<div className={styles.filesPanelContent} ref={filesPanelRef}>
-				{fileFilter.rowProps === null ? (
-					<ChangesHeaderRow
-						projectId={projectId}
-						fileParent={fileParent}
-						changes={changes}
-						lineStats={lineStats}
-						onOpenFilter={fileFilter.open}
-					/>
-				) : (
-					<ListFilterRow {...fileFilter.rowProps} />
-				)}
-				<div
-					className={classes(uiStyles.scroller, uiStyles.scrollerWithSeparator, styles.diffFiles)}
+				<FileList
+					className={styles.diffFiles}
+					title="Changes"
+					count={changes.length}
+					added={lineStats.linesAdded}
+					removed={lineStats.linesRemoved}
+					onOpenFilter={fileFilter.open}
+					filter={
+						fileFilter.rowProps && {
+							value: fileFilter.rowProps.filter,
+							onChange: fileFilter.rowProps.onFilterChange,
+							onClose: fileFilter.rowProps.onClose,
+							onEnterList: fileFilter.rowProps.onEnterList,
+							inputId: fileFilter.rowProps.inputId,
+						}
+					}
+					onHeaderContextMenu={(event) => {
+						void showNativeContextMenu(event, changesMenuItems);
+					}}
+					actions={
+						<Button
+							variant="ghost"
+							iconOnly
+							aria-label="Changes menu"
+							onClick={(event) => {
+								void showNativeMenuFromTrigger(event.currentTarget, changesMenuItems);
+							}}
+						>
+							<Icon name="kebab" />
+						</Button>
+					}
 				>
 					<FilesTree
 						focusScope="files"
@@ -2620,7 +2639,7 @@ const Diff: FC<{
 						reviewedPaths={reviewedFilePaths}
 						ref={filesTreeRef}
 					/>
-				</div>
+				</FileList>
 			</div>
 		</Panel>
 	) : null;
@@ -3123,23 +3142,19 @@ const BranchTabToggle: FC<{
 	prDisabled?: boolean;
 	className?: string;
 }> = ({ branchTab, setBranchTab, prDisabled = false, className }) => (
-	<ToggleGroup
-		render={<ToggleGroupStyles className={className} />}
-		value={[branchTab]}
-		onValueChange={(value: Array<BranchTab>) => {
-			const head = value[0];
-			if (head === undefined) return;
-			setBranchTab(head);
-		}}
+	<Tabs
+		className={className}
+		value={branchTab}
+		onValueChange={(value: BranchTab) => setBranchTab(value)}
 		aria-label="Branch tab"
 	>
-		<Toggle render={<ToggleStyles />} value={"diff" satisfies BranchTab}>
+		<Tab value={"diff" satisfies BranchTab} icon={<Icon name="diff" />}>
 			Diff
-		</Toggle>
-		<Toggle render={<ToggleStyles />} value={"pr" satisfies BranchTab} disabled={prDisabled}>
+		</Tab>
+		<Tab value={"pr" satisfies BranchTab} icon={<Icon name="pr" />} disabled={prDisabled}>
 			{prDisabled ? "No pull request" : "Pull Request"}
-		</Toggle>
-	</ToggleGroup>
+		</Tab>
+	</Tabs>
 );
 
 /** `[` and `]` step between a branch's tabs; with two of them, either key toggles. */
@@ -3316,10 +3331,10 @@ type DetailsViewProps = {
 type BranchDetailsProps = { branch: BranchAddress } & DetailsViewProps;
 
 /**
- * A branch the workspace does not hold, as the branches tab lists them: its
- * changes, and its review when one already exists. Opening a review is not
- * offered — the base comes from a branch's position in a workspace stack, which
- * this branch has not got, so `publish_review` refuses it.
+ * A branch in no lane, as the branches tab lists them: its changes, and its
+ * review when one already exists. Opening a review is not offered — the base
+ * comes from the branches beneath it in its lane, which this branch has not
+ * got, so `publish_review` refuses it.
  */
 const UnappliedBranchDetails: FC<BranchDetailsProps> = ({
 	branch,
@@ -3464,8 +3479,8 @@ const UnappliedBranchDetails: FC<BranchDetailsProps> = ({
 	);
 };
 
-/** A branch applied to the workspace: its changes, and the review of them. */
-const AppliedBranchDetails: FC<BranchDetailsProps> = ({
+/** A branch of a workspace stack or a linked worktree's lane: its changes, and the review of them. */
+const LaneBranchDetails: FC<BranchDetailsProps> = ({
 	branch,
 	projectId,
 	onActiveFileSelection,
@@ -3498,15 +3513,19 @@ const AppliedBranchDetails: FC<BranchDetailsProps> = ({
 	});
 	const authFailure = hasAccount === false ? "missing" : forgeAuthFailure(reviewError);
 	const canUseForge = accountsSuccess && hasAccount && authFailure === null;
-	const branchCtx = headInfoIndex?.branchContextByRefBytes(branch.branchRef);
+	const laneBranch = headInfoIndex?.laneBranchByRefBytes(branch.branchRef);
 	// A recorded PR missing from the open listing may be merged or closed.
 	// Keep it visible until verification rules out a merge.
 	const landedReviewId = useLandedReviewId(
 		projectId,
-		branchCtx ? recordedPullRequest(branchCtx.segment) : null,
+		laneBranch ? recordedPullRequest(laneBranch.segment) : null,
 		reviewsLoaded && !openReview && canUseForge,
 	);
 	const hasReview = !!openReview || landedReviewId !== null;
+	const { data: targetBranch } = useQuery({
+		...newReviewTargetQueryOptions({ projectId, branch: branchRef }),
+		enabled: !hasReview,
+	});
 
 	const chosenTab = useAppSelector((state) =>
 		projectSlice.selectors.selectBranchTab(state, projectId, branchName),
@@ -3532,18 +3551,10 @@ const AppliedBranchDetails: FC<BranchDetailsProps> = ({
 	const ref = useRef<HTMLDivElement>(null);
 	useBranchTabHotkeys({ branchTab, setBranchTab, target: ref });
 
-	// Once the parent branch is integrated, the PR can target the workspace's base.
-	const parentSegment = branchCtx?.stack.segments[branchCtx.segmentIndex + 1];
-	const targetBranch =
-		!parentSegment || parentSegment.pushStatus === "integrated"
-			? headInfo?.target?.remoteTrackingRef.displayName
-			: parentSegment.refName?.displayName;
 	// A forge only opens a review on a branch it has, so a new PR pushes the
 	// branch and its ancestors first when any of them still has something to
 	// push. Conflicted commits cannot be pushed, and so cannot be reviewed yet.
-	const downstack = branchCtx
-		? downstackPushStatusFromSegments(branchCtx.stack.segments.slice(branchCtx.segmentIndex))
-		: null;
+	const downstack = laneBranch?.downstack ?? null;
 	const pushFirst: PushBeforePublish | null = downstack?.anyRequiresPush
 		? { branch: branchRef, withForce: downstack.anyPushRequiresForce }
 		: null;
@@ -3657,7 +3668,7 @@ const AppliedBranchDetails: FC<BranchDetailsProps> = ({
 				) : (
 					<BranchDiff
 						projectId={projectId}
-						branch={branch}
+						branch={{ ...branch, worktree: laneBranch?.worktree ?? undefined }}
 						onActiveFileSelection={onActiveFileSelection}
 						viewerRef={viewerRef}
 						didScrollToViaFileRef={didScrollToViaFileRef}
@@ -3847,8 +3858,8 @@ export const Details: FC<
 	return Match.value(selection).pipe(
 		Match.tags({
 			Branch: (branch) =>
-				getHeadInfoIndex(headInfo).isApplied(branch.branchRef) ? (
-					<AppliedBranchDetails key={branchIdentityKey(branch)} branch={branch} {...viewProps} />
+				getHeadInfoIndex(headInfo).laneBranchByRefBytes(branch.branchRef) ? (
+					<LaneBranchDetails key={branchIdentityKey(branch)} branch={branch} {...viewProps} />
 				) : (
 					<UnappliedBranchDetails key={branchIdentityKey(branch)} branch={branch} {...viewProps} />
 				),
