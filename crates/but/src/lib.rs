@@ -534,7 +534,7 @@ fn print_and_exit_non_zero<T: std::fmt::Display>(err: T) -> ! {
 enum DispatchOutcome {
     Return,
     ReturnWithOutcome(command::CommandOutcome),
-    ExitWithoutDestructors(anyhow::Result<()>),
+    ExitWithoutDestructors(CliResult<()>),
 }
 
 async fn match_subcommand(
@@ -806,7 +806,7 @@ async fn dispatch_subcommand(
         Subcommands::Edit { file } => {
             let path = args.current_dir.join(&file);
             return Ok(DispatchOutcome::ExitWithoutDestructors(
-                tui::editor::edit_file(&path),
+                tui::editor::edit_file(&path).map_err(Into::into),
             ));
         }
         #[cfg(feature = "legacy")]
@@ -1011,9 +1011,22 @@ async fn dispatch_subcommand(
                     let outcome = command::worktree::remove::remove(&mut ctx, &worktree, force)?;
                     out.print_cli_output(outcome)?;
                 }
-                worktree::Subcommands::New { name, above } => {
+                worktree::Subcommands::New {
+                    name,
+                    above,
+                    #[cfg(feature = "worktree-cow")]
+                    create_mode,
+                } => {
+                    use but_api::worktrees::WorktreeCreationMode;
+                    #[cfg(not(feature = "worktree-cow"))]
+                    let mode = WorktreeCreationMode::Checkout;
+                    #[cfg(feature = "worktree-cow")]
+                    let mode = match create_mode {
+                        worktree::CreateMode::Cow => WorktreeCreationMode::Cow,
+                        worktree::CreateMode::Checkout => WorktreeCreationMode::Checkout,
+                    };
                     let outcome =
-                        command::worktree::new::new(&mut ctx, name.as_ref(), above.as_ref())?;
+                        command::worktree::new::new(&mut ctx, name.as_ref(), above.as_ref(), mode)?;
                     out.print_cli_output(outcome)?;
                 }
             }
@@ -1257,7 +1270,8 @@ async fn dispatch_subcommand(
         #[cfg(feature = "legacy")]
         Subcommands::Show { commit, verbose } => {
             return Ok(DispatchOutcome::ExitWithoutDestructors(
-                command::legacy::show::show_commit(&mut ctx, out, &commit, verbose),
+                command::legacy::show::show_commit(&mut ctx, out, &commit, verbose)
+                    .map_err(Into::into),
             ));
         }
         #[cfg(feature = "legacy")]
@@ -1618,8 +1632,7 @@ async fn dispatch_subcommand(
             let status_after = args.status_after
                 && matches!(&cmd, Some(crate::args::resolve::Subcommands::Finish));
             out.begin_status_after(status_after);
-            let result = command::legacy::resolve::handle(&mut ctx, out, cmd, targets, ai)
-                .context("Failed to handle conflict resolution.");
+            let result = command::legacy::resolve::handle(&mut ctx, out, cmd, targets, ai);
             if result.is_ok() {
                 run_status_after_if_requested(
                     status_after,
@@ -1676,7 +1689,8 @@ async fn dispatch_subcommand(
             let conflicts_before = command::legacy::conflict_notice::snapshot(&ctx);
             let result =
                 command::legacy::merge::handle(&mut ctx, out, &branch, yes, no_ff, whole_stack)
-                    .context("Failed to merge branch.");
+                    .context("Failed to merge branch.")
+                    .map_err(Into::into);
             if result.is_ok() {
                 command::legacy::conflict_notice::report_newly_conflicted(
                     &ctx,
