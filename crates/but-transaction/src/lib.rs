@@ -479,17 +479,23 @@ where
         Ok(())
     }
 
-    /// Restack `source_branch` on top of `target_branch` within the transaction's workspace.
+    /// Move `source_branch` to `side` of `relative_to` within the transaction's workspace.
     ///
     /// In single-branch mode, record the reordered branches and defer checkout of the new tip
     /// until the transaction is materialized, just like reference creation.
-    pub fn stack_branch_on(
+    pub fn move_branch(
         &mut self,
         source_branch: &FullNameRef,
-        target_branch: &FullNameRef,
+        relative_to: RelativeTo,
+        side: InsertSide,
     ) -> anyhow::Result<()> {
-        let (ws_meta, new_tip, branch_stack_order) = self.rebase(|editor, _| {
-            let outcome = but_workspace::branch::move_branch(editor, source_branch, target_branch)?;
+        let (ws_meta, new_tip, branch_stack_order) = self.rebase(|editor, commit_mappings| {
+            let relative_to = match relative_to {
+                RelativeTo::Commit(object_id) => RelativeTo::Commit(commit_mappings.map(object_id)),
+                RelativeTo::Reference(full_name) => RelativeTo::Reference(full_name),
+            };
+            let outcome =
+                but_workspace::branch::move_branch(editor, source_branch, relative_to, side)?;
             Ok((
                 (outcome.ws_meta, outcome.new_tip, outcome.branch_stack_order),
                 MaterializeWithoutCheckout::No,
@@ -1427,6 +1433,7 @@ fn workspace_state_from_rebase<M: RefMetadata>(
             .reference_target(branch.as_ref())
             .or_else(|_| resolve_checkout_target(rebase.repo(), branch.as_ref()))?;
         let replaced_commits = rebase.history.commit_mappings();
+        let conflicted_commits = rebase.history.conflicted_commits.clone();
         let workspace = rebase
             .overlayed_graph_with_workspace_overrides(Some((target, branch)), None)?
             .into_workspace()?;
@@ -1437,6 +1444,7 @@ fn workspace_state_from_rebase<M: RefMetadata>(
             meta,
             repo,
             replaced_commits,
+            conflicted_commits,
             db,
         );
     }
