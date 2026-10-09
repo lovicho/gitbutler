@@ -45,3 +45,9 @@ title names what happened in a short line — "Some changes were not committed"
 `role="status"` and waits its turn, except `danger`, which is `role="alert"`
 and interrupts. Toasts get theirs from the toast viewport. A state the user
 must act on belongs in the UI itself.
+
+**A state that holds is a banner, not news.** Live updates paused, a machine
+offline, a server that won't answer: none of these happened once, they are
+true until they clear. Set a `Banner` into the layout above what it affects,
+for as long as the condition lasts, with the fix as its one action. It has no
+close button; it leaves when the condition does.
