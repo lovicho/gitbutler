@@ -38,6 +38,8 @@ const Triggers: FC = () => {
 };
 
 const meta = preview.meta({
+	title: "Overlays/Toasts",
+	id: "components-toasts",
 	component: Toasts,
 	render: () => (
 		<Toast.Provider>
@@ -49,6 +51,12 @@ const meta = preview.meta({
 
 /** A title, a description, and Dismiss, in the window's bottom-right corner. */
 export const Default = meta.story({
+	parameters: {
+		design: {
+			type: "figma",
+			url: "https://www.figma.com/design/cqdnAotT8n9op8WGYLOHg4/%E2%9A%9B%EF%B8%8F-Core?node-id=2790-13762",
+		},
+	},
 	play: async ({ canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "Show a toast" }));
 	},
@@ -56,6 +64,12 @@ export const Default = meta.story({
 
 /** With `actionProps`, the toast offers its action beside Dismiss. */
 export const WithAction = meta.story({
+	parameters: {
+		design: {
+			type: "figma",
+			url: "https://www.figma.com/design/cqdnAotT8n9op8WGYLOHg4/%E2%9A%9B%EF%B8%8F-Core?node-id=2790-13775",
+		},
+	},
 	play: async ({ canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "Show a toast with an action" }));
 	},

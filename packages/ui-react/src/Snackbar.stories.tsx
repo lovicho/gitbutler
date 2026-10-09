@@ -2,6 +2,8 @@ import preview from "#storybook/preview";
 import { Snackbar, type SnackbarVariant } from "./Snackbar.tsx";
 
 const meta = preview.meta({
+	title: "Overlays/Snackbar",
+	id: "components-snackbar",
 	component: Snackbar,
 	parameters: {
 		design: {
@@ -28,6 +30,12 @@ export const Default = meta.story({});
 
 /** One surface, three glyphs: only the leading icon says how the news landed. */
 export const AllVariants = meta.story({
+	parameters: {
+		design: {
+			type: "figma",
+			url: "https://www.figma.com/design/cqdnAotT8n9op8WGYLOHg4/%E2%9A%9B%EF%B8%8F-Core?node-id=2787-6905",
+		},
+	},
 	render: () => (
 		<div style={{ display: "flex", flexDirection: "column", alignItems: "start", gap: 12 }}>
 			<Snackbar>Info. Snackbar message</Snackbar>

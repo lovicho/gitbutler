@@ -15,11 +15,13 @@ import { MetaCount } from "./MetaCount.tsx";
 import { BranchItem } from "./SidebarRow.tsx";
 
 const meta = preview.meta({
+	title: "Overlays/Menu",
+	id: "components-menu",
 	component: Menu,
 	parameters: {
 		design: {
 			type: "figma",
-			url: "https://www.figma.com/design/EBuHQGUcCaSw4Ln5uVpWkn/Client?node-id=5858-126537",
+			url: "https://www.figma.com/design/cqdnAotT8n9op8WGYLOHg4/%E2%9A%9B%EF%B8%8F-Core?node-id=2790-13820",
 		},
 	},
 	args: {
@@ -45,6 +47,12 @@ const meta = preview.meta({
  * hover.
  */
 export const Default = meta.story({
+	parameters: {
+		design: {
+			type: "figma",
+			url: "https://www.figma.com/design/cqdnAotT8n9op8WGYLOHg4/%E2%9A%9B%EF%B8%8F-Core?node-id=2791-14242",
+		},
+	},
 	args: {
 		"aria-label": "Branch actions",
 		trigger: (
@@ -104,11 +112,23 @@ const ViewOptionsMenu: FC<MenuProps> = (props) => {
 
 /** A header's view options: three choices of one, each ticked where it stands. */
 export const ViewOptions = meta.story({
+	parameters: {
+		design: {
+			type: "figma",
+			url: "https://www.figma.com/design/cqdnAotT8n9op8WGYLOHg4/%E2%9A%9B%EF%B8%8F-Core?node-id=2791-14320",
+		},
+	},
 	render: (args) => <ViewOptionsMenu {...args} />,
 });
 
 /** The same actions on a right-click, at the pointer. */
 export const OnRightClick = meta.story({
+	parameters: {
+		design: {
+			type: "figma",
+			url: "https://www.figma.com/design/cqdnAotT8n9op8WGYLOHg4/%E2%9A%9B%EF%B8%8F-Core?node-id=2791-14441",
+		},
+	},
 	render: () => (
 		<ContextMenu
 			aria-label="Commit actions"

@@ -18,6 +18,8 @@ const Recovering: FC = () => {
 };
 
 const meta = preview.meta({
+	title: "Content & status/ErrorBoundary",
+	id: "components-errorboundary",
 	component: ErrorBoundary,
 });
 

@@ -14,11 +14,13 @@ import { ViewHeader, ViewHeaderDivider } from "./ViewHeader.tsx";
 import type { FC } from "react";
 
 const meta = preview.meta({
+	title: "Content & status/ViewHeader",
+	id: "components-viewheader",
 	component: ViewHeader,
 	parameters: {
 		design: {
 			type: "figma",
-			url: "https://www.figma.com/design/EBuHQGUcCaSw4Ln5uVpWkn/Client?node-id=5611-127048",
+			url: "https://www.figma.com/design/cqdnAotT8n9op8WGYLOHg4/%E2%9A%9B%EF%B8%8F-Core?node-id=2800-14127",
 		},
 	},
 	decorators: [
@@ -110,6 +112,12 @@ export const Default = meta.story({
 
 /** An applied branch on the Diff tab: its tabs, a divider and the commit filter. No buttons. */
 export const Branch = meta.story({
+	parameters: {
+		design: {
+			type: "figma",
+			url: "https://www.figma.com/design/cqdnAotT8n9op8WGYLOHg4/%E2%9A%9B%EF%B8%8F-Core?node-id=2801-14125",
+		},
+	},
 	args: {
 		icon: "branch",
 		title: "feature/JIRA-404-search-filters",
@@ -183,6 +191,12 @@ export const BranchPullRequestTab = meta.story({
 
 /** A branch outside the workspace: no review, so the tab says why, and Apply is its action. */
 export const BranchNotApplied = meta.story({
+	parameters: {
+		design: {
+			type: "figma",
+			url: "https://www.figma.com/design/cqdnAotT8n9op8WGYLOHg4/%E2%9A%9B%EF%B8%8F-Core?node-id=2801-14379",
+		},
+	},
 	args: {
 		icon: "branch",
 		title: "debug-this-nightmare",
@@ -194,6 +208,12 @@ export const BranchNotApplied = meta.story({
 
 /** No tabs, so no toolbar: the author line ends the header. */
 export const Commit = meta.story({
+	parameters: {
+		design: {
+			type: "figma",
+			url: "https://www.figma.com/design/cqdnAotT8n9op8WGYLOHg4/%E2%9A%9B%EF%B8%8F-Core?node-id=2801-14583",
+		},
+	},
 	args: {
 		icon: "commit",
 		title: "fix: sanitize user input in search query",
@@ -204,6 +224,12 @@ export const Commit = meta.story({
 
 /** A commit whose review has landed: its tabs lead the author line rather than take a row. */
 export const CommitLandedReview = meta.story({
+	parameters: {
+		design: {
+			type: "figma",
+			url: "https://www.figma.com/design/cqdnAotT8n9op8WGYLOHg4/%E2%9A%9B%EF%B8%8F-Core?node-id=2801-14697",
+		},
+	},
 	args: {
 		icon: "commit",
 		title: "Add test file 18 to collection",
@@ -215,6 +241,12 @@ export const CommitLandedReview = meta.story({
 
 /** A conflicted commit: the badge keeps its size while the subject gives way. */
 export const CommitConflicted = meta.story({
+	parameters: {
+		design: {
+			type: "figma",
+			url: "https://www.figma.com/design/cqdnAotT8n9op8WGYLOHg4/%E2%9A%9B%EF%B8%8F-Core?node-id=2801-14907",
+		},
+	},
 	args: {
 		icon: "commit",
 		title: (
@@ -233,6 +265,12 @@ export const CommitConflicted = meta.story({
  * with the author line.
  */
 export const CommitWithPicker = meta.story({
+	parameters: {
+		design: {
+			type: "figma",
+			url: "https://www.figma.com/design/cqdnAotT8n9op8WGYLOHg4/%E2%9A%9B%EF%B8%8F-Core?node-id=2801-15025",
+		},
+	},
 	args: {
 		icon: "commit",
 		title: "fix: sanitize user input in search query",
@@ -254,6 +292,12 @@ export const CommitWithPicker = meta.story({
 
 /** A clean worktree: the title alone. */
 export const Uncommitted = meta.story({
+	parameters: {
+		design: {
+			type: "figma",
+			url: "https://www.figma.com/design/cqdnAotT8n9op8WGYLOHg4/%E2%9A%9B%EF%B8%8F-Core?node-id=2801-15185",
+		},
+	},
 	args: {
 		icon: "file-diff",
 		title: "Uncommitted",
@@ -262,6 +306,12 @@ export const Uncommitted = meta.story({
 
 /** but.dev's repository checkout: what it holds besides commits, and where to send it. */
 export const Worktree = meta.story({
+	parameters: {
+		design: {
+			type: "figma",
+			url: "https://www.figma.com/design/cqdnAotT8n9op8WGYLOHg4/%E2%9A%9B%EF%B8%8F-Core?node-id=2801-15276",
+		},
+	},
 	args: {
 		icon: "folder",
 		title: "gitbutler",
@@ -272,6 +322,12 @@ export const Worktree = meta.story({
 
 /** but.dev's machine: an entity, so it wears the picture of its kind as its avatar. */
 export const Machine = meta.story({
+	parameters: {
+		design: {
+			type: "figma",
+			url: "https://www.figma.com/design/cqdnAotT8n9op8WGYLOHg4/%E2%9A%9B%EF%B8%8F-Core?node-id=2801-15368",
+		},
+	},
 	args: {
 		avatar: <EntityAvatar value={{ _tag: "Picture", src: machinePictures[0].src }} />,
 		title: "pave--macbook-pro",
@@ -282,6 +338,12 @@ export const Machine = meta.story({
 
 /** but.dev's cloud session: an avatar, the branch's tabs, and Send to… as the surface's pop. */
 export const CloudSession = meta.story({
+	parameters: {
+		design: {
+			type: "figma",
+			url: "https://www.figma.com/design/cqdnAotT8n9op8WGYLOHg4/%E2%9A%9B%EF%B8%8F-Core?node-id=2801-15458",
+		},
+	},
 	args: {
 		avatar: <EntityAvatar value={{ _tag: "Emoji", emoji: "☁️" }} />,
 		title: "Panel incoming commits count",

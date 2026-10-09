@@ -10,6 +10,8 @@ const figma = (nodeId: string) => ({
 });
 
 const meta = preview.meta({
+	title: "Content & status/Banner",
+	id: "components-banner",
 	component: Banner,
 	parameters: figma("2763-6872"),
 	argTypes: {
