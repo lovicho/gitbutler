@@ -2,14 +2,16 @@
 	/* Appear above other floating UI e.g. dialogs. */
 	z-index: 1;
 	position: fixed;
+	/* Toasts take the bottom-right corner; the bottom centre belongs to snackbars. */
 	right: 16px;
 	bottom: 16px;
 	width: 320px;
 }
 
 /* At rest the toasts stack behind the newest, narrowing as they go back: the first behind peeks
-   14px above the front, the next 9px above that, each step 5px less. Under the pointer or focus the viewport expands them into a column,
-   8px apart. Base UI measures each toast and sets the --toast-* variables. */
+   14px above the front, the next 9px above that, each step 5px less. Under the pointer or focus
+   the viewport expands them into a column, 8px apart. Base UI measures each toast and sets the
+   --toast-* variables. */
 .root {
 	--gap: 8px;
 	--peek: 14px;

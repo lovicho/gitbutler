@@ -6,7 +6,7 @@ not how bad it is.
 **A snackbar is a sentence next to the thing it is about.** One glyph, one line,
 no title, floated over the surface that caused it — `Snackbar.tsx`, ⚛️ Core
 node `1706-1682`. News that won't fit in a line read without stopping isn't a
-snackbar. Seat it where the operation's own controls stood.
+snackbar.
 
 **A toast is a card in the corner of the window.** A glyph, a title, a
 description that can hold real content — a list of rejected paths, an error
@@ -14,6 +14,11 @@ message — at most one action under it, and a close button, in a 320px stack at
 the bottom right — `Toasts.tsx`, ⚛️ Core node `2805-61892`. It is for news that
 outlives its source: a background failure, a half-succeeded operation, an
 uncaught error.
+
+**Toasts sit bottom right, snackbars bottom centre.** Every app keeps the same
+two places, so news is always where the reader last saw it: toasts stack in the
+window's bottom-right corner, 16px in, and snackbars stack at the bottom centre,
+16px up. Neither moves to follow what caused it.
 
 **Pick by whether the surface is still there.** If the user is in front of the
 thing that failed, use a snackbar. If the screen may have moved on, the news
@@ -34,12 +39,12 @@ bench-tweaks", then "It shows under Archived until it has new work";
 **Work out of sight gets a busy snackbar; work in sight gets nothing.** An
 action that runs where the user can't watch it — on another machine, in the
 background — shows a snackbar with a spinner while it runs ("Rewording on
-macbook…"), seated beside the row it is working on, and that same snackbar turns
-into the result ("Commit reworded") before it goes. It stays for as long as the
-work runs, then leaves like any other. A change made here that the screen shows
-at once — the commit in the list, the branch on screen — needs neither. Lite's
-absorb does the first ("Absorbing…", then "Changes absorbed into 3 commits").
-A failure with a raw error leaves the snackbar for a toast; see below.
+macbook…"), and that same snackbar turns into the result ("Commit reworded")
+before it goes. It stays for as long as the work runs, then leaves like any
+other. A change made here that the screen shows at once — the commit in the
+list, the branch on screen — needs neither. Lite's absorb does the first
+("Absorbing…", then "Changes absorbed into 3 commits"). A failure with a raw
+error leaves the snackbar for a toast; see below.
 
 **The verdict is carried by the glyph, not the surface.** The four snackbar
 variants share ground and border; `info`, `warning`, `danger` and `safe` differ
