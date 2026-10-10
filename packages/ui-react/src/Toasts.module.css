@@ -86,6 +86,12 @@
 	padding: var(--padding-modal);
 }
 
+/* A toast sits at the window's edge, where the popup's larger shadow would mostly fall off it, so it
+   takes the closer one snackbars use. Scoped to the toast so it outranks the popup surface's own. */
+.root > .surface {
+	box-shadow: var(--shadow-md);
+}
+
 /* The glyph, the words and the close button side by side, all hung from the top edge so a long
    description grows the card downwards without moving them. The popup surface stays a column. */
 .row {
