@@ -20,6 +20,15 @@ two places, so news is always where the reader last saw it: toasts stack in the
 window's bottom-right corner, 16px in, and snackbars stack at the bottom centre,
 16px up. Neither moves to follow what caused it.
 
+**Raise snackbars through `Snackbars`.** `Snackbars.tsx` is the stack, drawn in
+⚛️ Core only as the single `Snackbar` it repeats: render it once with a manager
+of its own and raise one with `add({ title, type })`. They sit one below
+another, 8px apart, the newest at the bottom; each rises in and sinks out while
+the rest close the gap, and past three the oldest recedes until there is room. A
+busy one is a `loading` snackbar, updated to its result. A host with its own
+furniture at the bottom centre, as Lite's operation toolbox, lifts the stack
+above it with `--snackbars-bottom` rather than letting the two overlap.
+
 **Pick by whether the surface is still there.** If the user is in front of the
 thing that failed, use a snackbar. If the screen may have moved on, the news
 needs the corner and a title; errors from mutations and the React root always
@@ -72,9 +81,10 @@ couldn't be shown, with Retry and "Copy error message".
 title names what happened in a short line — "Some changes were not committed"
 — and the description carries the detail.
 
-**Both announce themselves to screen readers, differently.** A snackbar is
-`role="status"` and waits its turn, except `danger`, which is `role="alert"`
-and interrupts. Toasts get theirs from the toast viewport. A state the user
+**Both announce themselves to screen readers, differently.** A snackbar on its
+own is `role="status"` and waits its turn, except `danger`, which is
+`role="alert"` and interrupts. In the `Snackbars` stack, as toasts in theirs,
+the viewport announces it instead. A state the user
 must act on belongs in the UI itself.
 
 **A state that holds is a banner, not news.** Live updates paused, a machine
