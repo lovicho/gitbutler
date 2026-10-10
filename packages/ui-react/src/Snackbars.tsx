@@ -1,5 +1,6 @@
 import { Toast, type ToastManager } from "@base-ui/react";
 import type { FC } from "react";
+import { classes } from "./classes.ts";
 import type { IconName } from "./iconNames.ts";
 import { Snackbar, type SnackbarVariant } from "./Snackbar.tsx";
 import styles from "./Snackbars.module.css";
@@ -28,11 +29,11 @@ export type SnackbarData = {
 const variant = (type: string | undefined): SnackbarVariant =>
 	type === "warning" || type === "danger" || type === "safe" ? type : "info";
 
-const Stack: FC = () => {
+const Stack: FC<{ className?: string }> = ({ className }) => {
 	const { toasts, close } = Toast.useToastManager<SnackbarData>();
 	return (
 		<Toast.Portal>
-			<Toast.Viewport className={styles.viewport}>
+			<Toast.Viewport className={classes(styles.viewport, className)}>
 				{toasts.map((snackbar, index) => (
 					<Toast.Root
 						key={snackbar.id}
@@ -78,8 +79,10 @@ export const Snackbars: FC<{
 	manager: ToastManager<SnackbarData>;
 	/** How long one on a timer stays, in milliseconds. */
 	timeout?: number;
-}> = ({ manager, timeout = 5000 }) => (
+	/** On the stack, for a host that lifts it with `--snackbars-bottom`. */
+	className?: string;
+}> = ({ manager, timeout = 5000, className }) => (
 	<Toast.Provider toastManager={manager} timeout={timeout}>
-		<Stack />
+		<Stack className={className} />
 	</Toast.Provider>
 );
