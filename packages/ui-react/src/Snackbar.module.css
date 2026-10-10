@@ -28,6 +28,10 @@
 	--snackbar-icon: var(--text-3);
 }
 
+.warning {
+	--snackbar-icon: var(--text-warn);
+}
+
 .danger {
 	--snackbar-icon: var(--text-danger);
 }

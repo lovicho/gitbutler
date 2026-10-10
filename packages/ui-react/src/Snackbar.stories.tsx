@@ -14,7 +14,7 @@ const meta = preview.meta({
 	argTypes: {
 		variant: {
 			control: "inline-radio",
-			options: ["info", "danger", "safe"] satisfies Array<SnackbarVariant>,
+			options: ["info", "warning", "danger", "safe"] satisfies Array<SnackbarVariant>,
 		},
 		icon: { control: "text" },
 	},
@@ -28,7 +28,7 @@ const meta = preview.meta({
 /** The snackbar as the design states it: a glyph, a sentence, and a way out. */
 export const Default = meta.story({});
 
-/** One surface, three glyphs: only the leading icon says how the news landed. */
+/** One surface, four glyphs: only the leading icon says how the news landed. */
 export const AllVariants = meta.story({
 	parameters: {
 		design: {
@@ -39,6 +39,7 @@ export const AllVariants = meta.story({
 	render: () => (
 		<div style={{ display: "flex", flexDirection: "column", alignItems: "start", gap: 12 }}>
 			<Snackbar>Info. Snackbar message</Snackbar>
+			<Snackbar variant="warning">Warning. Snackbar message</Snackbar>
 			<Snackbar variant="danger">Danger. Snackbar message</Snackbar>
 			<Snackbar variant="safe">Success. Snackbar message</Snackbar>
 		</div>
@@ -50,6 +51,9 @@ export const WithDismiss = meta.story({
 	render: () => (
 		<div style={{ display: "flex", flexDirection: "column", alignItems: "start", gap: 12 }}>
 			<Snackbar onDismiss={() => {}}>Info. Snackbar message</Snackbar>
+			<Snackbar variant="warning" onDismiss={() => {}}>
+				Warning. Snackbar message
+			</Snackbar>
 			<Snackbar variant="danger" onDismiss={() => {}}>
 				Danger. Snackbar message
 			</Snackbar>
