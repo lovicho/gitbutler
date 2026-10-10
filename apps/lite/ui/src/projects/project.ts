@@ -101,12 +101,6 @@ type WorkspaceState = {
 	expandedIncoming: Record<string, true>;
 	dependencyCommitIds: Array<string>;
 	pendingOperation: PendingOperation;
-	/**
-	 * What became of the last operation that ended without one, stated where the operation's own
-	 * controls stood. An operation that cannot run must not hold the workspace open waiting to be
-	 * aimed, so it clears itself and leaves this behind to say why.
-	 */
-	notice: string | null;
 	selectedBranchTabs: Record<string, BranchTab>;
 	branchCommitFilters: Record<string, BranchCommitFilter>;
 	/**
@@ -148,7 +142,6 @@ const createInitialWorkspaceState = (): WorkspaceState => ({
 	expandedIncoming: {},
 	dependencyCommitIds: [],
 	pendingOperation: noPendingOperation,
-	notice: null,
 	selectedBranchTabs: {},
 	branchCommitFilters: {},
 	diffCursor: null,
@@ -237,7 +230,6 @@ export const projectReducers = {
 	},
 	startInlineEdit: (state: ProjectState, edit: PendingInlineEdit) => {
 		state.workspace.pendingOperation = pendingInlineEdit(edit);
-		state.workspace.notice = null;
 	},
 	updateRewrittenBranchReferences: (
 		state: ProjectState,
@@ -284,7 +276,6 @@ export const projectReducers = {
 	},
 	startTransfer: (state: ProjectState, { transfer }: { transfer: PendingTransfer }) => {
 		state.workspace.pendingOperation = pendingTransfer(transfer);
-		state.workspace.notice = null;
 	},
 	startKeyboardTransfer: (
 		state: ProjectState,
@@ -311,7 +302,6 @@ export const projectReducers = {
 				restoreFocus,
 			}),
 		);
-		state.workspace.notice = null;
 	},
 	startAbsorb: (
 		state: ProjectState,
@@ -326,7 +316,6 @@ export const projectReducers = {
 		},
 	) => {
 		state.workspace.pendingOperation = pendingAbsorb({ sources, restoreSelection, sourceTarget });
-		state.workspace.notice = null;
 	},
 	updatePointerTransfer: (
 		state: ProjectState,
@@ -393,13 +382,9 @@ export const projectReducers = {
 	clearPendingOperation: (state: ProjectState) => {
 		state.workspace.pendingOperation = noPendingOperation;
 	},
-	/** Ends the pending operation and says why in its place. */
-	refusePendingOperation: (state: ProjectState, { notice }: { notice: string }) => {
+	/** Ends a pending operation that cannot run; the caller says why, in a snackbar. */
+	refusePendingOperation: (state: ProjectState) => {
 		state.workspace.pendingOperation = noPendingOperation;
-		state.workspace.notice = notice;
-	},
-	clearNotice: (state: ProjectState) => {
-		state.workspace.notice = null;
 	},
 	setDependencyCommitIds: (
 		state: ProjectState,
@@ -804,7 +789,6 @@ export const projectSelectors = {
 		conflictCheckKey(conflict) in state.workspace.checkedConflicts,
 	selectCheckedConflicts: selectCheckedConflictsFor,
 	selectPendingOperation: (state: ProjectState) => state.workspace.pendingOperation,
-	selectNotice: (state: ProjectState) => state.workspace.notice,
 	selectFoldedSegments: (state: ProjectState) => state.workspace.foldedSegments,
 	selectSegmentFolded: (state: ProjectState, branchRef: string) =>
 		state.workspace.foldedSegments[branchRef] === true,

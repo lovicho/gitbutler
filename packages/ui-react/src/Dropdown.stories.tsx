@@ -4,6 +4,8 @@ import { Icon } from "./Icon.tsx";
 import { Dropdown, PopupItem, PopupSection } from "./Popup.tsx";
 
 const meta = preview.meta({
+	title: "Overlays/Dropdown",
+	id: "components-dropdown",
 	component: Dropdown,
 	parameters: {
 		design: {

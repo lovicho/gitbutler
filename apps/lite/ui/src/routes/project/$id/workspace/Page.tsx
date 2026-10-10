@@ -650,7 +650,7 @@ const PageBody: FC<{ projectId: string }> = ({ projectId }) => {
 					>
 						{/* No reset key: the child is built inline, so its identity changes
 						    every render. Recovery here is the fallback's Retry button. */}
-						<ErrorBoundary>
+						<ErrorBoundary title="The sidebar couldn't be shown">
 							<Sidebar
 								projectId={projectId}
 								project={selectedProject}
@@ -682,7 +682,9 @@ const PageBody: FC<{ projectId: string }> = ({ projectId }) => {
 					{/* Keyed on the deferred view itself, not on the URL: the deferred
 					    value still holds the old view for a beat after navigating, so a
 					    URL key would clear the error onto the element that just threw. */}
-					<ErrorBoundary resetKeys={[deferredDetails]}>{deferredDetails}</ErrorBoundary>
+					<ErrorBoundary title="This view couldn't be shown" resetKeys={[deferredDetails]}>
+						{deferredDetails}
+					</ErrorBoundary>
 				</Panel>
 			</Group>
 
@@ -759,7 +761,7 @@ export const Page: FC = () => {
 	return (
 		<QueryErrorResetBoundary>
 			{({ reset }) => (
-				<ErrorBoundary onReset={reset}>
+				<ErrorBoundary title="The workspace couldn't be shown" onReset={reset}>
 					<PageBody projectId={projectId} />
 				</ErrorBoundary>
 			)}
