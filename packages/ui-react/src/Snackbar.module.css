@@ -4,11 +4,13 @@
 	align-items: center;
 	max-width: 100%;
 
-	/* The design gives the snackbar 31px around its sentence and 36px once the close button raises the
-	   row to 20px. Boxes here are border-box and the message is trimmed to its caps, so both the
-	   padding and the floor state what the design measures minus the 1px border. */
-	min-height: 31px;
-	padding: 7px 9px;
+	/* Every snackbar is 36px tall, with a close button or without: the floor is the height the
+	   button's 20px row gives, so a run of snackbars lines up whichever of them can be dismissed.
+	   Boxes here are border-box, so the floor includes the padding and the border. */
+	min-height: 36px;
+	/* More room after the sentence than before the glyph, so a snackbar with nothing to close
+	   doesn't end hard against its edge. */
+	padding: 7px 13px 7px 9px;
 	border: 1px solid var(--border-2);
 	/* It floats over the page, so it wears the popup radius. */
 	border-radius: var(--radius-popup);
@@ -54,17 +56,18 @@
 	text-overflow: ellipsis;
 }
 
-/* Fences the way out off from what it would be closing, down the middle of its own lane. */
+/* Fences the way out off from what it would be closing. Its lane has room only on the sentence's
+   side, so the close button sits nearer the line than the words do. */
 .divider {
 	align-self: stretch;
 	width: 1px;
 	min-height: 20px;
-	margin-inline: 3.5px;
+	margin-inline: 3.5px -0.5px;
 	background-color: var(--border-3);
 }
 
-/* The button's own padding is optical rather than structural, so the design seats it in a slot 2px
-   narrower on each side and lets the glyph, not the hit area, line up with the sentence above. */
+/* The button spills 8px into the snackbar's wider end padding, so a snackbar that can be closed is
+   no wider for it, and its cross sits 10px from the edge, as the glyph does at the other end. */
 .dismiss {
-	margin-inline: -2px;
+	margin-inline-end: -8px;
 }
