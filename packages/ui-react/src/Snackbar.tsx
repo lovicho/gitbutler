@@ -73,7 +73,7 @@ export const Snackbar: FC<
 				<div aria-hidden className={styles.divider} />
 				<Button
 					aria-label={dismissLabel}
-					variant="ghost"
+					variant="ghost-inverted"
 					size="small"
 					iconOnly
 					className={styles.dismiss}

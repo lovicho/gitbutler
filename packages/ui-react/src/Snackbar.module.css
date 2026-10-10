@@ -4,19 +4,21 @@
 	align-items: center;
 	max-width: 100%;
 
-	/* Every snackbar is 36px tall, with a close button or without: the floor is the height the
+	/* Every snackbar is 32px tall, with a close button or without: the floor is the height the
 	   button's 20px row gives, so a run of snackbars lines up whichever of them can be dismissed.
 	   Boxes here are border-box, so the floor includes the padding and the border. */
-	min-height: 36px;
+	min-height: 32px;
 	/* More room after the sentence than before the glyph, so a snackbar with nothing to close
 	   doesn't end hard against its edge. */
-	padding: 7px 13px 7px 9px;
-	border: 1px solid var(--border-2);
+	padding: 5px 13px 5px 9px;
+	/* An inverted ground, so a snackbar reads as a passing note over the page rather than a piece of
+	   it. The border stays, transparent, to keep the measurements the light one had. */
+	border: 1px solid transparent;
 	/* It floats over the page, so it wears the popup radius. */
 	border-radius: var(--radius-popup);
-	background-color: var(--bg-1);
-	box-shadow: var(--shadow-md);
-	color: var(--text-1);
+	background-color: var(--fill-gray-bg);
+	box-shadow: var(--shadow-lg);
+	color: var(--text-1-invert);
 	white-space: nowrap;
 }
 
@@ -27,19 +29,19 @@
 }
 
 .info {
-	--snackbar-icon: var(--text-3);
+	--snackbar-icon: var(--text-2-invert);
 }
 
 .warning {
-	--snackbar-icon: var(--text-warn);
+	--snackbar-icon: var(--fill-warn-bg);
 }
 
 .danger {
-	--snackbar-icon: var(--text-danger);
+	--snackbar-icon: var(--fill-danger-bg);
 }
 
 .safe {
-	--snackbar-icon: var(--text-safe);
+	--snackbar-icon: var(--fill-safe-bg);
 }
 
 /* Takes the width it needs and gives it back before the snackbar grows past its container: a long
@@ -64,6 +66,7 @@
 	min-height: 20px;
 	margin-inline: 3.5px -0.5px;
 	background-color: var(--border-3);
+	opacity: 0.3;
 }
 
 /* The button spills 8px into the snackbar's wider end padding, so a snackbar that can be closed is
