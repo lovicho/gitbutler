@@ -4,6 +4,8 @@ import { Icon } from "./Icon.tsx";
 import { Tab, Tabs } from "./Tabs.tsx";
 
 const meta = preview.meta({
+	title: "Actions/Tabs",
+	id: "components-tabs",
 	component: Tabs,
 	parameters: {
 		design: {

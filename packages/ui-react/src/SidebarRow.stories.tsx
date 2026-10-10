@@ -21,6 +21,8 @@ const core = (node: string) =>
 	`https://www.figma.com/design/cqdnAotT8n9op8WGYLOHg4/%E2%9A%9B%EF%B8%8F-Lite-Core?node-id=${node}`;
 
 const meta = preview.meta({
+	title: "Sidebar/SidebarRow",
+	id: "components-sidebarrow",
 	component: BranchItem,
 	parameters: { design: { type: "figma", url: core("2572-3458") } },
 	argTypes: {

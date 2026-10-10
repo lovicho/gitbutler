@@ -14,7 +14,7 @@ import { type Address, addressEquals, addressFileParent, changesSourceOf } from 
 import { fileParentFromSources, resolveDiffSpecs } from "#ui/operations/diff-specs.ts";
 import { decodeBytes } from "#ui/api/bytes.ts";
 import { useAppDispatch } from "#ui/store.ts";
-import { errorMessageForToast } from "#ui/errors.ts";
+import { addErrorToast } from "#ui/errors.ts";
 import { syncCoreCaches } from "#ui/api/mutations.ts";
 
 /**
@@ -228,11 +228,9 @@ export const useExecuteOperation = (projectId: string) => {
 			}
 		},
 		onError: (error) => {
-			toastManager.add({
-				type: "error",
+			addErrorToast(toastManager, {
 				title: "Failed to run operation",
-				description: errorMessageForToast(error),
-				priority: "high",
+				error,
 			});
 		},
 	});
