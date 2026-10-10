@@ -111,8 +111,9 @@ const mount = async (autoUpdate: boolean) => {
 };
 
 const click = async (label: string) => {
+	// Dismiss is an icon-only button, named by its aria-label.
 	const button = [...document.querySelectorAll("button")].find(
-		(item) => item.textContent === label,
+		(item) => item.textContent === label || item.getAttribute("aria-label") === label,
 	);
 	expect(button, label).toBeDefined();
 	act(() => button?.click());
@@ -359,7 +360,7 @@ it("joins an ongoing check and presents the latest installation status when it c
 	await settle();
 	expect(document.body.textContent).toContain("Checking for updates...");
 	expect(document.body.textContent).not.toContain("Install 0.0.201 now");
-	expect(document.body.textContent.match(/Dismiss/g)).toHaveLength(1);
+	expect(document.querySelectorAll('[aria-label="Dismiss"]')).toHaveLength(1);
 	act(() => publish({ _tag: "Ready", version: "0.0.201" }));
 	await settle();
 	act(() => finishCheck({ _tag: "Available", version: "0.0.201" }));
