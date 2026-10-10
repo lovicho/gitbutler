@@ -33,7 +33,7 @@ export const AllVariants = meta.story({
 	parameters: {
 		design: {
 			type: "figma",
-			url: "https://www.figma.com/design/cqdnAotT8n9op8WGYLOHg4/%E2%9A%9B%EF%B8%8F-Core?node-id=2787-6905",
+			url: "https://www.figma.com/design/cqdnAotT8n9op8WGYLOHg4/%E2%9A%9B%EF%B8%8F-Core?node-id=2854-2578",
 		},
 	},
 	render: () => (
@@ -48,6 +48,12 @@ export const AllVariants = meta.story({
 
 /** With `onDismiss` the snackbar grows a divider and a close button, and the row with it. */
 export const WithDismiss = meta.story({
+	parameters: {
+		design: {
+			type: "figma",
+			url: "https://www.figma.com/design/cqdnAotT8n9op8WGYLOHg4/%E2%9A%9B%EF%B8%8F-Core?node-id=2854-2664",
+		},
+	},
 	render: () => (
 		<div style={{ display: "flex", flexDirection: "column", alignItems: "start", gap: 12 }}>
 			<Snackbar onDismiss={() => {}}>Info. Snackbar message</Snackbar>
@@ -66,6 +72,12 @@ export const WithDismiss = meta.story({
 
 /** `icon` overrides the variant's own glyph without changing what the snackbar means. */
 export const CustomIcon = meta.story({
+	parameters: {
+		design: {
+			type: "figma",
+			url: "https://www.figma.com/design/cqdnAotT8n9op8WGYLOHg4/%E2%9A%9B%EF%B8%8F-Core?node-id=2854-2740",
+		},
+	},
 	render: () => (
 		<div style={{ display: "flex", flexDirection: "column", alignItems: "start", gap: 12 }}>
 			<Snackbar icon="spinner">Absorbing…</Snackbar>
@@ -81,6 +93,12 @@ export const CustomIcon = meta.story({
 
 /** A sentence wider than the space it has ellipsises rather than widening the snackbar. */
 export const LongMessage = meta.story({
+	parameters: {
+		design: {
+			type: "figma",
+			url: "https://www.figma.com/design/cqdnAotT8n9op8WGYLOHg4/%E2%9A%9B%EF%B8%8F-Core?node-id=2854-2804",
+		},
+	},
 	render: () => (
 		<div style={{ display: "flex", flexDirection: "column", gap: 12, width: 320 }}>
 			<Snackbar icon="absorb" onDismiss={() => {}}>
